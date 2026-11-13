@@ -1,0 +1,66 @@
+import type {
+  GridDef,
+  QueryMode,
+  QueryRules,
+  QueryState,
+} from "./field-types.ts";
+import { applyAction, type QueryAction } from "./query-actions.ts";
+
+export type GridView = "grid" | "list" | "board";
+
+export const GRID_VIEWS: readonly GridView[] = ["grid", "list", "board"];
+
+export interface QueryStore {
+  def: GridDef;
+  getQuery: () => QueryState;
+  getView: () => GridView;
+  getRules: () => QueryRules;
+  subscribe: (listener: () => void) => () => void;
+  dispatch: (action: QueryAction) => void;
+  setView: (view: GridView) => void;
+  setQuickComplete: (complete: boolean) => void;
+}
+
+export function createQueryStore(
+  def: GridDef,
+  initial: QueryState,
+  initialView: GridView = "grid",
+  mode: QueryMode = "indexed",
+): QueryStore {
+  let query = initial;
+  let view = initialView;
+  let rules: QueryRules = { mode, quickComplete: false };
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach((listener) => listener());
+  return {
+    def,
+    getQuery: () => query,
+    getView: () => view,
+    getRules: () => rules,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    dispatch: (action) => {
+      const next = applyAction(def, query, action, rules);
+      if (next !== query) {
+        query = next;
+        notify();
+      }
+    },
+    setView: (next) => {
+      if (next !== view) {
+        view = next;
+        notify();
+      }
+    },
+    setQuickComplete: (complete) => {
+      if (complete !== rules.quickComplete) {
+        rules = { ...rules, quickComplete: complete };
+        notify();
+      }
+    },
+  };
+}

@@ -1,0 +1,17 @@
+{
+  "name": "query-grid-repo",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "bun run build:package && bun run --filter demo build",
+    "build:package": "bun run --filter @kikstart/query-grid build",
+    "dev": "bun run build:package && bun run --filter demo dev",
+    "lint": "bun run --filter \"*\" lint",
+    "test": "bun run build:package && bun run --filter \"*\" test",
+    "typecheck": "bun run build:package && bun run --filter \"*\" typecheck"
+  }
+}

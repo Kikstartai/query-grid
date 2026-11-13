@@ -1,0 +1,39 @@
+import type { GridRow } from "./field-types.ts";
+
+export interface PageResult {
+  rows: GridRow[];
+  nextCursor: string | null;
+  hasNext: boolean;
+}
+
+export type CountSource = "counter" | "capped" | "exact";
+
+export interface CountResult {
+  count: number;
+  capped: boolean;
+  source: CountSource;
+}
+
+export interface FacetCount {
+  value: string;
+  count: number;
+  sum?: number;
+}
+
+export interface TotalAvailable {
+  available: true;
+  sum: number;
+  rows: number;
+  source: "counter" | "live";
+}
+
+export interface TotalUnavailable {
+  available: false;
+  reason: string;
+}
+
+export type TotalResult = TotalAvailable | TotalUnavailable;
+
+export const PAGE_LIMIT_MAX = 1000;
+export const QUICK_LIMIT = 500;
+export const COUNT_CAP = 10_000;
