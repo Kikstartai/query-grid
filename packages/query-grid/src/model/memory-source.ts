@@ -59,13 +59,14 @@ export function sortRows(
     return rows;
   }
   const sign = sort.direction === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const order = compareValues(
-      toComparable(field, a[field.key] ?? null),
-      toComparable(field, b[field.key] ?? null),
-    );
-    return (order || compareValues(a.id, b.id)) * sign;
-  });
+  return rows
+    .map((row) => ({ row, value: toComparable(field, row[field.key] ?? null) }))
+    .sort(
+      (a, b) =>
+        (compareValues(a.value, b.value) || compareValues(a.row.id, b.row.id)) *
+        sign,
+    )
+    .map((keyed) => keyed.row);
 }
 
 function matchesRange(
@@ -86,12 +87,12 @@ function matchesRange(
   return (min === null || value >= min) && (max === null || value <= max);
 }
 
-function matchesQuick(def: GridDef, row: GridRow, quick: string): boolean {
-  const haystack = listQuickFields(def)
+function matchesQuick(row: GridRow, fields: string[], needle: string): boolean {
+  return fields
     .map((key) => String(row[key] ?? ""))
     .join(" ")
-    .toLowerCase();
-  return haystack.includes(quick.trim().toLowerCase());
+    .toLowerCase()
+    .includes(needle);
 }
 
 export function filterRows(
@@ -100,19 +101,17 @@ export function filterRows(
   query: QueryState,
 ): GridRow[] {
   const equals = Object.entries(query.equals);
+  const quickFields = listQuickFields(def);
+  const needle = query.quick?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
       equals.every(([key, value]) => String(row[key] ?? "") === value) &&
       (query.range === null || matchesRange(def, row, query.range)) &&
-      (query.quick === null || matchesQuick(def, row, query.quick)),
+      (needle === null || matchesQuick(row, quickFields, needle)),
   );
 }
 
-function listLookupOptions(
-  def: GridDef,
-  field: FieldDef,
-  rows: GridRow[],
-): FieldOption[] {
+function listLookupOptions(field: FieldDef, rows: GridRow[]): FieldOption[] {
   if (field.options) {
     return field.options;
   }
@@ -137,14 +136,42 @@ function listAllTransitions(def: GridDef): [string, string][] {
   );
 }
 
+interface Selection {
+  source: GridRow[];
+  equals: QueryState["equals"];
+  range: QueryState["range"];
+  quick: QueryState["quick"];
+  sort: SortState;
+  rows: GridRow[];
+}
+
 export function createMemorySource(
   def: GridDef,
   initialRows: GridRow[],
   options: MemorySourceOptions = {},
 ): DataSource {
   let rows = initialRows;
-  const select = (query: QueryState) =>
-    sortRows(def, filterRows(def, rows, query), query.sort);
+  let selected: Selection | null = null;
+  const select = (query: QueryState) => {
+    const fresh =
+      selected !== null &&
+      selected.source === rows &&
+      selected.equals === query.equals &&
+      selected.range === query.range &&
+      selected.quick === query.quick &&
+      selected.sort === query.sort;
+    if (!fresh) {
+      selected = {
+        source: rows,
+        equals: query.equals,
+        range: query.range,
+        quick: query.quick,
+        sort: query.sort,
+        rows: sortRows(def, filterRows(def, rows, query), query.sort),
+      };
+    }
+    return (selected as Selection).rows;
+  };
   return {
     mode: "memory",
     fetchPage: async (query, limit) => {
@@ -202,7 +229,7 @@ export function createMemorySource(
       if (!field) {
         return [];
       }
-      const all = listLookupOptions(def, field, rows);
+      const all = listLookupOptions(field, rows);
       if (search.value !== undefined) {
         return all.filter((option) => option.value === search.value);
       }

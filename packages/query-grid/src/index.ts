@@ -1,8 +1,11 @@
 export {
   getField,
+  getFieldLabel,
   INDEXED_RULES,
+  isDefaultSort,
   isQuickShape,
   KEY_FIELD,
+  listFilterFields,
   listQuickFields,
   type FacetDef,
   type FieldDef,
@@ -31,6 +34,7 @@ export {
   explainUnavailable,
   listControlActions,
   listOffers,
+  QUICK_UNORDERED_REASON,
   type Offers,
   type OfferTarget,
   type QueryAction,
@@ -64,6 +68,7 @@ export {
 export {
   describeShape,
   isAnswerable,
+  isFacetCountShown,
   isFacetOnlyQuery,
   listOrderedShapes,
   listSortFields,

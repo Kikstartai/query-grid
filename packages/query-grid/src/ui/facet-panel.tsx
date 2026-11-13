@@ -4,7 +4,7 @@ import { Button } from "@ui-sdk/react/button";
 
 import { getField, type FieldOption } from "../model/field-types.ts";
 import { formatCount } from "../model/format.ts";
-import { isFacetOnlyQuery } from "../model/shapes.ts";
+import { isFacetCountShown } from "../model/shapes.ts";
 import {
   useFacetState,
   useQueryDispatch,
@@ -81,7 +81,7 @@ export function FacetPanel() {
     return null;
   }
   const selected = query.equals[field.key] ?? null;
-  const showCounts = rules.mode === "memory" || isFacetOnlyQuery(def, query);
+  const showCounts = isFacetCountShown(def, query, rules.mode);
   const total = facets.counts.reduce((sum, facet) => sum + facet.count, 0);
   const countOf = (value: string) => {
     const facet = facets.counts.find((item) => item.value === value);

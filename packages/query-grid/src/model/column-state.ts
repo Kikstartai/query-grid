@@ -1,3 +1,4 @@
+import { createEmitter } from "./emitter.ts";
 import type { FieldDef, GridDef } from "./field-types.ts";
 
 export const COLUMN_MIN_WIDTH = 60;
@@ -200,10 +201,10 @@ export function createColumnStore(
   let columns = defaultColumns(def);
   let restored = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const listeners = new Set<() => void>();
+  const emitter = createEmitter();
   const set = (next: ColumnState[]) => {
     columns = next;
-    listeners.forEach((listener) => listener());
+    emitter.emit();
     if (!restored || !persistence) {
       return;
     }
@@ -214,12 +215,7 @@ export function createColumnStore(
   };
   return {
     getColumns: () => columns,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    subscribe: emitter.add,
     resize: (key, width) =>
       set(patchColumn(columns, key, { width: clampWidth(width) })),
     setVisible: (key, visible) => set(patchColumn(columns, key, { visible })),

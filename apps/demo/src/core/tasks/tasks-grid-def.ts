@@ -2,7 +2,7 @@ import type { FieldOption, GridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
 
-export const TASK_STATUSES: FieldOption[] = [
+const TASK_STATUSES: FieldOption[] = [
   { value: "todo", label: "To do" },
   { value: "doing", label: "In progress" },
   { value: "review", label: "In review" },

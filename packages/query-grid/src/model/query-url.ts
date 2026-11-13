@@ -1,8 +1,9 @@
-import type {
-  GridDef,
-  QueryState,
-  RangeState,
-  SortDirection,
+import {
+  isDefaultSort,
+  type GridDef,
+  type QueryState,
+  type RangeState,
+  type SortDirection,
 } from "./field-types.ts";
 
 const EQUALS_PREFIX = "f.";
@@ -24,10 +25,7 @@ export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {
   if (query.quick !== null) {
     params.set(QUICK_PARAM, query.quick);
   }
-  const isDefaultSort =
-    query.sort.field === def.defaultSort.field &&
-    query.sort.direction === def.defaultSort.direction;
-  if (!isDefaultSort) {
+  if (!isDefaultSort(def, query.sort)) {
     params.set("sort", `${query.sort.field}.${query.sort.direction}`);
   }
   if (query.cursor) {

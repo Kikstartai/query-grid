@@ -16,7 +16,11 @@ import {
 import { useEffect, useState } from "react";
 
 import type { ColumnState, GridColumn } from "../model/column-state.ts";
-import type { GridFormat, GridRow } from "../model/field-types.ts";
+import {
+  getFieldLabel,
+  type GridFormat,
+  type GridRow,
+} from "../model/field-types.ts";
 import { formatLoaded, formatValue } from "../model/format.ts";
 import {
   useColumns,
@@ -27,7 +31,7 @@ import { FeedNotice, isFeedBlank } from "./feed-notice.tsx";
 import { GridHeader, SELECT_COLUMN_WIDTH } from "./grid-header.tsx";
 import { HEADER_HEIGHT, sheet, type RowView } from "./grid-primitive.ts";
 import { CheckIcon, ColumnsIcon, PinIcon } from "./icons.tsx";
-import { withData } from "./part-props.ts";
+import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
 
 type SheetHandle = PrimitiveHandle<typeof sheet>;
@@ -287,10 +291,7 @@ export function ColumnsMenu() {
             <ColumnToggle
               key={column.key}
               column={column}
-              label={
-                def.fields.find((field) => field.key === column.key)?.label ??
-                column.key
-              }
+              label={getFieldLabel(def, column.key)}
             />
           ))}
         </div>
@@ -455,13 +456,7 @@ export function DataGrid() {
     <div
       className="qg-grid"
       data-part="grid"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        minWidth: 0,
-        flex: "1 1 0%",
-      }}
+      style={FILL_COLUMN_STYLE}
     >
       <div className="qg-grid-toolbar">
         <GridStatus handle={handle} />

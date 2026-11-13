@@ -12,7 +12,7 @@ function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
 }
 
-export const ORDER_FIELDS: FieldDef[] = [
+const ORDER_FIELDS: FieldDef[] = [
   {
     key: "order_number",
     label: "Order",

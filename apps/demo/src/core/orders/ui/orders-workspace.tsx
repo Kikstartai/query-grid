@@ -14,20 +14,14 @@ import {
   StatusBoard,
   TotalFooter,
   ViewSwitch,
-  type ViewOption,
 } from "@kikstart/query-grid/ui";
 
+import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
 import { ORDERS_GRID } from "../orders-grid-def";
 
 const ORDERS_API = "/api/orders";
-
-const VIEWS: ViewOption[] = [
-  { view: "grid", label: "Grid" },
-  { view: "list", label: "List" },
-  { view: "board", label: "Board" },
-];
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 

@@ -1,5 +1,7 @@
 "use client";
 
+import type { ComponentType } from "react";
+
 import { useQueryState } from "@kikstart/query-grid";
 import {
   CountDisplay,
@@ -11,6 +13,7 @@ import {
   TotalFooter,
 } from "@kikstart/query-grid/ui";
 
+import { PART_NAMES } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
 import {
@@ -19,7 +22,9 @@ import {
   OrdersQueryProvider,
 } from "./orders-workspace";
 
-const PARTS = {
+type PartName = (typeof PART_NAMES)[number];
+
+const PARTS: Record<PartName, ComponentType> = {
   "filter-bar": FilterBar,
   chips: FilterChips,
   sidebar: FilterSidebar,
@@ -29,9 +34,7 @@ const PARTS = {
   grid: DataGrid,
   list: OrdersCardList,
   board: OrdersBoard,
-} as const;
-
-type PartName = keyof typeof PARTS;
+};
 
 function QueryReadout() {
   const query = useQueryState();

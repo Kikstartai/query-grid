@@ -1,5 +1,7 @@
 import {
   getField,
+  getFieldLabel,
+  isDefaultSort,
   type FieldDef,
   type GridDef,
   type GridFormat,
@@ -94,8 +96,8 @@ export interface FilterChip {
   clear: QueryAction | null;
 }
 
-function labelOf(def: GridDef, key: string): string {
-  return getField(def, key)?.label ?? key;
+export function labelKey(field: string, value: string): string {
+  return `${field}:${value}`;
 }
 
 function formatBound(def: GridDef, key: string, bound: string | null): string {
@@ -116,7 +118,7 @@ function formatEquals(
   labels: Record<string, string>,
 ): string {
   const field = getField(def, key);
-  const known = labels[`${key}:${value}`];
+  const known = labels[labelKey(key, value)];
   if (known) {
     return known;
   }
@@ -132,7 +134,7 @@ export function listFilterChips(
     ([key, value]) => ({
       id: `eq:${key}`,
       kind: "equals",
-      label: `${labelOf(def, key)}: ${formatEquals(def, key, value, labels)}`,
+      label: `${getFieldLabel(def, key)}: ${formatEquals(def, key, value, labels)}`,
       clear: { type: "clearEquals", field: key },
     }),
   );
@@ -141,7 +143,7 @@ export function listFilterChips(
     chips.push({
       id: `range:${field}`,
       kind: "range",
-      label: `${labelOf(def, field)}: ${formatBound(def, field, min)} – ${formatBound(def, field, max)}`,
+      label: `${getFieldLabel(def, field)}: ${formatBound(def, field, min)} – ${formatBound(def, field, max)}`,
       clear: { type: "clearRange" },
     });
   }
@@ -153,14 +155,11 @@ export function listFilterChips(
       clear: { type: "clearQuick" },
     });
   }
-  const isDefaultSort =
-    query.sort.field === def.defaultSort.field &&
-    query.sort.direction === def.defaultSort.direction;
   chips.push({
     id: "sort",
     kind: "sort",
-    label: `Sort: ${labelOf(def, query.sort.field)} ${query.sort.direction === "asc" ? "↑" : "↓"}`,
-    clear: isDefaultSort
+    label: `Sort: ${getFieldLabel(def, query.sort.field)} ${query.sort.direction === "asc" ? "↑" : "↓"}`,
+    clear: isDefaultSort(def, query.sort)
       ? null
       : { type: "setSort", ...def.defaultSort },
   });

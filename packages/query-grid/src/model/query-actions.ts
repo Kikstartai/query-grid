@@ -1,6 +1,7 @@
 import {
-  getField,
+  getFieldLabel,
   INDEXED_RULES,
+  isDefaultSort,
   type GridDef,
   type QueryRules,
   type QueryState,
@@ -30,6 +31,9 @@ export type OfferTarget =
   | { kind: "range"; field: string }
   | { kind: "sort"; field: string }
   | { kind: "quick" };
+
+export const QUICK_UNORDERED_REASON =
+  "A quick filter result is unordered until every match is loaded: narrow it under the cap to sort.";
 
 export function defaultQuery(def: GridDef): QueryState {
   return {
@@ -88,10 +92,7 @@ function proposeAction(
         rules.mode === "indexed" &&
         query.quick !== null &&
         !rules.quickComplete;
-      const toDefault =
-        action.field === def.defaultSort.field &&
-        action.direction === def.defaultSort.direction;
-      if (unordered && !toDefault) {
+      if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
       return [
@@ -167,19 +168,15 @@ export function listOffers(
   };
 }
 
-function labelOf(def: GridDef, key: string): string {
-  return getField(def, key)?.label ?? key;
-}
-
 function describeQuery(def: GridDef, query: QueryState, skip: string): string {
   const filters = Object.keys(query.equals)
     .filter((key) => key !== skip)
-    .map((key) => `the ${labelOf(def, key)} filter`);
+    .map((key) => `the ${getFieldLabel(def, key)} filter`);
   const range =
     query.range && query.range.field !== skip
-      ? [`the ${labelOf(def, query.range.field)} range`]
+      ? [`the ${getFieldLabel(def, query.range.field)} range`]
       : [];
-  return [...filters, ...range, `sort ${labelOf(def, query.sort.field)}`].join(
+  return [...filters, ...range, `sort ${getFieldLabel(def, query.sort.field)}`].join(
     " and ",
   );
 }
@@ -193,11 +190,11 @@ export function explainUnavailable(
   if (target.kind === "quick") {
     return "The quick filter runs alone: clear the other filters first.";
   }
-  const label = labelOf(def, target.field);
+  const label = getFieldLabel(def, target.field);
   if (query.quick !== null && target.kind === "sort") {
     return rules.quickComplete
       ? `No index sorts by ${label}.`
-      : "A quick filter result is unordered until every match is loaded: narrow it under the cap to sort.";
+      : QUICK_UNORDERED_REASON;
   }
   if (query.quick !== null) {
     return "No index combines the quick filter with another filter.";

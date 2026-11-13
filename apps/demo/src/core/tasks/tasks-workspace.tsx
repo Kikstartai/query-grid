@@ -18,9 +18,9 @@ import {
   StatusBoard,
   TotalFooter,
   ViewSwitch,
-  type ViewOption,
 } from "@kikstart/query-grid/ui";
 
+import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
 import {
@@ -29,12 +29,6 @@ import {
   TASK_TRANSITIONS,
   TASKS_GRID,
 } from "./tasks-grid-def";
-
-const VIEWS: ViewOption[] = [
-  { view: "grid", label: "Grid" },
-  { view: "list", label: "List" },
-  { view: "board", label: "Board" },
-];
 
 const BOARD_DETAIL_FIELDS = ["title", "assignee", "budget"];
 

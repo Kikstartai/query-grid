@@ -15,7 +15,7 @@ import type { FieldDef, GridFormat } from "../model/field-types.ts";
 import { formatValue } from "../model/format.ts";
 import type { Feed } from "../react/feed.ts";
 
-export const ROW_ESTIMATE = 37;
+const ROW_ESTIMATE = 37;
 export const HEADER_HEIGHT = 40;
 const REACH_EVERY_ROW = 400;
 
@@ -32,7 +32,7 @@ interface SheetState {
   copied: string;
 }
 
-export interface CellView {
+interface CellView {
   tabIndex: number;
   active: boolean;
   selected: boolean;
@@ -48,6 +48,14 @@ interface RowPart {
 }
 
 const rowName = (row: number) => `r${row}`;
+
+const selectedSets = new WeakMap<string[], Set<string>>();
+
+function readSelectedSet(ids: string[]): Set<string> {
+  const known = selectedSets.get(ids) ?? new Set(ids);
+  selectedSets.set(ids, known);
+  return known;
+}
 
 const byRow = {
   values: ({ props }: RowPart) => [rowName(props.row)],
@@ -252,7 +260,7 @@ export const sheet = definePrimitive({
       state: (state, { props, api }) => {
         const id = api.rowId(props.row);
         return {
-          selected: id !== null && state.selected.includes(id),
+          selected: id !== null && readSelectedSet(state.selected).has(id),
           cells: Array.from({ length: api.colCount() }, (_, col) => {
             const cell = { row: props.row, col };
             return {

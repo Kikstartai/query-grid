@@ -251,9 +251,9 @@ export function buildCappedTotalSql(
   def: GridDef,
   query: QueryState,
   cap: number = COUNT_CAP,
-): SqlQuery | null {
+): SqlQuery {
   if (!def.total) {
-    return null;
+    throw new Error("the grid declares no total");
   }
   const { params, clauses } = filter(def, query);
   const total = column(requireField(def, def.total.field).key);

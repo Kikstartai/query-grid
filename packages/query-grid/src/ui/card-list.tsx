@@ -8,6 +8,7 @@ import { formatLoaded, formatValue } from "../model/format.ts";
 import type { Feed } from "../react/feed.ts";
 import { useFeedState, useQueryGrid } from "../react/query-grid-provider.tsx";
 import { FeedNotice, isFeedBlank } from "./feed-notice.tsx";
+import { FILL_COLUMN_STYLE } from "./part-props.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
 
 const CARD_ESTIMATE = 92;
@@ -111,13 +112,7 @@ export function CardList({ titleField, badgeField }: CardListProps) {
     <div
       className="qg-list"
       data-part="list"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        minWidth: 0,
-        flex: "1 1 0%",
-      }}
+      style={FILL_COLUMN_STYLE}
     >
       <div className="qg-status" data-status="loaded" data-value={loaded}>
         {formatLoaded(loaded, feedState.pages, def.format)}

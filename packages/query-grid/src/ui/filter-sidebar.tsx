@@ -10,6 +10,7 @@ import {
   DrawerTrigger,
 } from "@ui-sdk/react/drawer";
 
+import { listFilterFields } from "../model/field-types.ts";
 import {
   useFilterChips,
   useQueryDispatch,
@@ -32,7 +33,7 @@ export function FilterSidebar({
   const dispatch = useQueryDispatch();
   const chips = useFilterChips();
   const active = chips.filter((chip) => chip.clear !== null).length;
-  const filterable = def.fields.filter((field) => field.operators.length > 0);
+  const filterable = listFilterFields(def);
   return (
     <Drawer side={side} modal={false} closeOnOutsidePress={false}>
       <DrawerTrigger

@@ -1,5 +1,7 @@
 import type { DataSource } from "../model/data-source.ts";
+import { createEmitter, type Listener } from "../model/emitter.ts";
 import type { GridRow, QueryState } from "../model/field-types.ts";
+import { labelKey } from "../model/format.ts";
 import { sortRows } from "../model/memory-source.ts";
 import type { QueryStore } from "../model/query-store.ts";
 import type {
@@ -7,8 +9,6 @@ import type {
   FacetCount,
   TotalResult,
 } from "../model/wire-types.ts";
-
-type Listener = () => void;
 
 export type LoadStatus = "idle" | "loading" | "error";
 
@@ -40,21 +40,12 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "request failed";
 }
 
-interface Emitter {
-  emit: () => void;
-  add: (listener: Listener) => () => void;
-}
-
-function createEmitter(): Emitter {
-  const listeners = new Set<Listener>();
-  return {
-    emit: () => listeners.forEach((listener) => listener()),
-    add: (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+function createAbortable(): () => AbortController {
+  let current: AbortController | null = null;
+  return () => {
+    current?.abort();
+    current = new AbortController();
+    return current;
   };
 }
 
@@ -83,7 +74,7 @@ export function createFeed(
   const def = store.def;
   const sortsQuickLocally = source.mode === "indexed";
   let started = false;
-  let abort: AbortController | null = null;
+  const begin = createAbortable();
   let nextCursor: string | null = null;
   const insertedIds = new Set<string>();
   let state = initialFeedState(store.getQuery());
@@ -102,8 +93,7 @@ export function createFeed(
 
   const load = async () => {
     const query = state.query;
-    const controller = new AbortController();
-    abort = controller;
+    const controller = begin();
     set({ status: "loading", error: null });
     try {
       const page = await source.fetchPage(
@@ -137,7 +127,6 @@ export function createFeed(
   };
 
   const restart = () => {
-    abort?.abort();
     insertedIds.clear();
     state = initialFeedState(store.getQuery());
     nextCursor = state.query.cursor;
@@ -179,15 +168,19 @@ export function createFeed(
       }
     },
     patchRow: (id, patch) => {
-      set({
-        rows: state.rows.map((row) =>
-          row.id === id ? ({ ...row, ...patch } as GridRow) : row,
-        ),
-      });
+      const index = state.rows.findIndex((row) => row.id === id);
+      if (index < 0) {
+        return;
+      }
+      const rows = state.rows.slice();
+      rows[index] = { ...rows[index], ...patch } as GridRow;
+      set({ rows });
     },
     removeRow: (id) => {
       insertedIds.delete(id);
-      set({ rows: state.rows.filter((row) => row.id !== id) });
+      if (state.rows.some((row) => row.id === id)) {
+        set({ rows: state.rows.filter((row) => row.id !== id) });
+      }
     },
     insertRow: (index, row) => {
       insertedIds.add(row.id);
@@ -218,7 +211,7 @@ export function createCountStore(
 ): CountStore {
   const emitter = createEmitter();
   let started = false;
-  let abort: AbortController | null = null;
+  const begin = createAbortable();
   let state: CountState = {
     query: store.getQuery(),
     result: null,
@@ -226,9 +219,7 @@ export function createCountStore(
   };
 
   const load = async (exact: boolean) => {
-    abort?.abort();
-    const controller = new AbortController();
-    abort = controller;
+    const controller = begin();
     state = { ...state, query: store.getQuery(), status: "loading" };
     if (!exact) {
       state = { ...state, result: null };
@@ -290,7 +281,7 @@ export function createTotalStore(
 ): TotalStore {
   const emitter = createEmitter();
   let started = false;
-  let abort: AbortController | null = null;
+  const begin = createAbortable();
   let state: TotalState = {
     query: store.getQuery(),
     result: null,
@@ -299,9 +290,7 @@ export function createTotalStore(
   };
 
   const load = async () => {
-    abort?.abort();
-    const controller = new AbortController();
-    abort = controller;
+    const controller = begin();
     state = {
       query: store.getQuery(),
       result: null,
@@ -358,14 +347,12 @@ export function createFacetStore(
 ): FacetStore {
   const emitter = createEmitter();
   let started = false;
-  let abort: AbortController | null = null;
+  const begin = createAbortable();
   let query = store.getQuery();
   let state: FacetState = { counts: [], status: "idle" };
 
   const load = async () => {
-    abort?.abort();
-    const controller = new AbortController();
-    abort = controller;
+    const controller = begin();
     query = store.getQuery();
     state = { ...state, status: "loading" };
     emitter.emit();
@@ -413,7 +400,7 @@ export function createLabelStore(source: DataSource): LabelStore {
   const requested = new Set<string>();
   let labels: Record<string, string> = {};
   const remember = (field: string, value: string, label: string) => {
-    const key = `${field}:${value}`;
+    const key = labelKey(field, value);
     if (labels[key] !== label) {
       labels = { ...labels, [key]: label };
       emitter.emit();
@@ -431,7 +418,7 @@ export function createLabelStore(source: DataSource): LabelStore {
         remember(field, value, match.label);
       }
     } catch {
-      requested.delete(`${field}:${value}`);
+      requested.delete(labelKey(field, value));
     }
   };
   return {
@@ -439,7 +426,7 @@ export function createLabelStore(source: DataSource): LabelStore {
     subscribe: emitter.add,
     remember,
     request: (field, value) => {
-      const key = `${field}:${value}`;
+      const key = labelKey(field, value);
       if (!requested.has(key) && labels[key] === undefined) {
         requested.add(key);
         void resolve(field, value);

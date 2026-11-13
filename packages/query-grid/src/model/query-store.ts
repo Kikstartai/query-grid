@@ -1,3 +1,4 @@
+import { createEmitter } from "./emitter.ts";
 import type {
   GridDef,
   QueryMode,
@@ -30,36 +31,30 @@ export function createQueryStore(
   let query = initial;
   let view = initialView;
   let rules: QueryRules = { mode, quickComplete: false };
-  const listeners = new Set<() => void>();
-  const notify = () => listeners.forEach((listener) => listener());
+  const emitter = createEmitter();
   return {
     def,
     getQuery: () => query,
     getView: () => view,
     getRules: () => rules,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    subscribe: emitter.add,
     dispatch: (action) => {
       const next = applyAction(def, query, action, rules);
       if (next !== query) {
         query = next;
-        notify();
+        emitter.emit();
       }
     },
     setView: (next) => {
       if (next !== view) {
         view = next;
-        notify();
+        emitter.emit();
       }
     },
     setQuickComplete: (complete) => {
       if (complete !== rules.quickComplete) {
         rules = { ...rules, quickComplete: complete };
-        notify();
+        emitter.emit();
       }
     },
   };

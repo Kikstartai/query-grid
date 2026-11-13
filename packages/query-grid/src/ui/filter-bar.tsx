@@ -5,14 +5,17 @@ import { Input, InputClear, InputGroup } from "@ui-sdk/react/input";
 import {
   Select,
   SelectContent,
-  SelectItem,
-  SelectItemIndicator,
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
 import { useState, type FormEvent } from "react";
 
-import { getField, listQuickFields } from "../model/field-types.ts";
+import {
+  getFieldLabel,
+  listFilterFields,
+  listQuickFields,
+} from "../model/field-types.ts";
+import { QUICK_UNORDERED_REASON } from "../model/query-actions.ts";
 import type { FilterChip } from "../model/format.ts";
 import {
   isValidQuickValue,
@@ -29,10 +32,10 @@ import {
   useQueryState,
 } from "../react/query-grid-provider.tsx";
 import { FieldFilter, FieldFrame, useOfferState } from "./field-filter.tsx";
+import { SelectOption } from "./select-option.tsx";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  CheckIcon,
   ChevronDownIcon,
   SearchIcon,
   XIcon,
@@ -41,9 +44,6 @@ import {
 interface ControlProps {
   showReason?: boolean;
 }
-
-const SORT_UNAVAILABLE =
-  "A quick filter result is unordered until every match is loaded: narrow it under the cap to sort.";
 
 export function SortControl({ showReason }: ControlProps) {
   const { def } = useQueryGrid();
@@ -56,7 +56,7 @@ export function SortControl({ showReason }: ControlProps) {
   const descending = query.sort.direction === "desc";
   const items = fields.map((key) => ({
     value: key,
-    label: getField(def, key)?.label ?? key,
+    label: getFieldLabel(def, key),
     disabled: !offers.sorts.includes(key),
   }));
   return (
@@ -64,7 +64,7 @@ export function SortControl({ showReason }: ControlProps) {
       name="sort"
       kind="sort"
       label="Sort"
-      offer={{ offered, reason: offered ? null : SORT_UNAVAILABLE }}
+      offer={{ offered, reason: offered ? null : QUICK_UNORDERED_REASON }}
       showReason={showReason}
     >
       <Select
@@ -92,18 +92,12 @@ export function SortControl({ showReason }: ControlProps) {
         </SelectTrigger>
         <SelectContent className="qg-popup qg-select-content">
           {items.map((item) => (
-            <SelectItem
+            <SelectOption
               key={item.value}
-              className="qg-option"
               value={item.value}
+              label={item.label}
               disabled={item.disabled}
-              data-sort-option={item.value}
-            >
-              {item.label}
-              <SelectItemIndicator className="qg-option-indicator">
-                <CheckIcon />
-              </SelectItemIndicator>
-            </SelectItem>
+            />
           ))}
         </SelectContent>
       </Select>
@@ -120,17 +114,10 @@ export function SortControl({ showReason }: ControlProps) {
           })
         }
       >
-        <SortDirectionIcon descending={descending} />
+        {descending ? <ArrowDownIcon /> : <ArrowUpIcon />}
       </Button>
     </FieldFrame>
   );
-}
-
-function SortDirectionIcon({ descending }: { descending: boolean }) {
-  if (descending) {
-    return <ArrowDownIcon />;
-  }
-  return <ArrowUpIcon />;
 }
 
 function QuickHint({ show }: { show: boolean }) {
@@ -155,15 +142,16 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
   const [draft, setDraft] = useState(current);
   const [tooShort, setTooShort] = useState(false);
   const labels = listQuickFields(def)
-    .map((key) => getField(def, key)?.label ?? key)
+    .map((key) => getFieldLabel(def, key))
     .join(", ");
   const apply = (value: string) => {
     if (value.trim().length === 0) {
       dispatch({ type: "clearQuick" });
       return;
     }
-    setTooShort(!isValidQuickValue(value));
-    if (isValidQuickValue(value)) {
+    const valid = isValidQuickValue(value);
+    setTooShort(!valid);
+    if (valid) {
       dispatch({ type: "setQuick", value: value.trim() });
     }
   };
@@ -279,7 +267,7 @@ export function FilterChips() {
 
 export function FilterBar() {
   const { def } = useQueryGrid();
-  const filterable = def.fields.filter((field) => field.operators.length > 0);
+  const filterable = listFilterFields(def);
   return (
     <div
       className="qg-filter-bar"

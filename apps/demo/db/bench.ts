@@ -236,7 +236,7 @@ async function benchOrdered(
       client,
       shape,
       "capped total",
-      buildCappedTotalSql(ORDERS_GRID, base) as SqlQuery,
+      buildCappedTotalSql(ORDERS_GRID, base),
       TOTAL_SETTINGS,
     ),
   );

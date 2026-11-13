@@ -1,7 +1,7 @@
 "use client";
 
 import type { VirtualItem, Virtualizer } from "@ui-sdk/core";
-import { useSyncExternalStore } from "react";
+import { useStoreValue } from "../react/use-store-value.ts";
 
 interface VirtualWindow {
   items: VirtualItem[];
@@ -9,15 +9,8 @@ interface VirtualWindow {
 }
 
 export function useVirtualItems(virtual: Virtualizer): VirtualWindow {
-  const items = useSyncExternalStore(
-    virtual.subscribe,
-    virtual.items,
-    virtual.items,
-  );
-  const size = useSyncExternalStore(
-    virtual.subscribe,
-    virtual.size,
-    virtual.size,
-  );
-  return { items, size };
+  return {
+    items: useStoreValue(virtual.subscribe, virtual.items),
+    size: useStoreValue(virtual.subscribe, virtual.size),
+  };
 }

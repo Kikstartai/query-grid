@@ -37,6 +37,10 @@ export type SqlExecutor = <T extends object>(
   settings?: string[],
 ) => Promise<T[]>;
 
+function resolveCap(query: QueryState): number {
+  return query.quick !== null ? QUICK_LIMIT : COUNT_CAP;
+}
+
 async function runFiltered<T extends object>(
   execute: SqlExecutor,
   query: QueryState,
@@ -131,7 +135,7 @@ export async function getGridCount(
     );
     return { count: row.count, capped: false, source: "exact" };
   }
-  const cap = query.quick !== null ? QUICK_LIMIT : COUNT_CAP;
+  const cap = resolveCap(query);
   const [row] = await runFiltered<{ count: number }>(
     execute,
     query,
@@ -162,12 +166,11 @@ export async function getGridTotal(
       source: "counter",
     };
   }
-  const cap = query.quick !== null ? QUICK_LIMIT : COUNT_CAP;
-  const sql = buildCappedTotalSql(def, query, cap) as SqlQuery;
+  const cap = resolveCap(query);
   const [row] = await runFiltered<{ count: number; sum: number }>(
     execute,
     query,
-    sql,
+    buildCappedTotalSql(def, query, cap),
     TOTAL_SETTINGS,
   );
   if (row.count > cap) {

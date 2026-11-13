@@ -5,7 +5,6 @@ import {
   use,
   useEffect,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -52,6 +51,7 @@ import {
   type TotalState,
   type TotalStore,
 } from "./feed.ts";
+import { useStoreValue } from "./use-store-value.ts";
 
 const VIEW_PARAM = "view";
 const DEFAULT_PAGE_SIZE = 500;
@@ -169,22 +169,32 @@ export function useQueryGrid(): QueryGridContextValue {
 
 export function useQueryState(): QueryState {
   const { store } = useQueryGrid();
-  return useSyncExternalStore(store.subscribe, store.getQuery, store.getQuery);
+  return useStoreValue(store.subscribe, store.getQuery);
 }
 
 export function useGridView(): GridView {
   const { store } = useQueryGrid();
-  return useSyncExternalStore(store.subscribe, store.getView, store.getView);
+  return useStoreValue(store.subscribe, store.getView);
 }
 
 export function useQueryRules(): QueryRules {
   const { store } = useQueryGrid();
-  return useSyncExternalStore(store.subscribe, store.getRules, store.getRules);
+  return useStoreValue(store.subscribe, store.getRules);
+}
+
+const offersByQuery = new WeakMap<QueryState, WeakMap<QueryRules, Offers>>();
+
+function readOffers(def: GridDef, query: QueryState, rules: QueryRules): Offers {
+  const byRules = offersByQuery.get(query) ?? new WeakMap<QueryRules, Offers>();
+  offersByQuery.set(query, byRules);
+  const offers = byRules.get(rules) ?? listOffers(def, query, rules);
+  byRules.set(rules, offers);
+  return offers;
 }
 
 export function useOffers(): Offers {
   const { def } = useQueryGrid();
-  return listOffers(def, useQueryState(), useQueryRules());
+  return readOffers(def, useQueryState(), useQueryRules());
 }
 
 export function useQueryDispatch(): (action: QueryAction) => void {
@@ -193,43 +203,27 @@ export function useQueryDispatch(): (action: QueryAction) => void {
 
 export function useFeedState(): FeedState {
   const { feed } = useQueryGrid();
-  return useSyncExternalStore(feed.subscribe, feed.getState, feed.getState);
+  return useStoreValue(feed.subscribe, feed.getState);
 }
 
 export function useCountState(): CountState {
   const { counts } = useQueryGrid();
-  return useSyncExternalStore(
-    counts.subscribe,
-    counts.getState,
-    counts.getState,
-  );
+  return useStoreValue(counts.subscribe, counts.getState);
 }
 
 export function useTotalState(): TotalState {
   const { totals } = useQueryGrid();
-  return useSyncExternalStore(
-    totals.subscribe,
-    totals.getState,
-    totals.getState,
-  );
+  return useStoreValue(totals.subscribe, totals.getState);
 }
 
 export function useFacetState(): FacetState {
   const { facets } = useQueryGrid();
-  return useSyncExternalStore(
-    facets.subscribe,
-    facets.getState,
-    facets.getState,
-  );
+  return useStoreValue(facets.subscribe, facets.getState);
 }
 
 export function useFieldLabels(): Record<string, string> {
   const { labels } = useQueryGrid();
-  return useSyncExternalStore(
-    labels.subscribe,
-    labels.getLabels,
-    labels.getLabels,
-  );
+  return useStoreValue(labels.subscribe, labels.getLabels);
 }
 
 export function useFilterChips(): FilterChip[] {
@@ -249,10 +243,6 @@ export function useFilterChips(): FilterChip[] {
 
 export function useColumns(): ColumnsModel {
   const { def, columns } = useQueryGrid();
-  const state = useSyncExternalStore(
-    columns.subscribe,
-    columns.getColumns,
-    columns.getColumns,
-  );
+  const state = useStoreValue(columns.subscribe, columns.getColumns);
   return { state, layout: layoutColumns(def, state), store: columns };
 }

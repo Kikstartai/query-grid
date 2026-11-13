@@ -115,6 +115,21 @@ export function getField(def: GridDef, key: string): FieldDef | null {
   return def.fields.find((field) => field.key === key) ?? null;
 }
 
+export function getFieldLabel(def: GridDef, key: string): string {
+  return getField(def, key)?.label ?? key;
+}
+
+export function listFilterFields(def: GridDef): FieldDef[] {
+  return def.fields.filter((field) => field.operators.length > 0);
+}
+
+export function isDefaultSort(def: GridDef, sort: SortState): boolean {
+  return (
+    sort.field === def.defaultSort.field &&
+    sort.direction === def.defaultSort.direction
+  );
+}
+
 export function listQuickFields(def: GridDef): string[] {
   return def.shapes.find(isQuickShape)?.quick ?? [];
 }

@@ -26,8 +26,6 @@ import {
   Select,
   SelectClear,
   SelectContent,
-  SelectItem,
-  SelectItemIndicator,
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
@@ -38,6 +36,7 @@ import type {
   FieldOption,
   RangeState,
 } from "../model/field-types.ts";
+import { labelKey } from "../model/format.ts";
 import {
   explainUnavailable,
   type OfferTarget,
@@ -50,7 +49,8 @@ import {
   useQueryRules,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
-import { CalendarIcon, CheckIcon, ChevronDownIcon, XIcon } from "./icons.tsx";
+import { CalendarIcon, ChevronDownIcon, XIcon } from "./icons.tsx";
+import { SelectOption } from "./select-option.tsx";
 
 export interface FieldFilterProps {
   field: FieldDef;
@@ -171,16 +171,11 @@ function EqualsSelect({ field, showReason }: FieldFilterProps) {
         </SelectClear>
         <SelectContent className="qg-popup qg-select-content">
           {options.map((option) => (
-            <SelectItem
+            <SelectOption
               key={option.value}
-              className="qg-option"
               value={option.value}
-            >
-              {option.label}
-              <SelectItemIndicator className="qg-option-indicator">
-                <CheckIcon />
-              </SelectItemIndicator>
-            </SelectItem>
+              label={option.label}
+            />
           ))}
         </SelectContent>
       </Select>
@@ -224,12 +219,13 @@ function LookupCombobox({ field, showReason }: FieldFilterProps) {
       showReason={showReason}
     >
       <Combobox<string>
+        key={current ? (known[labelKey(field.key, current)] ?? "") : ""}
         items={options.items}
         filter={false}
         status={options.status}
         value={current}
         disabled={!offer.offered}
-        itemToLabel={(value) => known[`${field.key}:${value}`] ?? value}
+        itemToLabel={(value) => known[labelKey(field.key, value)] ?? value}
         onQueryChange={(text: string) => options.setQuery(text)}
         onValueChange={choose}
       >

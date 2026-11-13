@@ -1,9 +1,17 @@
+import type { ViewOption } from "@kikstart/query-grid/ui";
+
 export const KIKSTART_URL = "https://kikstart.ai";
 export const REPO_URL = "https://github.com/Kikstartai/query-grid";
 export const PACKAGE_NAME = "@kikstart/query-grid";
 export const INSTALL_LINE = `npm install ${PACKAGE_NAME} @ui-sdk/core@beta @ui-sdk/react@beta`;
 
-export interface DemoLink {
+export const VIEWS: ViewOption[] = [
+  { view: "grid", label: "Grid" },
+  { view: "list", label: "List" },
+  { view: "board", label: "Board" },
+];
+
+interface DemoLink {
   href: string;
   label: string;
   note: string;

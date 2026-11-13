@@ -14,7 +14,7 @@ import {
   usePrimitive,
   type PrimitiveHandle,
 } from "@ui-sdk/react/primitive";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
 import type { DataSource } from "../model/data-source.ts";
 import {
@@ -28,14 +28,15 @@ import {
 } from "../model/field-types.ts";
 import { formatCount, formatValue } from "../model/format.ts";
 import { createQueryStore } from "../model/query-store.ts";
-import { isAnswerable, isFacetOnlyQuery } from "../model/shapes.ts";
+import { isAnswerable, isFacetCountShown } from "../model/shapes.ts";
 import { createFeed, type Feed } from "../react/feed.ts";
 import {
   useFacetState,
   useQueryGrid,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
-import { withData } from "./part-props.ts";
+import { useStoreValue } from "../react/use-store-value.ts";
+import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
 
 const COLUMN_PAGE = 50;
@@ -342,7 +343,6 @@ const board = definePrimitive({
 type BoardHandle = PrimitiveHandle<typeof board>;
 
 interface BoardData {
-  statuses: string[];
   feeds: Map<string, Feed>;
   subscribe: (listener: () => void) => () => void;
   getRows: () => Map<string, GridRow>;
@@ -365,7 +365,6 @@ function createBoardData(
   );
   let rows: Map<string, GridRow> | null = null;
   return {
-    statuses: [...queries.keys()],
     feeds,
     subscribe: (listener) => {
       let seen = [...feeds.values()].map((feed) => feed.getState().rows);
@@ -425,14 +424,17 @@ function listColumnQueries(
   return answerable ? queries : null;
 }
 
-interface CardContentProps {
-  row: GridRow;
+interface BoardCardBodyProps {
+  row: GridRow | undefined;
   title: FieldDef;
   details: FieldDef[];
   format?: GridFormat;
 }
 
-function CardContent({ row, title, details, format }: CardContentProps) {
+function BoardCardBody({ row, title, details, format }: BoardCardBodyProps) {
+  if (!row) {
+    return null;
+  }
   return (
     <>
       <div className="qg-board-card-title">
@@ -447,28 +449,10 @@ function CardContent({ row, title, details, format }: CardContentProps) {
   );
 }
 
-interface BoardCardProps {
+interface BoardCardProps extends BoardCardBodyProps {
   id: string;
   index: number;
   start: number;
-  row: GridRow | undefined;
-  title: FieldDef;
-  details: FieldDef[];
-  format?: GridFormat;
-}
-
-function BoardCardBody({
-  row,
-  title,
-  details,
-  format,
-}: Omit<BoardCardProps, "id" | "index" | "start">) {
-  if (!row) {
-    return null;
-  }
-  return (
-    <CardContent row={row} title={title} details={details} format={format} />
-  );
 }
 
 function BoardCard({
@@ -582,11 +566,7 @@ function BoardColumn({
   format,
   syncVersion,
 }: BoardColumnProps) {
-  const feedState = useSyncExternalStore(
-    feed.subscribe,
-    feed.getState,
-    feed.getState,
-  );
+  const feedState = useStoreValue(feed.subscribe, feed.getState);
   const [virtual] = useState(() => handle.api.virtualFor(status));
   const loadedRows = feedState.rows;
 
@@ -660,7 +640,7 @@ function BoardColumns({
   const { def, source, feed, facets, counts, totals } = useQueryGrid();
   const facetState = useFacetState();
   const [data] = useState(() => createBoardData(def, source, queries));
-  const rows = useSyncExternalStore(data.subscribe, data.getRows, data.getRows);
+  const rows = useStoreValue(data.subscribe, data.getRows);
   const [error, setError] = useState<string | null>(null);
   const [syncVersion, setSyncVersion] = useState(0);
   const facetKey = def.facet?.field ?? "";
@@ -698,32 +678,21 @@ function BoardColumns({
   if (!title) {
     return null;
   }
-  const columns = data.statuses.flatMap((status) => {
-    const columnFeed = data.feeds.get(status);
+  const columns = [...data.feeds].map(([status, columnFeed]) => {
     const facet = facetState.counts.find((item) => item.value === status);
     const option = facetField?.options?.find((item) => item.value === status);
-    return columnFeed
-      ? [
-          {
-            status,
-            feed: columnFeed,
-            label: option?.label ?? status,
-            count: showCounts && facet ? facet.count : null,
-          },
-        ]
-      : [];
+    return {
+      status,
+      feed: columnFeed,
+      label: option?.label ?? status,
+      count: showCounts && facet ? facet.count : null,
+    };
   });
   return (
     <div
       className="qg-board"
       data-part="board"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        minHeight: 0,
-        minWidth: 0,
-        flex: "1 1 0%",
-      }}
+      style={FILL_COLUMN_STYLE}
     >
       <p
         className="qg-board-message"
@@ -801,7 +770,7 @@ export function StatusBoard(props: StatusBoardProps) {
     <BoardColumns
       key={JSON.stringify([...queries.values()])}
       queries={queries}
-      showCounts={source.mode === "memory" || isFacetOnlyQuery(def, query)}
+      showCounts={isFacetCountShown(def, query, source.mode)}
       transitions={transitions}
       {...props}
     />

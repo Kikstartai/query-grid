@@ -113,6 +113,14 @@ export function isFacetOnlyQuery(def: GridDef, query: QueryState): boolean {
   );
 }
 
+export function isFacetCountShown(
+  def: GridDef,
+  query: QueryState,
+  mode: QueryMode,
+): boolean {
+  return mode === "memory" || isFacetOnlyQuery(def, query);
+}
+
 function validateQuickShape(def: GridDef, columns: string[]): string[] {
   const problems: string[] = [];
   if (columns.length === 0) {
