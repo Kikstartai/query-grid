@@ -1,0 +1,87 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+
+import {
+  createMemorySource,
+  QueryGridProvider,
+  useGridView,
+} from "@kikstart/query-grid";
+import {
+  CardList,
+  CountDisplay,
+  DataGrid,
+  FacetPanel,
+  FilterBar,
+  FilterChips,
+  FilterSidebar,
+  StatusBoard,
+  TotalFooter,
+  ViewSwitch,
+  type ViewOption,
+} from "@kikstart/query-grid/ui";
+
+import {
+  listTaskRows,
+  TASK_COUNT,
+  TASK_TRANSITIONS,
+  TASKS_GRID,
+} from "./tasks-grid-def";
+
+const VIEWS: ViewOption[] = [
+  { view: "grid", label: "Grid" },
+  { view: "list", label: "List" },
+  { view: "board", label: "Board" },
+];
+
+const BOARD_DETAIL_FIELDS = ["title", "assignee", "budget"];
+
+function TasksView() {
+  const view = useGridView();
+  if (view === "list") {
+    return <CardList titleField="number" badgeField="status" />;
+  }
+  if (view === "board") {
+    return <StatusBoard titleField="number" detailFields={BOARD_DETAIL_FIELDS} />;
+  }
+  return <DataGrid />;
+}
+
+export function TasksWorkspace({ search }: { search: string }) {
+  const [source] = useState(() =>
+    createMemorySource(TASKS_GRID, listTaskRows(), {
+      transitions: TASK_TRANSITIONS,
+    }),
+  );
+  return (
+    <QueryGridProvider def={TASKS_GRID} search={search} source={source}>
+      <div className="workspace" data-source="memory">
+        <header className="workspace-head">
+          <Link className="workspace-home" href="/">
+            query-grid
+          </Link>
+          <h1>Tasks, in memory</h1>
+          <CountDisplay />
+          <span className="workspace-spacer" />
+          <ViewSwitch views={VIEWS} />
+        </header>
+        <p className="workspace-note">
+          {TASK_COUNT} rows held in the browser. No index is involved, so every
+          declared filter and sort is offered in any combination, and filtering,
+          sorting, counting and totalling run in JavaScript.
+        </p>
+        <FilterBar />
+        <div className="workspace-chips">
+          <FilterSidebar />
+          <FilterChips />
+        </div>
+        <div className="workspace-main">
+          <FacetPanel />
+          <TasksView />
+        </div>
+        <TotalFooter />
+      </div>
+    </QueryGridProvider>
+  );
+}

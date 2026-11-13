@@ -1,0 +1,39 @@
+{
+  "name": "demo",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "db:bench": "bun --env-file=.env.local db/bench.ts",
+    "db:check": "bun db/generate-migration.ts --check",
+    "db:generate": "bun db/generate-migration.ts",
+    "db:migrate": "bun --env-file=.env.local db/setup.ts --migrate-only",
+    "db:setup": "bun --env-file=.env.local db/setup.ts",
+    "dev": "next dev -p 3040",
+    "lint": "eslint .",
+    "start": "next start -p 3040",
+    "test": "bun test src",
+    "test:db": "bun --env-file=.env.local test ./db",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kikstart/query-grid": "workspace:*",
+    "@ui-sdk/core": "0.1.0-beta.1",
+    "@ui-sdk/react": "0.1.0-beta.1",
+    "next": "16.4.6",
+    "pg": "^8.20.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22",
+    "@types/pg": "^8.15.5",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "typescript": "^6.0.3"
+  }
+}

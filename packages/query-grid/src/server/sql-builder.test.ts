@@ -129,7 +129,7 @@ describe("counts and totals", () => {
   test("the live total sums inside the same cap", () => {
     const query: QueryState = { ...BASE, equals: { region: "north" } };
     expect(buildCappedTotalSql(TEST_DEF, query)).toEqual({
-      text: "SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT t.total AS amount FROM things t WHERE t.region = $1::text LIMIT 10001) capped",
+      text: "SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT t.total AS amount FROM things t WHERE t.region = $1::text ORDER BY t.created_at, t.id LIMIT 10001) capped",
       values: ["north"],
     });
   });

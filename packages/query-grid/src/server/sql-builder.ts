@@ -257,8 +257,12 @@ export function buildCappedTotalSql(
   }
   const { params, clauses } = filter(def, query);
   const total = column(requireField(def, def.total.field).key);
+  const order =
+    query.quick === null
+      ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
+      : "";
   return {
-    text: `SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT ${total} AS amount FROM ${from(def)}${whereClause(clauses)} LIMIT ${cap + 1}) capped`,
+    text: `SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT ${total} AS amount FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
     values: params.values,
   };
 }
