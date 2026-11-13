@@ -39,7 +39,7 @@ import { withData } from "./part-props.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
 
 const COLUMN_PAGE = 50;
-const CARD_HEIGHT = 76;
+const CARD_HEIGHT = 90;
 const CARD_GAP = 8;
 const CARD_EXTENT = CARD_HEIGHT + CARD_GAP;
 

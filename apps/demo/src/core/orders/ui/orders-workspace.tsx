@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { QueryGridProvider, useGridView } from "@kikstart/query-grid";
@@ -17,6 +16,8 @@ import {
   ViewSwitch,
   type ViewOption,
 } from "@kikstart/query-grid/ui";
+
+import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
 import { ORDERS_GRID } from "../orders-grid-def";
 
@@ -72,9 +73,7 @@ export function OrdersWorkspace({ search }: { search: string }) {
     <OrdersQueryProvider search={search}>
       <div className="workspace">
         <header className="workspace-head">
-          <Link className="workspace-home" href="/">
-            query-grid
-          </Link>
+          <SiteBrand />
           <h1>Orders</h1>
           <CountDisplay />
           <span className="workspace-spacer" />
@@ -89,7 +88,10 @@ export function OrdersWorkspace({ search }: { search: string }) {
           <FacetPanel />
           <OrdersView />
         </div>
-        <TotalFooter />
+        <footer className="workspace-foot">
+          <TotalFooter />
+          <ByKikstart />
+        </footer>
       </div>
     </OrdersQueryProvider>
   );

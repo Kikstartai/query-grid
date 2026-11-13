@@ -41,6 +41,18 @@ export function formatCount(count: number, format?: GridFormat): string {
   return resolveFormatters(format).integer.format(count);
 }
 
+export function formatRows(count: number, format?: GridFormat): string {
+  return `${formatCount(count, format)} ${count === 1 ? "row" : "rows"}`;
+}
+
+export function formatLoaded(
+  rows: number,
+  pages: number,
+  format?: GridFormat,
+): string {
+  return `${formatRows(rows, format)} loaded in ${pages} keyset ${pages === 1 ? "page" : "pages"}`;
+}
+
 export function formatMoney(cents: number, format?: GridFormat): string {
   return resolveFormatters(format).money.format(cents / 100);
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import {
   DEMO_LINKS,
   INSTALL_LINE,
@@ -26,6 +27,10 @@ const PRINCIPLES = [
 export default function LandingPage() {
   return (
     <main className="landing">
+      <nav className="landing-nav" aria-label="Site">
+        <SiteBrand />
+        <a href={REPO_URL}>GitHub</a>
+      </nav>
       <header className="landing-hero">
         <p className="landing-kicker">{PACKAGE_NAME}</p>
         <h1>A filter and data grid that only offers what an index answers</h1>
@@ -75,6 +80,7 @@ export default function LandingPage() {
         </p>
       </section>
       <footer className="landing-footer">
+        <ByKikstart height={20} />
         MIT licensed. The demo runs on a Neon Free-plan Postgres holding
         620,000 orders; every sorted query is an index scan of about a
         millisecond.

@@ -1,3 +1,4 @@
+export const KIKSTART_URL = "https://kikstart.ai";
 export const REPO_URL = "https://github.com/Kikstartai/query-grid";
 export const PACKAGE_NAME = "@kikstart/query-grid";
 export const INSTALL_LINE = `npm install ${PACKAGE_NAME} @ui-sdk/core@beta @ui-sdk/react@beta`;
@@ -28,6 +29,11 @@ export const DEMO_LINKS: DemoLink[] = [
     href: "/memory",
     label: "In memory",
     note: "the same parts over 400 rows held in the browser",
+  },
+  {
+    href: "/restyled",
+    label: "Restyled",
+    note: "the same parts restyled from a consumer's Tailwind stylesheet",
   },
   {
     href: "/parts/facets",

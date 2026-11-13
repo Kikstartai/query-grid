@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 
 import type { ColumnState, GridColumn } from "../model/column-state.ts";
 import type { GridFormat, GridRow } from "../model/field-types.ts";
-import { formatCount, formatValue } from "../model/format.ts";
+import { formatLoaded, formatValue } from "../model/format.ts";
 import {
   useColumns,
   useFeedState,
@@ -332,8 +332,7 @@ function GridStatus({ handle }: { handle: SheetHandle }) {
         children: (status: SheetStatus) => (
           <>
             <span data-status="loaded" data-value={feed.rows.length}>
-              {formatCount(feed.rows.length, def.format)} rows loaded in{" "}
-              {feed.pages} keyset pages
+              {formatLoaded(feed.rows.length, feed.pages, def.format)}
             </span>
             <FeedProgress />
             <span data-status="selected" data-value={status.selectedCount}>

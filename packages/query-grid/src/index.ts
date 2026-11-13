@@ -108,6 +108,7 @@ export {
 export {
   formatCount,
   formatMoney,
+  formatRows,
   formatValue,
   listFilterChips,
   type FilterChip,

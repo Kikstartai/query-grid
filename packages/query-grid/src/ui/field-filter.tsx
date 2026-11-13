@@ -317,11 +317,13 @@ function DateRange({ field, range, showReason }: RangeProps) {
           <DatePickerInput
             className="qg-input qg-date-input"
             aria-label={`${field.label} from`}
+            placeholder="from"
             data-filter={`${field.key}.min`}
           />
           <span className="qg-range-dash">–</span>
           <DatePickerInput
             end
+            placeholder="to"
             className="qg-input qg-date-input"
             aria-label={`${field.label} to`}
             data-filter={`${field.key}.max`}

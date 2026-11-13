@@ -326,12 +326,17 @@
   padding: 10px;
 }
 
-:where(.qg-calendar) :where([data-slot="calendar"]) {
-  display: grid;
+:where(.qg-calendar) > :where(div:first-child) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  margin-bottom: 6px;
 }
 
 :where(.qg-calendar) :where([data-slot="calendar-heading"]) {
+  margin: 0;
+  font-size: var(--qg-font-size);
   font-weight: 600;
 }
 
@@ -368,6 +373,7 @@
   color: var(--qg-fg);
   font: inherit;
   font-size: var(--qg-font-size-small);
+  text-align: center;
   cursor: pointer;
 }
 
@@ -527,6 +533,7 @@
 :where(.qg-drawer-body) :where(.qg-field) {
   display: flex;
   flex-direction: column;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: 6px;
 }
@@ -864,7 +871,7 @@
   width: 16px;
   height: 16px;
   padding: 0;
-  border: 1px solid var(--qg-ring);
+  border: 1px solid var(--qg-muted-fg);
   border-radius: 4px;
   background: var(--qg-bg);
   color: var(--qg-primary-fg);

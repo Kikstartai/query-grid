@@ -19,6 +19,7 @@ import {
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
   QUICK_SETTINGS,
+  TOTAL_SETTINGS,
   type SqlQuery,
 } from "@kikstart/query-grid/server";
 import { Client } from "pg";
@@ -29,7 +30,16 @@ const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? 30);
 const PAGE = 200;
 const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
-const QUICK_TERMS = ["Smith", "Mokoena", "Zanele Dlam", "mok", "a M", "12345", "ena 4"];
+const QUICK_TERMS = [
+  "Smith",
+  "Mokoena",
+  "Zanele Dlam",
+  "mok",
+  "a M",
+  "12345",
+  "ena 4",
+  "---",
+];
 
 interface PlanNode {
   "Node Type": string;
@@ -68,17 +78,15 @@ async function measure(
   shape: QueryShape,
   variant: string,
   sql: SqlQuery,
-  quick: boolean,
+  settings: string[] | null,
 ): Promise<Result> {
   const times: number[] = [];
   let plan: PlanNode[] = [];
   let refused = 0;
   for (let run = 0; run < RUNS + 3; run++) {
-    if (quick) {
+    if (settings) {
       await client.query(
-        ["BEGIN", ...QUICK_SETTINGS.map((item) => `SET LOCAL ${item}`)].join(
-          "; ",
-        ),
+        ["BEGIN", ...settings.map((item) => `SET LOCAL ${item}`)].join("; "),
       );
     }
     const explained = await client
@@ -91,7 +99,7 @@ async function measure(
         }
         return null;
       });
-    if (quick) {
+    if (settings) {
       await client.query(explained ? "COMMIT" : "ROLLBACK");
     }
     if (!explained) {
@@ -200,14 +208,14 @@ async function benchOrdered(
         shape,
         `first page ${direction}`,
         buildPageSql(ORDERS_GRID, query, PAGE),
-        false,
+        null,
       ),
       await measure(
         client,
         shape,
         `deep keyset page ${direction}`,
         buildPageSql(ORDERS_GRID, { ...query, cursor }, PAGE),
-        false,
+        null,
       ),
     );
   }
@@ -222,14 +230,14 @@ async function benchOrdered(
       shape,
       "capped count",
       buildCappedCountSql(ORDERS_GRID, base),
-      false,
+      null,
     ),
     await measure(
       client,
       shape,
       "capped total",
       buildCappedTotalSql(ORDERS_GRID, base) as SqlQuery,
-      false,
+      TOTAL_SETTINGS,
     ),
   );
   if (shape.range) {
@@ -247,14 +255,14 @@ async function benchOrdered(
         shape,
         "range, first page desc",
         buildPageSql(ORDERS_GRID, { ...base, range }, PAGE),
-        false,
+        null,
       ),
       await measure(
         client,
         shape,
         "range, capped count",
         buildCappedCountSql(ORDERS_GRID, { ...base, range }),
-        false,
+        null,
       ),
     );
   }
@@ -277,7 +285,7 @@ async function benchQuick(
         shape,
         `“${value}”, capped page`,
         buildPageSql(ORDERS_GRID, query, PAGE),
-        true,
+        QUICK_SETTINGS,
       ),
     );
   }

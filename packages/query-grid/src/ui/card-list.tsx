@@ -4,7 +4,7 @@ import { createVirtualizer } from "@ui-sdk/core";
 import { useEffect, useState } from "react";
 
 import type { FieldDef, GridFormat, GridRow } from "../model/field-types.ts";
-import { formatCount, formatValue } from "../model/format.ts";
+import { formatLoaded, formatValue } from "../model/format.ts";
 import type { Feed } from "../react/feed.ts";
 import { useFeedState, useQueryGrid } from "../react/query-grid-provider.tsx";
 import { FeedNotice, isFeedBlank } from "./feed-notice.tsx";
@@ -120,8 +120,7 @@ export function CardList({ titleField, badgeField }: CardListProps) {
       }}
     >
       <div className="qg-status" data-status="loaded" data-value={loaded}>
-        {formatCount(loaded, def.format)} rows loaded in {feedState.pages}{" "}
-        keyset pages
+        {formatLoaded(loaded, feedState.pages, def.format)}
       </div>
       <div
         className="qg-list-scroller"

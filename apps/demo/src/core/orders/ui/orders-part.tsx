@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 import { useQueryState } from "@kikstart/query-grid";
 import {
   CountDisplay,
@@ -12,6 +10,8 @@ import {
   FilterSidebar,
   TotalFooter,
 } from "@kikstart/query-grid/ui";
+
+import { SiteBrand } from "@/lib/site-brand";
 
 import {
   OrdersBoard,
@@ -55,10 +55,10 @@ export function OrdersPart({ part, search }: OrdersPartProps) {
   return (
     <OrdersQueryProvider search={search}>
       <div className="part-page" data-solo-part={part}>
+        <SiteBrand />
         <p className="part-intro">
-          <Link href="/">query-grid</Link> · the <code>{part}</code> part
-          mounted alone. It reads and writes the shared query state shown
-          below, and the URL.
+          The <code>{part}</code> part mounted alone. It reads and writes the
+          shared query state shown below, and the URL.
         </p>
         <QueryReadout />
         <Part />

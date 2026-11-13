@@ -26,6 +26,7 @@ export const QUICK_SETTINGS = [
   "enable_seqscan = off",
   `statement_timeout = ${QUICK_BUDGET_MS}`,
 ];
+export const TOTAL_SETTINGS = ["enable_sort = off"];
 export const QUERY_CANCELED = "57014";
 
 const EXACT_COUNT_SETTINGS = ["statement_timeout = '60s'"];
@@ -40,9 +41,10 @@ async function runFiltered<T extends object>(
   execute: SqlExecutor,
   query: QueryState,
   sql: SqlQuery,
+  settings?: string[],
 ): Promise<T[]> {
   if (query.quick === null) {
-    return execute<T>(sql);
+    return execute<T>(sql, settings);
   }
   try {
     return await execute<T>(sql, QUICK_SETTINGS);
@@ -164,6 +166,7 @@ export async function getGridTotal(
     execute,
     query,
     sql,
+    TOTAL_SETTINGS,
   );
   if (row.count > cap) {
     return {

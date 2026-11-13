@@ -16,6 +16,7 @@ export {
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
   QUICK_SETTINGS,
+  TOTAL_SETTINGS,
   walkGridPages,
   type SqlExecutor,
 } from "./query-runner.ts";

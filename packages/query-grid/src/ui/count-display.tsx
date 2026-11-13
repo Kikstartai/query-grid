@@ -2,7 +2,7 @@
 
 import { Button } from "@ui-sdk/react/button";
 
-import { formatCount, formatMoney } from "../model/format.ts";
+import { formatCount, formatMoney, formatRows } from "../model/format.ts";
 import { getField } from "../model/field-types.ts";
 import {
   useCountState,
@@ -63,10 +63,15 @@ export function CountDisplay() {
         data-count={count}
         data-count-source={source}
       >
-        {formatCount(count, def.format)}
-        {capped ? "+" : ""} rows
+        {capped
+          ? `${formatCount(count, def.format)}+ rows`
+          : formatRows(count, def.format)}
       </span>
-      <span className="qg-muted">{SOURCE_LABELS[source]}</span>
+      <span className="qg-muted">
+        {source === "capped" && !capped
+          ? "exact, counted under the cap"
+          : SOURCE_LABELS[source]}
+      </span>
       <ExactCountButton capped={capped} loading={state.status === "loading"} />
     </div>
   );
@@ -112,8 +117,8 @@ export function TotalFooter() {
       </span>
       <span className="qg-muted">
         {source === "counter"
-          ? `from the counter table, ${formatCount(rows, def.format)} rows`
-          : `summed live over ${formatCount(rows, def.format)} rows`}
+          ? `from the counter table, ${formatRows(rows, def.format)}`
+          : `summed live over ${formatRows(rows, def.format)}`}
       </span>
     </div>
   );

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import {
@@ -21,6 +20,8 @@ import {
   ViewSwitch,
   type ViewOption,
 } from "@kikstart/query-grid/ui";
+
+import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
 import {
   listTaskRows,
@@ -58,9 +59,7 @@ export function TasksWorkspace({ search }: { search: string }) {
     <QueryGridProvider def={TASKS_GRID} search={search} source={source}>
       <div className="workspace" data-source="memory">
         <header className="workspace-head">
-          <Link className="workspace-home" href="/">
-            query-grid
-          </Link>
+          <SiteBrand />
           <h1>Tasks, in memory</h1>
           <CountDisplay />
           <span className="workspace-spacer" />
@@ -80,7 +79,10 @@ export function TasksWorkspace({ search }: { search: string }) {
           <FacetPanel />
           <TasksView />
         </div>
-        <TotalFooter />
+        <footer className="workspace-foot">
+          <TotalFooter />
+          <ByKikstart />
+        </footer>
       </div>
     </QueryGridProvider>
   );

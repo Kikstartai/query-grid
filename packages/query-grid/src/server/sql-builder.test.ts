@@ -142,13 +142,19 @@ describe("counts and totals", () => {
   function recordingExecutor(rows: object[]): {
     execute: SqlExecutor;
     seen: SqlQuery[];
+    settings: (string[] | undefined)[];
   } {
     const seen: SqlQuery[] = [];
-    const execute: SqlExecutor = async <T extends object>(sql: SqlQuery) => {
+    const settings: (string[] | undefined)[] = [];
+    const execute: SqlExecutor = async <T extends object>(
+      sql: SqlQuery,
+      applied?: string[],
+    ) => {
       seen.push(sql);
+      settings.push(applied);
       return rows as T[];
     };
-    return { execute, seen };
+    return { execute, seen, settings };
   }
 
   test("a status grouping reads its count and total from the counter table", async () => {
@@ -179,6 +185,7 @@ describe("counts and totals", () => {
       rows: 812,
       source: "live",
     });
+    expect(under.settings).toEqual([["enable_sort = off"]]);
     const over = recordingExecutor([{ count: 10001, sum: 1 }]);
     expect(await getGridTotal(TEST_DEF, over.execute, query)).toEqual({
       available: false,
