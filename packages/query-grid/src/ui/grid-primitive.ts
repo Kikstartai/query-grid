@@ -162,7 +162,7 @@ export const sheet = definePrimitive({
       order: () => rows().map((row) => row.id),
       multiple: () => true,
     });
-    const pressRow = (id: string, event: MouseEvent) => {
+    const pressRow = (id: string, event: MouseEvent | KeyboardEvent) => {
       const why = { reason: "item-press", event };
       if (event.shiftKey) {
         selection.extend(id, why);

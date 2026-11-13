@@ -73,7 +73,15 @@ function GridCells({ handle, view, row, columns, format }: GridCellsProps) {
           aria-checked={view.selected}
           data-select-row={row.id}
           data-checked={view.selected ? "" : undefined}
+          tabIndex={0}
           onClick={(event) => handle.api.pressRow(row.id, event.nativeEvent)}
+          onKeyDown={(event) => {
+            if (event.key === " " || event.key === "Enter") {
+              event.preventDefault();
+              event.stopPropagation();
+              handle.api.pressRow(row.id, event.nativeEvent);
+            }
+          }}
         >
           <CheckIcon size={12} />
         </span>

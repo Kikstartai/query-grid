@@ -799,7 +799,7 @@ export function StatusBoard(props: StatusBoardProps) {
   }
   return (
     <BoardColumns
-      key={JSON.stringify([query.equals, query.range, query.quick, query.sort])}
+      key={JSON.stringify([...queries.values()])}
       queries={queries}
       showCounts={source.mode === "memory" || isFacetOnlyQuery(def, query)}
       transitions={transitions}

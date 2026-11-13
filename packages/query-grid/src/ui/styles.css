@@ -308,6 +308,14 @@
   margin: 0;
 }
 
+:where(.qg-quick-hint) {
+  align-self: center;
+  margin-left: 6px;
+  color: var(--qg-danger);
+  font-size: var(--qg-font-size-small);
+  white-space: nowrap;
+}
+
 :where(.qg-quick-input) {
   width: 250px;
   height: calc(var(--qg-control-height) - 2px);

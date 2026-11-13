@@ -268,7 +268,7 @@ function LookupCombobox({ field, showReason }: FieldFilterProps) {
 }
 
 function toDayBound(day: string, end: boolean): string {
-  return `${day}T${end ? "23:59:59.999" : "00:00:00.000"}Z`;
+  return `${day}T${end ? "23:59:59.999999" : "00:00:00.000000"}Z`;
 }
 
 function toDateValue(range: RangeState | null): [string, string] | null {
@@ -317,13 +317,13 @@ function DateRange({ field, range, showReason }: RangeProps) {
           <DatePickerInput
             className="qg-input qg-date-input"
             aria-label={`${field.label} from`}
-            placeholder="from"
+            placeholder={range?.min?.slice(0, 10) ?? "from"}
             data-filter={`${field.key}.min`}
           />
           <span className="qg-range-dash">–</span>
           <DatePickerInput
             end
-            placeholder="to"
+            placeholder={range?.max?.slice(0, 10) ?? "to"}
             className="qg-input qg-date-input"
             aria-label={`${field.label} to`}
             data-filter={`${field.key}.max`}

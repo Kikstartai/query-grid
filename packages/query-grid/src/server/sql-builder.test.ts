@@ -297,3 +297,19 @@ describe("generated DDL", () => {
     ).toEqual(["things_qs_status__created_at", "things_qs_quick"]);
   });
 });
+
+describe("an exact count of a quick filter", () => {
+  test("runs under the quick budget and is refused past it", async () => {
+    const applied: (string[] | undefined)[] = [];
+    const canceled: SqlExecutor = async (_sql, settings) => {
+      applied.push(settings);
+      throw Object.assign(new Error("canceling statement"), { code: "57014" });
+    };
+    await expect(
+      getGridCount(TEST_DEF, canceled, { ...BASE, quick: "---" }, true),
+    ).rejects.toMatchObject({ code: "too_broad" });
+    expect(applied).toEqual([
+      ["enable_seqscan = off", "statement_timeout = 120"],
+    ]);
+  });
+});

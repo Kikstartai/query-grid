@@ -88,7 +88,10 @@ function proposeAction(
         rules.mode === "indexed" &&
         query.quick !== null &&
         !rules.quickComplete;
-      if (unordered) {
+      const toDefault =
+        action.field === def.defaultSort.field &&
+        action.direction === def.defaultSort.direction;
+      if (unordered && !toDefault) {
         return [];
       }
       return [

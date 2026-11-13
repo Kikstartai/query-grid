@@ -123,7 +123,9 @@ export async function getGridCount(
     };
   }
   if (exact) {
-    const [row] = await execute<{ count: number }>(
+    const [row] = await runFiltered<{ count: number }>(
+      execute,
+      query,
       buildExactCountSql(def, query),
       EXACT_COUNT_SETTINGS,
     );

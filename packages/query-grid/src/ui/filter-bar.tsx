@@ -14,7 +14,11 @@ import { useState, type FormEvent } from "react";
 
 import { getField, listQuickFields } from "../model/field-types.ts";
 import type { FilterChip } from "../model/format.ts";
-import { isValidQuickValue } from "../model/query-validate.ts";
+import {
+  isValidQuickValue,
+  QUICK_MAX_LENGTH,
+  QUICK_MIN_LENGTH,
+} from "../model/query-validate.ts";
 import { listSortFields } from "../model/shapes.ts";
 import {
   useFilterChips,
@@ -129,6 +133,17 @@ function SortDirectionIcon({ descending }: { descending: boolean }) {
   return <ArrowUpIcon />;
 }
 
+function QuickHint({ show }: { show: boolean }) {
+  if (!show) {
+    return null;
+  }
+  return (
+    <span className="qg-quick-hint" role="status" data-quick-hint>
+      {QUICK_MIN_LENGTH} to {QUICK_MAX_LENGTH} characters
+    </span>
+  );
+}
+
 interface QuickFilterFormProps extends ControlProps {
   current: string;
 }
@@ -138,6 +153,7 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
   const dispatch = useQueryDispatch();
   const offer = useOfferState({ kind: "quick" });
   const [draft, setDraft] = useState(current);
+  const [tooShort, setTooShort] = useState(false);
   const labels = listQuickFields(def)
     .map((key) => getField(def, key)?.label ?? key)
     .join(", ");
@@ -146,6 +162,7 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
       dispatch({ type: "clearQuick" });
       return;
     }
+    setTooShort(!isValidQuickValue(value));
     if (isValidQuickValue(value)) {
       dispatch({ type: "setQuick", value: value.trim() });
     }
@@ -173,7 +190,10 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
             data-filter="quick"
             value={draft}
             disabled={!offer.offered}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              setTooShort(false);
+            }}
           />
           <InputClear
             className="qg-clear"
@@ -187,6 +207,7 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
             <XIcon size={12} />
           </InputClear>
         </InputGroup>
+        <QuickHint show={tooShort} />
       </form>
     </FieldFrame>
   );

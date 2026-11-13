@@ -292,3 +292,25 @@ describe("chips", () => {
     expect(idle[0].clear).toBeNull();
   });
 });
+
+describe("the sort under an unordered quick filter", () => {
+  test("only a return to the default sort is accepted", () => {
+    const stuck: QueryState = {
+      ...BASE,
+      quick: "abc",
+      sort: { field: "total", direction: "desc" },
+    };
+    expect(
+      applyAction(TEST_DEF, stuck, {
+        type: "setSort",
+        field: "total",
+        direction: "asc",
+      }),
+    ).toBe(stuck);
+    expect(
+      applyAction(TEST_DEF, stuck, { type: "setSort", ...TEST_DEF.defaultSort })
+        .sort,
+    ).toEqual(TEST_DEF.defaultSort);
+    expect(listOffers(TEST_DEF, stuck).sorts).toEqual([]);
+  });
+});

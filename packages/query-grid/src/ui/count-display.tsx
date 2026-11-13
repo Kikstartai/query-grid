@@ -77,19 +77,23 @@ export function CountDisplay() {
   );
 }
 
+function TotalUnavailable({ reason }: { reason: string | null }) {
+  return (
+    <div className="qg-total" data-part="total" data-total="unavailable">
+      <span className="qg-total-label">No total for this filter.</span>
+      <span className="qg-muted" data-total-reason>
+        {reason}
+      </span>
+    </div>
+  );
+}
+
 export function TotalFooter() {
   const { def } = useQueryGrid();
   const state = useTotalState();
   const label = getField(def, def.total?.field ?? "")?.label ?? "Total";
   if (state.status === "error") {
-    return (
-      <div className="qg-total" data-part="total" data-total="unavailable">
-        <span className="qg-total-label">No total for this filter.</span>
-        <span className="qg-muted" data-total-reason>
-          {state.error}
-        </span>
-      </div>
-    );
+    return <TotalUnavailable reason={state.error} />;
   }
   if (!state.result) {
     return (
@@ -99,14 +103,7 @@ export function TotalFooter() {
     );
   }
   if (!state.result.available) {
-    return (
-      <div className="qg-total" data-part="total" data-total="unavailable">
-        <span className="qg-total-label">No total for this filter.</span>
-        <span className="qg-muted" data-total-reason>
-          {state.result.reason}
-        </span>
-      </div>
-    );
+    return <TotalUnavailable reason={state.result.reason} />;
   }
   const { sum, rows, source } = state.result;
   return (
