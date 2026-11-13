@@ -95,7 +95,8 @@ function normalizeColumn(
         : fallback.width,
     visible:
       typeof stored.visible === "boolean" ? stored.visible : fallback.visible,
-    pinned: typeof stored.pinned === "boolean" ? stored.pinned : fallback.pinned,
+    pinned:
+      typeof stored.pinned === "boolean" ? stored.pinned : fallback.pinned,
   };
 }
 

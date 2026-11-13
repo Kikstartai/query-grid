@@ -191,7 +191,8 @@ function LookupCombobox({ field, showReason }: FieldFilterProps) {
   const offer = useOfferState({ kind: "equals", field: field.key });
   const current = query.equals[field.key] ?? null;
   const options = useAsyncOptions<FieldOption>(
-    (text, { signal }) => source.fetchOptions(field.key, { query: text }, signal),
+    (text, { signal }) =>
+      source.fetchOptions(field.key, { query: text }, signal),
     { debounce: 250, immediate: true },
   );
   useEffect(() => {

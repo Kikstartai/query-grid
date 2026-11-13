@@ -88,7 +88,11 @@ describe("matchShape", () => {
       quick: ["name", "number"],
     });
     expect(
-      matchShape(TEST_DEF, { ...BASE, quick: "abc", equals: { status: "open" } }),
+      matchShape(TEST_DEF, {
+        ...BASE,
+        quick: "abc",
+        equals: { status: "open" },
+      }),
     ).toBeNull();
   });
 });
@@ -110,7 +114,10 @@ describe("offers", () => {
   });
 
   test("an action with no shape leaves the query alone", () => {
-    const byTotal = { ...BASE, sort: { field: "total", direction: "desc" as const } };
+    const byTotal = {
+      ...BASE,
+      sort: { field: "total", direction: "desc" as const },
+    };
     expect(
       applyAction(TEST_DEF, byTotal, {
         type: "setEquals",
@@ -136,7 +143,10 @@ describe("offers", () => {
   });
 
   test("a quick filter disables everything until every match is loaded", () => {
-    const quick = applyAction(TEST_DEF, BASE, { type: "setQuick", value: "abc" });
+    const quick = applyAction(TEST_DEF, BASE, {
+      type: "setQuick",
+      value: "abc",
+    });
     expect(quick.quick).toBe("abc");
     expect(listOffers(TEST_DEF, quick)).toEqual({
       equals: [],
@@ -160,7 +170,10 @@ describe("offers", () => {
   });
 
   test("setting the quick filter returns to the default sort", () => {
-    const byTotal = { ...BASE, sort: { field: "total", direction: "asc" as const } };
+    const byTotal = {
+      ...BASE,
+      sort: { field: "total", direction: "asc" as const },
+    };
     const quick = applyAction(TEST_DEF, byTotal, {
       type: "setQuick",
       value: "abc",
@@ -181,9 +194,15 @@ describe("offers", () => {
   });
 
   test("the reason names what blocks a control", () => {
-    const byTotal = { ...BASE, sort: { field: "total", direction: "desc" as const } };
+    const byTotal = {
+      ...BASE,
+      sort: { field: "total", direction: "desc" as const },
+    };
     expect(
-      explainUnavailable(TEST_DEF, byTotal, { kind: "equals", field: "region" }),
+      explainUnavailable(TEST_DEF, byTotal, {
+        kind: "equals",
+        field: "region",
+      }),
     ).toBe("No index answers Region with sort Total.");
     expect(
       explainUnavailable(TEST_DEF, byTotal, {

@@ -64,8 +64,7 @@ export function matchShape(def: GridDef, query: QueryState): QueryShape | null {
     return answerable ? (def.shapes.find(isQuickShape) ?? null) : null;
   }
   const ordered = listOrderedShapes(def).find(
-    (shape) =>
-      shape.sort === query.sort.field && sameSet(shape.equals, equals),
+    (shape) => shape.sort === query.sort.field && sameSet(shape.equals, equals),
   );
   if (!ordered) {
     return null;
@@ -155,7 +154,9 @@ function validateOrderedShape(def: GridDef, shape: OrderedShape): string[] {
     problems.push(`shape ${id}: ${shape.sort} does not offer range`);
   }
   if (shape.equals.includes(shape.sort)) {
-    problems.push(`shape ${id}: ${shape.sort} is both an equality and the sort`);
+    problems.push(
+      `shape ${id}: ${shape.sort} is both an equality and the sort`,
+    );
   }
   for (const key of shape.equals) {
     if (!getField(def, key)?.operators.includes("eq")) {

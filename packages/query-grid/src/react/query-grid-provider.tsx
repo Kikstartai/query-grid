@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  use,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, use, useEffect, useState, type ReactNode } from "react";
 
 import {
   createColumnStore,
@@ -184,7 +178,11 @@ export function useQueryRules(): QueryRules {
 
 const offersByQuery = new WeakMap<QueryState, WeakMap<QueryRules, Offers>>();
 
-function readOffers(def: GridDef, query: QueryState, rules: QueryRules): Offers {
+function readOffers(
+  def: GridDef,
+  query: QueryState,
+  rules: QueryRules,
+): Offers {
   const byRules = offersByQuery.get(query) ?? new WeakMap<QueryRules, Offers>();
   offersByQuery.set(query, byRules);
   const offers = byRules.get(rules) ?? listOffers(def, query, rules);

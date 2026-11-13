@@ -2,7 +2,7 @@
 
 A composable filter and data grid for very large Postgres tables, built on [UI SDK](https://ui-sdk.dev). You declare the query shapes your indexes serve. The controls offer exactly those, and the server refuses everything else.
 
-Live demo: {{DEMO_URL}}
+The demo site in `apps/demo` is not deployed yet: see [Blocked](#blocked). Run it locally with `bun run dev`.
 
 ## Principles
 
@@ -39,9 +39,26 @@ export const ORDERS_GRID: GridDef = {
   total: { field: "total" },
   fields: [
     { key: "id", label: "ID", type: "id", operators: [], hidden: true },
-    { key: "order_number", label: "Order", type: "integer", operators: [], pinned: true },
-    { key: "created_at", label: "Created", type: "datetime", operators: ["range"] },
-    { key: "status_code", label: "Status", type: "enum", operators: ["eq"], options: STATUSES },
+    {
+      key: "order_number",
+      label: "Order",
+      type: "integer",
+      operators: [],
+      pinned: true,
+    },
+    {
+      key: "created_at",
+      label: "Created",
+      type: "datetime",
+      operators: ["range"],
+    },
+    {
+      key: "status_code",
+      label: "Status",
+      type: "enum",
+      operators: ["eq"],
+      options: STATUSES,
+    },
     { key: "customer_name", label: "Customer", type: "text", operators: [] },
     { key: "total", label: "Total", type: "money", operators: ["range"] },
   ],
@@ -59,26 +76,42 @@ Generate the DDL from it: one index per shape, then the counter table and its tr
 ```ts
 import { generateGridMigration } from "@kikstart/query-grid/server";
 
-writeFileSync("migrations/0002_query_grid.sql", generateGridMigration(ORDERS_GRID));
+writeFileSync(
+  "migrations/0002_query_grid.sql",
+  generateGridMigration(ORDERS_GRID),
+);
 ```
 
 Serve it. The executor is yours; the runner validates the shape before any SQL exists.
 
 ```ts
 import { decodeQuery } from "@kikstart/query-grid";
-import { listGridPage, QueryRejected, type SqlExecutor } from "@kikstart/query-grid/server";
+import {
+  listGridPage,
+  QueryRejected,
+  type SqlExecutor,
+} from "@kikstart/query-grid/server";
 
-const execute: SqlExecutor = async (sql) => (await pool.query(sql.text, sql.values)).rows;
+const execute: SqlExecutor = async (sql) =>
+  (await pool.query(sql.text, sql.values)).rows;
 
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   try {
     return Response.json(
-      await listGridPage(ORDERS_GRID, execute, decodeQuery(ORDERS_GRID, params), 200),
+      await listGridPage(
+        ORDERS_GRID,
+        execute,
+        decodeQuery(ORDERS_GRID, params),
+        200,
+      ),
     );
   } catch (error) {
     if (error instanceof QueryRejected) {
-      return Response.json({ error: error.code, message: error.message }, { status: 400 });
+      return Response.json(
+        { error: error.code, message: error.message },
+        { status: 400 },
+      );
     }
     throw error;
   }
@@ -87,15 +120,15 @@ export async function GET(request: Request) {
 
 The HTTP data source expects these routes under one base path. `getGridCount`, `getGridTotal` and `listFacetCounts` answer the first three; the rest are the host's own.
 
-| Route               | Answers                                                              |
-| ------------------- | -------------------------------------------------------------------- |
-| `GET /`             | a keyset page: `{ rows, nextCursor, hasNext }`                       |
-| `GET /count`        | `{ count, capped, source }`; `exact=1` asks for the exact count      |
-| `GET /total`        | `{ available, sum, rows, source }` or `{ available: false, reason }` |
-| `GET /facets`       | `[{ value, count, sum }]` from the counter table                     |
-| `GET /options`      | `[{ value, label }]` for a lookup field (`field`, `query`, `value`)  |
-| `GET /transitions`  | `[[from, to]]`, for the board                                        |
-| `POST /status`      | `{ id, to }` moves one row and returns it, for the board             |
+| Route              | Answers                                                              |
+| ------------------ | -------------------------------------------------------------------- |
+| `GET /`            | a keyset page: `{ rows, nextCursor, hasNext }`                       |
+| `GET /count`       | `{ count, capped, source }`; `exact=1` asks for the exact count      |
+| `GET /total`       | `{ available, sum, rows, source }` or `{ available: false, reason }` |
+| `GET /facets`      | `[{ value, count, sum }]` from the counter table                     |
+| `GET /options`     | `[{ value, label }]` for a lookup field (`field`, `query`, `value`)  |
+| `GET /transitions` | `[[from, to]]`, for the board                                        |
+| `POST /status`     | `{ id, to }` moves one row and returns it, for the board             |
 
 Mount the parts. Each one reads and writes the same query state; mount as many or as few as you need.
 
@@ -103,7 +136,15 @@ Mount the parts. Each one reads and writes the same query state; mount as many o
 "use client";
 
 import { QueryGridProvider } from "@kikstart/query-grid";
-import { CountDisplay, DataGrid, FacetPanel, FilterBar, FilterChips, FilterSidebar, TotalFooter } from "@kikstart/query-grid/ui";
+import {
+  CountDisplay,
+  DataGrid,
+  FacetPanel,
+  FilterBar,
+  FilterChips,
+  FilterSidebar,
+  TotalFooter,
+} from "@kikstart/query-grid/ui";
 import "@kikstart/query-grid/ui/styles.css";
 
 export function Orders({ search }: { search: string }) {
@@ -144,7 +185,7 @@ export function Orders({ search }: { search: string }) {
 }
 ```
 
-A Tailwind restyle of one Select and one grid row, from the demo's [`/restyled`]({{DEMO_URL}}/restyled) route. No Tailwind is in the package; the consumer's stylesheet targets the classes and state attributes:
+A Tailwind restyle of one Select and one grid row, from the demo's `/restyled` route. No Tailwind is in the package; the consumer's stylesheet targets the classes and state attributes:
 
 ```css
 @import "tailwindcss/theme.css" layer(theme);
@@ -178,7 +219,14 @@ The hooks in the root entry are complete without `./ui`. Build your own controls
 ```tsx
 "use client";
 
-import { QueryGridProvider, useFeedState, useOffers, useQueryDispatch, useQueryGrid, useQueryState } from "@kikstart/query-grid";
+import {
+  QueryGridProvider,
+  useFeedState,
+  useOffers,
+  useQueryDispatch,
+  useQueryGrid,
+  useQueryState,
+} from "@kikstart/query-grid";
 
 function StatusButtons() {
   const { def } = useQueryGrid();
@@ -193,7 +241,13 @@ function StatusButtons() {
           key={option.value}
           disabled={!offers.equals.includes("status_code")}
           aria-pressed={query.equals.status_code === option.value}
-          onClick={() => dispatch({ type: "setEquals", field: "status_code", value: option.value })}
+          onClick={() =>
+            dispatch({
+              type: "setEquals",
+              field: "status_code",
+              value: option.value,
+            })
+          }
         >
           {option.label}
         </button>
@@ -211,22 +265,24 @@ function Rows() {
         <li key={row.id}>{row.order_number}</li>
       ))}
       <li>
-        <button disabled={!hasNext} onClick={feed.loadMore}>More</button>
+        <button disabled={!hasNext} onClick={feed.loadMore}>
+          More
+        </button>
       </li>
     </ul>
   );
 }
 ```
 
-| Hook                                              | Gives                                                                   |
-| ------------------------------------------------- | ----------------------------------------------------------------------- |
-| `useQueryState`, `useQueryDispatch`               | the query and the one way to change it                                  |
-| `useOffers`, `useQueryRules`                      | which filters, ranges, sorts and quick filter an index answers now      |
-| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped        |
+| Hook                                              | Gives                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `useQueryState`, `useQueryDispatch`               | the query and the one way to change it                                   |
+| `useOffers`, `useQueryRules`                      | which filters, ranges, sorts and quick filter an index answers now       |
+| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped         |
 | `useCountState`, `useTotalState`, `useFacetState` | count, total and facet counts, each fetched only once something reads it |
-| `useFilterChips`                                  | one entry per active filter and the sort, each with its clearing action |
-| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns  |
-| `useGridView`, `useQueryGrid`                     | the current view and the stores themselves                              |
+| `useFilterChips`                                  | one entry per active filter and the sort, each with its clearing action  |
+| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns   |
+| `useGridView`, `useQueryGrid`                     | the current view and the stores themselves                               |
 
 `explainUnavailable(def, query, target, rules)` returns the sentence a disabled control shows. For a host's own export, `useQueryState()` is the query, `useColumns().layout` the visible columns in order, and `walkGridPages(def, execute, query)` on the server yields every page of the result by keyset.
 
@@ -240,7 +296,7 @@ const source = createMemorySource(TASKS_GRID, rows, { transitions });
 <QueryGridProvider def={TASKS_GRID} search={search} source={source}>
 ```
 
-It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's [`/memory`]({{DEMO_URL}}/memory) route) and still under a frame at 5,000. Past that, give the table shapes and an index.
+It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's `/memory` route) and still under a frame at 5,000. Past that, give the table shapes and an index.
 
 ## Design as built
 
@@ -255,17 +311,17 @@ The grid then declares its **query shapes**. A shape is the unit the data layer 
 
 The demo's orders grid declares ten:
 
-| Shape                                           | Index                                                     |
-| ----------------------------------------------- | --------------------------------------------------------- |
-| no filter, sort `created_at`, range             | `(created_at, id)`                                        |
-| no filter, sort `total`, range                  | `(total, id)`                                             |
-| `status_code =`, sort `created_at`, range       | `(status_code, created_at, id)`                           |
-| `status_code =`, sort `total`, range            | `(status_code, total, id)`                                |
-| `customer_id =`, sort `created_at`              | `(customer_id, created_at, id)`                           |
-| `region =`, sort `created_at`, range            | `(region, created_at, id)`                                |
-| `channel =`, sort `created_at`                  | `(channel, created_at, id)`                               |
-| `status_code =`, `region =`, sort `created_at`  | `(status_code, region, created_at, id)`                   |
-| `status_code =`, `channel =`, sort `created_at` | `(status_code, channel, created_at, id)`                  |
+| Shape                                             | Index                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------------------- |
+| no filter, sort `created_at`, range               | `(created_at, id)`                                                    |
+| no filter, sort `total`, range                    | `(total, id)`                                                         |
+| `status_code =`, sort `created_at`, range         | `(status_code, created_at, id)`                                       |
+| `status_code =`, sort `total`, range              | `(status_code, total, id)`                                            |
+| `customer_id =`, sort `created_at`                | `(customer_id, created_at, id)`                                       |
+| `region =`, sort `created_at`, range              | `(region, created_at, id)`                                            |
+| `channel =`, sort `created_at`                    | `(channel, created_at, id)`                                           |
+| `status_code =`, `region =`, sort `created_at`    | `(status_code, region, created_at, id)`                               |
+| `status_code =`, `channel =`, sort `created_at`   | `(status_code, channel, created_at, id)`                              |
 | quick filter over `customer_name`, `order_number` | GIN `((customer_name \|\| ' ' \|\| order_number::text) gin_trgm_ops)` |
 
 `validateGridDef` rejects a shape that sorts on a nullable field, repeats another shape, names an operator its field does not offer or puts a timestamp in the quick filter, and requires the default sort with no filter to be a shape.
@@ -319,19 +375,19 @@ Any other filter shows `No total for this filter` with the reason. The counter t
 
 ### Parts
 
-| Part                                        | Reads                                           | Writes                                      |
-| ------------------------------------------- | ----------------------------------------------- | ------------------------------------------- |
-| `FilterBar` (`QuickFilter`, `FieldFilter`, `SortControl`) | query, offers                     | filters, sort                               |
-| `FilterSidebar`                             | query, offers, with each reason shown           | filters, sort                               |
-| `FilterChips`                               | query                                           | clears one filter, the sort, or everything  |
-| header sort and filter controls             | query, offers                                   | sort, filters                               |
-| `FacetPanel`                                | query, offers, facet counts                     | status filter                               |
-| `CountDisplay`                              | count store                                     | exact-count request                         |
-| `TotalFooter`                               | total store                                     | –                                           |
-| `DataGrid`, `ColumnsMenu`                   | feed, query, column state                       | sort, filters, column state                 |
-| `CardList`                                  | feed                                            | –                                           |
-| `StatusBoard`                               | query, facet counts, one keyset feed per status | the status of one row, through the server   |
-| `ViewSwitch`                                | view                                            | view                                        |
+| Part                                                      | Reads                                           | Writes                                     |
+| --------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------ |
+| `FilterBar` (`QuickFilter`, `FieldFilter`, `SortControl`) | query, offers                                   | filters, sort                              |
+| `FilterSidebar`                                           | query, offers, with each reason shown           | filters, sort                              |
+| `FilterChips`                                             | query                                           | clears one filter, the sort, or everything |
+| header sort and filter controls                           | query, offers                                   | sort, filters                              |
+| `FacetPanel`                                              | query, offers, facet counts                     | status filter                              |
+| `CountDisplay`                                            | count store                                     | exact-count request                        |
+| `TotalFooter`                                             | total store                                     | –                                          |
+| `DataGrid`, `ColumnsMenu`                                 | feed, query, column state                       | sort, filters, column state                |
+| `CardList`                                                | feed                                            | –                                          |
+| `StatusBoard`                                             | query, facet counts, one keyset feed per status | the status of one row, through the server  |
+| `ViewSwitch`                                              | view                                            | view                                       |
 
 ### Controls
 
@@ -355,28 +411,28 @@ The handle on a header's right edge is a focusable `separator`. `bindDrag` track
 
 ## Decisions
 
-| Decision                                                                               | Why                                                                                         |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| A range filter sits on the sort column only                                            | One index cannot serve a range on one column and an order on another                        |
-| An equality filter takes one value, never a list                                       | `IN` over an ordered index needs a merge the index does not give                            |
-| A nullable column is never a sort                                                      | The NULL-safe keyset predicate is an `OR`, which loses the index range scan on a deep page  |
-| The quick filter returns 500 unordered rows and no cursor                              | A bitmap scan has no order; ordering it means a Sort over every match                       |
-| The quick filter is refused past 120 ms                                                | Its cost follows the match count, so only a time budget bounds it                           |
-| Setting the quick filter returns to the default sort                                   | A capped result has no order; a complete one is sorted in memory by the default sort first  |
-| The quick filter covers customer name and order number, not email                      | `orders` carries no email column, and adding one would pass the demo database's 0.5 GB cap  |
+| Decision                                                                                    | Why                                                                                                                                            |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| A range filter sits on the sort column only                                                 | One index cannot serve a range on one column and an order on another                                                                           |
+| An equality filter takes one value, never a list                                            | `IN` over an ordered index needs a merge the index does not give                                                                               |
+| A nullable column is never a sort                                                           | The NULL-safe keyset predicate is an `OR`, which loses the index range scan on a deep page                                                     |
+| The quick filter returns 500 unordered rows and no cursor                                   | A bitmap scan has no order; ordering it means a Sort over every match                                                                          |
+| The quick filter is refused past 120 ms                                                     | Its cost follows the match count, so only a time budget bounds it                                                                              |
+| Setting the quick filter returns to the default sort                                        | A capped result has no order; a complete one is sorted in memory by the default sort first                                                     |
+| The quick filter covers customer name and order number, not email                           | `orders` carries no email column, and adding one would pass the demo database's 0.5 GB cap                                                     |
 | The live total orders its inner scan by the shape's index and runs with `enable_sort = off` | The plan is then always an index scan that stops at row 10,001; left alone the planner picks a sequential scan or a sort, bounded only by luck |
-| Clearing a filter falls back: same sort, then the default sort, then the default query | The result must stay a declared shape                                                       |
-| The URL carries the cursor the feed starts from                                        | A view is shareable; changing a filter or sort resets it                                    |
-| Facet counts hide while another filter is active                                       | Only the per-status totals have a counter                                                   |
-| The filter sidebar is a non-modal Drawer                                               | The grid stays in view and usable while filters change                                      |
-| Grid rows use a behaviour-driven `role="checkbox"` cell, not a Checkbox per row        | One primitive instance per row costs frames; selection is UI SDK's `createSelection` either way |
-| The exact count is unbounded but opt-in                                                | It never runs on the request path                                                           |
-| The package is compiled with the React Compiler and ships no `useMemo`                 | A consumer's compiler does not reach into `node_modules`                                    |
-| The demo dataset is 620,000 orders on Neon, with the 10M run local                     | The Free plan caps a project at 0.5 GB and 10M orders with their indexes are 6.9 GB         |
+| Clearing a filter falls back: same sort, then the default sort, then the default query      | The result must stay a declared shape                                                                                                          |
+| The URL carries the cursor the feed starts from                                             | A view is shareable; changing a filter or sort resets it                                                                                       |
+| Facet counts hide while another filter is active                                            | Only the per-status totals have a counter                                                                                                      |
+| The filter sidebar is a non-modal Drawer                                                    | The grid stays in view and usable while filters change                                                                                         |
+| Grid rows use a behaviour-driven `role="checkbox"` cell, not a Checkbox per row             | One primitive instance per row costs frames; selection is UI SDK's `createSelection` either way                                                |
+| The exact count is unbounded but opt-in                                                     | It never runs on the request path                                                                                                              |
+| The package is compiled with the React Compiler and ships no `useMemo`                      | A consumer's compiler does not reach into `node_modules`                                                                                       |
+| The demo dataset is 620,000 orders on Neon, with the 10M run local                          | The Free plan caps a project at 0.5 GB and 10M orders with their indexes are 6.9 GB                                                            |
 
 ## Cost at scale
 
-- **Storage per shape.** At 10M orders the heap is 1.7 GB and nine ordered shape indexes are about 510 MB each; the trigram index was 237 MB over one column. Indexes scale with the table: at 620,000 rows the same ratio holds, {{STORAGE_NOTE}}. Roughly three times the heap for nine ordered shapes is why shapes are declared deliberately, per grid, and never generated per column.
+- **Storage per shape.** At 10M orders the heap is 1.7 GB and nine ordered shape indexes are about 510 MB each; the trigram index was 237 MB over one column. Indexes scale with the table: at 620,000 rows the same ratio holds, 108 MB of heap under 336 MB of indexes: 24 MB for a two-column shape index, 39 MB for a four-column one and 32 MB for the quick-filter trigram index over two columns. Roughly three times the heap for nine ordered shapes is why shapes are declared deliberately, per grid, and never generated per column.
 - **Write amplification.** Each insert maintains every shape index plus the primary key, eleven index writes here, and each status change rewrites the indexes that carry `status_code`. Write cost is proportional to the shape count.
 - **Counters.** One counter-row upsert per insert or delete, two per change of status or total. The counter row is a hot row under concurrent writes to one status, and two concurrent status moves in opposite directions take their row locks in opposite order.
 - **Rollout.** Indexes ship as migrations. `CREATE INDEX` on a populated table should be `CONCURRENTLY`; the generated file uses `IF NOT EXISTS` and leaves that choice to the host. The 10M build took 117 s for all ten.
@@ -389,7 +445,25 @@ The handle on a header's right edge is a focusable `separator`. `bindDrag` track
 
 ### Neon, 620,000 orders
 
-{{BENCH_NEON}}
+Postgres 18.7 on a Neon Free-plan compute, 0.25 to 2 CU, measured 2026-11-13. All 72 queries pass; [`apps/demo/db/bench-results.md`](apps/demo/db/bench-results.md) holds each one with its plan.
+
+| Shape                                             | Page variants                          | Worst page p50 / p95 (ms) | Worst capped count p50 / p95 (ms) | Worst live total p50 / p95 (ms) | Plan              |
+| ------------------------------------------------- | -------------------------------------- | ------------------------- | --------------------------------- | ------------------------------- | ----------------- |
+| no filter, sort `created_at`                      | first and deep, both directions, range | 1.82 / 3.18               | 3.45 / 3.97                       | 8.58 / 11.65                    | Index Scan        |
+| no filter, sort `total`                           | first and deep, both directions, range | 1.37 / 1.65               | 3.47 / 3.76                       | 2.36 / 2.53                     | Index Scan        |
+| `status_code =`, sort `created_at`                | first and deep, both directions, range | 1.20 / 2.03               | 2.43 / 2.97                       | 9.01 / 9.90                     | Index Scan        |
+| `status_code =`, sort `total`                     | first and deep, both directions, range | 0.90 / 1.20               | 2.46 / 2.73                       | 2.56 / 2.99                     | Index Scan        |
+| `customer_id =`, sort `created_at`                | first and deep, both directions        | 0.89 / 0.97               | 2.39 / 2.58                       | 10.64 / 12.45                   | Index Scan        |
+| `region =`, sort `created_at`                     | first and deep, both directions, range | 0.76 / 0.90               | 2.39 / 2.82                       | 10.57 / 14.02                   | Index Scan        |
+| `channel =`, sort `created_at`                    | first and deep, both directions        | 0.82 / 0.88               | 4.58 / 4.92                       | 9.15 / 13.88                    | Index Scan        |
+| `status_code =`, `region =`, sort `created_at`    | first and deep, both directions        | 0.80 / 1.05               | 2.53 / 2.69                       | 10.52 / 11.70                   | Index Scan        |
+| `status_code =`, `channel =`, sort `created_at`   | first and deep, both directions        | 0.83 / 0.90               | 2.49 / 2.65                       | 9.67 / 11.85                    | Index Scan        |
+| quick filter over `customer_name`, `order_number` | 8 terms                                | 11.93 / 13.42             | none                              | none                            | Bitmap Index Scan |
+
+- A deep page starts 200,000 rows into the result, or 20,000 or 1,000 where the filter leaves fewer, and costs the same as the first page.
+- The live total is the capped sum behind the footer: an index scan that stops at row 10,001, run with `enable_sort = off`. Its plan is an Index Scan or Index Only Scan on the shape's own index in every case.
+- Quick filter by term, p95: `12345` 0.4 ms, `Smith` 2.0 ms, `Zanele Dlam` 6.3 ms, `Mokoena` 8.6 ms, `ena 4` 8.6 ms, `mok` 9.1 ms, `a M` 13.4 ms.
+- `---` holds no trigram the index can use, so it would recheck every row. The server refused it at the 120 ms budget in all 33 runs. That is the refusal the budget exists for.
 
 ### Local, 10,000,000 orders
 
@@ -414,7 +488,91 @@ Measured on the proof of concept this library came from: embedded Postgres 18.6 
 
 ## Walkthrough
 
-{{WALKTHROUGH}}
+Captured with agent-browser at 1500 by 900 from the production build of `apps/demo` running locally against the Neon project. They will be retaken from the deployed site once it exists: see [Blocked](#blocked).
+
+![Landing page](docs/screenshots/01-landing.png)
+
+The landing page: what the library is, the three principles, the install line, the GitHub link and the live routes, in kikstart's brand.
+
+![Default grid](docs/screenshots/02-default-grid.png)
+
+The default query: the filter bar, the always-visible chip row, the status facets with counts from the counter table, the exact count, the first keyset page and the footer total. Total's range inputs are disabled because the sort is Created.
+
+![Filter sidebar](docs/screenshots/03-filter-sidebar.png)
+
+The filter sidebar, a non-modal Drawer: one control per filterable field over the same query state. Region is set, so the controls no index combines with it are disabled.
+
+![Chips and Reset](docs/screenshots/04-chips-reset.png)
+
+One chip per active filter and one for the sort, each with its own remove button, and Reset for the lot.
+
+![Disabled controls with reasons](docs/screenshots/05-disabled-with-reasons.png)
+
+Status Paid sorted by Total. Region, Channel, Customer, the Created range and the quick filter are disabled, and each says which index is missing.
+
+![Capped count, no total](docs/screenshots/06-capped-count-no-total.png)
+
+A range on Total has no counter, so the count stops at `10 000+` and offers the exact count. More than 10,000 rows match, so the footer says no total is available and why.
+
+![Exact count](docs/screenshots/07-exact-count.png)
+
+The exact count runs only after the button is pressed: 10,874 rows.
+
+![Live total](docs/screenshots/08-total-live.png)
+
+A week of Paid orders is 1,701 rows, under the cap, so the footer sums them live in one bounded query.
+
+![Total from the counter table](docs/screenshots/09-total-from-counter.png)
+
+A status alone is a declared grouping: the count and the total are a one-row read of the trigger-maintained counter table.
+
+![Quick filter, answered](docs/screenshots/10-quick-filter-answered.png)
+
+The quick filter matched 34 orders across customer name and order number. Every match is loaded, so the sort is offered and runs in memory, here by Total; every other filter is disabled.
+
+![Quick filter, refused](docs/screenshots/11-quick-filter-refused.png)
+
+The term `---` gives the trigram index nothing to narrow, so the server refuses it at its 120 ms budget with a 400 and the grid, count and total say so.
+
+![Header filter](docs/screenshots/12-header-filter.png)
+
+A header carries its own filter popover and sort button, drawn from the same offers as the filter bar. The filter is a UI SDK Select inside a Popover.
+
+![Columns menu](docs/screenshots/13-columns-menu.png)
+
+The Columns menu shows, hides and pins columns with UI SDK Checkboxes; the state is one small array persisted through the host's save and load functions.
+
+![Range selection](docs/screenshots/14-range-selection.png)
+
+A 5 by 4 cell range made with Shift and the arrow keys; Ctrl+C copies it as TSV.
+
+![Resize and pinned column](docs/screenshots/15-resize-pinned-scrolled.png)
+
+Customer resized from 200 to 300 px by dragging its handle, then the grid scrolled 520 px right and 600 px down: the select column, the pinned Order column and the header stay in place.
+
+![List view](docs/screenshots/16-list-view.png)
+
+The card list over the same query: the chips and the URL are unchanged by the switch.
+
+![Status board](docs/screenshots/17-board.png)
+
+One virtualised, keyset-paged column per status, each headed by its trigger-maintained count.
+
+![Board drag](docs/screenshots/18-board-drag.png)
+
+A Paid card dragged over Shipped: it has left its column and Shipped has opened a slot for it. Dropping it posts the status change, which the server checks against the transitions table.
+
+![One part alone](docs/screenshots/19-part-facets-alone.png)
+
+`/parts/facets` mounts the facet panel alone over the query state restored from the URL.
+
+![In-memory route](docs/screenshots/20-in-memory.png)
+
+The same parts over 400 rows held in the browser: two filters and a sort that no index would need to exist for, with the count, facet counts and total computed in JavaScript.
+
+![Tailwind restyle](docs/screenshots/21-tailwind-restyle.png)
+
+The same parts restyled from the demo's own Tailwind stylesheet: the Select and the grid rows change, the package does not.
 
 ## Develop
 
@@ -440,14 +598,14 @@ bun run dev
 
 The demo needs `apps/demo/.env.local` holding `QUERY_GRID_DATABASE_URL`, a direct Postgres 18 connection string (see `apps/demo/.env.example`). It serves on port 3040.
 
-| Script (`bun run --filter demo …`) | What                                                                                      |
-| ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| `db:setup`                         | schema, seed (620,000 orders and 30,000 customers by default), generated DDL, vacuum      |
-| `db:migrate`                       | the schema and the generated DDL only, no seeding                                         |
-| `db:generate`, `db:check`          | writes, or checks, `db/migrations/0002_query_grid.sql` from the grid def                  |
-| `test`                             | def validity, the control enumeration, migration parity (no database)                     |
-| `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact     |
-| `db:bench`                         | p50 and p95 of every shape with `EXPLAIN (ANALYZE)`, written to `db/bench-results.md`     |
+| Script (`bun run --filter demo …`) | What                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `db:setup`                         | schema, seed (620,000 orders and 30,000 customers by default), generated DDL, vacuum  |
+| `db:migrate`                       | the schema and the generated DDL only, no seeding                                     |
+| `db:generate`, `db:check`          | writes, or checks, `db/migrations/0002_query_grid.sql` from the grid def              |
+| `test`                             | def validity, the control enumeration, migration parity (no database)                 |
+| `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact |
+| `db:bench`                         | p50 and p95 of every shape with `EXPLAIN (ANALYZE)`, written to `db/bench-results.md` |
 
 ## Releasing
 
@@ -469,7 +627,68 @@ The `@kikstart` scope must exist on npm first: create the `kikstart` organisatio
 
 ## Verification record
 
-{{VERIFICATION}}
+Every row was observed on the Neon project (620,000 orders, 30,000 customers, 461 MB, Postgres 18.7) through the production build of the demo running locally, unless it says otherwise. The numbers refer to the Definition of Done.
+
+| #     | Item                                                     | Command                                                                                                                                                                                              | Observation                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Builds, typechecks, lints, tests                         | `bun run typecheck`, `bun run lint`, `bun run test`, `bun run build`                                                                                                                                 | all clean for the package and the demo; 59 package tests and 3 demo tests pass; `next build` compiles every route                                                                                                                                                                                                                                                                                                                                              |
+| 2     | DDL generated from the `GridDef`                         | `db:generate`, `db:check`, `db:migrate`                                                                                                                                                              | ten indexes, the counter table, its functions and three triggers generated into `0002_query_grid.sql`; the check passes; applied to Neon in 3.8 s                                                                                                                                                                                                                                                                                                              |
+| 2     | `pg_indexes` check                                       | `test:db`                                                                                                                                                                                            | every declared shape has its index; the counter table has its columns and `orders` its three triggers                                                                                                                                                                                                                                                                                                                                                          |
+| 2     | A missing index fails by name                            | `DROP INDEX orders_qs_region__created_at`, `test:db`, `db:migrate`, `test:db`                                                                                                                        | 1 fail naming `orders_qs_region__created_at`; after the rebuild 10 pass                                                                                                                                                                                                                                                                                                                                                                                        |
+| 3     | The UI offers only declared shapes                       | `bun run test`                                                                                                                                                                                       | for the test def and the orders def, with the quick result complete and capped: every reachable control state matches a shape and every shape is reached                                                                                                                                                                                                                                                                                                       |
+| 3     | The server refuses the rest                              | `curl /api/orders?f.channel=web&sort=total.desc`; `?f.status_code=nope`; `?limit=100000`                                                                                                             | 400 `undeclared_shape`; 400 `invalid_value`; 200 with 1,000 rows, the per-request cap                                                                                                                                                                                                                                                                                                                                                                          |
+| 4     | Benchmark on Neon at 620,000                             | `db:bench`                                                                                                                                                                                           | 72 of 72 pass: worst ordered page p95 3.18 ms, worst capped count 4.92 ms, worst live total 14.02 ms, every one an index scan with no Sort; quick filter answered in at most 13.42 ms or refused at the 120 ms budget                                                                                                                                                                                                                                          |
+| 5     | Capped count, then exact                                 | Paid, Total R 200 to R 600; Exact count                                                                                                                                                              | `10 000+ rows`, capped; then `10 874 rows`, exact                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 5     | Counts from the counter table                            | default query; status Paid                                                                                                                                                                           | `620 000 rows` and `62 275 rows`, each exact from the counter table; facet counts shown, and hidden once another filter is active                                                                                                                                                                                                                                                                                                                              |
+| 5     | Totals                                                   | status Paid; Paid in a week of Created; Paid with a Total range                                                                                                                                      | R 6 702 835,27 from the counter table; R 198 603,69 summed live over 1,701 rows; no total, with "More than 10 000 rows match and no counter totals this filter."                                                                                                                                                                                                                                                                                               |
+| 5     | Counter sums stay exact                                  | `test:db`                                                                                                                                                                                            | the counter table equals `count(*)` and `sum(total)` `GROUP BY status_code`; inserts, a status move, a total change, a move with a total change, an unrelated update and deletes keep both exact                                                                                                                                                                                                                                                               |
+| 6     | No own primitives, native controls, Tailwind or TanStack | `grep -rnE '<(select\|input\|button\|textarea)\b\|type="date"' packages/query-grid/src`; `grep -rniE 'tailwind\|clsx\|tailwind-merge\|@tanstack\|components/ui\|shadcn\|lucide' packages/query-grid` | 0 lines each; `./ui` imports UI SDK Button, Checkbox, Combobox, Date Picker, Drawer, Input, Number Input, Popover, Segmented Control and Select                                                                                                                                                                                                                                                                                                                |
+| 7     | Filter sidebar                                           | open it on Paid sorted by Total; toggle the direction; clear Status                                                                                                                                  | eight controls, five disabled with their reasons as text; both changes reach the shared query, the chips, the count and the URL                                                                                                                                                                                                                                                                                                                                |
+| 7     | Chips and Reset                                          | Shipped and Gauteng; remove Region; Reset                                                                                                                                                            | three chips; the Region chip leaves and the counter count returns; Reset restores the default query and disables itself                                                                                                                                                                                                                                                                                                                                        |
+| 7     | Quick filter                                             | `zanele dlamini`; sort by Total; `123456`; `mok`; `ab`; `---`                                                                                                                                        | 34 rows of one customer, sorted in memory; order 123456 alone; `500+ rows` with the sort disabled and its reason; a hint for two characters; refused with `too_broad`, for the page, the count and the exact count                                                                                                                                                                                                                                             |
+| 7     | Customer picker                                          | type `mokoena` in the Combobox, pick the first; reload                                                                                                                                               | 20 customers offered from the server; 899 orders of one customer, a live total, the chip and the input showing the name; both restored from the URL after a reload                                                                                                                                                                                                                                                                                             |
+| 8     | Resize rule                                              | `bun run test`                                                                                                                                                                                       | clamps at 60 and 600, both directions, a drag measured from the start width, 10 px and 50 px keyboard steps, Escape restoring the start width                                                                                                                                                                                                                                                                                                                  |
+| 8     | Resize by mouse                                          | drag the Customer handle +100; drag -180 then Escape; drag +900                                                                                                                                      | 200 to 300 px in header and cells, saved; 120 px during the drag and 300 px after Escape; clamped at 600 px                                                                                                                                                                                                                                                                                                                                                    |
+| 8     | Resize by keyboard                                       | focus the handle; Right; Shift+Left; Left twice; Escape; Shift+Right x7; Shift+Left x12                                                                                                              | 310, 260, 240, then 300 on Escape; clamped at 600 and at 60                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 8     | Resize persists                                          | reload                                                                                                                                                                                               | the 250 px width is restored in header and cells                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 8     | Resize while scrolled sideways                           | scroll 520 px right and 600 px down; drag the Region handle +80                                                                                                                                      | Region 150 to 230 px; the select column stays at x 1, the pinned Order column and its header at x 41, the header at y 1                                                                                                                                                                                                                                                                                                                                        |
+| 9     | In-memory route                                          | `/memory`: Team Growth, Priority High, quick `fix`, sort Budget, Budget from $1,000                                                                                                                  | 400 rows, then 5 rows totalling $4,640.00, then 1 row totalling $1,590.00; facet counts follow the filters; no control is disabled; 0 requests to `/api`; the board shows the same rows                                                                                                                                                                                                                                                                        |
+| 10    | Parts mount alone                                        | `/parts/<part>?f.status_code=refunded` for all nine parts                                                                                                                                            | each page mounts only its part and shows the shared query; a facet click on `/parts/facets` updates the query and the URL                                                                                                                                                                                                                                                                                                                                      |
+| 10    | Grid, list and board keep the query                      | Region Gauteng; List; Board; Grid                                                                                                                                                                    | the chip and the URL survive each switch; seven board columns narrowed by region with counts hidden                                                                                                                                                                                                                                                                                                                                                            |
+| 10    | URL round-trip                                           | open `/orders?f.status_code=shipped&f.region=gauteng&sort=created_at.asc&view=list`; open an undeclared URL                                                                                          | view, both filters, sort and direction restored; the undeclared URL falls back to the default query and the URL is rewritten                                                                                                                                                                                                                                                                                                                                   |
+| 10    | Virtualised scroll and keyset paging                     | scroll to the end twelve times                                                                                                                                                                       | 6,500 rows in 13 keyset pages, 33 rows mounted, row heights 37 to 78 px with no gap or overlap                                                                                                                                                                                                                                                                                                                                                                 |
+| 10    | Arrow keys, range, TSV                                   | click, arrows, Shift+arrows, Ctrl+C, Home, End, Ctrl+Home, Ctrl+End                                                                                                                                  | a 4 by 4 range copies four TSV lines; Ctrl+End reaches row 499 and loads the next page                                                                                                                                                                                                                                                                                                                                                                         |
+| 10    | Selection                                                | a row checkbox, a Shift-click, select all twice; Space on a focused row checkbox                                                                                                                     | 1, then rows 1 to 6, then 500, then 0; Space selects the row                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 10    | Column reorder                                           | Space, Right, Right, Space on Status; Space, Left, Escape; drag Region onto Created                                                                                                                  | header and body cells move together by keyboard and by pointer; Escape cancels                                                                                                                                                                                                                                                                                                                                                                                 |
+| 10    | Pin and visibility                                       | Columns menu: hide Currency, show ID, pin Customer; reload; Reset columns                                                                                                                            | Currency leaves, ID joins, Customer moves beside Order and sticks at x 151; all three survive the reload; Reset restores the def's layout                                                                                                                                                                                                                                                                                                                      |
+| 10    | Board moves                                              | Space, Left, Space on a Pending card; Space, Right, Escape on a Completed card; drag a Paid card onto Shipped                                                                                        | Pending 37,050 to 37,049 and Paid up one from the counter triggers; the Completed card skips to Refunded and Escape puts it back; the dragged card lands at index 3 and both counts move                                                                                                                                                                                                                                                                       |
+| 10    | Board refusals                                           | drag a Paid card across Shipped onto Completed; release one in the gap between columns; `POST /api/orders/status` with a Completed order and `pending`                                               | the card returns to Paid both times and no count moves; 409 `transition_refused`                                                                                                                                                                                                                                                                                                                                                                               |
+| 10    | Virtualised board columns                                | scroll the Completed column to its end six times                                                                                                                                                     | 350 cards loaded in keyset pages of 50, 16 mounted                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 10    | No errors                                                | agent-browser `errors` after the whole pass; the `next start` log                                                                                                                                    | both empty                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 11    | Deployed on Vercel                                       | `vercel whoami`                                                                                                                                                                                      | **blocked**: the saved Vercel login has expired and signing in needs a person in a browser                                                                                                                                                                                                                                                                                                                                                                     |
+| 12    | Public GitHub repo                                       | `gh repo create Kikstartai/query-grid --public`                                                                                                                                                      | **blocked**: this session's permission check refused to create a public repository                                                                                                                                                                                                                                                                                                                                                                             |
+| 13    | Publish-ready                                            | `npm pack --dry-run` in `packages/query-grid`; `node -e "import(...)"` of the three entries                                                                                                          | 74 files, 73.1 kB: `dist` with `.js`, `.d.ts` and `ui/styles.css`, the README and the LICENSE; all three entry points import in plain Node ESM                                                                                                                                                                                                                                                                                                                 |
+| 14    | Screenshots                                              | agent-browser against the local production build on Neon                                                                                                                                             | 21 captures in `docs/screenshots/`, embedded in the Walkthrough; retaking them from the deployed site waits on item 11                                                                                                                                                                                                                                                                                                                                         |
+| 16    | Reviews                                                  | `/code-review`, `/security-review`, `/simplify`                                                                                                                                                      | code review: nine findings, all fixed (the quick exact count now runs under the quick budget; keyboard row selection; the date range end; the sort chip under a capped quick filter; five smaller ones). Security review: no finding at confidence 8 or above. Simplify: shared field helpers, one emitter, one store hook, cached offers, a cheaper in-memory sort and selection lookup, one page wrapper in the demo. Everything above was re-run afterwards |
+| brand | kikstart branding in the demo                            | landing and app pages                                                                                                                                                                                | the mark and wordmark in both headers, "by kikstart" linking to https://kikstart.ai in header and footer, the icon as favicon and apple icon, Geist fonts and kikstart's colours and radius mapped onto `--qg-*` in the demo only                                                                                                                                                                                                                              |
+
+### Blocked
+
+Three items need a person and are otherwise ready:
+
+- **The GitHub repository.** Creating the public repo `Kikstartai/query-grid` was refused by the session's permission check. Create it and push `main`:
+
+```bash
+gh repo create Kikstartai/query-grid --public --source . --remote origin --push
+```
+
+- **The Vercel deployment.** The saved Vercel CLI login has expired. Sign in, then create the project with `apps/demo` as its root directory, link it to the GitHub repo, set `QUERY_GRID_DATABASE_URL` as a server environment variable and deploy production. `apps/demo/vercel.json` already carries the install command, the build command and the `fra1` region beside the Neon database.
+
+```bash
+vercel login
+```
+
+- **The deployed URL.** Once it exists it goes in the first lines of this README and in `homepage` in `packages/query-grid/package.json`, and the Walkthrough screenshots are retaken from it.
 
 ## Licence
 

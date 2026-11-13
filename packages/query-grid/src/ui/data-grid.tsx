@@ -453,11 +453,7 @@ export function DataGrid() {
   );
 
   return (
-    <div
-      className="qg-grid"
-      data-part="grid"
-      style={FILL_COLUMN_STYLE}
-    >
+    <div className="qg-grid" data-part="grid" style={FILL_COLUMN_STYLE}>
       <div className="qg-grid-toolbar">
         <GridStatus handle={handle} />
         <ColumnsMenu />

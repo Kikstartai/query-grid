@@ -120,7 +120,9 @@ describe("column state", () => {
       "status",
       "id",
     ]);
-    expect(layout.map((column) => column.left).slice(0, 3)).toEqual([0, 100, 0]);
+    expect(layout.map((column) => column.left).slice(0, 3)).toEqual([
+      0, 100, 0,
+    ]);
   });
 
   test("the store saves through the host function after a restore", async () => {

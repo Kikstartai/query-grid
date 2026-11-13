@@ -42,7 +42,15 @@ const ASSIGNEES = [
   "Daniel Roberts",
 ];
 
-const VERBS = ["Fix", "Design", "Review", "Migrate", "Document", "Test", "Ship"];
+const VERBS = [
+  "Fix",
+  "Design",
+  "Review",
+  "Migrate",
+  "Document",
+  "Test",
+  "Ship",
+];
 const SUBJECTS = [
   "invoice export",
   "login flow",

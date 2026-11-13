@@ -151,7 +151,12 @@ export function listOffers(
       )
       .map((field) => field.key),
     sorts: listSortFields(def, rules.mode).filter((field) =>
-      isOffered(def, query, { type: "setSort", field, direction: "asc" }, rules),
+      isOffered(
+        def,
+        query,
+        { type: "setSort", field, direction: "asc" },
+        rules,
+      ),
     ),
     ranges: def.fields
       .filter((field) => field.operators.includes("range"))
@@ -176,9 +181,11 @@ function describeQuery(def: GridDef, query: QueryState, skip: string): string {
     query.range && query.range.field !== skip
       ? [`the ${getFieldLabel(def, query.range.field)} range`]
       : [];
-  return [...filters, ...range, `sort ${getFieldLabel(def, query.sort.field)}`].join(
-    " and ",
-  );
+  return [
+    ...filters,
+    ...range,
+    `sort ${getFieldLabel(def, query.sort.field)}`,
+  ].join(" and ");
 }
 
 export function explainUnavailable(

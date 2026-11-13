@@ -107,8 +107,7 @@ export function createFeed(
       nextCursor = page.nextCursor;
       const capped = page.hasNext && page.nextCursor === null;
       const fresh = page.rows.filter((row) => !insertedIds.has(row.id));
-      const sortLocally =
-        sortsQuickLocally && query.quick !== null && !capped;
+      const sortLocally = sortsQuickLocally && query.quick !== null && !capped;
       set({
         rows: sortLocally
           ? sortRows(def, fresh, query.sort)

@@ -109,11 +109,7 @@ export function CardList({ titleField, badgeField }: CardListProps) {
     return <FeedNotice feed={feedState} />;
   }
   return (
-    <div
-      className="qg-list"
-      data-part="list"
-      style={FILL_COLUMN_STYLE}
-    >
+    <div className="qg-list" data-part="list" style={FILL_COLUMN_STYLE}>
       <div className="qg-status" data-status="loaded" data-value={loaded}>
         {formatLoaded(loaded, feedState.pages, def.format)}
       </div>

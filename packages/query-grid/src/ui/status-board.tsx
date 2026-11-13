@@ -689,11 +689,7 @@ function BoardColumns({
     };
   });
   return (
-    <div
-      className="qg-board"
-      data-part="board"
-      style={FILL_COLUMN_STYLE}
-    >
+    <div className="qg-board" data-part="board" style={FILL_COLUMN_STYLE}>
       <p
         className="qg-board-message"
         data-board-message

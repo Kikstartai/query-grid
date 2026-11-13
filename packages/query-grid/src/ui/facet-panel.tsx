@@ -62,8 +62,7 @@ function FacetNote({ showCounts }: { showCounts: boolean }) {
   }
   return (
     <p className="qg-facet-note">
-      Counts are hidden while another filter is active: no counter answers
-      them.
+      Counts are hidden while another filter is active: no counter answers them.
     </p>
   );
 }

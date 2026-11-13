@@ -31,7 +31,10 @@ export interface DataSource {
     signal: AbortSignal,
   ) => Promise<CountResult>;
   fetchTotal: (query: QueryState, signal: AbortSignal) => Promise<TotalResult>;
-  fetchFacets: (query: QueryState, signal: AbortSignal) => Promise<FacetCount[]>;
+  fetchFacets: (
+    query: QueryState,
+    signal: AbortSignal,
+  ) => Promise<FacetCount[]>;
   fetchOptions: (
     field: string,
     search: OptionSearch,

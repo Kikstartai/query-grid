@@ -78,7 +78,9 @@ export function FilterSidebar({
           >
             Reset
           </Button>
-          <DrawerClose className="qg-button qg-button-primary">Done</DrawerClose>
+          <DrawerClose className="qg-button qg-button-primary">
+            Done
+          </DrawerClose>
         </footer>
       </DrawerContent>
     </Drawer>

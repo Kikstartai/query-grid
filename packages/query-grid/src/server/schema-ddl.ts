@@ -65,7 +65,11 @@ export function listCounterObjects(def: GridDef): CounterObjects | null {
   return {
     table,
     columns: [identifier(def.facet.field), "row_count", "total_sum"],
-    triggers: [`${table}_on_insert`, `${table}_on_delete`, `${table}_on_update`],
+    triggers: [
+      `${table}_on_insert`,
+      `${table}_on_delete`,
+      `${table}_on_update`,
+    ],
   };
 }
 

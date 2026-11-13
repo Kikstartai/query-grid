@@ -85,7 +85,12 @@ export async function* walkGridPages(
 ): AsyncGenerator<GridRow[]> {
   let cursor: string | null = query.cursor;
   do {
-    const page = await listGridPage(def, execute, { ...query, cursor }, pageSize);
+    const page = await listGridPage(
+      def,
+      execute,
+      { ...query, cursor },
+      pageSize,
+    );
     yield page.rows;
     cursor = page.nextCursor;
   } while (cursor !== null);
@@ -106,9 +111,7 @@ async function listSelectedCounters(
 ): Promise<FacetCount[]> {
   const counts = await listFacetCounts(def, execute);
   const selected = def.facet ? query.equals[def.facet.field] : undefined;
-  return selected
-    ? counts.filter((facet) => facet.value === selected)
-    : counts;
+  return selected ? counts.filter((facet) => facet.value === selected) : counts;
 }
 
 export async function getGridCount(

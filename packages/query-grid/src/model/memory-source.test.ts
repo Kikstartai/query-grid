@@ -55,11 +55,23 @@ describe("the in-memory source", () => {
   });
 
   test("the quick filter matches across its columns", async () => {
-    const byName = await source.fetchCount({ ...BASE, quick: "SMITH" }, false, signal);
+    const byName = await source.fetchCount(
+      { ...BASE, quick: "SMITH" },
+      false,
+      signal,
+    );
     expect(byName).toEqual({ count: 8, capped: false, source: "exact" });
-    const byNumber = await source.fetchPage({ ...BASE, quick: "1017" }, 10, signal);
+    const byNumber = await source.fetchPage(
+      { ...BASE, quick: "1017" },
+      10,
+      signal,
+    );
     expect(byNumber.rows.map((row) => row.id)).toEqual(["row-17"]);
-    const across = await source.fetchCount({ ...BASE, quick: "5 1005" }, false, signal);
+    const across = await source.fetchCount(
+      { ...BASE, quick: "5 1005" },
+      false,
+      signal,
+    );
     expect(across.count).toBe(1);
   });
 
@@ -106,10 +118,17 @@ describe("the in-memory source", () => {
   });
 
   test("options come from the def or from the rows", async () => {
-    expect(await source.fetchOptions("status", { query: "do" }, signal)).toEqual(
-      [{ value: "done", label: "Done" }],
+    expect(
+      await source.fetchOptions("status", { query: "do" }, signal),
+    ).toEqual([{ value: "done", label: "Done" }]);
+    const names = await source.fetchOptions(
+      "name",
+      { query: "smith 1" },
+      signal,
     );
-    const names = await source.fetchOptions("name", { query: "smith 1" }, signal);
-    expect(names.map((option) => option.value)).toEqual(["Smith 10", "Smith 15"]);
+    expect(names.map((option) => option.value)).toEqual([
+      "Smith 10",
+      "Smith 15",
+    ]);
   });
 });

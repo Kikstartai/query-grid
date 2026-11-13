@@ -38,7 +38,9 @@ function TasksView() {
     return <CardList titleField="number" badgeField="status" />;
   }
   if (view === "board") {
-    return <StatusBoard titleField="number" detailFields={BOARD_DETAIL_FIELDS} />;
+    return (
+      <StatusBoard titleField="number" detailFields={BOARD_DETAIL_FIELDS} />
+    );
   }
   return <DataGrid />;
 }

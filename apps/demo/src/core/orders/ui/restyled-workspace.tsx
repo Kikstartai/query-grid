@@ -1,6 +1,5 @@
 "use client";
 
-
 import {
   CountDisplay,
   DataGrid,
@@ -18,7 +17,9 @@ export function RestyledWorkspace({ search }: { search: string }) {
       <div className="restyled workspace bg-amber-50">
         <header className="workspace-head">
           <SiteBrand />
-          <h1 className="font-mono uppercase">Orders, restyled with Tailwind</h1>
+          <h1 className="font-mono uppercase">
+            Orders, restyled with Tailwind
+          </h1>
           <CountDisplay />
         </header>
         <p className="workspace-note">

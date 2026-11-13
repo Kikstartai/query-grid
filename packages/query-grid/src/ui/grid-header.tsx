@@ -153,9 +153,7 @@ const headerRow = definePrimitive({
 });
 
 function isFilterOffered(field: FieldDef, offers: Offers): boolean {
-  return (
-    offers.equals.includes(field.key) || offers.ranges.includes(field.key)
-  );
+  return offers.equals.includes(field.key) || offers.ranges.includes(field.key);
 }
 
 function SortIcon({ direction }: { direction: SortDirection | null }) {
@@ -204,8 +202,7 @@ function HeaderFilter({ field }: { field: FieldDef }) {
   if (!isFilterOffered(field, offers)) {
     return null;
   }
-  const active =
-    field.key in query.equals || query.range?.field === field.key;
+  const active = field.key in query.equals || query.range?.field === field.key;
   return (
     <span data-no-drag data-header-filter={field.key}>
       <Popover>
@@ -426,7 +423,11 @@ export function GridHeader({
         {selectAll}
       </div>
       {pinned.map((column) => (
-        <PinnedHeaderCell key={column.field.key} column={column} store={store} />
+        <PinnedHeaderCell
+          key={column.field.key}
+          column={column}
+          store={store}
+        />
       ))}
       <ReorderHeaders columns={center} store={store} />
     </div>

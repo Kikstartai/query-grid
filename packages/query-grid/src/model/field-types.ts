@@ -1,12 +1,7 @@
 import type { ReactNode } from "react";
 
 export type FieldType =
-  | "id"
-  | "text"
-  | "enum"
-  | "integer"
-  | "money"
-  | "datetime";
+  "id" | "text" | "enum" | "integer" | "money" | "datetime";
 
 export type FilterOperator = "eq" | "range";
 

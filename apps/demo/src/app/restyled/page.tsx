@@ -7,5 +7,7 @@ export default function RestyledPage({
 }: {
   searchParams: SearchParams;
 }) {
-  return <SearchPage searchParams={searchParams} workspace={RestyledWorkspace} />;
+  return (
+    <SearchPage searchParams={searchParams} workspace={RestyledWorkspace} />
+  );
 }

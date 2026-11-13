@@ -81,9 +81,8 @@ export default function LandingPage() {
       </section>
       <footer className="landing-footer">
         <ByKikstart height={20} />
-        MIT licensed. The demo runs on a Neon Free-plan Postgres holding
-        620,000 orders; every sorted query is an index scan of about a
-        millisecond.
+        MIT licensed. The demo runs on a Neon Free-plan Postgres holding 620,000
+        orders; every sorted query is an index scan of about a millisecond.
       </footer>
     </main>
   );

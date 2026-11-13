@@ -12,7 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "query-grid: a filter and data grid that only offers what an index answers",
+  title:
+    "query-grid: a filter and data grid that only offers what an index answers",
   description:
     "A composable filter and data grid for very large Postgres tables. The UI only offers the filter and sort combinations an index answers, and the server refuses the rest.",
 };

@@ -58,7 +58,10 @@ describe("buildPageSql", () => {
   test("a descending cursor compares with less-than", () => {
     const query: QueryState = {
       ...BASE,
-      cursor: encodeCursor({ sortValue: "2026-01-01T00:00:00.000000Z", id: ID }),
+      cursor: encodeCursor({
+        sortValue: "2026-01-01T00:00:00.000000Z",
+        id: ID,
+      }),
     };
     expect(buildPageSql(TEST_DEF, query, 10).text).toContain(
       "(t.created_at, t.id) < ($1::timestamptz, $2::uuid)",
@@ -86,8 +89,12 @@ describe("buildPageSql", () => {
   });
 
   test("the page size is capped per request", () => {
-    expect(buildPageSql(TEST_DEF, BASE, 1_000_000).text).toEndWith("LIMIT 1001");
-    expect(buildPageSql(TEST_DEF, BASE, Number.NaN).text).toEndWith("LIMIT 201");
+    expect(buildPageSql(TEST_DEF, BASE, 1_000_000).text).toEndWith(
+      "LIMIT 1001",
+    );
+    expect(buildPageSql(TEST_DEF, BASE, Number.NaN).text).toEndWith(
+      "LIMIT 201",
+    );
   });
 
   test("an undeclared shape is rejected", () => {
@@ -284,9 +291,9 @@ describe("generated DDL", () => {
       "CREATE INDEX d ON public.things USING btree (region, created_at, id)",
       "CREATE INDEX e ON public.things USING gin ((((name || ' '::text) || (number)::text)) gin_trgm_ops)",
     ].map((indexdef, index) => ({ indexname: `i${index}`, indexdef }));
-    expect(listMissingIndexes(TEST_DEF, rows).map((index) => index.name)).toEqual(
-      ["things_qs_status__created_at"],
-    );
+    expect(
+      listMissingIndexes(TEST_DEF, rows).map((index) => index.name),
+    ).toEqual(["things_qs_status__created_at"]);
     const withoutQuick = rows.slice(0, -1).concat({
       indexname: "name_only",
       indexdef:
