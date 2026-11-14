@@ -54,8 +54,10 @@ run_sidebar() {
   click '[data-part=filter-sidebar-trigger]' 1
   note "controls" "$(js "document.querySelectorAll('[data-part=filter-sidebar] [data-field]').length")"
   note "disabled" "$(js "[...document.querySelectorAll('[data-part=filter-sidebar] [data-unavailable]')].map((e) => e.dataset.field + ': ' + e.querySelector('[data-field-reason]')?.textContent).join(' | ')")"
+  reveal '[data-part=filter-sidebar] [data-sort=direction]'
   click '[data-part=filter-sidebar] [data-sort=direction]' 2
   note "after direction toggle" "$(url) chips: $(chips)"
+  reveal '[data-part=filter-sidebar] [data-filter-clear=status_code]'
   click '[data-part=filter-sidebar] [data-filter-clear=status_code]' 2
   note "after clearing Status" "$(url) count $(count)"
   click '[data-sidebar-close]' 1
@@ -85,7 +87,7 @@ run_multi() {
   note "count" "$(count) [$(source_of)]"
   note "total" "$(total)"
   note "pressed facets" "$(js "[...document.querySelectorAll('[data-facet][aria-pressed=true]')].map((e) => e.dataset.facet).join(',')")"
-  note "row statuses" "$(js "[...new Set([...document.querySelectorAll('[data-field=status_code]')].map((e) => e.textContent))].join(',')")"
+  note "row statuses" "$(js "[...new Set([...document.querySelectorAll('.qg-cell[data-field=status_code]')].map((e) => e.textContent))].join(',')")"
   note "disabled" "$(unavailable)"
   click '[data-chip-remove="eq:status_code"][data-chip-value="paid"]' 2
   note "after removing Paid" "$(chips); $(count); $(url)"
@@ -96,7 +98,7 @@ run_multi() {
   note "after All" "$(url); $(count)"
   go "/orders?f.region=gauteng&f.region=limpopo&f.status_code=paid" 5
   note "restored from URL" "$(chips); $(count) [$(source_of)]"
-  note "regions in rows" "$(js "[...new Set([...document.querySelectorAll('[data-field=region]')].map((e) => e.textContent))].join(',')")"
+  note "regions in rows" "$(js "[...new Set([...document.querySelectorAll('.qg-cell[data-field=region]')].map((e) => e.textContent))].join(',')")"
   go "/orders?view=board&f.status_code=paid&f.status_code=shipped" 6
   note "board lanes" "$(js "[...document.querySelectorAll('[data-column]')].map((e) => e.dataset.column).join(',')")"
 }
@@ -107,9 +109,9 @@ run_quick() {
   ab fill '[data-part=filter-bar] [data-filter=quick]' "zanele dlamini" >/dev/null; key Enter 3
   note "zanele dlamini" "$(count); $(loaded); disabled $(unavailable)"
   click '[data-header-sort="total"]' 2
-  note "sorted by Total" "$(url); first totals $(js "[...document.querySelectorAll('[data-field=total]')].slice(0, 4).map((e) => e.textContent).join(' ')")"
+  note "sorted by Total" "$(url); first totals $(js "[...document.querySelectorAll('.qg-cell[data-field=total]')].slice(0, 4).map((e) => e.textContent).join(' ')")"
   ab fill '[data-part=filter-bar] [data-filter=quick]' "123456" >/dev/null; key Enter 3
-  note "123456" "$(count); orders $(js "[...document.querySelectorAll('[data-field=order_number]')].map((e) => e.textContent).join(',')")"
+  note "123456" "$(count); orders $(js "[...document.querySelectorAll('.qg-cell[data-field=order_number]')].map((e) => e.textContent).join(',')")"
   ab fill '[data-part=filter-bar] [data-filter=quick]' "mok" >/dev/null; key Enter 3
   note "mok" "$(count); sort disabled: $(js "document.querySelector('[data-part=filter-bar] [data-field=sort]').title")"
   ab fill '[data-part=filter-bar] [data-filter=quick]' "ab" >/dev/null; key Enter 1
@@ -124,8 +126,9 @@ run_customer() {
   click '[data-part=filter-bar] [data-filter=customer_id]' 1
   ab keyboard type "mokoena" >/dev/null; settle 3
   note "options" "$(js "document.querySelectorAll('[data-slot=combobox-item]').length")"
-  click '[data-slot=combobox-item]' 1
-  click '[data-slot=combobox-item]:nth-of-type(2)' 1
+  click '[data-slot=combobox-item]' 2
+  note "list stays open" "$(js "document.querySelectorAll('[data-slot=combobox-item]').length > 0")"
+  click '[data-slot=combobox-item]:not([aria-selected=true])' 2
   key Escape 3
   note "two customers" "$(count) [$(source_of)]; $(total)"
   note "chips" "$(chips)"
@@ -140,7 +143,7 @@ run_resize() {
   go "/orders" 4; reset_columns; go "/orders" 4
   note "start" "$(width customer_name)"
   dragby '[data-resize="customer_name"]' 100 0
-  note "drag +100" "header $(width customer_name), cell $(js "Math.round(document.querySelector('[data-field=customer_name]').getBoundingClientRect().width)")"
+  note "drag +100" "header $(width customer_name), cell $(js "Math.round(document.querySelector('.qg-cell[data-field=customer_name]').getBoundingClientRect().width)")"
   dragby '[data-resize="customer_name"]' -180 0 hold
   note "during drag -180" "$(width customer_name)"
   key Escape; ab mouse up >/dev/null
@@ -164,7 +167,7 @@ run_resize() {
   for i in 1 2 3 4; do key Shift+ArrowRight 0.1; done
   note "set to" "$(width customer_name)"; settle 1
   ab reload >/dev/null; settle 5
-  note "after reload" "header $(width customer_name), cell $(js "Math.round(document.querySelector('[data-field=customer_name]').getBoundingClientRect().width)")"
+  note "after reload" "header $(width customer_name), cell $(js "Math.round(document.querySelector('.qg-cell[data-field=customer_name]').getBoundingClientRect().width)")"
 
   say "Resize while scrolled sideways"
   js "document.querySelector('[data-part=grid-scroller]').scrollTo(520, 600); 'ok'" >/dev/null; settle 1
@@ -279,7 +282,9 @@ run_columns() {
 
   say "Pin and visibility"
   click '[data-part=columns-menu-trigger]' 1
-  click '[data-column-toggle="currency"]'; click '[data-column-toggle="id"]'; click '[data-column-pin="customer_name"]'
+  click '[data-column-toggle="currency"]'
+  reveal '[data-column-toggle="id"]'; click '[data-column-toggle="id"]'
+  reveal '[data-column-pin="customer_name"]'; click '[data-column-pin="customer_name"]'
   key Escape 1.5
   local pinned="(() => { const g = document.querySelector('[data-part=grid-scroller]').getBoundingClientRect(); const h = document.querySelector('[data-header=customer_name]'); return 'headers ' + [...document.querySelectorAll('[data-header]')].map((e) => e.dataset.header).slice(0, 3).join(',') + '; currency ' + !!document.querySelector('[data-header=currency]') + '; id ' + !!document.querySelector('[data-header=id]') + '; customer pinned ' + h.hasAttribute('data-pinned') + ' at x ' + Math.round(h.getBoundingClientRect().left - g.left); })()"
   note "after menu" "$(js "$pinned")"
@@ -351,7 +356,8 @@ run_rtl() {
   note "drag Region onto Created" "$(headers 6)"
   js "document.querySelector('[data-part=grid-scroller]').scrollTo(-520, 400); 1" >/dev/null; settle 1
   note "scrolled 520 toward the end" "$(js "$at")"
-  click '[data-part=columns-menu-trigger]' 1; click '[data-column-pin="customer_name"]'; key Escape 1
+  click '[data-part=columns-menu-trigger]' 1
+  reveal '[data-column-pin="customer_name"]'; click '[data-column-pin="customer_name"]'; key Escape 1
   note "Customer pinned" "$(js "(() => { const g = document.querySelector('[data-part=grid-scroller]').getBoundingClientRect(); const b = document.querySelector('[data-header=customer_name]').getBoundingClientRect(); return 'starts ' + Math.round(g.right - b.right) + ' from the right edge'; })()")"
   click '[data-part=filter-sidebar-trigger]' 1.5
   note "sidebar" "$(js "(() => { const el = document.querySelector('[data-part=filter-sidebar]'); const b = el.getBoundingClientRect(); return 'side ' + el.dataset.side + ', x ' + Math.round(b.left) + '..' + Math.round(b.right) + ' of ' + innerWidth; })()")"
@@ -368,9 +374,9 @@ run_components() {
   go "/components" 4
   note "start" "$(count); $(loaded); rows $(js "document.querySelectorAll('[data-row]').length")"
   click '[data-facet="fruit"]' 1; click '[data-facet="grain"]' 1
-  note "Fruit + Grain" "$(count); $(chips); kinds $(js "[...new Set([...document.querySelectorAll('[data-field=kind]')].map((e) => e.textContent))].join(',')")"
+  note "Fruit + Grain" "$(count); $(chips); kinds $(js "[...new Set([...document.querySelectorAll('.qg-cell[data-field=kind]')].map((e) => e.textContent))].join(',')")"
   click '[data-header-sort="price"]' 1
-  note "sorted by Price" "$(js "[...document.querySelectorAll('[data-field=price]')].slice(0, 3).map((e) => e.textContent).join(' ')")"
+  note "sorted by Price" "$(js "[...document.querySelectorAll('.qg-cell[data-field=price]')].slice(0, 3).map((e) => e.textContent).join(' ')")"
   click '[data-chip-remove="kind"][data-chip-value="fruit"]' 1
   note "after removing Fruit" "$(count); $(chips)"
   dragby '[data-resize="name"]' 60 0
@@ -381,6 +387,7 @@ run_components() {
 
 run_history() {
   say "URL history"
+  ab tab new >/dev/null; settle 1
   go "/" 2; go "/orders" 4
   local len="history.length"
   local start; start=$(js "$len")
@@ -399,8 +406,6 @@ run_history() {
   ab fill '[data-part=filter-bar] [data-filter=quick]' "zanele dlamini" >/dev/null; key Enter 3
   ab fill '[data-part=filter-bar] [data-filter=quick]' "zanele dlam" >/dev/null; key Enter 3
   note "two quick filters" "entries +$(( $(js "$len") - start )); $(url)"
-  go "/orders?f.status_code=paid" 4
-  js "(() => { const a = document.querySelector('.site-brand-home'); return a ? a.getAttribute('href') : null; })()" >/dev/null
   go "/" 2
   click 'a[href="/orders?view=board"]' 6
   note "Link to the board" "$(url); lanes $(js "document.querySelectorAll('[data-column]').length")"

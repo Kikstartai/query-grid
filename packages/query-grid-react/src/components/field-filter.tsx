@@ -263,7 +263,6 @@ function LookupSingle(props: LookupProps) {
 
 interface LookupChipState {
   value: unknown;
-  labels: string[];
 }
 
 function LookupMultiple(props: LookupProps) {
@@ -271,7 +270,6 @@ function LookupMultiple(props: LookupProps) {
   const messages = useMessages();
   const { options, choose } = useLookup(props);
   const label = { label: field.label };
-  const labelsKey = values.map((value) => valueLabels[value] ?? "").join("|");
   return (
     <FieldFrame
       name={field.key}
@@ -282,7 +280,6 @@ function LookupMultiple(props: LookupProps) {
       showReason={props.showReason}
     >
       <Combobox<string>
-        key={labelsKey}
         multiple
         items={options.items}
         filter={false}
@@ -296,17 +293,17 @@ function LookupMultiple(props: LookupProps) {
         <ComboboxChips className="qg-combobox-chips">
           <ComboboxValue>
             {(state: LookupChipState) =>
-              toValues(state.value as string[]).map((value, index) => (
+              toValues(state.value as string[]).map((value) => (
                 <ComboboxChip
                   key={value}
                   value={value}
                   className="qg-combobox-chip"
                 >
-                  {state.labels[index]}
+                  <bdi>{valueLabels[value] ?? value}</bdi>
                   <ComboboxChipRemove
                     className="qg-chip-remove"
                     aria-label={messages.removeChip({
-                      label: state.labels[index] ?? value,
+                      label: valueLabels[value] ?? value,
                     })}
                   >
                     <XIcon size={12} />

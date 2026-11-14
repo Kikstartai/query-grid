@@ -2,12 +2,12 @@
 
 A bun workspace of three published packages and one demo. The README holds the design, the decisions and the verification record; `docs/RESTRUCTURE.md` holds the 0.2.0 spec and its record.
 
-| Path                             | Package                         | Holds                                                                    |
-| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------ |
-| `packages/query-grid`            | `@kikstart/query-grid`          | the core: the query contract, stores, feeds, data sources. No React, DOM or `pg` |
-| `packages/query-grid-react`      | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css` |
-| `packages/query-grid-postgres`   | `@kikstart/query-grid-postgres` | the server: shapes, SQL, DDL, `createGridHandler`. No React or `pg`      |
-| `apps/demo`                      | `demo`                          | the Next.js demo site                                                    |
+| Path                           | Package                         | Holds                                                                                               |
+| ------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, stores, feeds, data sources. No React, DOM or `pg`                    |
+| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css` |
+| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: shapes, SQL, DDL, `createGridHandler`. No React or `pg`                                 |
+| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                               |
 
 ## Commands
 

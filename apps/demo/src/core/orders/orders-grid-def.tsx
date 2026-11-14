@@ -15,7 +15,7 @@ function withStatusBadge(field: ClientFieldDef): ClientFieldDef {
   return {
     ...field,
     cell: (value) => (
-      <span className="qg-badge" data-value={value ?? ""}>
+      <span className="order-status" data-value={value ?? ""}>
         {formatValue(field, value)}
       </span>
     ),

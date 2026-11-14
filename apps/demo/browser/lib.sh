@@ -11,6 +11,7 @@ note() { printf '   %s: %s\n' "$1" "$2"; }
 go() { ab open "$BASE$1" >/dev/null; sleep "${2:-3}"; }
 settle() { sleep "${1:-1.5}"; }
 click() { ab click "$1" >/dev/null; settle "${2:-0.6}"; }
+reveal() { js "document.querySelector('$1').scrollIntoView({ block: 'center' }); 1" >/dev/null; settle 0.4; }
 key() { ab press "$1" >/dev/null; settle "${2:-0.3}"; }
 
 center() {
