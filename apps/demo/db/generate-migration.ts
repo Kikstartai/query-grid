@@ -1,29 +1,37 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
-  generateGridMigration,
-  validateGridDef,
+  listTableMigrations,
+  validateGridDefs,
 } from "@kikstart/query-grid-postgres";
 
-import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
+import { resolveMigrationFile, SERVER_GRIDS } from "../src/core/server-grids";
 
-const target = join(import.meta.dir, "migrations", "0002_query_grid.sql");
-const problems = validateGridDef(ORDERS_GRID);
+const problems = validateGridDefs(SERVER_GRIDS);
 if (problems.length > 0) {
   console.error(problems.join("\n"));
   process.exit(1);
 }
-const generated = generateGridMigration(ORDERS_GRID);
 
-if (process.argv.includes("--check")) {
-  const current = readFileSync(target, "utf8");
-  if (current !== generated) {
-    console.error(`${target} is stale; run db:generate`);
-    process.exit(1);
+const check = process.argv.includes("--check");
+let stale = 0;
+for (const migration of listTableMigrations(SERVER_GRIDS)) {
+  const name = resolveMigrationFile(migration.table);
+  const target = join(import.meta.dir, "migrations", name);
+  if (!check) {
+    writeFileSync(target, migration.sql);
+    console.log(`wrote ${target}`);
+    continue;
   }
-  console.log("0002_query_grid.sql matches the grid def");
-} else {
-  writeFileSync(target, generated);
-  console.log(`wrote ${target}`);
+  const current = existsSync(target) ? readFileSync(target, "utf8") : null;
+  if (current !== migration.sql) {
+    console.error(`${target} is stale; run db:generate`);
+    stale += 1;
+    continue;
+  }
+  console.log(`${name} matches the grid defs`);
+}
+if (stale > 0) {
+  process.exit(1);
 }

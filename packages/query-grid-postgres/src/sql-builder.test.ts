@@ -12,9 +12,14 @@ import {
 } from "./query-runner.ts";
 import {
   generateGridMigration,
+  IDENTIFIER_MAX_LENGTH,
   listCounterObjects,
+  listGridMigrationSteps,
   listMissingIndexes,
   listShapeIndexes,
+  listTableMigrations,
+  shortenIdentifier,
+  validateGridDefs,
 } from "./schema-ddl.ts";
 import {
   buildCappedCountSql,
@@ -25,6 +30,7 @@ import {
   toPageResult,
   type SqlQuery,
 } from "./sql-builder.ts";
+import type { ServerGridDef } from "./storage.ts";
 
 const BASE: QueryState = {
   equals: {},
@@ -345,38 +351,144 @@ describe("toPageResult", () => {
 });
 
 describe("generated DDL", () => {
-  test("each shape maps to one index", () => {
+  test("each shape maps to one index, built without blocking writes", () => {
     expect(listShapeIndexes(TEST_DEF).map((index) => index.ddl)).toEqual([
-      "CREATE INDEX IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
-      "CREATE INDEX IF NOT EXISTS things_qs_total ON things USING btree (total, id);",
-      "CREATE INDEX IF NOT EXISTS things_qs_status__created_at ON things USING btree (status, created_at, id);",
-      "CREATE INDEX IF NOT EXISTS things_qs_status__total ON things USING btree (status, total, id);",
-      "CREATE INDEX IF NOT EXISTS things_qs_region__created_at ON things USING btree (region, created_at, id);",
-      "CREATE INDEX IF NOT EXISTS things_qs_quick ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_total ON things USING btree (total, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__created_at ON things USING btree (status, created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__total ON things USING btree (status, total, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_region__created_at ON things USING btree (region, created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_quick ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
     ]);
+    expect(listShapeIndexes(TEST_DEF, { concurrently: false })[0].ddl).toBe(
+      "CREATE INDEX IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
+    );
   });
 
-  test("the migration carries the extension, the counter table and its triggers", () => {
-    const migration = generateGridMigration(TEST_DEF);
-    expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
-    expect(migration).toContain(
+  test("an index statement is never inside a transaction", () => {
+    const steps = listGridMigrationSteps(TEST_DEF);
+    const indexes = steps.filter((step) => step.sql.includes("CREATE INDEX"));
+    expect(indexes).toHaveLength(6);
+    for (const step of indexes) {
+      expect(step.transaction).toBe(false);
+      expect(step.sql).not.toContain("BEGIN");
+      expect(step.sql.split("\n")).toHaveLength(1);
+    }
+  });
+
+  test("the counter is backfilled from one snapshot, with no lock held across the scan", () => {
+    const steps = listGridMigrationSteps(TEST_DEF).filter(
+      (step) => step.transaction,
+    );
+    expect(steps).toHaveLength(3);
+    const [install, backfill, switchOver] = steps.map((step) => step.sql);
+    expect(install).toContain(
       "CREATE TABLE IF NOT EXISTS thing_status_counts (status text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);",
     );
-    expect(migration).toContain(
+    expect(install).toContain(
+      "INSERT INTO thing_status_counts_pending (status, row_count, total_sum) VALUES (p_value, p_rows, p_sum);",
+    );
+    expect(install).toContain(
       "PERFORM thing_status_counts_bump(OLD.status, -1, -OLD.total);",
     );
-    expect(migration).toContain(
+    expect(install).toContain(
       "CREATE TRIGGER thing_status_counts_on_update AFTER UPDATE OF status, total ON things FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status OR OLD.total IS DISTINCT FROM NEW.total) EXECUTE FUNCTION thing_status_counts_on_update();",
     );
+    expect(backfill).toStartWith("BEGIN ISOLATION LEVEL REPEATABLE READ;");
+    expect(backfill).not.toContain("LOCK TABLE");
+    expect(backfill).toContain(
+      "SELECT status, count(*), coalesce(sum(total), 0) FROM things GROUP BY status",
+    );
+    expect(backfill).toContain("DELETE FROM thing_status_counts_pending;");
+    expect(switchOver).toContain(
+      "SELECT status, sum(row_count), sum(total_sum) FROM thing_status_counts_pending GROUP BY status",
+    );
+    expect(switchOver).toContain(
+      "ON CONFLICT (status) DO UPDATE SET row_count = thing_status_counts.row_count + EXCLUDED.row_count, total_sum = thing_status_counts.total_sum + EXCLUDED.total_sum;\n$$;",
+    );
+    expect(switchOver).toContain("DROP TABLE thing_status_counts_pending;");
+    const migration = generateGridMigration(TEST_DEF);
+    expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+    expect(migration.match(/LOCK TABLE/g)).toHaveLength(2);
     expect(listCounterObjects(TEST_DEF)).toEqual({
       table: "thing_status_counts",
+      pending: "thing_status_counts_pending",
       columns: ["status", "row_count", "total_sum"],
+      functions: ["thing_status_counts_bump"],
       triggers: [
         "thing_status_counts_on_insert",
         "thing_status_counts_on_delete",
         "thing_status_counts_on_update",
       ],
     });
+  });
+
+  test("a name past 63 characters is shortened with a hash, never truncated by Postgres", () => {
+    const long = "a_table_with_a_rather_long_name_for_its_rows";
+    const wide: ServerGridDef = {
+      ...TEST_DEF,
+      table: long,
+      facet: undefined,
+      shapes: [
+        { equals: [], sort: "created_at" },
+        { equals: ["status", "region"], sort: "created_at" },
+        { equals: ["status", "region"], sort: "total" },
+      ],
+    };
+    const names = listShapeIndexes(wide).map((index) => index.name);
+    expect(names[0]).toBe(`${long}_qs_created_at`);
+    for (const name of names) {
+      expect(name.length).toBeLessThanOrEqual(IDENTIFIER_MAX_LENGTH);
+    }
+    expect(names[1].length).toBe(63);
+    expect(new Set(names).size).toBe(3);
+    expect(names[1].slice(0, 54)).toBe(names[2].slice(0, 54));
+    expect(shortenIdentifier("short")).toBe("short");
+    expect(shortenIdentifier("x".repeat(64))).toBe(
+      shortenIdentifier("x".repeat(64)),
+    );
+  });
+
+  test("many defs give one migration per table, with shared indexes once", () => {
+    const other: ServerGridDef = {
+      ...TEST_DEF,
+      id: "things-by-region",
+      facet: undefined,
+      shapes: [
+        { equals: [], sort: "created_at", range: true },
+        { equals: ["region"], sort: "total" },
+      ],
+    };
+    const widgets: ServerGridDef = {
+      ...TEST_DEF,
+      id: "widgets",
+      table: "widgets",
+      facet: { field: "status", counterTable: "widget_status_counts" },
+    };
+    const migrations = listTableMigrations([TEST_DEF, other, widgets]);
+    expect(migrations.map((migration) => migration.table)).toEqual([
+      "things",
+      "widgets",
+    ]);
+    const [things] = migrations;
+    expect(
+      things.sql.match(
+        /CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_created_at /g,
+      ),
+    ).toHaveLength(1);
+    expect(things.sql).toContain("things_qs_region__total");
+    expect(things.sql.match(/CREATE EXTENSION/g)).toHaveLength(1);
+    expect(things.sql).not.toContain("widget");
+    expect(migrations[1].sql).toContain("widget_status_counts_pending");
+    expect(validateGridDefs([TEST_DEF, other, widgets])).toEqual([]);
+    expect(validateGridDefs([TEST_DEF, TEST_DEF])).toEqual([
+      "things: the id is used by more than one def",
+    ]);
+    expect(
+      validateGridDefs([{ ...other, shapes: [{ equals: [], sort: "total" }] }]),
+    ).toEqual([
+      "things-by-region: the default sort with no filter is not a declared shape",
+    ]);
   });
 
   test("a shape with no matching index is reported", () => {
@@ -400,6 +512,25 @@ describe("generated DDL", () => {
     expect(
       listMissingIndexes(TEST_DEF, withoutQuick).map((index) => index.name),
     ).toEqual(["things_qs_status__created_at", "things_qs_quick"]);
+  });
+
+  test("an index left invalid by a failed concurrent build counts as missing", () => {
+    const rows = [
+      {
+        indexname: "things_qs_created_at",
+        indexdef:
+          "CREATE INDEX things_qs_created_at ON public.things USING btree (created_at, id)",
+        valid: false,
+      },
+    ];
+    expect(
+      listMissingIndexes(TEST_DEF, rows).map((index) => index.name),
+    ).toContain("things_qs_created_at");
+    expect(
+      listMissingIndexes(TEST_DEF, [{ ...rows[0], valid: true }]).map(
+        (index) => index.name,
+      ),
+    ).not.toContain("things_qs_created_at");
   });
 });
 

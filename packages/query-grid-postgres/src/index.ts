@@ -20,12 +20,20 @@ export {
 } from "./query-runner.ts";
 export {
   generateGridMigration,
+  IDENTIFIER_MAX_LENGTH,
   listCounterObjects,
+  listGridMigrationSteps,
   listMissingIndexes,
   listShapeIndexes,
+  listTableMigrations,
+  shortenIdentifier,
+  validateGridDefs,
   type CounterObjects,
+  type MigrationOptions,
+  type MigrationStep,
   type PgIndexRow,
   type ShapeIndex,
+  type TableMigration,
 } from "./schema-ddl.ts";
 export {
   describeShape,

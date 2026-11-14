@@ -8,10 +8,10 @@ import {
   type QueryRules,
 } from "@kikstart/query-grid";
 import {
-  generateGridMigration,
+  listTableMigrations,
   matchShape,
   shapeId,
-  validateGridDef,
+  validateGridDefs,
 } from "@kikstart/query-grid-postgres";
 import { capabilities } from "@kikstart/query-grid-postgres/capabilities";
 
@@ -20,6 +20,7 @@ import {
   ORDERS_FACET_FIELD,
   ORDERS_SHAPES,
 } from "./orders-fields";
+import { resolveMigrationFile, SERVER_GRIDS } from "../server-grids";
 import { ORDERS_SERVER_GRID } from "./orders-server-def";
 
 const CAPABILITIES = capabilities(ORDERS_SHAPES, {
@@ -32,8 +33,8 @@ const RULES: QueryRules[] = [
 ];
 
 describe("orders grid def", () => {
-  test("the def is valid", () => {
-    expect(validateGridDef(ORDERS_SERVER_GRID)).toEqual([]);
+  test("every server def is valid", () => {
+    expect(validateGridDefs(SERVER_GRIDS)).toEqual([]);
   });
 
   test("the client and the server share one set of fields", () => {
@@ -65,11 +66,19 @@ describe("orders grid def", () => {
     }
   });
 
-  test("the migration is the one the def generates", () => {
-    const migration = readFileSync(
-      join(import.meta.dir, "../../../db/migrations/0002_query_grid.sql"),
-      "utf8",
-    );
-    expect(migration).toBe(generateGridMigration(ORDERS_SERVER_GRID));
+  test("each table's migration is the one its defs generate", () => {
+    const migrations = listTableMigrations(SERVER_GRIDS);
+    expect(migrations.map((migration) => migration.table)).toEqual(["orders"]);
+    for (const migration of migrations) {
+      const file = readFileSync(
+        join(
+          import.meta.dir,
+          "../../../db/migrations",
+          resolveMigrationFile(migration.table),
+        ),
+        "utf8",
+      );
+      expect(file).toBe(migration.sql);
+    }
   });
 });

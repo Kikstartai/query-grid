@@ -85,6 +85,7 @@ async function measure(
   settings: string[] | null,
   multi = false,
 ): Promise<Result> {
+  const sortAllowed = multi;
   const times: number[] = [];
   let plan: PlanNode[] = [];
   let refused = 0;
@@ -150,7 +151,7 @@ async function measure(
       p95 < BUDGET_MS &&
       scansByIndex &&
       !types.includes("Seq Scan") &&
-      !types.includes("Sort"),
+      (sortAllowed || !types.includes("Sort")),
   };
 }
 
@@ -171,16 +172,20 @@ async function pickEqualsValues(
   );
 }
 
+type Frequency = "common" | "rare";
+
 async function pickSeveralValues(
   client: Client,
   shape: OrderedShape,
   size: number,
+  frequency: Frequency,
 ): Promise<Record<string, string[]>> {
   const equals: Record<string, string[]> = {};
+  const order = frequency === "common" ? "DESC" : "ASC";
   for (const column of shape.equals) {
     const { rows } = await client.query<{ value: string }>(
       `SELECT ${column} AS value FROM (SELECT ${column} FROM orders LIMIT 200000) sample
-       GROUP BY ${column} ORDER BY count(*) DESC LIMIT ${size}`,
+       GROUP BY ${column} ORDER BY count(*) ${order}, ${column} LIMIT ${size}`,
     );
     equals[column] = rows.map((row) => row.value);
   }
@@ -201,38 +206,41 @@ async function benchSeveral(
 ): Promise<Result[]> {
   const results: Result[] = [];
   const seen = new Set<string>();
-  for (const size of listMultiSizes(shape)) {
-    const equals = await pickSeveralValues(client, shape, size);
-    const label = Object.entries(equals)
-      .map(([key, values]) => `${values.length} ${key}`)
-      .join(", ");
-    if (seen.has(label)) {
-      continue;
+  for (const frequency of ["common", "rare"] as const) {
+    for (const size of listMultiSizes(shape)) {
+      const equals = await pickSeveralValues(client, shape, size, frequency);
+      const key = JSON.stringify(equals);
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      const label = Object.entries(equals)
+        .map(([name, values]) => `${values.length} ${frequency} ${name}`)
+        .join(", ");
+      const query: QueryState = {
+        ...defaultQuery(ORDERS_GRID),
+        equals,
+        sort: { field: shape.sort, direction: "desc" },
+      };
+      results.push(
+        await measure(
+          client,
+          shape,
+          `${label}: first page desc`,
+          buildPageSql(ORDERS_GRID, query, PAGE),
+          null,
+          true,
+        ),
+        await measure(
+          client,
+          shape,
+          `${label}: capped count`,
+          buildCappedCountSql(ORDERS_GRID, query),
+          null,
+          true,
+        ),
+      );
     }
-    seen.add(label);
-    const query: QueryState = {
-      ...defaultQuery(ORDERS_GRID),
-      equals,
-      sort: { field: shape.sort, direction: "desc" },
-    };
-    results.push(
-      await measure(
-        client,
-        shape,
-        `${label}: first page desc`,
-        buildPageSql(ORDERS_GRID, query, PAGE),
-        null,
-        true,
-      ),
-      await measure(
-        client,
-        shape,
-        `${label}: capped count`,
-        buildCappedCountSql(ORDERS_GRID, query),
-        null,
-        true,
-      ),
-    );
   }
   return results;
 }
@@ -404,6 +412,8 @@ function toMarkdown(results: Result[], total: number): string {
     ...toTable(single),
     "",
     `## Several values per field: ${summarize(several)}`,
+    "",
+    "Each ordered shape with an equality field, with 2, 5 and the field's cap of values, taken from the most common and then from the rarest. The bar is the same p95 budget and no Seq Scan; a Sort is allowed here and shows in the plan, because `= ANY` over several values has no single index order to read.",
     "",
     ...toTable(several),
     "",

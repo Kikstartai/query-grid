@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
+import { listTableMigrations } from "@kikstart/query-grid-postgres";
 import { Client } from "pg";
 
 import {
@@ -11,13 +12,13 @@ import {
   ORDER_STATUS_TRANSITIONS,
   type WeightedOption,
 } from "../src/core/orders/orders-reference";
+import { SERVER_GRIDS } from "../src/core/server-grids";
 
 const CUSTOMER_COUNT = Number(process.env.QUERY_GRID_CUSTOMER_COUNT ?? 30_000);
 const ORDER_COUNT = Number(process.env.QUERY_GRID_ORDER_COUNT ?? 620_000);
 const CUSTOMER_BATCH = 100_000;
 const ORDER_BATCH = 250_000;
 const SCHEMA = join(import.meta.dir, "migrations", "0001_schema.sql");
-const GENERATED = join(import.meta.dir, "migrations", "0002_query_grid.sql");
 const UPGRADE = join(import.meta.dir, "upgrade-from-poc.sql");
 const MIGRATE_ONLY = process.argv.includes("--migrate-only");
 
@@ -176,6 +177,19 @@ async function applyFile(client: Client, path: string): Promise<void> {
   log(`applied ${basename(path)} in ${seconds}s`);
 }
 
+async function applyGenerated(client: Client): Promise<void> {
+  for (const migration of listTableMigrations(SERVER_GRIDS)) {
+    const started = Date.now();
+    for (const step of migration.steps) {
+      await client.query(step.sql);
+    }
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
+    log(
+      `applied ${migration.steps.length} generated steps to ${migration.table} in ${seconds}s`,
+    );
+  }
+}
+
 async function seedReference(client: Client): Promise<void> {
   for (const [index, status] of ORDER_STATUSES.entries()) {
     await client.query(
@@ -303,7 +317,7 @@ async function main(): Promise<void> {
     await seedOrders(client);
   }
   await applyFile(client, UPGRADE);
-  await applyFile(client, GENERATED);
+  await applyGenerated(client);
   await client.query("VACUUM (ANALYZE) orders");
   await client.query("ANALYZE customers");
   const count = await client.query<{ count: string }>(

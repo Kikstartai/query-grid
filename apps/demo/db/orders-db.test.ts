@@ -72,7 +72,7 @@ async function listPage(query: QueryState, limit: number) {
 describe("generated schema", () => {
   test("every declared shape has its index in pg_indexes", async () => {
     const { rows } = await client.query<PgIndexRow>(
-      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1",
+      "SELECT p.indexname, p.indexdef, i.indisvalid AS valid FROM pg_indexes p JOIN pg_class c ON c.relname = p.indexname JOIN pg_index i ON i.indexrelid = c.oid WHERE p.schemaname = 'public' AND p.tablename = $1",
       [ORDERS_GRID.table],
     );
     const missing = listMissingIndexes(ORDERS_GRID, rows);
