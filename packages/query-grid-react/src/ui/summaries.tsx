@@ -75,7 +75,7 @@ export function FacetPanel() {
   }
   const showCounts = capabilities.isFacetCountShown(query);
   const countOf = (value: string) =>
-    facets.counts.find((item) => item.value === value)?.count ?? 0;
+    facets.result.find((item) => item.value === value)?.count ?? 0;
   const shown = showCounts ? "counter" : "hidden";
   return (
     <BaseFacetPanel
@@ -91,7 +91,7 @@ export function FacetPanel() {
       multiple={offers.multi.includes(field.key)}
       total={
         showCounts
-          ? facets.counts.reduce((sum, facet) => sum + facet.count, 0)
+          ? facets.result.reduce((sum, facet) => sum + facet.count, 0)
           : null
       }
       note={

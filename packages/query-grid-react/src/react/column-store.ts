@@ -1,4 +1,4 @@
-import { createEmitter, type FieldDef } from "@kikstart/query-grid";
+import { createStore, type FieldDef } from "@kikstart/query-grid";
 
 import {
   COLUMN_SAVE_DELAY_MS,
@@ -20,13 +20,11 @@ export function createColumnStore(
   fields: FieldDef[],
   persistence: ColumnPersistence | null,
 ): ColumnStore {
-  let columns = defaultColumns(fields);
+  const store = createStore(defaultColumns(fields));
   let restored = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const emitter = createEmitter();
   const set = (next: ColumnState[]) => {
-    columns = next;
-    emitter.emit();
+    store.set(next);
     if (!restored || !persistence) {
       return;
     }
@@ -34,13 +32,13 @@ export function createColumnStore(
       clearTimeout(timer);
     }
     timer = setTimeout(
-      () => void persistence.save(columns),
+      () => void persistence.save(store.get()),
       COLUMN_SAVE_DELAY_MS,
     );
   };
   return {
-    getColumns: () => columns,
-    subscribe: emitter.add,
+    getColumns: store.get,
+    subscribe: store.subscribe,
     setColumns: set,
     restore: async () => {
       if (restored) {

@@ -1,5 +1,5 @@
 import type { DataSource } from "./data-source.ts";
-import { createEmitter, type Listener } from "./emitter.ts";
+import type { Listener } from "./emitter.ts";
 import type { GridRow, QueryState } from "./field-types.ts";
 import {
   createAbortable,
@@ -10,6 +10,7 @@ import {
 import { toProblem, type Problem } from "./problems.ts";
 import type { QueryStore } from "./query-store.ts";
 import { sortRows } from "./sort-rows.ts";
+import { createStore } from "./store.ts";
 
 export interface FeedState {
   query: QueryState;
@@ -48,31 +49,32 @@ export function createFeed(
   source: DataSource,
   pageSize: number,
 ): Feed {
-  const emitter = createEmitter();
   const def = store.def;
   const sortsQuickLocally = source.capabilities.mode === "server";
-  let started = false;
+  const feed = createStore(initialFeedState(store.getQuery()));
   const begin = createAbortable();
-  let nextCursor: string | null = null;
   const insertedIds = new Set<string>();
-  let state = initialFeedState(store.getQuery());
+  let started = false;
+  let nextCursor: string | null = null;
 
-  const set = (patch: Partial<FeedState>) => {
-    state = { ...state, ...patch };
-    emitter.emit();
+  const set = (patch: Partial<FeedState>) =>
+    feed.set({ ...feed.get(), ...patch });
+
+  const isQuickComplete = () => {
+    const state = feed.get();
+    return (
+      sortsQuickLocally &&
+      state.query.quick !== null &&
+      state.pages > 0 &&
+      state.status === "idle" &&
+      !state.capped
+    );
   };
 
-  const isQuickComplete = () =>
-    sortsQuickLocally &&
-    state.query.quick !== null &&
-    state.pages > 0 &&
-    state.status === "idle" &&
-    !state.capped;
-
-  const load = async () => {
-    const query = state.query;
+  const load = async (base: FeedState) => {
+    const query = base.query;
     const controller = begin();
-    set({ status: "loading", error: null });
+    feed.set({ ...base, status: "loading", error: null });
     try {
       const page = await source.fetchPage(
         { ...query, cursor: nextCursor },
@@ -86,6 +88,7 @@ export function createFeed(
       const capped = page.hasNext && page.nextCursor === null;
       const fresh = page.rows.filter((row) => !insertedIds.has(row.id));
       const sortLocally = sortsQuickLocally && query.quick !== null && !capped;
+      const state = feed.get();
       set({
         rows: sortLocally
           ? sortRows(def, fresh, query.sort)
@@ -104,15 +107,16 @@ export function createFeed(
   };
 
   const restart = () => {
+    const initial = initialFeedState(store.getQuery());
     insertedIds.clear();
-    state = initialFeedState(store.getQuery());
-    nextCursor = state.query.cursor;
+    nextCursor = initial.query.cursor;
     store.setQuickComplete(false);
-    void load();
+    void load(initial);
   };
 
   const follow = () => {
     const next = store.getQuery();
+    const state = feed.get();
     if (next === state.query) {
       return;
     }
@@ -124,46 +128,42 @@ export function createFeed(
     restart();
   };
 
-  const start = () => {
-    if (started) {
-      return;
-    }
-    started = true;
-    store.subscribe(follow);
-    restart();
-  };
-
   return {
-    getState: () => state,
+    getState: feed.get,
     subscribe: (listener) => {
-      start();
-      return emitter.add(listener);
+      if (!started) {
+        started = true;
+        store.subscribe(follow);
+        restart();
+      }
+      return feed.subscribe(listener);
     },
     loadMore: () => {
+      const state = feed.get();
       if (state.status === "idle" && state.hasNext) {
-        void load();
+        void load(state);
       }
     },
     patchRow: (id, patch) => {
-      const index = state.rows.findIndex((row) => row.id === id);
+      const rows = feed.get().rows.slice();
+      const index = rows.findIndex((row) => row.id === id);
       if (index < 0) {
         return;
       }
-      const rows = state.rows.slice();
       rows[index] = { ...rows[index], ...patch } as GridRow;
       set({ rows });
     },
     removeRow: (id) => {
       insertedIds.delete(id);
-      if (state.rows.some((row) => row.id === id)) {
-        set({ rows: state.rows.filter((row) => row.id !== id) });
+      const { rows } = feed.get();
+      if (rows.some((row) => row.id === id)) {
+        set({ rows: rows.filter((row) => row.id !== id) });
       }
     },
     insertRow: (index, row) => {
       insertedIds.add(row.id);
-      set({
-        rows: [...state.rows.slice(0, index), row, ...state.rows.slice(index)],
-      });
+      const { rows } = feed.get();
+      set({ rows: [...rows.slice(0, index), row, ...rows.slice(index)] });
     },
     reload: restart,
   };

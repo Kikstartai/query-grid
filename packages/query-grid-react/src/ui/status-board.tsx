@@ -152,7 +152,7 @@ function BoardLanes({
     <BaseStatusBoard
       lanes={[...data.feeds].map(([status, laneFeed]) => {
         const state = states.get(status);
-        const facet = facetState.counts.find((item) => item.value === status);
+        const facet = facetState.result.find((item) => item.value === status);
         return {
           id: status,
           label:

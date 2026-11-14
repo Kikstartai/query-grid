@@ -1,212 +1,78 @@
 import type { DataSource } from "./data-source.ts";
-import { createEmitter, type Listener } from "./emitter.ts";
-import type { QueryState } from "./field-types.ts";
+import type { Listener } from "./emitter.ts";
 import { labelKey } from "./format.ts";
+import { sameFilters } from "./load.ts";
 import {
-  createAbortable,
-  isAbort,
-  sameFilters,
-  type LoadStatus,
-} from "./load.ts";
-import { toProblem, type Problem } from "./problems.ts";
+  createQueryResource,
+  type QueryResource,
+  type ResourceState,
+} from "./query-resource.ts";
 import type { QueryStore } from "./query-store.ts";
+import { createStore } from "./store.ts";
 import type { CountResult, FacetCount, TotalResult } from "./wire-types.ts";
 
-export interface CountState {
-  query: QueryState;
-  result: CountResult | null;
-  status: LoadStatus;
+export type CountState = ResourceState<CountResult | null>;
+export type TotalState = ResourceState<TotalResult | null>;
+export type FacetState = ResourceState<FacetCount[]>;
+
+type ResourceStore<R> = Pick<
+  QueryResource<R>,
+  "getState" | "subscribe" | "reload"
+>;
+
+export interface CountStore extends ResourceStore<CountResult | null> {
+  requestExact: () => void;
 }
 
-export interface CountStore {
-  getState: () => CountState;
-  subscribe: (listener: Listener) => () => void;
-  requestExact: () => void;
-  reload: () => void;
-}
+export type TotalStore = ResourceStore<TotalResult | null>;
+export type FacetStore = ResourceStore<FacetCount[]>;
 
 export function createCountStore(
   store: QueryStore,
   source: DataSource,
 ): CountStore {
-  const emitter = createEmitter();
-  let started = false;
-  const begin = createAbortable();
-  let state: CountState = {
-    query: store.getQuery(),
-    result: null,
-    status: "idle",
-  };
-
-  const load = async (exact: boolean) => {
-    const controller = begin();
-    state = { ...state, query: store.getQuery(), status: "loading" };
-    if (!exact) {
-      state = { ...state, result: null };
-    }
-    emitter.emit();
-    try {
-      const result = await source.fetchCount(
-        state.query,
-        exact,
-        controller.signal,
-      );
-      if (!controller.signal.aborted) {
-        state = { ...state, result, status: "idle" };
-        emitter.emit();
-      }
-    } catch (error) {
-      if (!isAbort(error)) {
-        state = { ...state, status: "error" };
-        emitter.emit();
-      }
-    }
-  };
-
+  const resource = createQueryResource<CountResult | null>(
+    store,
+    (query, signal) => source.fetchCount(query, false, signal),
+    { initial: null },
+  );
   return {
-    getState: () => state,
-    subscribe: (listener) => {
-      if (!started) {
-        started = true;
-        store.subscribe(() => {
-          if (!sameFilters(store.getQuery(), state.query)) {
-            void load(false);
-          }
-        });
-        void load(false);
-      }
-      return emitter.add(listener);
-    },
-    requestExact: () => void load(true),
-    reload: () => void load(false),
+    getState: resource.getState,
+    subscribe: resource.subscribe,
+    reload: resource.reload,
+    requestExact: () =>
+      resource.load(
+        (query, signal) => source.fetchCount(query, true, signal),
+        true,
+      ),
   };
-}
-
-export interface TotalState {
-  query: QueryState;
-  result: TotalResult | null;
-  status: LoadStatus;
-  error: Problem | null;
-}
-
-export interface TotalStore {
-  getState: () => TotalState;
-  subscribe: (listener: Listener) => () => void;
-  reload: () => void;
 }
 
 export function createTotalStore(
   store: QueryStore,
   source: DataSource,
 ): TotalStore {
-  const emitter = createEmitter();
-  let started = false;
-  const begin = createAbortable();
-  let state: TotalState = {
-    query: store.getQuery(),
-    result: null,
-    status: "idle",
-    error: null,
-  };
-
-  const load = async () => {
-    const controller = begin();
-    state = {
-      query: store.getQuery(),
-      result: null,
-      status: "loading",
-      error: null,
-    };
-    emitter.emit();
-    try {
-      const result = await source.fetchTotal(state.query, controller.signal);
-      if (!controller.signal.aborted) {
-        state = { ...state, result, status: "idle" };
-        emitter.emit();
-      }
-    } catch (error) {
-      if (!isAbort(error)) {
-        state = { ...state, status: "error", error: toProblem(error) };
-        emitter.emit();
-      }
-    }
-  };
-
-  return {
-    getState: () => state,
-    subscribe: (listener) => {
-      if (!started) {
-        started = true;
-        store.subscribe(() => {
-          if (!sameFilters(store.getQuery(), state.query)) {
-            void load();
-          }
-        });
-        void load();
-      }
-      return emitter.add(listener);
-    },
-    reload: () => void load(),
-  };
-}
-
-export interface FacetState {
-  counts: FacetCount[];
-  status: LoadStatus;
-}
-
-export interface FacetStore {
-  getState: () => FacetState;
-  subscribe: (listener: Listener) => () => void;
-  reload: () => void;
+  return createQueryResource<TotalResult | null>(
+    store,
+    (query, signal) => source.fetchTotal(query, signal),
+    { initial: null },
+  );
 }
 
 export function createFacetStore(
   store: QueryStore,
   source: DataSource,
 ): FacetStore {
-  const emitter = createEmitter();
-  let started = false;
-  const begin = createAbortable();
-  let query = store.getQuery();
-  let state: FacetState = { counts: [], status: "idle" };
-
-  const load = async () => {
-    const controller = begin();
-    query = store.getQuery();
-    state = { ...state, status: "loading" };
-    emitter.emit();
-    try {
-      const counts = await source.fetchFacets(query, controller.signal);
-      state = { counts, status: "idle" };
-    } catch (error) {
-      if (isAbort(error)) {
-        return;
-      }
-      state = { ...state, status: "error" };
-    }
-    emitter.emit();
-  };
-
-  return {
-    getState: () => state,
-    subscribe: (listener) => {
-      if (!started) {
-        started = true;
-        store.subscribe(() => {
-          const followsQuery =
-            source.capabilities.mode === "memory" &&
-            !sameFilters(store.getQuery(), query);
-          if (followsQuery) {
-            void load();
-          }
-        });
-        void load();
-      }
-      return emitter.add(listener);
+  const memory = source.capabilities.mode === "memory";
+  return createQueryResource<FacetCount[]>(
+    store,
+    (query, signal) => source.fetchFacets(query, signal),
+    {
+      initial: [],
+      keepResult: true,
+      follows: (next, current) => memory && !sameFilters(next, current),
     },
-    reload: () => void load(),
-  };
+  );
 }
 
 export interface LabelStore {
@@ -217,14 +83,12 @@ export interface LabelStore {
 }
 
 export function createLabelStore(source: DataSource): LabelStore {
-  const emitter = createEmitter();
+  const labels = createStore<Record<string, string>>({});
   const requested = new Set<string>();
-  let labels: Record<string, string> = {};
   const remember = (field: string, value: string, label: string) => {
     const key = labelKey(field, value);
-    if (labels[key] !== label) {
-      labels = { ...labels, [key]: label };
-      emitter.emit();
+    if (labels.get()[key] !== label) {
+      labels.set({ ...labels.get(), [key]: label });
     }
   };
   const resolve = async (field: string, value: string) => {
@@ -243,12 +107,12 @@ export function createLabelStore(source: DataSource): LabelStore {
     }
   };
   return {
-    getLabels: () => labels,
-    subscribe: emitter.add,
+    getLabels: labels.get,
+    subscribe: labels.subscribe,
     remember,
     request: (field, value) => {
       const key = labelKey(field, value);
-      if (!requested.has(key) && labels[key] === undefined) {
+      if (!requested.has(key) && labels.get()[key] === undefined) {
         requested.add(key);
         void resolve(field, value);
       }

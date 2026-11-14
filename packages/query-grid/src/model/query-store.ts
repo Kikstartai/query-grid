@@ -1,4 +1,3 @@
-import { createEmitter } from "./emitter.ts";
 import type {
   Capabilities,
   GridDef,
@@ -11,6 +10,7 @@ import {
   type QueryAction,
 } from "./query-actions.ts";
 import { validateQueryValues } from "./query-validate.ts";
+import { createStore } from "./store.ts";
 
 export type GridView = "grid" | "list" | "board";
 
@@ -48,49 +48,56 @@ function resolveHistoryWrite(action: QueryAction): HistoryWrite {
     : "push";
 }
 
+interface QueryStoreState {
+  query: QueryState;
+  view: GridView;
+  rules: QueryRules;
+}
+
 export function createQueryStore(
   def: GridDef,
   capabilities: Capabilities,
   initial: QueryState,
   initialView: GridView = "grid",
 ): QueryStore {
-  let query = normalizeQuery(def, capabilities, initial);
-  let view = initialView;
-  let rules: QueryRules = { capabilities, quickComplete: false };
+  const store = createStore<QueryStoreState>({
+    query: normalizeQuery(def, capabilities, initial),
+    view: initialView,
+    rules: { capabilities, quickComplete: false },
+  });
   let historyWrite: HistoryWrite = "replace";
-  const emitter = createEmitter();
+  const change = (patch: Partial<QueryStoreState>, write: HistoryWrite) => {
+    historyWrite = write;
+    store.set({ ...store.get(), ...patch });
+  };
   return {
     def,
-    getQuery: () => query,
-    getView: () => view,
-    getRules: () => rules,
+    getQuery: () => store.get().query,
+    getView: () => store.get().view,
+    getRules: () => store.get().rules,
     getHistoryWrite: () => historyWrite,
-    subscribe: emitter.add,
+    subscribe: store.subscribe,
     dispatch: (action) => {
+      const { query, rules } = store.get();
       const next = applyAction(def, query, action, rules);
       if (next !== query) {
-        query = next;
-        historyWrite = resolveHistoryWrite(action);
-        emitter.emit();
+        change({ query: next }, resolveHistoryWrite(action));
       }
     },
-    setView: (next) => {
-      if (next !== view) {
-        view = next;
-        historyWrite = "push";
-        emitter.emit();
+    setView: (view) => {
+      if (view !== store.get().view) {
+        change({ view }, "push");
       }
     },
-    replace: (next, nextView = view) => {
-      query = normalizeQuery(def, capabilities, next);
-      view = nextView;
-      historyWrite = "replace";
-      emitter.emit();
-    },
-    setQuickComplete: (complete) => {
-      if (complete !== rules.quickComplete) {
-        rules = { ...rules, quickComplete: complete };
-        emitter.emit();
+    replace: (next, view = store.get().view) =>
+      change(
+        { query: normalizeQuery(def, capabilities, next), view },
+        "replace",
+      ),
+    setQuickComplete: (quickComplete) => {
+      const { rules } = store.get();
+      if (quickComplete !== rules.quickComplete) {
+        change({ rules: { ...rules, quickComplete } }, historyWrite);
       }
     },
   };

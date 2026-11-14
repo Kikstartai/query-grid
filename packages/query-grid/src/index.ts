@@ -87,6 +87,7 @@ export {
 } from "./model/query-validate.ts";
 export { createFeed, type Feed, type FeedState } from "./model/row-feed.ts";
 export { sortRows } from "./model/sort-rows.ts";
+export { createStore, type Store } from "./model/store.ts";
 export {
   createCountStore,
   createFacetStore,
