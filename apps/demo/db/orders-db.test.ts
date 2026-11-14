@@ -3,22 +3,24 @@ import { Client } from "pg";
 
 import {
   defaultQuery,
-  isQuickShape,
   type GridRow,
   type QueryState,
 } from "@kikstart/query-grid";
 import {
   buildPageSql,
+  getGridCount,
   getGridTotal,
+  isQuickShape,
   listCounterObjects,
   listMissingIndexes,
   QueryRejected,
   toPageResult,
   type PgIndexRow,
   type SqlExecutor,
-} from "@kikstart/query-grid/server";
+  type SqlQuery,
+} from "@kikstart/query-grid-postgres";
 
-import { ORDERS_GRID } from "../src/core/orders/orders-grid-def";
+import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
 
 interface Counter {
   rows: number;
@@ -29,10 +31,7 @@ const client = new Client({
   connectionString: process.env.QUERY_GRID_DATABASE_URL,
 });
 
-const execute: SqlExecutor = async <T extends object>(sql: {
-  text: string;
-  values: string[];
-}) => {
+const execute: SqlExecutor = async <T extends object>(sql: SqlQuery) => {
   const result = await client.query(sql.text, sql.values);
   return result.rows as T[];
 };
@@ -113,7 +112,12 @@ describe("keyset paging", () => {
       for (const direction of ["asc", "desc"] as const) {
         const query: QueryState = {
           ...defaultQuery(ORDERS_GRID),
-          equals: sample.rows[0],
+          equals: Object.fromEntries(
+            Object.entries(sample.rows[0]).map(([key, value]) => [
+              key,
+              [value],
+            ]),
+          ),
           sort: { field: shape.sort, direction },
         };
         const whole = await listPage(query, 150);
@@ -136,7 +140,7 @@ describe("keyset paging", () => {
   test("an undeclared shape never reaches the database", () => {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID),
-      equals: { channel: "web" },
+      equals: { channel: ["web"] },
       sort: { field: "total", direction: "desc" },
     };
     expect(() => buildPageSql(ORDERS_GRID, query, 50)).toThrow(QueryRejected);
@@ -244,7 +248,7 @@ describe("totals", () => {
   test("a status grouping is a one-row read of the counter table", async () => {
     const total = await getGridTotal(ORDERS_GRID, execute, {
       ...base,
-      equals: { status_code: "failed" },
+      equals: { status_code: ["failed"] },
     });
     const real = await client.query<Counter>(
       "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE status_code = 'failed'",
@@ -264,7 +268,7 @@ describe("totals", () => {
     const id = customer.rows[0].customer_id;
     const total = await getGridTotal(ORDERS_GRID, execute, {
       ...base,
-      equals: { customer_id: id },
+      equals: { customer_id: [id] },
     });
     const real = await client.query<Counter>(
       "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE customer_id = $1",
@@ -281,13 +285,94 @@ describe("totals", () => {
   test("a result over the cap has no total, with the reason", async () => {
     const total = await getGridTotal(ORDERS_GRID, execute, {
       ...base,
-      equals: { channel: "web" },
+      equals: { channel: ["web"] },
     });
-    expect(total.available).toBe(false);
-    expect(total).toMatchObject({
-      reason: expect.stringMatching(
-        /^More than 10.000 rows match and no counter totals this filter\.$/,
-      ),
+    expect(total).toEqual({
+      available: false,
+      code: "over_cap",
+      params: { cap: 10000 },
     });
   }, 60_000);
+});
+
+describe("several values of one field", () => {
+  const base = defaultQuery(ORDERS_GRID);
+
+  test("a page under ANY holds exactly the rows of those values, in keyset order", async () => {
+    const query: QueryState = {
+      ...base,
+      equals: { status_code: ["failed", "refunded"] },
+    };
+    const first = await listPage(query, 100);
+    const second = await listPage({ ...query, cursor: first.nextCursor }, 100);
+    const paged = [...first.rows, ...second.rows];
+    const real = await client.query<{ id: string }>(
+      "SELECT id FROM orders WHERE status_code IN ('failed', 'refunded') ORDER BY created_at DESC, id DESC LIMIT 200",
+    );
+    expect(paged.map((row) => row.id)).toEqual(real.rows.map((row) => row.id));
+    expect(new Set(paged.map((row) => row.status_code))).toEqual(
+      new Set(["failed", "refunded"]),
+    );
+  }, 60_000);
+
+  test("several facet values count and total as the sum of their counters", async () => {
+    const query: QueryState = {
+      ...base,
+      equals: { status_code: ["failed", "refunded"] },
+    };
+    const real = await client.query<Counter>(
+      "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE status_code IN ('failed', 'refunded')",
+    );
+    expect(await getGridCount(ORDERS_GRID, execute, query, false)).toEqual({
+      count: real.rows[0].rows,
+      capped: false,
+      source: "counter",
+    });
+    expect(await getGridTotal(ORDERS_GRID, execute, query)).toEqual({
+      available: true,
+      sum: real.rows[0].sum,
+      rows: real.rows[0].rows,
+      source: "counter",
+    });
+  }, 60_000);
+
+  test("several lookup values are one array parameter", async () => {
+    const customers = await client.query<{ customer_id: string }>(
+      "SELECT DISTINCT customer_id FROM (SELECT customer_id FROM orders LIMIT 500) sample LIMIT 3",
+    );
+    const ids = customers.rows.map((row) => row.customer_id);
+    const query: QueryState = { ...base, equals: { customer_id: ids } };
+    const sql = buildPageSql(ORDERS_GRID, query, 50);
+    expect(sql.values).toEqual([ids]);
+    const page = await listPage(query, 50);
+    expect(page.rows.length).toBeGreaterThan(0);
+    for (const row of page.rows) {
+      expect(ids).toContain(String(row.customer_id));
+    }
+    const count = await getGridCount(ORDERS_GRID, execute, query, false);
+    const real = await client.query<{ rows: number }>(
+      "SELECT count(*)::float8 AS rows FROM orders WHERE customer_id = ANY($1::uuid[])",
+      [ids],
+    );
+    expect(count.count).toBe(real.rows[0].rows);
+  }, 60_000);
+
+  test("more values than the field's cap never reach the database", () => {
+    const ids = Array.from(
+      { length: 21 },
+      (_, index) =>
+        `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+    );
+    const query: QueryState = { ...base, equals: { customer_id: ids } };
+    let refusal: unknown = null;
+    try {
+      buildPageSql(ORDERS_GRID, query, 50);
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toMatchObject({
+      code: "too_many_values",
+      params: { field: "customer_id", max: 20 },
+    });
+  });
 });

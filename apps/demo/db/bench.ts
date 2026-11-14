@@ -3,11 +3,9 @@ import { join } from "node:path";
 
 import {
   defaultQuery,
-  describeShape,
-  isQuickShape,
+  getField,
+  resolveMaxValues,
   type GridRow,
-  type OrderedShape,
-  type QueryShape,
   type QueryState,
 } from "@kikstart/query-grid";
 import {
@@ -15,21 +13,26 @@ import {
   buildCappedTotalSql,
   buildPageSql,
   buildRowSql,
+  describeShape,
   encodeCursor,
+  isQuickShape,
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
   QUICK_SETTINGS,
   TOTAL_SETTINGS,
+  type OrderedShape,
+  type QueryShape,
   type SqlQuery,
-} from "@kikstart/query-grid/server";
+} from "@kikstart/query-grid-postgres";
 import { Client } from "pg";
 
-import { ORDERS_GRID } from "../src/core/orders/orders-grid-def";
+import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
 
 const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? 30);
 const PAGE = 200;
 const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
+const MULTI_SIZES = [2, 5];
 const QUICK_TERMS = [
   "Smith",
   "Mokoena",
@@ -56,6 +59,7 @@ interface Explain {
 
 interface Result {
   shape: string;
+  multi: boolean;
   variant: string;
   p50: number;
   p95: number;
@@ -79,6 +83,7 @@ async function measure(
   variant: string,
   sql: SqlQuery,
   settings: string[] | null,
+  multi = false,
 ): Promise<Result> {
   const times: number[] = [];
   let plan: PlanNode[] = [];
@@ -115,6 +120,7 @@ async function measure(
   if (times.length === 0) {
     return {
       shape: describeShape(shape),
+      multi,
       variant,
       p50: Number.NaN,
       p95: Number.NaN,
@@ -128,6 +134,7 @@ async function measure(
   const scansByIndex = plan.some((node) => node["Index Name"] !== undefined);
   return {
     shape: describeShape(shape),
+    multi,
     variant,
     p50: percentile(times, 0.5),
     p95,
@@ -150,7 +157,7 @@ async function measure(
 async function pickEqualsValues(
   client: Client,
   shape: OrderedShape,
-): Promise<Record<string, string>> {
+): Promise<Record<string, string[]>> {
   if (shape.equals.length === 0) {
     return {};
   }
@@ -159,7 +166,75 @@ async function pickEqualsValues(
     `SELECT ${columns} FROM (SELECT ${columns} FROM orders LIMIT 200000) sample
      GROUP BY ${columns} ORDER BY count(*) DESC LIMIT 1`,
   );
-  return rows[0];
+  return Object.fromEntries(
+    Object.entries(rows[0]).map(([key, value]) => [key, [value]]),
+  );
+}
+
+async function pickSeveralValues(
+  client: Client,
+  shape: OrderedShape,
+  size: number,
+): Promise<Record<string, string[]>> {
+  const equals: Record<string, string[]> = {};
+  for (const column of shape.equals) {
+    const { rows } = await client.query<{ value: string }>(
+      `SELECT ${column} AS value FROM (SELECT ${column} FROM orders LIMIT 200000) sample
+       GROUP BY ${column} ORDER BY count(*) DESC LIMIT ${size}`,
+    );
+    equals[column] = rows.map((row) => row.value);
+  }
+  return equals;
+}
+
+function listMultiSizes(shape: OrderedShape): number[] {
+  const caps = shape.equals.map((key) => {
+    const field = getField(ORDERS_GRID, key);
+    return field ? resolveMaxValues(field) : 1;
+  });
+  return [...new Set([...MULTI_SIZES, Math.max(...caps)])];
+}
+
+async function benchSeveral(
+  client: Client,
+  shape: OrderedShape,
+): Promise<Result[]> {
+  const results: Result[] = [];
+  const seen = new Set<string>();
+  for (const size of listMultiSizes(shape)) {
+    const equals = await pickSeveralValues(client, shape, size);
+    const label = Object.entries(equals)
+      .map(([key, values]) => `${values.length} ${key}`)
+      .join(", ");
+    if (seen.has(label)) {
+      continue;
+    }
+    seen.add(label);
+    const query: QueryState = {
+      ...defaultQuery(ORDERS_GRID),
+      equals,
+      sort: { field: shape.sort, direction: "desc" },
+    };
+    results.push(
+      await measure(
+        client,
+        shape,
+        `${label}: first page desc`,
+        buildPageSql(ORDERS_GRID, query, PAGE),
+        null,
+        true,
+      ),
+      await measure(
+        client,
+        shape,
+        `${label}: capped count`,
+        buildCappedCountSql(ORDERS_GRID, query),
+        null,
+        true,
+      ),
+    );
+  }
+  return results;
 }
 
 async function pickDeepCursor(
@@ -168,7 +243,7 @@ async function pickDeepCursor(
 ): Promise<string | null> {
   const filters = Object.keys(query.equals);
   const where = filters.length
-    ? `WHERE ${filters.map((key, index) => `${key} = $${index + 1}`).join(" AND ")}`
+    ? `WHERE ${filters.map((key, index) => `${key} = ANY($${index + 1})`).join(" AND ")}`
     : "";
   const direction = query.sort.direction.toUpperCase();
   for (const offset of [DEEP_OFFSET, 20_000, 1000]) {
@@ -266,6 +341,9 @@ async function benchOrdered(
       ),
     );
   }
+  if (shape.equals.length > 0 && shape.multi !== false) {
+    results.push(...(await benchSeveral(client, shape)));
+  }
   return results;
 }
 
@@ -296,16 +374,42 @@ function formatMs(value: number): string {
   return Number.isNaN(value) ? "–" : value.toFixed(2);
 }
 
-function toMarkdown(results: Result[], total: number): string {
-  const lines = [
-    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after 3 warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
-    "",
+function toTable(results: Result[]): string[] {
+  return [
     "| Shape | Query | p50 | p95 | Plan | Pass |",
     "| --- | --- | ---: | ---: | --- | --- |",
     ...results.map(
       (result) =>
         `| ${result.shape} | ${result.variant} | ${formatMs(result.p50)} | ${formatMs(result.p95)} | ${result.nodes} | ${result.ok ? "yes" : "**no**"} |`,
     ),
+  ];
+}
+
+function summarize(results: Result[]): string {
+  const passed = results.filter((result) => result.ok).length;
+  return `${passed} of ${results.length} pass`;
+}
+
+function toMarkdown(results: Result[], total: number): string {
+  const single = results.filter((result) => !result.multi);
+  const several = results.filter((result) => result.multi);
+  const optedOut = ORDERS_GRID.shapes
+    .filter((shape) => !isQuickShape(shape) && shape.multi === false)
+    .map(describeShape);
+  const lines = [
+    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after 3 warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
+    "",
+    `## One value per field: ${summarize(single)}`,
+    "",
+    ...toTable(single),
+    "",
+    `## Several values per field: ${summarize(several)}`,
+    "",
+    ...toTable(several),
+    "",
+    optedOut.length > 0
+      ? `Shapes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
+      : "No shape is declared `multi: false`.",
   ];
   return `${lines.join("\n")}\n`;
 }

@@ -2,7 +2,7 @@
 
 import { use, type ReactNode } from "react";
 
-import { QueryGridProvider, useGridView } from "@kikstart/query-grid";
+import { QueryGridProvider, useGridView } from "@kikstart/query-grid-react";
 import {
   CardList,
   CountDisplay,
@@ -14,15 +14,14 @@ import {
   StatusBoard,
   TotalFooter,
   ViewSwitch,
-} from "@kikstart/query-grid/ui";
+} from "@kikstart/query-grid-react/ui";
 
 import { normalizeSearch, type SearchParams } from "@/lib/read-search";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
-import { ORDERS_GRID } from "../orders-grid-def";
-
-const ORDERS_API = "/api/orders";
+import { ORDERS_API } from "../orders-fields";
+import { ORDERS_CAPABILITIES, ORDERS_GRID } from "../orders-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
@@ -40,7 +39,12 @@ export function OrdersQueryProvider({
 }: OrdersQueryProviderProps) {
   const search = normalizeSearch(use(searchParams));
   return (
-    <QueryGridProvider def={ORDERS_GRID} search={search} basePath={ORDERS_API}>
+    <QueryGridProvider
+      def={ORDERS_GRID}
+      search={search}
+      basePath={ORDERS_API}
+      capabilities={ORDERS_CAPABILITIES}
+    >
       {children}
     </QueryGridProvider>
   );

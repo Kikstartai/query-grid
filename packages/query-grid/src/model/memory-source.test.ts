@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { GridRow, QueryState } from "./field-types.ts";
-import { TEST_DEF } from "./grid-def.fixture.ts";
+import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { defaultQuery } from "./query-actions.ts";
 
@@ -18,13 +18,15 @@ const ROWS: GridRow[] = Array.from({ length: 40 }, (_, index) => ({
 
 const BASE = defaultQuery(TEST_DEF);
 const signal = new AbortController().signal;
-const source = createMemorySource(TEST_DEF, ROWS);
+const source = createMemorySource(TEST_DEF, ROWS, {
+  quick: TEST_QUICK_FIELDS,
+});
 
 describe("the in-memory source", () => {
   test("it filters, sorts and pages", async () => {
     const query: QueryState = {
       ...BASE,
-      equals: { status: "open", region: "south" },
+      equals: { status: ["open"], region: ["south"] },
       range: { field: "total", min: "500", max: "2000" },
       sort: { field: "total", direction: "desc" },
     };
@@ -77,7 +79,7 @@ describe("the in-memory source", () => {
 
   test("the total is the sum of the filtered rows", async () => {
     const total = await source.fetchTotal(
-      { ...BASE, equals: { status: "done" } },
+      { ...BASE, equals: { status: ["done"] } },
       signal,
     );
     expect(total).toEqual({
@@ -93,7 +95,7 @@ describe("the in-memory source", () => {
 
   test("facet counts follow the other filters, not the facet itself", async () => {
     const facets = await source.fetchFacets(
-      { ...BASE, equals: { status: "done", region: "north" } },
+      { ...BASE, equals: { status: ["done"], region: ["north"] } },
       signal,
     );
     expect(
@@ -101,12 +103,35 @@ describe("the in-memory source", () => {
     ).toEqual({ done: 10, open: 10 });
   });
 
+  test("several values of one field match any of them", async () => {
+    const either = await source.fetchCount(
+      { ...BASE, equals: { status: ["open", "done"], region: ["north"] } },
+      false,
+      signal,
+    );
+    expect(either.count).toBe(20);
+    const facets = await source.fetchFacets(
+      { ...BASE, equals: { status: ["open", "done"] } },
+      signal,
+    );
+    expect(facets.reduce((sum, facet) => sum + facet.count, 0)).toBe(40);
+  });
+
+  test("a grid without a total answers a code", async () => {
+    const bare = createMemorySource({ ...TEST_DEF, total: undefined }, ROWS);
+    expect(await bare.fetchTotal(BASE, signal)).toEqual({
+      available: false,
+      code: "no_total",
+      params: {},
+    });
+  });
+
   test("a status change is kept", async () => {
     const mutable = createMemorySource(TEST_DEF, ROWS);
     const updated = await mutable.changeFacetValue("row-01", "done");
     expect(updated.status).toBe("done");
     const count = await mutable.fetchCount(
-      { ...BASE, equals: { status: "done" } },
+      { ...BASE, equals: { status: ["done"] } },
       false,
       signal,
     );

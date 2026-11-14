@@ -1,0 +1,404 @@
+import { describe, expect, test } from "bun:test";
+import type { ReactElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { CardList } from "./card-list.tsx";
+import { defaultColumns } from "./column-state.ts";
+import { ColumnsMenu } from "./columns-menu.tsx";
+import { CountDisplay, TotalFooter } from "./count-display.tsx";
+import { DataGrid } from "./data-grid.tsx";
+import { FacetPanel } from "./facet-panel.tsx";
+import { FieldFilter } from "./field-filter.tsx";
+import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
+import {
+  FilterBar,
+  FilterChips,
+  QuickFilter,
+  SortControl,
+} from "./filter-bar.tsx";
+import { FilterSidebar } from "./filter-sidebar.tsx";
+import {
+  formatLoaded,
+  formatRows,
+  DEFAULT_MESSAGES,
+  QueryGridMessagesProvider,
+} from "./messages.tsx";
+import { StatusBoard } from "./status-board.tsx";
+import { ViewSwitch } from "./view-switch.tsx";
+
+const noop = () => undefined;
+const STATUS = TEST_FIELDS.find((field) => field.key === "status")!;
+const TOTAL = TEST_FIELDS.find((field) => field.key === "total")!;
+const CREATED = TEST_FIELDS.find((field) => field.key === "created_at")!;
+const NAME = { ...TEST_FIELDS[6], operators: ["eq" as const] };
+const ROW_WINDOW = {
+  rows: TEST_ROWS,
+  hasNext: false,
+  onEndReached: noop,
+  loading: false,
+};
+
+function render(element: ReactElement): string {
+  return renderToStaticMarkup(element);
+}
+
+describe("each base component mounts alone, with plain props and no provider", () => {
+  test("DataGrid", () => {
+    const html = render(<DataGrid fields={TEST_FIELDS} {...ROW_WINDOW} />);
+    expect(html).toContain('data-part="grid"');
+    expect(html).toContain('role="grid"');
+    expect(html).toContain('data-header="status"');
+    expect(html).toContain("6 rows loaded");
+    expect(html).toContain("end of results");
+    expect(html).toContain('aria-label="Select all loaded rows"');
+  });
+
+  test("DataGrid with a sort, a header filter and controlled columns", () => {
+    const columns = defaultColumns(TEST_FIELDS).map((column) =>
+      column.key === "note" ? { ...column, visible: false } : column,
+    );
+    const html = render(
+      <DataGrid
+        fields={TEST_FIELDS}
+        {...ROW_WINDOW}
+        columns={columns}
+        onColumnsChange={noop}
+        sort={{ field: "total", direction: "asc" }}
+        sortableFields={["total"]}
+        onSortChange={noop}
+        filters={{ status: <span>status filter</span> }}
+        activeFilters={["status"]}
+      />,
+    );
+    expect(html).toContain('data-header-sort="total"');
+    expect(html).toContain('data-sorted="asc"');
+    expect(html).toContain('aria-label="Filter Status"');
+    expect(html).not.toContain('data-header="note"');
+  });
+
+  test("DataGrid states", () => {
+    const empty = { ...ROW_WINDOW, rows: [] };
+    expect(render(<DataGrid fields={TEST_FIELDS} {...empty} />)).toContain(
+      "No rows match.",
+    );
+    expect(
+      render(<DataGrid fields={TEST_FIELDS} {...empty} loading />),
+    ).toContain("Loading…");
+    expect(
+      render(<DataGrid fields={TEST_FIELDS} {...empty} error="It broke" />),
+    ).toContain("It broke");
+  });
+
+  test("ColumnsMenu", () => {
+    const html = render(
+      <ColumnsMenu
+        fields={TEST_FIELDS}
+        columns={defaultColumns(TEST_FIELDS)}
+        onColumnsChange={noop}
+      />,
+    );
+    expect(html).toContain('data-part="columns-menu-trigger"');
+    expect(html).toContain("Columns");
+  });
+
+  test("CardList", () => {
+    const html = render(
+      <CardList
+        fields={TEST_FIELDS}
+        {...ROW_WINDOW}
+        titleField="number"
+        badgeField="status"
+      />,
+    );
+    expect(html).toContain('data-part="list"');
+    expect(html).toContain("6 rows loaded");
+  });
+
+  test("StatusBoard over generic lanes", () => {
+    const html = render(
+      <StatusBoard
+        lanes={[
+          {
+            id: "open",
+            label: "Open",
+            count: 1234,
+            rows: TEST_ROWS.filter((row) => row.status === "open"),
+            hasNext: false,
+            onEndReached: noop,
+          },
+          {
+            id: "done",
+            label: "Done",
+            rows: TEST_ROWS.filter((row) => row.status === "done"),
+            hasNext: false,
+            onEndReached: noop,
+          },
+        ]}
+        fields={TEST_FIELDS}
+        titleField="number"
+        detailFields={["name", "total"]}
+        onMove={noop}
+        canMove={() => true}
+      />,
+    );
+    expect(html).toContain('data-part="board"');
+    expect(html).toContain('data-column="open"');
+    expect(html).toContain('data-column="done"');
+    expect(html).toContain("1,234");
+    expect(html).toContain("Drag a card");
+  });
+
+  test("FilterBar, SortControl and QuickFilter", () => {
+    const html = render(
+      <FilterBar>
+        <QuickFilter value="" onValueChange={noop} fieldLabels={["Name"]} />
+        <SortControl
+          options={[
+            { value: "created_at", label: "Created" },
+            { value: "total", label: "Total", disabled: true },
+          ]}
+          value="created_at"
+          direction="desc"
+          onSortChange={noop}
+        />
+      </FilterBar>,
+    );
+    expect(html).toContain('role="toolbar"');
+    expect(html).toContain('placeholder="Quick filter: Name"');
+    expect(html).toContain('aria-label="Sort by"');
+    expect(html).toContain('aria-label="Descending"');
+  });
+
+  test("a disabled control carries its reason", () => {
+    const html = render(
+      <SortControl
+        options={[{ value: "total", label: "Total" }]}
+        value="total"
+        direction="asc"
+        onSortChange={noop}
+        disabled
+        reason="Not now"
+        showReason
+      />,
+    );
+    expect(html).toContain("data-unavailable");
+    expect(html).toContain("Not now");
+  });
+
+  test("FieldFilter in each of its forms", () => {
+    const single = render(
+      <FieldFilter field={STATUS} values={["open"]} onValuesChange={noop} />,
+    );
+    expect(single).toContain('aria-label="Status filter"');
+    expect(single).not.toContain("data-multiple");
+    const multiple = render(
+      <FieldFilter
+        field={STATUS}
+        values={["open", "done"]}
+        onValuesChange={noop}
+        multiple
+      />,
+    );
+    expect(multiple).toContain("data-multiple");
+    const lookup = render(
+      <FieldFilter
+        field={NAME}
+        values={["a", "b"]}
+        valueLabels={{ a: "Alpha", b: "Beta" }}
+        onValuesChange={noop}
+        loadOptions={async () => []}
+        multiple
+      />,
+    );
+    expect(lookup).toContain("Alpha");
+    expect(lookup).toContain('aria-label="Remove Beta"');
+    const money = render(
+      <FieldFilter
+        field={TOTAL}
+        range={{ min: "1000", max: null }}
+        onRangeChange={noop}
+      />,
+    );
+    expect(money).toContain('aria-label="Total from"');
+    const dates = render(<FieldFilter field={CREATED} onRangeChange={noop} />);
+    expect(dates).toContain('aria-label="Pick Created dates"');
+  });
+
+  test("FilterChips with one chip per field and one remove per value", () => {
+    const html = render(
+      <FilterChips
+        chips={[
+          {
+            id: "eq:status",
+            kind: "equals",
+            label: "Status:",
+            values: [
+              { id: "open", label: "Open" },
+              { id: "done", label: "Done" },
+            ],
+            removable: true,
+          },
+          {
+            id: "sort",
+            kind: "sort",
+            label: "Sort: Created ↓",
+            removable: false,
+          },
+        ]}
+        onRemove={noop}
+        onReset={noop}
+      />,
+    );
+    expect(html.match(/data-chip=/g)).toHaveLength(2);
+    expect(html.match(/data-chip-remove="eq:status"/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="Remove Status: Done"');
+    expect(html).toContain('data-chip-value="open"');
+  });
+
+  test("FilterSidebar", () => {
+    const html = render(
+      <FilterSidebar activeCount={2} onReset={noop}>
+        <span>body</span>
+      </FilterSidebar>,
+    );
+    expect(html).toContain('data-part="filter-sidebar-trigger"');
+    expect(html).toContain('data-sidebar-active="2"');
+  });
+
+  test("FacetPanel", () => {
+    const html = render(
+      <FacetPanel
+        label="Status"
+        options={[
+          { value: "open", label: "Open", count: 30 },
+          { value: "done", label: "Done", count: 10 },
+        ]}
+        values={["open"]}
+        onValuesChange={noop}
+        total={40}
+        note="A note"
+      />,
+    );
+    expect(html).toContain('data-facet="open"');
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain(">40<");
+    expect(html).toContain("A note");
+  });
+
+  test("ViewSwitch", () => {
+    const html = render(
+      <ViewSwitch
+        views={[
+          { view: "grid", label: "Grid" },
+          { view: "list", label: "List" },
+        ]}
+        value="grid"
+        onValueChange={noop}
+      />,
+    );
+    expect(html).toContain('data-view="list"');
+    expect(html).toContain('aria-label="View"');
+  });
+
+  test("CountDisplay", () => {
+    const capped = render(
+      <CountDisplay
+        status="idle"
+        value={{ count: 10000, capped: true, source: "capped" }}
+        onRequestExact={noop}
+      />,
+    );
+    expect(capped).toContain("10,000+ rows");
+    expect(capped).toContain("Exact count");
+    expect(render(<CountDisplay status="loading" value={null} />)).toContain(
+      "Counting…",
+    );
+    expect(
+      render(
+        <CountDisplay
+          status="idle"
+          value={{ count: 1, capped: false, source: "exact" }}
+        />,
+      ),
+    ).toContain("1 row<");
+  });
+
+  test("TotalFooter", () => {
+    const live = render(
+      <TotalFooter
+        status="idle"
+        label="Total"
+        value={{ sum: 123456, rows: 2, source: "live" }}
+      />,
+    );
+    expect(live).toContain("Total sum");
+    expect(live).toContain("$1,234.56");
+    expect(live).toContain("summed live over 2 rows");
+    expect(
+      render(<TotalFooter status="idle" value={null} reason="Too many" />),
+    ).toContain("Too many");
+  });
+});
+
+describe("messages", () => {
+  test("plurals follow the locale's rules, not an English ternary", () => {
+    expect(formatRows(DEFAULT_MESSAGES, 1)).toBe("1 row");
+    expect(formatRows(DEFAULT_MESSAGES, 0)).toBe("0 rows");
+    expect(formatRows(DEFAULT_MESSAGES, 620000, { locale: "de-DE" })).toBe(
+      "620.000 rows",
+    );
+    expect(formatLoaded(DEFAULT_MESSAGES, 500, 1)).toBe(
+      "500 rows loaded in 1 keyset page",
+    );
+    const welsh = {
+      ...DEFAULT_MESSAGES,
+      rows: ({ count, locale }: { count: number; locale: string }) =>
+        new Intl.PluralRules(locale).select(count),
+    };
+    expect(formatRows(welsh, 2, { locale: "cy" })).toBe("two");
+    expect(formatRows(welsh, 3, { locale: "cy" })).toBe("few");
+  });
+
+  test("the provider's messages replace the defaults in every component", () => {
+    const html = render(
+      <QueryGridMessagesProvider
+        messages={{
+          noRows: "Geen rye nie.",
+          columns: "Kolomme",
+          rows: ({ formatted }) => `${formatted} rye`,
+          selectAll: "Kies alles",
+          reset: "Herstel",
+          countSources: { exact: "presiese telling" },
+          facetNotes: { memory: "Tellings volg die filters." },
+        }}
+      >
+        <DataGrid fields={TEST_FIELDS} {...ROW_WINDOW} rows={[]} />
+        <CountDisplay
+          status="idle"
+          value={{ count: 7, capped: false, source: "exact" }}
+        />
+        <FilterChips chips={[]} onRemove={noop} onReset={noop} />
+      </QueryGridMessagesProvider>,
+    );
+    expect(html).toContain("Geen rye nie.");
+    expect(html).toContain("Kolomme");
+    expect(html).toContain("7 rye");
+    expect(html).toContain("presiese telling");
+    expect(html).toContain('aria-label="Kies alles"');
+    expect(html).toContain("Herstel");
+    expect(html).not.toContain("No rows match.");
+    expect(html).not.toContain("Columns");
+  });
+
+  test("an override keeps the defaults it does not name", () => {
+    const html = render(
+      <QueryGridMessagesProvider messages={{ countSources: { exact: "x" } }}>
+        <CountDisplay
+          status="idle"
+          value={{ count: 7, capped: false, source: "counter" }}
+        />
+      </QueryGridMessagesProvider>,
+    );
+    expect(html).toContain("exact, from the counter table");
+  });
+});

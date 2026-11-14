@@ -13,8 +13,10 @@ const RANGE_SEPARATOR = "..";
 
 export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {
   const params = new URLSearchParams();
-  for (const [field, value] of Object.entries(query.equals)) {
-    params.set(`${EQUALS_PREFIX}${field}`, value);
+  for (const [field, values] of Object.entries(query.equals)) {
+    for (const value of values) {
+      params.append(`${EQUALS_PREFIX}${field}`, value);
+    }
   }
   if (query.range) {
     params.set(
@@ -51,11 +53,13 @@ function decodeSort(def: GridDef, raw: string | null): QueryState["sort"] {
 }
 
 export function decodeQuery(def: GridDef, params: URLSearchParams): QueryState {
-  const equals: Record<string, string> = {};
+  const equals: Record<string, string[]> = {};
   let range: RangeState | null = null;
   for (const [name, value] of params) {
     if (name.startsWith(EQUALS_PREFIX)) {
-      equals[name.slice(EQUALS_PREFIX.length)] = value;
+      const field = name.slice(EQUALS_PREFIX.length);
+      const values = equals[field] ?? [];
+      equals[field] = values.includes(value) ? values : [...values, value];
     }
     if (name.startsWith(RANGE_PREFIX)) {
       range = decodeRange(name.slice(RANGE_PREFIX.length), value);

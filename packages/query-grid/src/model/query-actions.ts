@@ -1,16 +1,16 @@
 import {
-  getFieldLabel,
-  INDEXED_RULES,
+  getField,
   isDefaultSort,
+  resolveMaxValues,
   type GridDef,
   type QueryRules,
   type QueryState,
   type SortDirection,
 } from "./field-types.ts";
-import { isAnswerable, listSortFields } from "./shapes.ts";
 
 export type QueryAction =
-  | { type: "setEquals"; field: string; value: string }
+  | { type: "setEquals"; field: string; values: string[] }
+  | { type: "removeEqualsValue"; field: string; value: string }
   | { type: "clearEquals"; field: string }
   | { type: "setRange"; field?: string; min: string | null; max: string | null }
   | { type: "clearRange" }
@@ -21,6 +21,7 @@ export type QueryAction =
 
 export interface Offers {
   equals: string[];
+  multi: string[];
   sorts: string[];
   ranges: string[];
   quick: boolean;
@@ -32,8 +33,25 @@ export type OfferTarget =
   | { kind: "sort"; field: string }
   | { kind: "quick" };
 
-export const QUICK_UNORDERED_REASON =
-  "A quick filter result is unordered until every match is loaded: narrow it under the cap to sort.";
+export type ReasonCode =
+  | "quick_alone"
+  | "quick_unordered"
+  | "quick_no_combine"
+  | "no_sort_index"
+  | "range_needs_sort"
+  | "no_sort_with"
+  | "no_filter_with"
+  | "no_range_with";
+
+export interface UnavailableReason {
+  code: ReasonCode;
+  field: string | null;
+  filters: string[];
+  range: string | null;
+  sort: string;
+}
+
+const PROBE = ["x", "y"];
 
 export function defaultQuery(def: GridDef): QueryState {
   return {
@@ -46,12 +64,50 @@ export function defaultQuery(def: GridDef): QueryState {
 }
 
 function withoutKey(
-  record: Record<string, string>,
+  record: Record<string, string[]>,
   key: string,
-): Record<string, string> {
+): Record<string, string[]> {
   return Object.fromEntries(
     Object.entries(record).filter(([name]) => name !== key),
   );
+}
+
+function proposeClear(
+  def: GridDef,
+  query: QueryState,
+  field: string,
+): QueryState[] {
+  const equals = withoutKey(query.equals, field);
+  return [
+    { ...query, cursor: null, equals },
+    {
+      ...query,
+      cursor: null,
+      equals,
+      range: null,
+      sort: def.defaultSort,
+    },
+    defaultQuery(def),
+  ];
+}
+
+function proposeEquals(
+  def: GridDef,
+  query: QueryState,
+  field: string,
+  values: string[],
+): QueryState[] {
+  const unique = [...new Set(values)];
+  if (unique.length === 0) {
+    return proposeClear(def, query, field);
+  }
+  const target = getField(def, field);
+  if (target && unique.length > resolveMaxValues(target)) {
+    return [];
+  }
+  return [
+    { ...query, cursor: null, equals: { ...query.equals, [field]: unique } },
+  ];
 }
 
 function proposeAction(
@@ -61,19 +117,21 @@ function proposeAction(
   rules: QueryRules,
 ): QueryState[] {
   const top = { ...query, cursor: null };
+  const memory = rules.capabilities.mode === "memory";
   switch (action.type) {
     case "setEquals":
-      return [
-        { ...top, equals: { ...query.equals, [action.field]: action.value } },
-      ];
-    case "clearEquals": {
-      const equals = withoutKey(query.equals, action.field);
-      return [
-        { ...top, equals },
-        { ...top, equals, range: null, sort: def.defaultSort },
-        defaultQuery(def),
-      ];
-    }
+      return proposeEquals(def, query, action.field, action.values);
+    case "removeEqualsValue":
+      return proposeEquals(
+        def,
+        query,
+        action.field,
+        (query.equals[action.field] ?? []).filter(
+          (value) => value !== action.value,
+        ),
+      );
+    case "clearEquals":
+      return proposeClear(def, query, action.field);
     case "setRange":
       return [
         {
@@ -88,10 +146,7 @@ function proposeAction(
     case "clearRange":
       return [{ ...top, range: null }];
     case "setSort": {
-      const unordered =
-        rules.mode === "indexed" &&
-        query.quick !== null &&
-        !rules.quickComplete;
+      const unordered = !memory && query.quick !== null && !rules.quickComplete;
       if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
@@ -100,7 +155,7 @@ function proposeAction(
       ];
     }
     case "setQuick":
-      if (rules.mode === "memory") {
+      if (memory) {
         return [{ ...top, quick: action.value }];
       }
       return [{ ...top, quick: action.value, sort: def.defaultSort }];
@@ -115,10 +170,10 @@ export function applyAction(
   def: GridDef,
   query: QueryState,
   action: QueryAction,
-  rules: QueryRules = INDEXED_RULES,
+  rules: QueryRules,
 ): QueryState {
   const next = proposeAction(def, query, action, rules).find((candidate) =>
-    isAnswerable(def, candidate, rules.mode),
+    rules.capabilities.isAnswerable(candidate),
   );
   return next ?? query;
 }
@@ -130,27 +185,25 @@ function isOffered(
   rules: QueryRules,
 ): boolean {
   const [first] = proposeAction(def, query, action, rules);
-  return first !== undefined && isAnswerable(def, first, rules.mode);
+  return first !== undefined && rules.capabilities.isAnswerable(first);
 }
 
 export function listOffers(
   def: GridDef,
   query: QueryState,
-  rules: QueryRules = INDEXED_RULES,
+  rules: QueryRules,
 ): Offers {
+  const equalsFields = def.fields
+    .filter((field) => field.operators.includes("eq"))
+    .map((field) => field.key);
+  const offersEquals = (values: string[]) =>
+    equalsFields.filter((field) =>
+      isOffered(def, query, { type: "setEquals", field, values }, rules),
+    );
   return {
-    equals: def.fields
-      .filter((field) => field.operators.includes("eq"))
-      .filter((field) =>
-        isOffered(
-          def,
-          query,
-          { type: "setEquals", field: field.key, value: "x" },
-          rules,
-        ),
-      )
-      .map((field) => field.key),
-    sorts: listSortFields(def, rules.mode).filter((field) =>
+    equals: offersEquals(PROBE.slice(0, 1)),
+    multi: offersEquals(PROBE),
+    sorts: rules.capabilities.sortFields.filter((field) =>
       isOffered(
         def,
         query,
@@ -173,52 +226,61 @@ export function listOffers(
   };
 }
 
-function describeQuery(def: GridDef, query: QueryState, skip: string): string {
-  const filters = Object.keys(query.equals)
-    .filter((key) => key !== skip)
-    .map((key) => `the ${getFieldLabel(def, key)} filter`);
-  const range =
-    query.range && query.range.field !== skip
-      ? [`the ${getFieldLabel(def, query.range.field)} range`]
-      : [];
-  return [
-    ...filters,
-    ...range,
-    `sort ${getFieldLabel(def, query.sort.field)}`,
-  ].join(" and ");
+function describeQuery(
+  query: QueryState,
+  code: ReasonCode,
+  field: string | null,
+): UnavailableReason {
+  return {
+    code,
+    field,
+    filters: Object.keys(query.equals).filter((key) => key !== field),
+    range:
+      query.range && query.range.field !== field ? query.range.field : null,
+    sort: query.sort.field,
+  };
 }
 
 export function explainUnavailable(
-  def: GridDef,
   query: QueryState,
   target: OfferTarget,
-  rules: QueryRules = INDEXED_RULES,
-): string {
+  rules: QueryRules,
+): UnavailableReason {
   if (target.kind === "quick") {
-    return "The quick filter runs alone: clear the other filters first.";
+    return describeQuery(query, "quick_alone", null);
   }
-  const label = getFieldLabel(def, target.field);
   if (query.quick !== null && target.kind === "sort") {
-    return rules.quickComplete
-      ? `No index sorts by ${label}.`
-      : QUICK_UNORDERED_REASON;
+    return describeQuery(
+      query,
+      rules.quickComplete ? "no_sort_index" : "quick_unordered",
+      target.field,
+    );
   }
   if (query.quick !== null) {
-    return "No index combines the quick filter with another filter.";
+    return describeQuery(query, "quick_no_combine", target.field);
   }
   if (target.kind === "range" && query.sort.field !== target.field) {
-    return `No index answers a ${label} range unless the sort is ${label}.`;
+    return describeQuery(query, "range_needs_sort", target.field);
   }
   if (target.kind === "sort") {
-    return `No index sorts by ${label} with ${describeQuery(def, query, "")}.`;
+    return {
+      ...describeQuery(query, "no_sort_with", null),
+      field: target.field,
+    };
   }
-  const what = target.kind === "range" ? `a ${label} range` : label;
-  return `No index answers ${what} with ${describeQuery(def, query, target.field)}.`;
+  return describeQuery(
+    query,
+    target.kind === "range" ? "no_range_with" : "no_filter_with",
+    target.field,
+  );
 }
 
 function stateKey(query: QueryState): string {
   return [
-    Object.keys(query.equals).sort().join("+"),
+    Object.entries(query.equals)
+      .map(([key, values]) => (values.length > 1 ? `${key}*` : key))
+      .sort()
+      .join("+"),
     query.range ? `range:${query.range.field}` : "",
     query.quick !== null ? "quick" : "",
     query.sort.field,
@@ -228,15 +290,19 @@ function stateKey(query: QueryState): string {
 export function listControlActions(
   def: GridDef,
   query: QueryState,
-  rules: QueryRules = INDEXED_RULES,
+  rules: QueryRules,
 ): QueryAction[] {
   const offers = listOffers(def, query, rules);
   const actions: QueryAction[] = [{ type: "reset" }];
   for (const field of offers.equals) {
-    actions.push({ type: "setEquals", field, value: "x" });
+    actions.push({ type: "setEquals", field, values: PROBE.slice(0, 1) });
+  }
+  for (const field of offers.multi) {
+    actions.push({ type: "setEquals", field, values: PROBE });
   }
   for (const field of Object.keys(query.equals)) {
     actions.push({ type: "clearEquals", field });
+    actions.push({ type: "removeEqualsValue", field, value: PROBE[1] });
   }
   for (const field of offers.sorts) {
     actions.push({ type: "setSort", field, direction: "asc" });
@@ -259,7 +325,7 @@ export function listControlActions(
 
 export function enumerateReachableStates(
   def: GridDef,
-  rules: QueryRules = INDEXED_RULES,
+  rules: QueryRules,
 ): QueryState[] {
   const start = defaultQuery(def);
   const seen = new Map<string, QueryState>([[stateKey(start), start]]);

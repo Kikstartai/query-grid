@@ -1,4 +1,5 @@
 import type { GridRow } from "./field-types.ts";
+import type { Problem } from "./problems.ts";
 
 export interface PageResult {
   rows: GridRow[];
@@ -27,12 +28,16 @@ export interface TotalAvailable {
   source: "counter" | "live";
 }
 
-export interface TotalUnavailable {
+export interface TotalUnavailable extends Problem {
   available: false;
-  reason: string;
 }
 
 export type TotalResult = TotalAvailable | TotalUnavailable;
+
+export interface OptionSearch {
+  query?: string;
+  value?: string;
+}
 
 export const PAGE_LIMIT_MAX = 1000;
 export const QUICK_LIMIT = 500;

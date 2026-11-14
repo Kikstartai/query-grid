@@ -1,9 +1,9 @@
-import type { ViewOption } from "@kikstart/query-grid/ui";
+import type { ViewOption } from "@kikstart/query-grid-react/ui";
 
 export const KIKSTART_URL = "https://kikstart.ai";
 export const REPO_URL = "https://github.com/Kikstartai/query-grid";
 export const PACKAGE_NAME = "@kikstart/query-grid";
-export const INSTALL_LINE = `npm install ${PACKAGE_NAME} @ui-sdk/core@beta @ui-sdk/react@beta`;
+export const INSTALL_LINE = `npm install ${PACKAGE_NAME} ${PACKAGE_NAME}-react ${PACKAGE_NAME}-postgres @ui-sdk/core@beta @ui-sdk/react@beta`;
 
 export const VIEWS: ViewOption[] = [
   { view: "grid", label: "Grid" },

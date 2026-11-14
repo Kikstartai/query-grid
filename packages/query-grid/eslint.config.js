@@ -1,13 +1,9 @@
-import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   { ignores: ["dist/**"] },
   {
-    extends: [
-      tseslint.configs.recommended,
-      reactHooks.configs.flat["recommended-latest"],
-    ],
+    extends: [tseslint.configs.recommended],
     languageOptions: {
       parserOptions: {
         tsconfigRootDir: import.meta.dirname,

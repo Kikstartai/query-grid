@@ -1,9 +1,11 @@
 import {
   getField,
+  resolveMaxValues,
   type FieldDef,
   type GridDef,
   type QueryState,
 } from "./field-types.ts";
+import type { Problem } from "./problems.ts";
 
 export const QUICK_MIN_LENGTH = 3;
 export const QUICK_MAX_LENGTH = 80;
@@ -27,12 +29,35 @@ function isValidValue(field: FieldDef, value: string): boolean {
   }
 }
 
-function checkValue(def: GridDef, key: string, value: string): string | null {
+function checkValue(def: GridDef, key: string, value: string): Problem | null {
   const field = getField(def, key);
   if (!field) {
-    return `unknown field ${key}`;
+    return { code: "unknown_field", params: { field: key } };
   }
-  return isValidValue(field, value) ? null : `invalid value for ${key}`;
+  return isValidValue(field, value)
+    ? null
+    : { code: "invalid_value", params: { field: key } };
+}
+
+function checkEquals(
+  def: GridDef,
+  key: string,
+  values: string[],
+): Problem | null {
+  const field = getField(def, key);
+  if (!field) {
+    return { code: "unknown_field", params: { field: key } };
+  }
+  if (values.length === 0) {
+    return { code: "invalid_value", params: { field: key } };
+  }
+  const max = resolveMaxValues(field);
+  if (values.length > max) {
+    return { code: "too_many_values", params: { field: key, max } };
+  }
+  return values.every((value) => isValidValue(field, value))
+    ? null
+    : { code: "invalid_value", params: { field: key } };
 }
 
 export function isValidFieldValue(
@@ -51,9 +76,9 @@ export function isValidQuickValue(value: string): boolean {
 export function validateQueryValues(
   def: GridDef,
   query: QueryState,
-): string | null {
-  for (const [key, value] of Object.entries(query.equals)) {
-    const problem = checkValue(def, key, value);
+): Problem | null {
+  for (const [key, values] of Object.entries(query.equals)) {
+    const problem = checkEquals(def, key, values);
     if (problem) {
       return problem;
     }
@@ -68,10 +93,13 @@ export function validateQueryValues(
     }
   }
   if (query.quick !== null && !isValidQuickValue(query.quick)) {
-    return `the quick filter needs ${QUICK_MIN_LENGTH} to ${QUICK_MAX_LENGTH} characters`;
+    return {
+      code: "quick_length",
+      params: { min: QUICK_MIN_LENGTH, max: QUICK_MAX_LENGTH },
+    };
   }
   if (query.sort.direction !== "asc" && query.sort.direction !== "desc") {
-    return "invalid sort direction";
+    return { code: "invalid_sort_direction", params: {} };
   }
   return null;
 }

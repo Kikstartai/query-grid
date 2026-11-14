@@ -1,7 +1,7 @@
 import { createEmitter } from "./emitter.ts";
 import type {
+  Capabilities,
   GridDef,
-  QueryMode,
   QueryRules,
   QueryState,
 } from "./field-types.ts";
@@ -24,13 +24,13 @@ export interface QueryStore {
 
 export function createQueryStore(
   def: GridDef,
+  capabilities: Capabilities,
   initial: QueryState,
   initialView: GridView = "grid",
-  mode: QueryMode = "indexed",
 ): QueryStore {
   let query = initial;
   let view = initialView;
-  let rules: QueryRules = { mode, quickComplete: false };
+  let rules: QueryRules = { capabilities, quickComplete: false };
   const emitter = createEmitter();
   return {
     def,

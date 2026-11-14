@@ -1,6 +1,6 @@
 import { Pool, type QueryResultRow } from "pg";
 
-import type { SqlExecutor, SqlQuery } from "@kikstart/query-grid/server";
+import type { SqlExecutor, SqlQuery } from "@kikstart/query-grid-postgres";
 
 const STATEMENT_BUDGET_MS = 5000;
 

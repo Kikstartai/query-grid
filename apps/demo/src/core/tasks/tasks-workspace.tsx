@@ -2,11 +2,8 @@
 
 import { use, useState } from "react";
 
-import {
-  createMemorySource,
-  QueryGridProvider,
-  useGridView,
-} from "@kikstart/query-grid";
+import { createMemorySource } from "@kikstart/query-grid/memory";
+import { QueryGridProvider, useGridView } from "@kikstart/query-grid-react";
 import {
   CardList,
   CountDisplay,
@@ -18,7 +15,7 @@ import {
   StatusBoard,
   TotalFooter,
   ViewSwitch,
-} from "@kikstart/query-grid/ui";
+} from "@kikstart/query-grid-react/ui";
 
 import { normalizeSearch, type SearchParams } from "@/lib/read-search";
 import { VIEWS } from "@/lib/site";
@@ -27,6 +24,7 @@ import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import {
   listTaskRows,
   TASK_COUNT,
+  TASK_QUICK_FIELDS,
   TASK_TRANSITIONS,
   TASKS_GRID,
 } from "./tasks-grid-def";
@@ -54,6 +52,7 @@ export function TasksWorkspace({ searchParams }: TasksWorkspaceProps) {
   const search = normalizeSearch(use(searchParams));
   const [source] = useState(() =>
     createMemorySource(TASKS_GRID, listTaskRows(), {
+      quick: TASK_QUICK_FIELDS,
       transitions: TASK_TRANSITIONS,
     }),
   );

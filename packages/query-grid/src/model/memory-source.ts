@@ -1,7 +1,7 @@
 import type { DataSource } from "./data-source.ts";
 import {
   getField,
-  listQuickFields,
+  type Capabilities,
   type FieldDef,
   type FieldOption,
   type GridDef,
@@ -9,64 +9,34 @@ import {
   type QueryState,
   type SortState,
 } from "./field-types.ts";
+import { SourceError } from "./problems.ts";
+import { sortRows, toComparable } from "./sort-rows.ts";
 import type { FacetCount } from "./wire-types.ts";
 
 const OPTION_LIMIT = 50;
 
 export interface MemorySourceOptions {
+  quick?: string[];
   transitions?: [string, string][];
 }
 
-function toComparable(
-  field: FieldDef,
-  value: string | number | null,
-): string | number | null {
-  if (value === null || value === "") {
-    return null;
-  }
-  if (field.type === "integer" || field.type === "money") {
-    return Number(value);
-  }
-  if (field.type === "datetime") {
-    return Date.parse(String(value));
-  }
-  return String(value).toLowerCase();
-}
-
-function compareValues(
-  a: string | number | null,
-  b: string | number | null,
-): number {
-  if (a === b) {
-    return 0;
-  }
-  if (a === null) {
-    return 1;
-  }
-  if (b === null) {
-    return -1;
-  }
-  return a < b ? -1 : 1;
-}
-
-export function sortRows(
+export function memoryCapabilities(
   def: GridDef,
-  rows: GridRow[],
-  sort: SortState,
-): GridRow[] {
-  const field = getField(def, sort.field);
-  if (!field) {
-    return rows;
-  }
-  const sign = sort.direction === "asc" ? 1 : -1;
-  return rows
-    .map((row) => ({ row, value: toComparable(field, row[field.key] ?? null) }))
-    .sort(
-      (a, b) =>
-        (compareValues(a.value, b.value) || compareValues(a.row.id, b.row.id)) *
-        sign,
-    )
-    .map((keyed) => keyed.row);
+  quickFields: string[] = [],
+): Capabilities {
+  const offers = (key: string, operator: "eq" | "range") =>
+    getField(def, key)?.operators.includes(operator) === true;
+  return {
+    mode: "memory",
+    isAnswerable: (query) =>
+      Object.keys(query.equals).every((key) => offers(key, "eq")) &&
+      (query.range === null || offers(query.range.field, "range")) &&
+      (query.quick === null || quickFields.length > 0) &&
+      getField(def, query.sort.field) !== null,
+    sortFields: def.fields.map((field) => field.key),
+    quickFields,
+    isFacetCountShown: () => true,
+  };
 }
 
 function matchesRange(
@@ -99,13 +69,15 @@ export function filterRows(
   def: GridDef,
   rows: GridRow[],
   query: QueryState,
+  quickFields: string[] = [],
 ): GridRow[] {
   const equals = Object.entries(query.equals);
-  const quickFields = listQuickFields(def);
   const needle = query.quick?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
-      equals.every(([key, value]) => String(row[key] ?? "") === value) &&
+      equals.every(([key, values]) =>
+        values.includes(String(row[key] ?? "")),
+      ) &&
       (query.range === null || matchesRange(def, row, query.range)) &&
       (needle === null || matchesQuick(row, quickFields, needle)),
   );
@@ -152,6 +124,9 @@ export function createMemorySource(
 ): DataSource {
   let rows = initialRows;
   let selected: Selection | null = null;
+  const quickFields = options.quick ?? [];
+  const matching = (query: QueryState) =>
+    filterRows(def, rows, query, quickFields);
   const select = (query: QueryState) => {
     const fresh =
       selected !== null &&
@@ -167,39 +142,39 @@ export function createMemorySource(
         range: query.range,
         quick: query.quick,
         sort: query.sort,
-        rows: sortRows(def, filterRows(def, rows, query), query.sort),
+        rows: sortRows(def, matching(query), query.sort),
       };
     }
     return (selected as Selection).rows;
   };
   return {
-    mode: "memory",
+    capabilities: memoryCapabilities(def, quickFields),
     fetchPage: async (query, limit) => {
       const offset = Number(query.cursor ?? 0) || 0;
-      const matching = select(query);
+      const found = select(query);
       const end = offset + limit;
-      const hasNext = end < matching.length;
+      const hasNext = end < found.length;
       return {
-        rows: matching.slice(offset, end),
+        rows: found.slice(offset, end),
         nextCursor: hasNext ? String(end) : null,
         hasNext,
       };
     },
     fetchCount: async (query) => ({
-      count: filterRows(def, rows, query).length,
+      count: matching(query).length,
       capped: false,
       source: "exact",
     }),
     fetchTotal: async (query) => {
       const key = def.total?.field;
       if (!key) {
-        return { available: false, reason: "This grid declares no total." };
+        return { available: false, code: "no_total", params: {} };
       }
-      const matching = filterRows(def, rows, query);
+      const found = matching(query);
       return {
         available: true,
-        sum: matching.reduce((sum, row) => sum + Number(row[key] ?? 0), 0),
-        rows: matching.length,
+        sum: found.reduce((sum, row) => sum + Number(row[key] ?? 0), 0),
+        rows: found.length,
         source: "live",
       };
     },
@@ -213,7 +188,7 @@ export function createMemorySource(
         Object.entries(query.equals).filter(([name]) => name !== key),
       );
       const counts = new Map<string, FacetCount>();
-      for (const row of filterRows(def, rows, { ...query, equals: others })) {
+      for (const row of matching({ ...query, equals: others })) {
         const value = String(row[key] ?? "");
         const current = counts.get(value) ?? { value, count: 0, sum: 0 };
         counts.set(value, {
@@ -244,7 +219,7 @@ export function createMemorySource(
       const key = def.facet?.field;
       const current = rows.find((row) => row.id === id);
       if (!key || !current) {
-        throw new Error("unknown row");
+        throw new SourceError("unknown_row", { id });
       }
       const updated: GridRow = { ...current, [key]: to };
       rows = rows.map((row) => (row.id === id ? updated : row));

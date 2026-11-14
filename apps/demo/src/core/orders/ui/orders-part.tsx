@@ -2,7 +2,7 @@
 
 import { use, type ComponentType } from "react";
 
-import { useQueryState } from "@kikstart/query-grid";
+import { useQueryState } from "@kikstart/query-grid-react";
 import {
   CountDisplay,
   DataGrid,
@@ -11,7 +11,7 @@ import {
   FilterChips,
   FilterSidebar,
   TotalFooter,
-} from "@kikstart/query-grid/ui";
+} from "@kikstart/query-grid-react/ui";
 
 import { PART_NAMES } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";

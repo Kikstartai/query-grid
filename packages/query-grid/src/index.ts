@@ -1,12 +1,23 @@
 export {
+  listFilterChips,
+  type ChipValue,
+  type EqualsChip,
+  type FilterChip,
+  type QuickChip,
+  type RangeChip,
+  type SortChip,
+} from "./model/chips.ts";
+export type { DataSource } from "./model/data-source.ts";
+export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
+export {
+  DEFAULT_MAX_VALUES,
   getField,
   getFieldLabel,
-  INDEXED_RULES,
   isDefaultSort,
-  isQuickShape,
   KEY_FIELD,
   listFilterFields,
-  listQuickFields,
+  resolveMaxValues,
+  type Capabilities,
   type FacetDef,
   type FieldDef,
   type FieldLookup,
@@ -16,17 +27,30 @@ export {
   type GridDef,
   type GridFormat,
   type GridRow,
-  type OrderedShape,
   type QueryMode,
   type QueryRules,
-  type QueryShape,
   type QueryState,
-  type QuickShape,
   type RangeState,
   type SortDirection,
   type SortState,
   type TotalDef,
 } from "./model/field-types.ts";
+export {
+  DEFAULT_CURRENCY,
+  DEFAULT_LOCALE,
+  formatCount,
+  formatMoney,
+  formatValue,
+  labelKey,
+} from "./model/format.ts";
+export type { LoadStatus } from "./model/load.ts";
+export {
+  formatProblem,
+  SourceError,
+  toProblem,
+  type Problem,
+  type ProblemParams,
+} from "./model/problems.ts";
 export {
   applyAction,
   defaultQuery,
@@ -34,10 +58,11 @@ export {
   explainUnavailable,
   listControlActions,
   listOffers,
-  QUICK_UNORDERED_REASON,
   type Offers,
   type OfferTarget,
   type QueryAction,
+  type ReasonCode,
+  type UnavailableReason,
 } from "./model/query-actions.ts";
 export {
   createQueryStore,
@@ -53,6 +78,21 @@ export {
   QUICK_MIN_LENGTH,
   validateQueryValues,
 } from "./model/query-validate.ts";
+export { createFeed, type Feed, type FeedState } from "./model/row-feed.ts";
+export { sortRows } from "./model/sort-rows.ts";
+export {
+  createCountStore,
+  createFacetStore,
+  createLabelStore,
+  createTotalStore,
+  type CountState,
+  type CountStore,
+  type FacetState,
+  type FacetStore,
+  type LabelStore,
+  type TotalState,
+  type TotalStore,
+} from "./model/summary-stores.ts";
 export {
   COUNT_CAP,
   PAGE_LIMIT_MAX,
@@ -60,97 +100,9 @@ export {
   type CountResult,
   type CountSource,
   type FacetCount,
+  type OptionSearch,
   type PageResult,
   type TotalAvailable,
   type TotalResult,
   type TotalUnavailable,
 } from "./model/wire-types.ts";
-export {
-  describeShape,
-  isAnswerable,
-  isFacetCountShown,
-  isFacetOnlyQuery,
-  listOrderedShapes,
-  listSortFields,
-  matchShape,
-  shapeId,
-  validateGridDef,
-} from "./model/shapes.ts";
-export {
-  createHttpSource,
-  type DataSource,
-  type OptionSearch,
-} from "./model/data-source.ts";
-export {
-  createMemorySource,
-  filterRows,
-  sortRows,
-  type MemorySourceOptions,
-} from "./model/memory-source.ts";
-export {
-  beginResize,
-  cancelResize,
-  clampWidth,
-  COLUMN_DEFAULT_WIDTH,
-  COLUMN_MAX_WIDTH,
-  COLUMN_MIN_WIDTH,
-  createColumnStore,
-  createLocalStoragePersistence,
-  defaultColumns,
-  layoutColumns,
-  normalizeColumns,
-  reorderColumns,
-  RESIZE_LARGE_STEP,
-  RESIZE_STEP,
-  resizeWidth,
-  stepWidth,
-  type ColumnPersistence,
-  type ColumnState,
-  type ColumnStore,
-  type GridColumn,
-  type ResizeSession,
-} from "./model/column-state.ts";
-export {
-  formatCount,
-  formatMoney,
-  formatRows,
-  formatValue,
-  listFilterChips,
-  type FilterChip,
-} from "./model/format.ts";
-export {
-  createCountStore,
-  createFacetStore,
-  createFeed,
-  createLabelStore,
-  createTotalStore,
-  type CountState,
-  type CountStore,
-  type FacetState,
-  type FacetStore,
-  type Feed,
-  type FeedState,
-  type LabelStore,
-  type LoadStatus,
-  type TotalState,
-  type TotalStore,
-} from "./react/feed.ts";
-export {
-  QueryGridProvider,
-  useColumns,
-  useCountState,
-  useFacetState,
-  useFeedState,
-  useFieldLabels,
-  useFilterChips,
-  useGridView,
-  useOffers,
-  useQueryDispatch,
-  useQueryGrid,
-  useQueryRules,
-  useQueryState,
-  useTotalState,
-  type ColumnsModel,
-  type QueryGridContextValue,
-  type QueryGridProviderProps,
-} from "./react/query-grid-provider.tsx";

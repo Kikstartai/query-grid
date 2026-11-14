@@ -1,13 +1,16 @@
-import type { ReactNode } from "react";
-
 export type FieldType =
-  "id" | "text" | "enum" | "integer" | "money" | "datetime";
+  | "id"
+  | "text"
+  | "enum"
+  | "integer"
+  | "money"
+  | "datetime";
 
 export type FilterOperator = "eq" | "range";
 
 export type SortDirection = "asc" | "desc";
 
-export type QueryMode = "indexed" | "memory";
+export type QueryMode = "server" | "memory";
 
 export type GridRow = Record<string, string | number | null> & { id: string };
 
@@ -28,28 +31,15 @@ export interface FieldDef {
   nullable?: boolean;
   options?: FieldOption[];
   lookup?: FieldLookup;
+  maxValues?: number;
   width?: number;
   pinned?: boolean;
   hidden?: boolean;
   wrap?: boolean;
-  cell?: (value: string | number | null, row: GridRow) => ReactNode;
 }
-
-export interface OrderedShape {
-  equals: string[];
-  sort: string;
-  range?: boolean;
-}
-
-export interface QuickShape {
-  quick: string[];
-}
-
-export type QueryShape = OrderedShape | QuickShape;
 
 export interface FacetDef {
   field: string;
-  counterTable: string;
 }
 
 export interface TotalDef {
@@ -66,10 +56,9 @@ export interface GridFormat {
   currency?: string;
 }
 
-export interface GridDef {
-  table: string;
-  fields: FieldDef[];
-  shapes: QueryShape[];
+export interface GridDef<F extends FieldDef = FieldDef> {
+  id: string;
+  fields: F[];
   defaultSort: SortState;
   facet?: FacetDef;
   total?: TotalDef;
@@ -83,30 +72,33 @@ export interface RangeState {
 }
 
 export interface QueryState {
-  equals: Record<string, string>;
+  equals: Record<string, string[]>;
   range: RangeState | null;
   quick: string | null;
   sort: SortState;
   cursor: string | null;
 }
 
-export interface QueryRules {
+export interface Capabilities {
   mode: QueryMode;
+  isAnswerable: (query: QueryState) => boolean;
+  sortFields: string[];
+  quickFields: string[];
+  isFacetCountShown: (query: QueryState) => boolean;
+}
+
+export interface QueryRules {
+  capabilities: Capabilities;
   quickComplete: boolean;
 }
 
 export const KEY_FIELD = "id";
+export const DEFAULT_MAX_VALUES = 20;
 
-export const INDEXED_RULES: QueryRules = {
-  mode: "indexed",
-  quickComplete: false,
-};
-
-export function isQuickShape(shape: QueryShape): shape is QuickShape {
-  return "quick" in shape;
-}
-
-export function getField(def: GridDef, key: string): FieldDef | null {
+export function getField<F extends FieldDef>(
+  def: GridDef<F>,
+  key: string,
+): F | null {
   return def.fields.find((field) => field.key === key) ?? null;
 }
 
@@ -114,7 +106,7 @@ export function getFieldLabel(def: GridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }
 
-export function listFilterFields(def: GridDef): FieldDef[] {
+export function listFilterFields<F extends FieldDef>(def: GridDef<F>): F[] {
   return def.fields.filter((field) => field.operators.length > 0);
 }
 
@@ -125,6 +117,6 @@ export function isDefaultSort(def: GridDef, sort: SortState): boolean {
   );
 }
 
-export function listQuickFields(def: GridDef): string[] {
-  return def.shapes.find(isQuickShape)?.quick ?? [];
+export function resolveMaxValues(field: FieldDef): number {
+  return field.maxValues ?? DEFAULT_MAX_VALUES;
 }

@@ -1,6 +1,7 @@
 import type { FieldOption, GridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
+export const TASK_QUICK_FIELDS = ["title", "assignee", "number"];
 
 const TASK_STATUSES: FieldOption[] = [
   { value: "todo", label: "To do" },
@@ -65,9 +66,9 @@ const SUBJECTS = [
 ];
 
 export const TASKS_GRID: GridDef = {
-  table: "tasks",
+  id: "tasks",
   defaultSort: { field: "due_at", direction: "asc" },
-  facet: { field: "status", counterTable: "task_status_counts" },
+  facet: { field: "status" },
   total: { field: "budget" },
   format: { locale: "en-US", currency: "USD" },
   fields: [
@@ -135,7 +136,6 @@ export const TASKS_GRID: GridDef = {
     },
     { key: "id", label: "ID", type: "id", operators: [], hidden: true },
   ],
-  shapes: [{ quick: ["title", "assignee", "number"] }],
 };
 
 function createRandom(seed: number): () => number {

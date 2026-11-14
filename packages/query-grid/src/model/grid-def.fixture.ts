@@ -1,9 +1,11 @@
 import type { GridDef } from "./field-types.ts";
 
+export const TEST_QUICK_FIELDS = ["name", "number"];
+
 export const TEST_DEF: GridDef = {
-  table: "things",
+  id: "things",
   defaultSort: { field: "created_at", direction: "desc" },
-  facet: { field: "status", counterTable: "thing_status_counts" },
+  facet: { field: "status" },
   total: { field: "total" },
   fields: [
     { key: "id", label: "ID", type: "id", operators: [] },
@@ -43,13 +45,5 @@ export const TEST_DEF: GridDef = {
       operators: [],
       nullable: true,
     },
-  ],
-  shapes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: [], sort: "total", range: true },
-    { equals: ["status"], sort: "created_at" },
-    { equals: ["status"], sort: "total", range: true },
-    { equals: ["region"], sort: "created_at" },
-    { quick: ["name", "number"] },
   ],
 };

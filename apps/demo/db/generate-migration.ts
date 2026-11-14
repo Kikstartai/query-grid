@@ -1,10 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { validateGridDef } from "@kikstart/query-grid";
-import { generateGridMigration } from "@kikstart/query-grid/server";
+import {
+  generateGridMigration,
+  validateGridDef,
+} from "@kikstart/query-grid-postgres";
 
-import { ORDERS_GRID } from "../src/core/orders/orders-grid-def";
+import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
 
 const target = join(import.meta.dir, "migrations", "0002_query_grid.sql");
 const problems = validateGridDef(ORDERS_GRID);

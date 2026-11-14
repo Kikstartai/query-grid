@@ -10,5 +10,5 @@ next-env.d.ts
 *.tgz
 .agent-browser/
 packages/query-grid/README.md
-packages/query-grid/LICENSE
+packages/*/LICENSE
 .claude/skills/

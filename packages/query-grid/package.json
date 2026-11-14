@@ -1,15 +1,13 @@
 {
   "name": "@kikstart/query-grid",
-  "version": "0.1.0",
-  "description": "A composable filter and data grid for very large Postgres tables. The UI only offers the filter and sort combinations an index answers, and the server refuses the rest.",
+  "version": "0.2.0",
+  "description": "The React-free core of query-grid: the query contract, URL codec, validation, offers, feeds and data sources for a filter and data grid that only offers what an index answers.",
   "keywords": [
-    "react",
     "data-grid",
     "postgres",
     "keyset-pagination",
     "filter",
-    "virtualized",
-    "ui-sdk"
+    "query-state"
   ],
   "license": "MIT",
   "type": "module",
@@ -20,9 +18,7 @@
   },
   "bugs": "https://github.com/Kikstartai/query-grid/issues",
   "homepage": "https://query-grid.vercel.app",
-  "sideEffects": [
-    "**/*.css"
-  ],
+  "sideEffects": false,
   "files": [
     "dist",
     "README.md",
@@ -33,15 +29,14 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./server": {
-      "types": "./dist/server/index.d.ts",
-      "default": "./dist/server/index.js"
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
     },
-    "./ui": {
-      "types": "./dist/ui/index.d.ts",
-      "default": "./dist/ui/index.js"
-    },
-    "./ui/styles.css": "./dist/ui/styles.css"
+    "./memory": {
+      "types": "./dist/memory.d.ts",
+      "default": "./dist/memory.js"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -53,28 +48,10 @@
     "test": "bun test src",
     "typecheck": "tsc --noEmit"
   },
-  "peerDependencies": {
-    "@ui-sdk/core": ">=0.1.0-beta.1",
-    "@ui-sdk/react": ">=0.1.0-beta.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
   "devDependencies": {
-    "@babel/core": "^7.28.0",
-    "@babel/preset-react": "^7.27.0",
-    "@babel/preset-typescript": "^7.27.0",
-    "@types/babel__core": "^7.20.5",
     "@types/bun": "latest",
     "@types/node": "^22",
-    "@types/react": "19.2.14",
-    "@types/react-dom": "19.2.3",
-    "@ui-sdk/core": "0.1.0-beta.1",
-    "@ui-sdk/react": "0.1.0-beta.1",
-    "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-plugin-react-hooks": "^7.0.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.46.0"
   }

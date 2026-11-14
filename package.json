@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "bun run build:package && bun run --filter demo build",
-    "build:package": "bun run --filter @kikstart/query-grid build",
+    "build:package": "bun run --filter @kikstart/query-grid build && bun run --filter @kikstart/query-grid-postgres build && bun run --filter @kikstart/query-grid-react build",
     "dev": "bun run build:package && bun run --filter demo dev",
     "lint": "bun run --filter \"*\" lint",
     "test": "bun run build:package && bun run --filter \"*\" test",

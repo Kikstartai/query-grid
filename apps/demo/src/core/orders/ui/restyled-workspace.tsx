@@ -5,7 +5,7 @@ import {
   DataGrid,
   FilterBar,
   FilterChips,
-} from "@kikstart/query-grid/ui";
+} from "@kikstart/query-grid-react/ui";
 
 import { SiteBrand } from "@/lib/site-brand";
 

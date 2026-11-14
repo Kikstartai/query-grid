@@ -10,6 +10,8 @@
       "version": "0.0.0",
       "dependencies": {
         "@kikstart/query-grid": "workspace:*",
+        "@kikstart/query-grid-postgres": "workspace:*",
+        "@kikstart/query-grid-react": "workspace:*",
         "@ui-sdk/core": "0.1.0-beta.1",
         "@ui-sdk/react": "0.1.0-beta.1",
         "next": "16.4.6",
@@ -31,7 +33,35 @@
     },
     "packages/query-grid": {
       "name": "@kikstart/query-grid",
-      "version": "0.1.0",
+      "version": "0.2.0",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^22",
+        "eslint": "^9",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.46.0",
+      },
+    },
+    "packages/query-grid-postgres": {
+      "name": "@kikstart/query-grid-postgres",
+      "version": "0.2.0",
+      "dependencies": {
+        "@kikstart/query-grid": "0.2.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/node": "^22",
+        "eslint": "^9",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.46.0",
+      },
+    },
+    "packages/query-grid-react": {
+      "name": "@kikstart/query-grid-react",
+      "version": "0.2.0",
+      "dependencies": {
+        "@kikstart/query-grid": "0.2.0",
+      },
       "devDependencies": {
         "@babel/core": "^7.28.0",
         "@babel/preset-react": "^7.27.0",
@@ -221,6 +251,10 @@
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
     "@kikstart/query-grid": ["@kikstart/query-grid@workspace:packages/query-grid"],
+
+    "@kikstart/query-grid-postgres": ["@kikstart/query-grid-postgres@workspace:packages/query-grid-postgres"],
+
+    "@kikstart/query-grid-react": ["@kikstart/query-grid-react@workspace:packages/query-grid-react"],
 
     "@next/env": ["@next/env@16.4.6", "", {}, "sha512-SunBjJ6t+oBtecS3dTjdVuMhUogP5wD/vrGL5EVuQYM1iS4O5ilL51HkiJ3sPjMzRHiCChvr4dbaSJbR7F3lxA=="],
 
