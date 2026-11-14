@@ -242,6 +242,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 - A filter, range, sort, view or reset pushes. `setQuick` and `clearQuick` replace, throttled to 250 ms. The quick filter still applies on Enter, so "typing" is each applied term; live search per keystroke was not built, because each term is a trigram query under a 120 ms budget.
 - A URL nothing answers is rewritten in place to the default; a parameter the def does not own is left alone.
 - `syncUrl={false}` renders a provider that calls no nuqs hook and needs no adapter; it starts from `search` and follows it. Under nuqs the `search` prop is unused.
+- `urlPrefix` namespaces a provider's URL keys (`a.f.status`), for two grids on one page. The prefix exists only in the page URL: the store, the sync and the wire to the server keep core's keys.
 - The demo mounts `NuqsAdapter` from `nuqs/adapters/next/app` in the root layout. Its pages no longer pass `searchParams`; an `AtRequest` server component awaits `connection()` inside the Suspense boundary, so a deep link is still server-rendered with its state.
 - Column layout stays out of the URL.
 - The store subscription, the echo guard and the follow step are one plain object, `createUrlSync(store, search, write)` in `react/url-sync.ts`, tested without React; the provider only hands it the nuqs setter. The provider without nuqs uses the same object with a writer that does nothing.

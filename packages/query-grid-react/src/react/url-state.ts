@@ -27,23 +27,45 @@ function listUrlKeys(def: GridDef): QueryKey[] {
   return [...listQueryKeys(def), VIEW_KEY];
 }
 
-export function buildUrlParsers(def: GridDef) {
+function urlName(key: QueryKey, prefix: string): string {
+  return prefix ? `${prefix}.${key.name}` : key.name;
+}
+
+export function buildUrlParsers(def: GridDef, prefix = "") {
   return Object.fromEntries(
     listUrlKeys(def).map((key) => [
-      key.name,
+      urlName(key, prefix),
       key.repeated ? parseAsNativeArrayOf(parseAsString) : parseAsString,
     ]),
   );
 }
 
-export function toSearch(def: GridDef, values: UrlValues): string {
+export function toSearch(def: GridDef, values: UrlValues, prefix = ""): string {
   const params = new URLSearchParams();
   for (const key of listUrlKeys(def)) {
-    for (const item of [values[key.name] ?? []].flat()) {
+    for (const item of [values[urlName(key, prefix)] ?? []].flat()) {
       params.append(key.name, item);
     }
   }
   return params.toString();
+}
+
+export function normalizeSearch(
+  def: GridDef,
+  search: string,
+  prefix: string,
+): string {
+  if (!prefix) {
+    return search;
+  }
+  const params = new URLSearchParams(search);
+  const values = Object.fromEntries(
+    listUrlKeys(def).map((key) => [
+      urlName(key, prefix),
+      params.getAll(urlName(key, prefix)),
+    ]),
+  );
+  return toSearch(def, values, prefix);
 }
 
 export function readUrlState(
@@ -59,14 +81,18 @@ export function readUrlState(
   };
 }
 
-export function toUrlValues(def: GridDef, state: UrlState): UrlValues {
+export function toUrlValues(
+  def: GridDef,
+  state: UrlState,
+  prefix = "",
+): UrlValues {
   const params = encodeQuery(def, state.query);
   if (state.view !== "grid") {
     params.set(VIEW_KEY.name, state.view);
   }
   return Object.fromEntries(
     listUrlKeys(def).map((key) => [
-      key.name,
+      urlName(key, prefix),
       key.repeated ? params.getAll(key.name) : params.get(key.name),
     ]),
   );

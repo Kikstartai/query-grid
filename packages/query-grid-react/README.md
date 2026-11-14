@@ -50,6 +50,8 @@ import { DataGrid, FilterBar } from "@kikstart/query-grid-react/ui";
 </QueryGridProvider>;
 ```
 
+The provider keeps the query in the URL through [nuqs](https://nuqs.dev), so mount its adapter for your framework; `syncUrl={false}` leaves the URL alone. Two grids on one page each take a `urlPrefix`, which puts their keys under `a.f.status` and `b.f.status`.
+
 Every string comes from `QueryGridMessagesProvider`, with English built in, and the components follow the page's direction, right to left included.
 
 The full documentation, the design and the verification record are in the [repository README](https://github.com/Kikstartai/query-grid#readme). The three packages, `@kikstart/query-grid`, `@kikstart/query-grid-react` and `@kikstart/query-grid-postgres`, are released together at the same version.

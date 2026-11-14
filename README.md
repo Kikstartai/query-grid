@@ -238,6 +238,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 - **One URL format.** The parser map is built from the def at runtime, on the keys core's `listQueryKeys` names (`f.<field>`, repeated per value; `r.<field>=min..max`; `q`; `sort`; `cursor`; `view`), and states go in and out through core's `encodeQuery` and `decodeQuery`. The server reads the same parameters with the same function.
 - nuqs stays inside the provider: no hook of the package returns it, and the base components never see it. Column layout stays out of the URL.
 - `syncUrl={false}` leaves the URL alone and needs no adapter. The provider then starts from its `search` prop and follows it when it changes.
+- Two grids on one page each take a `urlPrefix`: `urlPrefix="a"` writes `a.f.status`, `a.q`, `a.sort` and `a.view`, so neither grid reads or overwrites the other's keys. Without a prefix they would share `q`, `sort`, `cursor` and `view`.
 
 ## Capabilities
 

@@ -59,6 +59,7 @@ import { useLatest } from "../components/use-latest.ts";
 import { useStoreValue } from "../components/use-store-value.ts";
 import {
   buildUrlParsers,
+  normalizeSearch,
   readUrlState,
   toSearch,
   toUrlValues,
@@ -89,6 +90,7 @@ export interface QueryGridProviderProps {
   source?: DataSource;
   pageSize?: number;
   syncUrl?: boolean;
+  urlPrefix?: string;
   columnPersistence?: ColumnPersistence | null;
   children: ReactNode;
 }
@@ -152,15 +154,16 @@ function createValue(
 }
 
 function UrlQueryGridProvider(props: QueryGridProviderProps) {
-  const [parsers] = useState(() => buildUrlParsers(props.def));
+  const prefix = props.urlPrefix ?? "";
+  const [parsers] = useState(() => buildUrlParsers(props.def, prefix));
   const [values, setValues] = useQueryStates(parsers);
-  const search = toSearch(props.def, values as UrlValues);
+  const search = toSearch(props.def, values as UrlValues, prefix);
   const [value] = useState(() => createValue(props, search));
   const setter = useLatest(setValues);
   const [sync] = useState(() =>
     createUrlSync(value.store, search, (state, history) => {
       void setter.current(
-        toUrlValues(value.def, state),
+        toUrlValues(value.def, state, prefix),
         history === "push"
           ? { history }
           : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
@@ -185,7 +188,11 @@ function ignoreWrite(): void {
 }
 
 function StaticQueryGridProvider(props: QueryGridProviderProps) {
-  const search = props.search ?? "";
+  const search = normalizeSearch(
+    props.def,
+    props.search ?? "",
+    props.urlPrefix ?? "",
+  );
   const [value] = useState(() => createValue(props, search));
   const [sync] = useState(() =>
     createUrlSync(value.store, search, ignoreWrite),
