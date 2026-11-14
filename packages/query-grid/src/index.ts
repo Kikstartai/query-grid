@@ -68,6 +68,7 @@ export {
   createQueryStore,
   GRID_VIEWS,
   type GridView,
+  type HistoryWrite,
   type QueryStore,
 } from "./model/query-store.ts";
 export { decodeQuery, encodeQuery } from "./model/query-url.ts";

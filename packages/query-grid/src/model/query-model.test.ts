@@ -227,6 +227,40 @@ describe("memory mode", () => {
   });
 });
 
+describe("the store and browser history", () => {
+  test("a filter, sort or view change asks for a new history entry", () => {
+    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    expect(store.getHistoryWrite()).toBe("replace");
+    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    expect(store.getHistoryWrite()).toBe("push");
+    store.dispatch({ type: "setQuick", value: "abc" });
+    expect(store.getHistoryWrite()).toBe("replace");
+    store.setView("list");
+    expect(store.getHistoryWrite()).toBe("push");
+    store.dispatch({ type: "clearQuick" });
+    expect(store.getHistoryWrite()).toBe("replace");
+    store.dispatch({ type: "reset" });
+    expect(store.getHistoryWrite()).toBe("push");
+  });
+
+  test("replace loads a query and a view from the URL without a new entry", () => {
+    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    let emitted = 0;
+    store.subscribe(() => {
+      emitted += 1;
+    });
+    store.setView("board");
+    const next: QueryState = { ...BASE, equals: { region: ["north"] } };
+    store.replace(next, "list");
+    expect(store.getQuery()).toBe(next);
+    expect(store.getView()).toBe("list");
+    expect(store.getHistoryWrite()).toBe("replace");
+    store.replace(BASE);
+    expect(store.getView()).toBe("list");
+    expect(emitted).toBe(3);
+  });
+});
+
 describe("the URL", () => {
   test("a query round-trips", () => {
     const query: QueryState = {

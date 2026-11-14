@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, use, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  use,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
   createCountStore,
@@ -105,20 +112,33 @@ export interface LabelledChip {
 
 const QueryGridContext = createContext<QueryGridContextValue | null>(null);
 
-function readView(raw: string | null): GridView {
-  return GRID_VIEWS.find((view) => view === raw) ?? "grid";
+interface UrlState {
+  query: QueryState;
+  view: GridView;
 }
 
-function readQuery(
+function readUrlState(
   def: GridDef,
-  params: URLSearchParams,
+  search: string,
   capabilities: Capabilities,
-): QueryState {
+): UrlState {
+  const params = new URLSearchParams(search);
   const decoded = decodeQuery(def, params);
   const usable =
     capabilities.isAnswerable(decoded) &&
     validateQueryValues(def, decoded) === null;
-  return usable ? decoded : defaultQuery(def);
+  return {
+    query: usable ? decoded : defaultQuery(def),
+    view: GRID_VIEWS.find((view) => view === params.get(VIEW_PARAM)) ?? "grid",
+  };
+}
+
+function encodeUrlState(def: GridDef, state: UrlState): string {
+  const params = encodeQuery(def, state.query);
+  if (state.view !== "grid") {
+    params.set(VIEW_PARAM, state.view);
+  }
+  return params.size > 0 ? `?${params}` : "";
 }
 
 function resolveSource(props: QueryGridProviderProps): DataSource {
@@ -133,13 +153,13 @@ function resolveSource(props: QueryGridProviderProps): DataSource {
 
 function createValue(props: QueryGridProviderProps): QueryGridContextValue {
   const { def } = props;
-  const params = new URLSearchParams(props.search ?? "");
   const source = resolveSource(props);
+  const initial = readUrlState(def, props.search ?? "", source.capabilities);
   const store = createQueryStore(
     def,
     source.capabilities,
-    readQuery(def, params, source.capabilities),
-    readView(params.get(VIEW_PARAM)),
+    initial.query,
+    initial.view,
   );
   const persistence =
     props.columnPersistence === undefined
@@ -158,32 +178,68 @@ function createValue(props: QueryGridProviderProps): QueryGridContextValue {
   };
 }
 
+function encodeStore(store: QueryStore): string {
+  return encodeUrlState(store.def, {
+    query: store.getQuery(),
+    view: store.getView(),
+  });
+}
+
 function mirrorToUrl(store: QueryStore): void {
-  const params = encodeQuery(store.def, store.getQuery());
-  if (store.getView() !== "grid") {
-    params.set(VIEW_PARAM, store.getView());
+  const search = encodeStore(store);
+  if (search === window.location.search) {
+    return;
   }
-  const search = params.size > 0 ? `?${params}` : "";
-  if (search !== window.location.search) {
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${search}`,
-    );
+  const url = `${window.location.pathname}${search}`;
+  if (store.getHistoryWrite() === "push") {
+    window.history.pushState(null, "", url);
+    return;
+  }
+  window.history.replaceState(null, "", url);
+}
+
+function followSearch(store: QueryStore, search: string): void {
+  const next = readUrlState(store.def, search, store.getRules().capabilities);
+  if (encodeUrlState(store.def, next) !== encodeStore(store)) {
+    store.replace(next.query, next.view);
   }
 }
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const [value] = useState(() => createValue(props));
   const syncUrl = props.syncUrl ?? true;
+  const search = props.search ?? "";
+  const appliedSearchRef = useRef(search);
+
   useEffect(() => {
     void value.columns.restore();
     if (!syncUrl) {
       return;
     }
+    const followLocation = () =>
+      followSearch(value.store, window.location.search);
     mirrorToUrl(value.store);
-    return value.store.subscribe(() => mirrorToUrl(value.store));
+    const unsubscribe = value.store.subscribe(() => mirrorToUrl(value.store));
+    window.addEventListener("popstate", followLocation);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("popstate", followLocation);
+    };
   }, [value, syncUrl]);
+
+  useEffect(() => {
+    if (syncUrl) {
+      followSearch(value.store, window.location.search);
+    }
+  });
+
+  useEffect(() => {
+    if (appliedSearchRef.current !== search) {
+      appliedSearchRef.current = search;
+      followSearch(value.store, search);
+    }
+  }, [value, search]);
+
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }
 
