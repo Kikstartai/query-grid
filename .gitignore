@@ -11,3 +11,4 @@ next-env.d.ts
 .agent-browser/
 packages/query-grid/README.md
 packages/query-grid/LICENSE
+.claude/skills/
