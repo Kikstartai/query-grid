@@ -207,7 +207,7 @@ function GridRows({ handle, layout }: GridRowsProps) {
         return row
           ? [
               <GridRowPart
-                key={`${item.key}:${layout.layoutKey}`}
+                key={`${item.key}:${item.index}:${layout.layoutKey}`}
                 handle={handle}
                 index={item.index}
                 start={item.start}
@@ -394,11 +394,12 @@ export function DataGrid() {
   const { def, feed } = useQueryGrid();
   const { layout: columns, store } = useColumns();
   const feedState = useFeedState();
+  const [epoch, setEpoch] = useState(0);
   const layout: GridLayout = {
     columns,
     totalWidth: sumWidths(columns),
     pinnedWidth: sumWidths(columns.filter((column) => column.pinned)),
-    layoutKey: columns.map((column) => column.field.key).join(","),
+    layoutKey: `${epoch}:${columns.map((column) => column.field.key).join(",")}`,
   };
   const handle = usePrimitive(sheet, {
     feed,
@@ -407,7 +408,6 @@ export function DataGrid() {
   });
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const loaded = feedState.rows.length;
-  const query = feedState.query;
   const rows = feedState.rows;
 
   useEffect(() => {
@@ -415,9 +415,17 @@ export function DataGrid() {
   }, [handle, rows, layout.layoutKey]);
 
   useEffect(() => {
-    handle.api.clear();
-    scroller?.scrollTo({ top: 0 });
-  }, [handle, scroller, query]);
+    let seen = feed.getState().query;
+    return feed.subscribe(() => {
+      const next = feed.getState().query;
+      if (next !== seen) {
+        seen = next;
+        handle.api.clear();
+        scroller?.scrollTo({ top: 0 });
+        setEpoch((value) => value + 1);
+      }
+    });
+  }, [feed, handle, scroller]);
 
   const root = usePart(
     handle,

@@ -19,7 +19,7 @@
     "directory": "packages/query-grid"
   },
   "bugs": "https://github.com/Kikstartai/query-grid/issues",
-  "homepage": "https://github.com/Kikstartai/query-grid",
+  "homepage": "https://query-grid.vercel.app",
   "sideEffects": [
     "**/*.css"
   ],

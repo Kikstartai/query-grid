@@ -126,7 +126,7 @@ export function CardList({ titleField, badgeField }: CardListProps) {
             return row
               ? [
                   <Card
-                    key={item.key}
+                    key={`${item.key}:${item.index}`}
                     virtual={virtual}
                     index={item.index}
                     start={item.start}
