@@ -416,6 +416,7 @@ run_errors() {
   note "browser errors" "'$(errors)'"
 }
 
+ab set viewport 1500 900 >/dev/null
 SECTIONS="${*:-refusals counts sidebar chips multi history quick customer resize memory parts scroll keys columns board rtl components errors}"
 for section in $SECTIONS; do
   "run_$section"
