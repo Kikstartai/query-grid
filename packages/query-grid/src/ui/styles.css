@@ -377,6 +377,7 @@
   color: inherit;
   font-weight: 600;
   text-align: start;
+  text-transform: inherit;
 }
 
 :where(.qg-header-sort:hover:not([data-disabled])) {
