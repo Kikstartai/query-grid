@@ -27,6 +27,7 @@ const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 export interface OrdersWorkspaceProps {
   searchParams: SearchParams;
+  dir?: "rtl";
 }
 
 interface OrdersQueryProviderProps extends OrdersWorkspaceProps {
@@ -71,13 +72,13 @@ function OrdersView() {
   return <DataGrid />;
 }
 
-export function OrdersWorkspace({ searchParams }: OrdersWorkspaceProps) {
+export function OrdersWorkspace({ searchParams, dir }: OrdersWorkspaceProps) {
   return (
     <OrdersQueryProvider searchParams={searchParams}>
-      <div className="workspace">
+      <div className="workspace" dir={dir} data-dir={dir}>
         <header className="workspace-head">
           <SiteBrand />
-          <h1>Orders</h1>
+          <h1>{dir ? "Orders, right to left" : "Orders"}</h1>
           <CountDisplay />
           <span className="workspace-spacer" />
           <ViewSwitch views={VIEWS} />

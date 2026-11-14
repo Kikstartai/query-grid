@@ -33,9 +33,9 @@ interface FacetCountProps {
 
 function FacetCountText({ count, format }: FacetCountProps) {
   return (
-    <span className="qg-facet-count" data-facet-count>
+    <bdi className="qg-facet-count" data-facet-count>
       {count === null || count === undefined ? "" : formatCount(count, format)}
-    </span>
+    </bdi>
   );
 }
 
@@ -43,7 +43,11 @@ function FacetNote({ note }: { note: ReactNode }) {
   if (!note) {
     return null;
   }
-  return <p className="qg-facet-note">{note}</p>;
+  return (
+    <p className="qg-facet-note">
+      <bdi>{note}</bdi>
+    </p>
+  );
 }
 
 function toggleValue(values: string[], value: string): string[] {
@@ -82,7 +86,7 @@ export function FacetPanel({
         disabled={none}
         onClick={() => onValuesChange([])}
       >
-        <span>{messages.all}</span>
+        <bdi>{messages.all}</bdi>
         <FacetCountText count={total} format={format} />
       </Button>
       {options.map((option) => (
@@ -98,7 +102,7 @@ export function FacetPanel({
             )
           }
         >
-          <span>{option.label}</span>
+          <bdi>{option.label}</bdi>
           <FacetCountText count={option.count} format={format} />
         </Button>
       ))}

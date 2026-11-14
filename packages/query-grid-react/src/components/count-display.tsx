@@ -71,7 +71,7 @@ export function CountDisplay({
   const underCap = source === "capped" && !capped;
   return (
     <div className="qg-count" data-part="count">
-      <span
+      <bdi
         className="qg-count-value"
         data-count={count}
         data-count-source={source}
@@ -83,10 +83,10 @@ export function CountDisplay({
               locale: resolveLocale(format),
             })
           : formatRows(messages, count, format)}
-      </span>
-      <span className="qg-muted">
+      </bdi>
+      <bdi className="qg-muted">
         {messages.countSources[underCap ? "underCap" : source]}
-      </span>
+      </bdi>
       <ExactCountButton
         capped={capped}
         loading={status === "loading"}
@@ -114,10 +114,10 @@ function TotalUnavailable({ reason }: { reason: string }) {
   const messages = useMessages();
   return (
     <div className="qg-total" data-part="total" data-total="unavailable">
-      <span className="qg-total-label">{messages.noTotal}</span>
-      <span className="qg-muted" data-total-reason>
+      <bdi className="qg-total-label">{messages.noTotal}</bdi>
+      <bdi className="qg-muted" data-total-reason>
         {reason}
-      </span>
+      </bdi>
     </div>
   );
 }
@@ -143,17 +143,17 @@ export function TotalFooter({
   const rows = formatRows(messages, value.rows, format);
   return (
     <div className="qg-total" data-part="total" data-total={value.source}>
-      <span className="qg-total-label">
+      <bdi className="qg-total-label">
         {messages.totalSum({ label: label ?? messages.total })}
-      </span>
-      <span className="qg-total-value" data-total-sum={value.sum}>
+      </bdi>
+      <bdi className="qg-total-value" data-total-sum={value.sum}>
         {formatMoney(value.sum, format)}
-      </span>
-      <span className="qg-muted">
+      </bdi>
+      <bdi className="qg-muted">
         {value.source === "counter"
           ? messages.totalFromCounter({ rows })
           : messages.totalLive({ rows })}
-      </span>
+      </bdi>
     </div>
   );
 }

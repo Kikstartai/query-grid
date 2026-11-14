@@ -44,6 +44,16 @@ export const DEMO_LINKS: DemoLink[] = [
     note: "the same parts restyled by repointing UI SDK's tokens in one short stylesheet",
   },
   {
+    href: "/rtl",
+    label: "Right to left",
+    note: 'the grid route under dir="rtl": pinning, resize, the sidebar and the chips mirror',
+  },
+  {
+    href: "/components",
+    label: "Base components",
+    note: "the controlled components with plain props: no provider, no query state, no server",
+  },
+  {
     href: "/parts/facets",
     label: "One part alone",
     note: "the facet panel mounted by itself over the query state",

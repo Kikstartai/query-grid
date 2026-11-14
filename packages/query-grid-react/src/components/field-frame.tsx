@@ -18,7 +18,7 @@ function FieldReason({
   }
   return (
     <p className="qg-field-reason" data-field-reason>
-      {reason}
+      <bdi>{reason}</bdi>
     </p>
   );
 }

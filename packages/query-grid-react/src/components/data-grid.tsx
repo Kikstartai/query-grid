@@ -141,9 +141,11 @@ function GridCells({ handle, view, row, columns, format }: GridCellsProps) {
                 : undefined,
             }}
           >
-            {column.field.cell
-              ? column.field.cell(value, row)
-              : formatValue(column.field, value, format)}
+            {column.field.cell ? (
+              column.field.cell(value, row)
+            ) : (
+              <bdi>{formatValue(column.field, value, format)}</bdi>
+            )}
           </div>
         );
       })}
@@ -267,13 +269,13 @@ type ProgressProps = Pick<DataGridProps, "loading" | "capped" | "hasNext">;
 function FeedProgress({ loading, capped, hasNext }: ProgressProps) {
   const messages = useMessages();
   if (loading) {
-    return <span data-status="feed">{messages.feedLoading}</span>;
+    return <bdi data-status="feed">{messages.feedLoading}</bdi>;
   }
   if (capped) {
-    return <span data-status="feed">{messages.feedCapped}</span>;
+    return <bdi data-status="feed">{messages.feedCapped}</bdi>;
   }
   if (!hasNext) {
-    return <span data-status="feed">{messages.feedEnd}</span>;
+    return <bdi data-status="feed">{messages.feedEnd}</bdi>;
   }
   return <span data-status="feed" />;
 }
@@ -303,19 +305,19 @@ function GridStatus({
         className: "qg-status",
         children: (status: SheetStatus) => (
           <>
-            <span data-status="loaded" data-value={loaded}>
+            <bdi data-status="loaded" data-value={loaded}>
               {formatLoaded(messages, loaded, pages, format)}
-            </span>
+            </bdi>
             <FeedProgress {...progress} />
-            <span data-status="selected" data-value={status.selectedCount}>
+            <bdi data-status="selected" data-value={status.selectedCount}>
               {messages.selected({ count: status.selectedCount })}
-            </span>
-            <span data-status="active" data-value={status.active}>
+            </bdi>
+            <bdi data-status="active" data-value={status.active}>
               {messages.activeCell({ cell: none(status.active) })}
-            </span>
-            <span data-status="range" data-value={status.range}>
+            </bdi>
+            <bdi data-status="range" data-value={status.range}>
               {messages.cellRange({ range: none(status.range) })}
-            </span>
+            </bdi>
             <pre data-status="copied" hidden>
               {status.copied}
             </pre>

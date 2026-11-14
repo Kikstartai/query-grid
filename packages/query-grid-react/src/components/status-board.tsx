@@ -73,11 +73,13 @@ function BoardCardBody({ row, title, details, format }: BoardCardBodyProps) {
   return (
     <>
       <div className="qg-board-card-title">
-        {title.label} {formatValue(title, row[title.key] ?? null, format)}
+        <bdi>
+          {title.label} {formatValue(title, row[title.key] ?? null, format)}
+        </bdi>
       </div>
       {details.map((field) => (
         <div key={field.key} className="qg-board-card-detail">
-          {formatValue(field, row[field.key] ?? null, format)}
+          <bdi>{formatValue(field, row[field.key] ?? null, format)}</bdi>
         </div>
       ))}
     </>
@@ -278,7 +280,7 @@ export function StatusBoard(props: StatusBoardProps) {
         data-board-message
         data-error={message ? "" : undefined}
       >
-        {message ?? messages.boardHelp}
+        <bdi>{message ?? messages.boardHelp}</bdi>
       </p>
       <div
         className="qg-board-columns"

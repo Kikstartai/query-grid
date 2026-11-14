@@ -14,20 +14,20 @@ export function FeedNotice({ loading, error, pages }: NoticeProps) {
   if (error) {
     return (
       <p className="qg-notice qg-notice-error" data-feed-state="error">
-        {error}
+        <bdi>{error}</bdi>
       </p>
     );
   }
   if (loading || pages === 0) {
     return (
       <p className="qg-notice" data-feed-state="loading">
-        {messages.loading}
+        <bdi>{messages.loading}</bdi>
       </p>
     );
   }
   return (
     <p className="qg-notice" data-feed-state="empty">
-      {messages.noRows}
+      <bdi>{messages.noRows}</bdi>
     </p>
   );
 }

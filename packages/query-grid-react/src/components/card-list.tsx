@@ -64,12 +64,12 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
     >
       <div className="qg-card">
         <div className="qg-card-head">
-          <span className="qg-card-title">
+          <bdi className="qg-card-title">
             {title.label} {formatValue(title, row[title.key] ?? null, format)}
-          </span>
-          <span className="qg-badge" data-value={row[badge.key] ?? ""}>
+          </bdi>
+          <bdi className="qg-badge" data-value={row[badge.key] ?? ""}>
             {formatValue(badge, row[badge.key] ?? null, format)}
-          </span>
+          </bdi>
         </div>
         <dl className="qg-card-details">
           {rest.flatMap((field) => {
@@ -77,8 +77,12 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
             return text
               ? [
                   <div key={field.key} className="qg-card-detail">
-                    <dt>{field.label}:</dt>
-                    <dd>{text}</dd>
+                    <dt>
+                      <bdi>{field.label}:</bdi>
+                    </dt>
+                    <dd>
+                      <bdi>{text}</bdi>
+                    </dd>
                   </div>,
                 ]
               : [];
@@ -122,7 +126,7 @@ export function CardList(props: CardListProps) {
   return (
     <div className="qg-list" data-part="list" style={FILL_COLUMN_STYLE}>
       <div className="qg-status" data-status="loaded" data-value={rows.length}>
-        {formatLoaded(messages, rows.length, props.pages, format)}
+        <bdi>{formatLoaded(messages, rows.length, props.pages, format)}</bdi>
       </div>
       <div
         className="qg-list-scroller"

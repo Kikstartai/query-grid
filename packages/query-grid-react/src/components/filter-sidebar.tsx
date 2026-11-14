@@ -50,7 +50,9 @@ export function FilterSidebar({
             <XIcon />
           </DrawerClose>
         </header>
-        <DrawerDescription>{messages.filtersDescription}</DrawerDescription>
+        <DrawerDescription>
+          <bdi>{messages.filtersDescription}</bdi>
+        </DrawerDescription>
         <div className="qg-drawer-body">{children}</div>
         <footer className="qg-drawer-footer">
           <Button

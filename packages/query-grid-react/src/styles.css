@@ -144,6 +144,32 @@
   border-radius: 999px;
 }
 
+:where(.qg-chip-value) {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 400;
+}
+
+:where(.qg-combobox-chips) {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-spacing);
+}
+
+:where(.qg-combobox-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-spacing);
+  height: calc(var(--ui-spacing) * 6);
+  padding-inline: calc(var(--ui-spacing) * 2) var(--ui-spacing);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-muted);
+  font-size: calc(var(--ui-font-size) - 0.125rem);
+  white-space: nowrap;
+}
+
 :where(.qg-count-pill) {
   display: inline-flex;
   align-items: center;

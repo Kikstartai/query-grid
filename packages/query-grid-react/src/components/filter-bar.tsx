@@ -234,17 +234,17 @@ function ChipBody({ chip, onRemove }: Omit<ChipRemoveProps, "value">) {
   if (!chip.values) {
     return (
       <>
-        {chip.label}
+        <bdi>{chip.label}</bdi>
         <ChipRemove chip={chip} onRemove={onRemove} />
       </>
     );
   }
   return (
     <>
-      {chip.label}
+      <bdi>{chip.label}</bdi>
       {chip.values.map((value) => (
         <span key={value.id} className="qg-chip-value" data-value={value.id}>
-          {value.label}
+          <bdi>{value.label}</bdi>
           <ChipRemove chip={chip} value={value} onRemove={onRemove} />
         </span>
       ))}
