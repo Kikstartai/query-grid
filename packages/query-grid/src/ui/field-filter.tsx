@@ -12,6 +12,14 @@ import {
   ComboboxStatus,
 } from "@ui-sdk/react/combobox";
 import {
+  CalendarDay,
+  CalendarGrid,
+  CalendarHeading,
+  CalendarNext,
+  CalendarPrevious,
+  CalendarWeekday,
+  CalendarWeekdays,
+  CalendarWeeks,
   DatePicker,
   DatePickerContent,
   DatePickerInput,
@@ -49,7 +57,7 @@ import {
   useQueryRules,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
-import { CalendarIcon, ChevronDownIcon, XIcon } from "./icons.tsx";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
 import { SelectOption } from "./select-option.tsx";
 
 export interface FieldFilterProps {
@@ -154,13 +162,11 @@ function EqualsSelect({ field, showReason }: FieldFilterProps) {
         }
       >
         <SelectTrigger
-          className="qg-select-trigger"
           aria-label={`${field.label} filter`}
           data-filter={field.key}
         >
           <span className="qg-select-prefix">{field.label}</span>
-          <SelectValue className="qg-select-value" />
-          <ChevronDownIcon />
+          <SelectValue />
         </SelectTrigger>
         <SelectClear
           className="qg-clear"
@@ -169,7 +175,7 @@ function EqualsSelect({ field, showReason }: FieldFilterProps) {
         >
           <XIcon size={12} />
         </SelectClear>
-        <SelectContent className="qg-popup qg-select-content">
+        <SelectContent>
           {options.map((option) => (
             <SelectOption
               key={option.value}
@@ -231,7 +237,7 @@ function LookupCombobox({ field, showReason }: FieldFilterProps) {
         onValueChange={choose}
       >
         <ComboboxInput
-          className="qg-input qg-combobox-input"
+          className="qg-combobox-input"
           aria-label={`${field.label} filter`}
           placeholder={`${field.label}: search…`}
           data-filter={field.key}
@@ -243,14 +249,14 @@ function LookupCombobox({ field, showReason }: FieldFilterProps) {
         >
           <XIcon size={12} />
         </ComboboxClear>
-        <ComboboxContent className="qg-popup qg-select-content">
-          <ComboboxStatus className="qg-option-status" />
-          <ComboboxEmpty className="qg-option-status">No match.</ComboboxEmpty>
-          <ComboboxList className="qg-option-list">
+        <ComboboxContent>
+          <ComboboxStatus />
+          <ComboboxEmpty>No match.</ComboboxEmpty>
+          <ComboboxList>
             {options.items.map((option) => (
               <ComboboxItem
                 key={option.value}
-                className="qg-option"
+
                 value={option.value}
                 label={option.label}
               >
@@ -312,7 +318,6 @@ function DateRange({ field, range, showReason }: RangeProps) {
       >
         <div className="qg-range">
           <DatePickerInput
-            className="qg-input qg-date-input"
             aria-label={`${field.label} from`}
             placeholder={range?.min?.slice(0, 10) ?? "from"}
             data-filter={`${field.key}.min`}
@@ -321,19 +326,31 @@ function DateRange({ field, range, showReason }: RangeProps) {
           <DatePickerInput
             end
             placeholder={range?.max?.slice(0, 10) ?? "to"}
-            className="qg-input qg-date-input"
             aria-label={`${field.label} to`}
             data-filter={`${field.key}.max`}
           />
           <DatePickerTrigger
-            className="qg-button qg-icon-button"
             aria-label={`Pick ${field.label} dates`}
             data-filter={`${field.key}.calendar`}
-          >
-            <CalendarIcon />
-          </DatePickerTrigger>
+          />
         </div>
-        <DatePickerContent className="qg-popup qg-calendar" />
+        <DatePickerContent>
+          <CalendarPrevious>
+            <ChevronLeftIcon />
+          </CalendarPrevious>
+          <CalendarHeading />
+          <CalendarNext>
+            <ChevronRightIcon />
+          </CalendarNext>
+          <CalendarGrid>
+            <CalendarWeekdays>
+              {(index) => <CalendarWeekday index={index} />}
+            </CalendarWeekdays>
+            <CalendarWeeks>
+              {(cell) => <CalendarDay value={cell.date} />}
+            </CalendarWeeks>
+          </CalendarGrid>
+        </DatePickerContent>
       </DatePicker>
     </FieldFrame>
   );
@@ -400,9 +417,9 @@ function NumberRange({ field, range, showReason }: RangeProps) {
           onValueChange={(value: number | null) => setMin(value)}
           onValueCommit={(value: number | null) => apply(value, max)}
         >
-          <NumberInputGroup className="qg-number">
+          <NumberInputGroup>
             <NumberInputControl
-              className="qg-input qg-number-input"
+              className="qg-number-input"
               aria-label={`${field.label} from`}
               placeholder="min"
               data-filter={`${field.key}.min`}
@@ -419,9 +436,9 @@ function NumberRange({ field, range, showReason }: RangeProps) {
           onValueChange={(value: number | null) => setMax(value)}
           onValueCommit={(value: number | null) => apply(min, value)}
         >
-          <NumberInputGroup className="qg-number">
+          <NumberInputGroup>
             <NumberInputControl
-              className="qg-input qg-number-input"
+              className="qg-number-input"
               aria-label={`${field.label} to`}
               placeholder="max"
               data-filter={`${field.key}.max`}

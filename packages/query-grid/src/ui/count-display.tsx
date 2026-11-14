@@ -27,12 +27,7 @@ function ExactCountButton({ capped, loading }: ExactCountButtonProps) {
     return null;
   }
   return (
-    <Button
-      className="qg-button"
-      data-count-exact
-      disabled={loading}
-      onClick={counts.requestExact}
-    >
+    <Button data-count-exact disabled={loading} onClick={counts.requestExact}>
       {loading ? "Counting…" : "Exact count"}
     </Button>
   );

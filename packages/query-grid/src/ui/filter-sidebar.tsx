@@ -37,7 +37,6 @@ export function FilterSidebar({
   return (
     <Drawer side={side} modal={false} closeOnOutsidePress={false}>
       <DrawerTrigger
-        className="qg-button"
         data-part="filter-sidebar-trigger"
         data-active={active > 0 ? "" : undefined}
       >
@@ -49,16 +48,12 @@ export function FilterSidebar({
       </DrawerTrigger>
       <DrawerContent className="qg-drawer" data-part="filter-sidebar">
         <header className="qg-drawer-header">
-          <DrawerTitle className="qg-drawer-title">{label}</DrawerTitle>
-          <DrawerClose
-            className="qg-button qg-icon-button"
-            aria-label="Close filters"
-            data-sidebar-close
-          >
+          <DrawerTitle>{label}</DrawerTitle>
+          <DrawerClose aria-label="Close filters" data-sidebar-close>
             <XIcon />
           </DrawerClose>
         </header>
-        <DrawerDescription className="qg-drawer-description">
+        <DrawerDescription>
           A control is offered only when an index answers it with the current
           filters and sort. A disabled control says what blocks it.
         </DrawerDescription>
@@ -71,16 +66,13 @@ export function FilterSidebar({
         </div>
         <footer className="qg-drawer-footer">
           <Button
-            className="qg-button qg-button-ghost"
             data-sidebar-reset
             disabled={active === 0}
             onClick={() => dispatch({ type: "reset" })}
           >
             Reset
           </Button>
-          <DrawerClose className="qg-button qg-button-primary">
-            Done
-          </DrawerClose>
+          <DrawerClose data-variant="solid">Done</DrawerClose>
         </footer>
       </DrawerContent>
     </Drawer>

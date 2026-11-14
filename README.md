@@ -18,12 +18,21 @@ npm install @kikstart/query-grid @ui-sdk/core@beta @ui-sdk/react@beta
 
 React 19 and UI SDK `0.1.0-beta.1` or later are peer dependencies. The package ships ESM and type declarations, compiled with the React Compiler.
 
+Import UI SDK's stylesheet once at the app entry, then the package's, in that order:
+
+```ts
+import "@ui-sdk/core/web.css";
+import "@kikstart/query-grid/ui/styles.css";
+```
+
+`web.css` gives every UI SDK component its look and defines the `--ui-*` tokens. The package does not import it for you: it belongs to the app, like any other UI SDK stylesheet, and sits in `@layer ui-sdk`. Put `@layer ui-sdk;` at the top of your global stylesheet so your own rules always win.
+
 | Entry point                          | Holds                                                                                |
 | ------------------------------------ | ------------------------------------------------------------------------------------ |
 | `@kikstart/query-grid`               | field and shape types, query state, URL codec, validation, data sources, React hooks |
 | `@kikstart/query-grid/server`        | SQL builder, keyset cursor, index and counter DDL, query runner                      |
 | `@kikstart/query-grid/ui`            | the parts: filter bar, sidebar, chips, facets, count, total, grid, list, board       |
-| `@kikstart/query-grid/ui/styles.css` | the optional default theme                                                           |
+| `@kikstart/query-grid/ui/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens          |
 
 ## Quick start
 
@@ -145,6 +154,7 @@ import {
   FilterSidebar,
   TotalFooter,
 } from "@kikstart/query-grid/ui";
+import "@ui-sdk/core/web.css";
 import "@kikstart/query-grid/ui/styles.css";
 
 export function Orders({ search }: { search: string }) {
@@ -171,46 +181,73 @@ export function Orders({ search }: { search: string }) {
 
 ## Styling
 
-`./ui` ships no styles of its own beyond the layout the grid cannot work without (sticky and absolute positioning, widths, flex), which is inline. Everything else is yours.
+Two stylesheets, one set of tokens.
 
-- Every UI SDK part carries its `data-slot` (`select-trigger`, `drawer-content`, `calendar-day`) and state attributes (`data-open`, `data-highlighted`, `data-disabled`, `data-checked`).
-- Every element the package renders carries a stable `qg-` class (`qg-select-trigger`, `qg-row`, `qg-cell`, `qg-chip`, `qg-facet`) and the grid's own state attributes (`data-active`, `data-selected`, `data-pinned`, `data-unavailable`).
-- `@kikstart/query-grid/ui/styles.css` is an optional default theme in plain CSS. Every selector sits inside `:where()`, so it has no specificity and any rule of yours wins. It reads `--qg-*` custom properties:
+- **`@ui-sdk/core/web.css`** styles every UI SDK component the package renders: Select, Combobox, Date Picker and its calendar, Number Input, Input, Popover, Drawer, Checkbox, Segmented Control and Button. It reads about 36 `--ui-*` custom properties: background, foreground, muted, border, input, primary, destructive, ring, radius, spacing, font size and fonts.
+- **`@kikstart/query-grid/ui/styles.css`** covers only what `web.css` does not: the grid, its rows, cells, header and resize handle, the card list, the board, the chips, the facets, the count and total, and the layout of the filter bar and sidebar. It restyles no UI SDK component and defines no tokens of its own; it reads the same `--ui-*` properties. Every selector sits inside `:where()`, so it has no specificity and any rule of yours wins.
+- Layout the grid cannot work without (sticky and absolute positioning, widths, flex) is inline.
 
-```css
-:root {
-  --qg-primary: #4f46e5;
-  --qg-radius: 2px;
-  --qg-control-height: 28px;
-}
-```
-
-A Tailwind restyle of one Select and one grid row, from the demo's [`/restyled`](https://query-grid.vercel.app/restyled) route. No Tailwind is in the package; the consumer's stylesheet targets the classes and state attributes:
+So a restyle is mostly repointing tokens. This is the whole stylesheet behind the demo's [`/restyled`](https://query-grid.vercel.app/restyled) route, 33 lines, with nothing changed in the package:
 
 ```css
-@import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
-
-.restyled .qg-select-trigger {
-  @apply h-9 rounded-none border-2 border-slate-900 bg-amber-50 px-3 font-mono text-xs tracking-wide uppercase;
+.restyled {
+  --ui-background: #fffbeb;
+  --ui-foreground: #0f172a;
+  --ui-muted: #fde68a;
+  --ui-muted-foreground: #475569;
+  --ui-border: #0f172a;
+  --ui-input: #0f172a;
+  --ui-primary: #0f172a;
+  --ui-primary-foreground: #fffbeb;
+  --ui-ring: #f59e0b;
+  --ui-ring-border: #0f172a;
+  --ui-radius: 0;
+  --ui-font-size: 0.75rem;
+  --ui-font-sans: var(--font-mono);
+  background: var(--ui-background);
+  color: var(--ui-foreground);
+  font-family: var(--ui-font-sans);
 }
 
-.restyled .qg-select-trigger[data-open] {
-  @apply bg-slate-900 text-amber-50;
+.restyled .qg-header-cell {
+  background: var(--ui-foreground);
+  color: var(--ui-background);
+  text-transform: uppercase;
 }
 
 .restyled .qg-row {
-  @apply border-b border-dashed border-slate-400 bg-amber-50 font-mono text-xs hover:bg-amber-200;
+  border-bottom-style: dashed;
 }
 
-.restyled .qg-row:has([data-active]) {
-  @apply bg-amber-200;
+.restyled .qg-header-sort[data-sorted],
+.restyled .qg-header-sort[data-sorted] .qg-icon {
+  color: var(--ui-ring);
 }
 ```
 
-Skip `styles.css` entirely to start from unstyled parts. Sticky cells then need an opaque background of your own.
+The demo site wears kikstart's brand the same way: [`apps/demo/src/app/globals.css`](apps/demo/src/app/globals.css) points fifteen `--ui-*` tokens at kikstart's colours, radius and Geist fonts, and nothing else. The package ships no brand.
 
-The demo site wears kikstart's brand: [`apps/demo/src/app/globals.css`](apps/demo/src/app/globals.css) maps kikstart's colours, radius and Geist fonts onto the `--qg-*` properties. The package's own `styles.css` stays brand-neutral.
+To go further than tokens, target the hooks:
+
+- Every UI SDK part carries its `data-slot` (`select-trigger`, `drawer-content`, `calendar-day`) and state attributes (`data-open`, `data-highlighted`, `data-disabled`, `data-checked`).
+- The package's own elements carry stable `qg-` classes (`qg-row`, `qg-cell`, `qg-header-cell`, `qg-chip`, `qg-facet`, `qg-card`, `qg-board-card`) and the grid's state attributes (`data-active`, `data-selected`, `data-pinned`, `data-unavailable`).
+
+Tailwind works against the same hooks from your own stylesheet; no Tailwind is in the package:
+
+```css
+@layer ui-sdk;
+@import "tailwindcss";
+
+.orders [data-slot="select-trigger"] {
+  @apply h-9 rounded-none border-2 border-slate-900 font-mono text-xs uppercase;
+}
+
+.orders .qg-row {
+  @apply border-b border-dashed border-slate-400 hover:bg-amber-100;
+}
+```
+
+`web.css` follows the system colour scheme. A light-only app sets `color-scheme: light` on `:root`, as the demo does.
 
 ## Using the hooks alone
 
@@ -411,24 +448,25 @@ The handle on a header's right edge is a focusable `separator`. `bindDrag` track
 
 ## Decisions
 
-| Decision                                                                                    | Why                                                                                                                                            |
-| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| A range filter sits on the sort column only                                                 | One index cannot serve a range on one column and an order on another                                                                           |
-| An equality filter takes one value, never a list                                            | `IN` over an ordered index needs a merge the index does not give                                                                               |
-| A nullable column is never a sort                                                           | The NULL-safe keyset predicate is an `OR`, which loses the index range scan on a deep page                                                     |
-| The quick filter returns 500 unordered rows and no cursor                                   | A bitmap scan has no order; ordering it means a Sort over every match                                                                          |
-| The quick filter is refused past 120 ms                                                     | Its cost follows the match count, so only a time budget bounds it                                                                              |
-| Setting the quick filter returns to the default sort                                        | A capped result has no order; a complete one is sorted in memory by the default sort first                                                     |
-| The quick filter covers customer name and order number, not email                           | `orders` carries no email column, and adding one would pass the demo database's 0.5 GB cap                                                     |
-| The live total orders its inner scan by the shape's index and runs with `enable_sort = off` | The plan is then always an index scan that stops at row 10,001; left alone the planner picks a sequential scan or a sort, bounded only by luck |
-| Clearing a filter falls back: same sort, then the default sort, then the default query      | The result must stay a declared shape                                                                                                          |
-| The URL carries the cursor the feed starts from                                             | A view is shareable; changing a filter or sort resets it                                                                                       |
-| Facet counts hide while another filter is active                                            | Only the per-status totals have a counter                                                                                                      |
-| The filter sidebar is a non-modal Drawer                                                    | The grid stays in view and usable while filters change                                                                                         |
-| Grid rows use a behaviour-driven `role="checkbox"` cell, not a Checkbox per row             | One primitive instance per row costs frames; selection is UI SDK's `createSelection` either way                                                |
-| The exact count is unbounded but opt-in                                                     | It never runs on the request path                                                                                                              |
-| The package is compiled with the React Compiler and ships no `useMemo`                      | A consumer's compiler does not reach into `node_modules`                                                                                       |
-| The demo dataset is 620,000 orders on Neon, with the 10M run local                          | The Free plan caps a project at 0.5 GB and 10M orders with their indexes are 6.9 GB                                                            |
+| Decision                                                                                                     | Why                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| A range filter sits on the sort column only                                                                  | One index cannot serve a range on one column and an order on another                                                                           |
+| An equality filter takes one value, never a list                                                             | `IN` over an ordered index needs a merge the index does not give                                                                               |
+| A nullable column is never a sort                                                                            | The NULL-safe keyset predicate is an `OR`, which loses the index range scan on a deep page                                                     |
+| The quick filter returns 500 unordered rows and no cursor                                                    | A bitmap scan has no order; ordering it means a Sort over every match                                                                          |
+| The quick filter is refused past 120 ms                                                                      | Its cost follows the match count, so only a time budget bounds it                                                                              |
+| Setting the quick filter returns to the default sort                                                         | A capped result has no order; a complete one is sorted in memory by the default sort first                                                     |
+| The quick filter covers customer name and order number, not email                                            | `orders` carries no email column, and adding one would pass the demo database's 0.5 GB cap                                                     |
+| The live total orders its inner scan by the shape's index and runs with `enable_sort = off`                  | The plan is then always an index scan that stops at row 10,001; left alone the planner picks a sequential scan or a sort, bounded only by luck |
+| Clearing a filter falls back: same sort, then the default sort, then the default query                       | The result must stay a declared shape                                                                                                          |
+| The URL carries the cursor the feed starts from                                                              | A view is shareable; changing a filter or sort resets it                                                                                       |
+| Facet counts hide while another filter is active                                                             | Only the per-status totals have a counter                                                                                                      |
+| The filter sidebar is a non-modal Drawer                                                                     | The grid stays in view and usable while filters change                                                                                         |
+| Grid rows use a behaviour-driven `role="checkbox"` cell, not a Checkbox per row                              | One primitive instance per row costs frames; selection is UI SDK's `createSelection` either way                                                |
+| The exact count is unbounded but opt-in                                                                      | It never runs on the request path                                                                                                              |
+| UI SDK components keep UI SDK's own stylesheet; the package styles only its own elements, on `--ui-*` tokens | A consumer restyles by repointing one set of tokens instead of overriding the package's selectors                                              |
+| The package is compiled with the React Compiler and ships no `useMemo`                                       | A consumer's compiler does not reach into `node_modules`                                                                                       |
+| The demo dataset is 620,000 orders on Neon, with the 10M run local                                           | The Free plan caps a project at 0.5 GB and 10M orders with their indexes are 6.9 GB                                                            |
 
 ## Cost at scale
 
@@ -445,24 +483,24 @@ The handle on a header's right edge is a focusable `separator`. `bindDrag` track
 
 ### Neon, 620,000 orders
 
-Postgres 18.7 on a Neon Free-plan compute, 0.25 to 2 CU, measured 2026-11-13. All 72 queries pass; [`apps/demo/db/bench-results.md`](apps/demo/db/bench-results.md) holds each one with its plan.
+Postgres 18.7 on a Neon Free-plan compute, 0.25 to 2 CU, measured 2026-11-14. All 72 queries pass; [`apps/demo/db/bench-results.md`](apps/demo/db/bench-results.md) holds each one with its plan.
 
 | Shape                                             | Page variants                          | Worst page p50 / p95 (ms) | Worst capped count p50 / p95 (ms) | Worst live total p50 / p95 (ms) | Plan              |
 | ------------------------------------------------- | -------------------------------------- | ------------------------- | --------------------------------- | ------------------------------- | ----------------- |
-| no filter, sort `created_at`                      | first and deep, both directions, range | 1.82 / 3.18               | 3.45 / 3.97                       | 8.58 / 11.65                    | Index Scan        |
-| no filter, sort `total`                           | first and deep, both directions, range | 1.37 / 1.65               | 3.47 / 3.76                       | 2.36 / 2.53                     | Index Scan        |
-| `status_code =`, sort `created_at`                | first and deep, both directions, range | 1.20 / 2.03               | 2.43 / 2.97                       | 9.01 / 9.90                     | Index Scan        |
-| `status_code =`, sort `total`                     | first and deep, both directions, range | 0.90 / 1.20               | 2.46 / 2.73                       | 2.56 / 2.99                     | Index Scan        |
-| `customer_id =`, sort `created_at`                | first and deep, both directions        | 0.89 / 0.97               | 2.39 / 2.58                       | 10.64 / 12.45                   | Index Scan        |
-| `region =`, sort `created_at`                     | first and deep, both directions, range | 0.76 / 0.90               | 2.39 / 2.82                       | 10.57 / 14.02                   | Index Scan        |
-| `channel =`, sort `created_at`                    | first and deep, both directions        | 0.82 / 0.88               | 4.58 / 4.92                       | 9.15 / 13.88                    | Index Scan        |
-| `status_code =`, `region =`, sort `created_at`    | first and deep, both directions        | 0.80 / 1.05               | 2.53 / 2.69                       | 10.52 / 11.70                   | Index Scan        |
-| `status_code =`, `channel =`, sort `created_at`   | first and deep, both directions        | 0.83 / 0.90               | 2.49 / 2.65                       | 9.67 / 11.85                    | Index Scan        |
-| quick filter over `customer_name`, `order_number` | 8 terms                                | 11.93 / 13.42             | none                              | none                            | Bitmap Index Scan |
+| no filter, sort `created_at`                      | first and deep, both directions, range | 2.04 / 2.33               | 4.36 / 8.60                       | 12.06 / 19.69                   | Index Scan        |
+| no filter, sort `total`                           | first and deep, both directions, range | 1.23 / 1.94               | 4.39 / 6.38                       | 2.61 / 2.71                     | Index Scan        |
+| `status_code =`, sort `created_at`                | first and deep, both directions, range | 1.15 / 1.41               | 2.80 / 4.31                       | 12.29 / 16.65                   | Index Scan        |
+| `status_code =`, sort `total`                     | first and deep, both directions, range | 1.09 / 2.18               | 2.78 / 2.99                       | 2.95 / 3.22                     | Index Scan        |
+| `customer_id =`, sort `created_at`                | first and deep, both directions        | 0.92 / 1.08               | 2.74 / 3.00                       | 12.75 / 14.57                   | Index Scan        |
+| `region =`, sort `created_at`                     | first and deep, both directions, range | 0.93 / 1.13               | 2.77 / 3.91                       | 12.59 / 16.59                   | Index Scan        |
+| `channel =`, sort `created_at`                    | first and deep, both directions        | 0.89 / 1.12               | 6.17 / 6.90                       | 12.17 / 19.35                   | Index Scan        |
+| `status_code =`, `region =`, sort `created_at`    | first and deep, both directions        | 0.96 / 1.14               | 2.88 / 3.04                       | 12.26 / 13.28                   | Index Scan        |
+| `status_code =`, `channel =`, sort `created_at`   | first and deep, both directions        | 1.01 / 1.13               | 2.85 / 3.02                       | 13.00 / 26.08                   | Index Scan        |
+| quick filter over `customer_name`, `order_number` | 8 terms                                | 15.29 / 19.23             | none                              | none                            | Bitmap Index Scan |
 
 - A deep page starts 200,000 rows into the result, or 20,000 or 1,000 where the filter leaves fewer, and costs the same as the first page.
 - The live total is the capped sum behind the footer: an index scan that stops at row 10,001, run with `enable_sort = off`. Its plan is an Index Scan or Index Only Scan on the shape's own index in every case.
-- Quick filter by term, p95: `12345` 0.4 ms, `Smith` 2.0 ms, `Zanele Dlam` 6.3 ms, `Mokoena` 8.6 ms, `ena 4` 8.6 ms, `mok` 9.1 ms, `a M` 13.4 ms.
+- Quick filter by term, p95: `12345` 0.6 ms, `Smith` 3.0 ms, `Mokoena` 7.9 ms, `Zanele Dlam` 8.0 ms, `ena 4` 10.8 ms, `mok` 10.8 ms, `a M` 19.2 ms.
 - `---` holds no trigram the index can use, so it would recheck every row. The server refused it at the 120 ms budget in all 33 runs. That is the refusal the budget exists for.
 
 ### Local, 10,000,000 orders
@@ -570,9 +608,9 @@ A Paid card dragged over Shipped: it has left its column and Shipped has opened 
 
 The same parts over 400 rows held in the browser: two filters and a sort that no index would need to exist for, with the count, facet counts and total computed in JavaScript.
 
-![Tailwind restyle](docs/screenshots/21-tailwind-restyle.png)
+![Token restyle](docs/screenshots/21-token-restyle.png)
 
-The same parts restyled from the demo's own Tailwind stylesheet: the Select and the grid rows change, the package does not.
+The same parts restyled by one 33-line stylesheet that repoints UI SDK's `--ui-*` tokens and adds three grid rules: every control, popup and the grid change, the package does not.
 
 ## Develop
 
@@ -637,7 +675,7 @@ Every row was observed on the Neon project (620,000 orders, 30,000 customers, 46
 | 2     | A missing index fails by name                            | `DROP INDEX orders_qs_region__created_at`, `test:db`, `db:migrate`, `test:db`                                                                                                                        | 1 fail naming `orders_qs_region__created_at`; after the rebuild 10 pass                                                                                                                                                                                                                                                                                                                                                                                        |
 | 3     | The UI offers only declared shapes                       | `bun run test`                                                                                                                                                                                       | for the test def and the orders def, with the quick result complete and capped: every reachable control state matches a shape and every shape is reached                                                                                                                                                                                                                                                                                                       |
 | 3     | The server refuses the rest                              | `curl /api/orders?f.channel=web&sort=total.desc`; `?f.status_code=nope`; `?limit=100000`                                                                                                             | 400 `undeclared_shape`; 400 `invalid_value`; 200 with 1,000 rows, the per-request cap                                                                                                                                                                                                                                                                                                                                                                          |
-| 4     | Benchmark on Neon at 620,000                             | `db:bench`                                                                                                                                                                                           | 72 of 72 pass: worst ordered page p95 3.18 ms, worst capped count 4.92 ms, worst live total 14.02 ms, every one an index scan with no Sort; quick filter answered in at most 13.42 ms or refused at the 120 ms budget                                                                                                                                                                                                                                          |
+| 4     | Benchmark on Neon at 620,000                             | `db:bench`                                                                                                                                                                                           | 72 of 72 pass: worst ordered page p95 2.33 ms, worst capped count 8.60 ms, worst live total 26.08 ms, every one an index scan with no Sort; quick filter answered in at most 19.23 ms or refused at the 120 ms budget                                                                                                                                                                                                                                          |
 | 5     | Capped count, then exact                                 | Paid, Total R 200 to R 600; Exact count                                                                                                                                                              | `10 000+ rows`, capped; then `10 874 rows`, exact                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 5     | Counts from the counter table                            | default query; status Paid                                                                                                                                                                           | `620 000 rows` and `62 275 rows`, each exact from the counter table; facet counts shown, and hidden once another filter is active                                                                                                                                                                                                                                                                                                                              |
 | 5     | Totals                                                   | status Paid; Paid in a week of Created; Paid with a Total range                                                                                                                                      | R 6 702 835,27 from the counter table; R 198 603,69 summed live over 1,701 rows; no total, with "More than 10 000 rows match and no counter totals this filter."                                                                                                                                                                                                                                                                                               |
@@ -671,7 +709,8 @@ Every row was observed on the Neon project (620,000 orders, 30,000 customers, 46
 | 13    | Publish-ready                                            | `npm pack --dry-run` in `packages/query-grid`; `node -e "import(...)"` of the three entries                                                                                                          | 74 files, 73.1 kB: `dist` with `.js`, `.d.ts` and `ui/styles.css`, the README and the LICENSE; all three entry points import in plain Node ESM                                                                                                                                                                                                                                                                                                                 |
 | 14    | Screenshots                                              | agent-browser against the deployed demo                                                                                                                                                              | 21 captures in `docs/screenshots/`, embedded in the Walkthrough with what each proves                                                                                                                                                                                                                                                                                                                                                                          |
 | 16    | Reviews                                                  | `/code-review`, `/security-review`, `/simplify`                                                                                                                                                      | code review: nine findings, all fixed (the quick exact count now runs under the quick budget; keyboard row selection; the date range end; the sort chip under a capped quick filter; five smaller ones). Security review: no finding at confidence 8 or above. Simplify: shared field helpers, one emitter, one store hook, cached offers, a cheaper in-memory sort and selection lookup, one page wrapper in the demo. Everything above was re-run afterwards |
-| brand | kikstart branding in the demo                            | landing and app pages                                                                                                                                                                                | the mark and wordmark in both headers, "by kikstart" linking to https://kikstart.ai in header and footer, the icon as favicon and apple icon, Geist fonts and kikstart's colours and radius mapped onto `--qg-*` in the demo only                                                                                                                                                                                                                              |
+| brand | kikstart branding in the demo                            | landing and app pages                                                                                                                                                                                | the mark and wordmark in both headers, "by kikstart" linking to https://kikstart.ai in header and footer, the icon as favicon and apple icon, Geist fonts and kikstart's colours and radius set through fifteen `--ui-*` tokens in the demo only                                                                                                                                                                                                               |
+| style | Styling on UI SDK's stylesheet                           | `wc -l` before and after; the browser pass; `/restyled`                                                                                                                                              | `packages/query-grid/src/ui/styles.css` 1,101 to 626 lines, with no rule left that restyles a UI SDK component and no `--qg-*` token; `apps/demo/src/app/globals.css` 352 to 358; `apps/demo/src/app/restyled/restyled.css` 38 lines of Tailwind `@apply` to 33 lines of plain CSS, 13 of them token assignments. Row heights, column widths and every browser observation above are unchanged                                                                 |
 
 ## Licence
 

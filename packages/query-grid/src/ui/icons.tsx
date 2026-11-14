@@ -75,10 +75,18 @@ export function CheckIcon(props: IconProps) {
   );
 }
 
-export function ChevronDownIcon(props: IconProps) {
+export function ChevronLeftIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="m6 9 6 6 6-6" />
+      <path d="m15 18-6-6 6-6" />
+    </Svg>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m9 18 6-6-6-6" />
     </Svg>
   );
 }
@@ -92,28 +100,10 @@ export function ColumnsIcon(props: IconProps) {
   );
 }
 
-export function CalendarIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </Svg>
-  );
-}
-
 export function PinIcon(props: IconProps) {
   return (
     <Svg {...props}>
       <path d="M12 17v5M9 3h6l-1 6 3 3v2H7v-2l3-3-1-6z" />
-    </Svg>
-  );
-}
-
-export function SearchIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <circle cx="11" cy="11" r="7" />
-      <path d="m21 21-4.3-4.3" />
     </Svg>
   );
 }

@@ -23,7 +23,6 @@ export function ViewSwitch({ views }: ViewSwitchProps) {
   const current = useGridView();
   return (
     <SegmentedControl
-      className="qg-view-switch"
       aria-label="View"
       data-part="view-switch"
       value={current}
@@ -34,11 +33,11 @@ export function ViewSwitch({ views }: ViewSwitchProps) {
         }
       }}
     >
-      <SegmentedControlIndicator className="qg-view-indicator" />
+      <SegmentedControlIndicator />
       {views.map(({ view, label }) => (
         <SegmentedControlItem
           key={view}
-          className="qg-view-item"
+
           value={view}
           data-view={view}
         >

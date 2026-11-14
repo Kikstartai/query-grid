@@ -33,13 +33,7 @@ import {
 } from "../react/query-grid-provider.tsx";
 import { FieldFilter, FieldFrame, useOfferState } from "./field-filter.tsx";
 import { SelectOption } from "./select-option.tsx";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  ChevronDownIcon,
-  SearchIcon,
-  XIcon,
-} from "./icons.tsx";
+import { ArrowDownIcon, ArrowUpIcon, XIcon } from "./icons.tsx";
 
 interface ControlProps {
   showReason?: boolean;
@@ -81,16 +75,11 @@ export function SortControl({ showReason }: ControlProps) {
           }
         }}
       >
-        <SelectTrigger
-          className="qg-select-trigger"
-          aria-label="Sort by"
-          data-sort="field"
-        >
+        <SelectTrigger aria-label="Sort by" data-sort="field">
           <span className="qg-select-prefix">Sort</span>
-          <SelectValue className="qg-select-value" />
-          <ChevronDownIcon />
+          <SelectValue />
         </SelectTrigger>
-        <SelectContent className="qg-popup qg-select-content">
+        <SelectContent>
           {items.map((item) => (
             <SelectOption
               key={item.value}
@@ -102,7 +91,6 @@ export function SortControl({ showReason }: ControlProps) {
         </SelectContent>
       </Select>
       <Button
-        className="qg-button qg-icon-button"
         aria-label={descending ? "Descending" : "Ascending"}
         data-sort="direction"
         disabled={!offered}
@@ -168,10 +156,9 @@ function QuickFilterForm({ current, showReason }: QuickFilterFormProps) {
       showReason={showReason}
     >
       <form className="qg-quick" role="search" onSubmit={submit}>
-        <InputGroup className="qg-input-group">
-          <SearchIcon />
+        <InputGroup className="qg-quick-group">
           <Input
-            className="qg-input qg-quick-input"
+            className="qg-quick-input"
             type="search"
             aria-label="Quick filter"
             placeholder={`Quick filter: ${labels}`}
@@ -254,7 +241,6 @@ export function FilterChips() {
         </span>
       ))}
       <Button
-        className="qg-button qg-button-ghost"
         data-chips-reset
         disabled={pristine}
         onClick={() => dispatch({ type: "reset" })}

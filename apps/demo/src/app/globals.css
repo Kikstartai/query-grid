@@ -1,3 +1,5 @@
+@layer ui-sdk;
+
 :root {
   --background: oklch(0.99 0.002 80);
   --foreground: oklch(0.15 0.005 285.823);
@@ -15,18 +17,22 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, Menlo, Consolas, monospace;
 
-  --qg-font: var(--font-sans);
-  --qg-bg: var(--card);
-  --qg-fg: var(--foreground);
-  --qg-muted: var(--muted);
-  --qg-muted-fg: var(--muted-foreground);
-  --qg-border: var(--border);
-  --qg-primary: var(--brand);
-  --qg-primary-fg: oklch(0.985 0 0);
-  --qg-danger: var(--destructive);
-  --qg-ring: var(--brand);
-  --qg-selected: var(--brand-muted);
-  --qg-radius: calc(var(--radius) - 4px);
+  color-scheme: light;
+  --ui-background: var(--card);
+  --ui-foreground: var(--foreground);
+  --ui-muted: var(--muted);
+  --ui-muted-foreground: var(--muted-foreground);
+  --ui-border: var(--border);
+  --ui-input: oklch(0.87 0.004 286.32);
+  --ui-primary: var(--brand);
+  --ui-primary-foreground: oklch(0.985 0 0);
+  --ui-destructive: var(--destructive);
+  --ui-ring: color-mix(in oklab, var(--brand) 25%, transparent);
+  --ui-ring-border: var(--brand);
+  --ui-radius: calc(var(--radius) - 4px);
+  --ui-font-size: 0.875rem;
+  --ui-font-sans: var(--font-sans);
+  --ui-font-mono: var(--font-mono);
 }
 
 html,

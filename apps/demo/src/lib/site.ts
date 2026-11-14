@@ -41,7 +41,7 @@ export const DEMO_LINKS: DemoLink[] = [
   {
     href: "/restyled",
     label: "Restyled",
-    note: "the same parts restyled from a consumer's Tailwind stylesheet",
+    note: "the same parts restyled by repointing UI SDK's tokens in one short stylesheet",
   },
   {
     href: "/parts/facets",

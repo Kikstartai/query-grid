@@ -241,16 +241,13 @@ function ColumnToggle({ column, label }: ColumnToggleProps) {
     <div className="qg-column-row" data-column={column.key}>
       <label className="qg-check-label">
         <Checkbox
-          className="qg-checkbox"
           checked={column.visible}
           data-column-toggle={column.key}
           onCheckedChange={(checked: boolean | "indeterminate") =>
             store.setVisible(column.key, checked === true)
           }
         >
-          <CheckboxIndicator className="qg-checkbox-indicator">
-            <CheckIcon size={12} />
-          </CheckboxIndicator>
+          <CheckboxIndicator />
         </Checkbox>
         {label}
       </label>
@@ -272,20 +269,16 @@ export function ColumnsMenu() {
   const { state, store } = useColumns();
   return (
     <Popover>
-      <PopoverTrigger
-        className="qg-button"
-        aria-label="Columns"
-        data-part="columns-menu-trigger"
-      >
+      <PopoverTrigger data-part="columns-menu-trigger">
         <ColumnsIcon />
         Columns
       </PopoverTrigger>
       <PopoverContent
-        className="qg-popup qg-popover qg-columns-menu"
+        className="qg-columns-menu"
         align="end"
         data-part="columns-menu"
       >
-        <PopoverTitle className="qg-popover-title">Columns</PopoverTitle>
+        <PopoverTitle>Columns</PopoverTitle>
         <div className="qg-columns-list">
           {state.map((column) => (
             <ColumnToggle
@@ -295,11 +288,7 @@ export function ColumnsMenu() {
             />
           ))}
         </div>
-        <Button
-          className="qg-button qg-button-ghost"
-          data-columns-reset
-          onClick={store.reset}
-        >
+        <Button data-columns-reset onClick={store.reset}>
           Reset columns
         </Button>
       </PopoverContent>
@@ -374,15 +363,12 @@ function SelectAll({ handle, loaded }: SelectAllProps) {
     {
       children: (status: SheetStatus) => (
         <Checkbox
-          className="qg-checkbox"
           aria-label="Select all loaded rows"
           data-select-all
           checked={loaded > 0 && status.selectedCount === loaded}
           onCheckedChange={handle.api.toggleAll}
         >
-          <CheckboxIndicator className="qg-checkbox-indicator">
-            <CheckIcon size={12} />
-          </CheckboxIndicator>
+          <CheckboxIndicator />
         </Checkbox>
       ),
     },

@@ -213,10 +213,8 @@ function HeaderFilter({ field }: { field: FieldDef }) {
         >
           <FilterIcon />
         </PopoverTrigger>
-        <PopoverContent className="qg-popup qg-popover" align="start">
-          <PopoverTitle className="qg-popover-title">
-            Filter {field.label}
-          </PopoverTitle>
+        <PopoverContent className="qg-popover-filter" align="start">
+          <PopoverTitle>Filter {field.label}</PopoverTitle>
           <FieldFilter field={field} />
         </PopoverContent>
       </Popover>
