@@ -140,6 +140,13 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 ## Scale
 This is library code with nothing that grows with a tenant count. Each request is one query against a declared shape's index. The benchmark proves 72 of 72 shapes on 620k rows. Capabilities are computed once per def.
 
+## URL history with nuqs (added later, Glen)
+- `-react` only: `QueryGridProvider` uses **nuqs** for the URL; nuqs stays internal to the provider and hosts mount a nuqs adapter (Next for the demo, plain React otherwise). Core and `-postgres` gain no nuqs dependency.
+- Discrete changes (filter, sort, view, reset) push a history entry; quick-filter typing replaces with throttling. Back/Forward and Next `<Link>` changes flow back into the grid.
+- The URL is the source of truth: `dispatch` still runs `applyAction` + the answerable check, then writes through nuqs; the query store follows. Core's query store gains a framework-free way to take a query from outside (e.g. `replace(query)`, validated, falling back to the default).
+- The nuqs parsers are built at runtime from the GridDef on top of core's `encodeQuery`/`decodeQuery`, so browser and server read one URL format (`f.<field>`, `r.<field>=min..max`, `q`, `sort`, `view`). Verify nuqs supports the dynamic keys.
+- Column layout stays out of the URL.
+
 ## As built: calls the spec left open
 
 ### Names and types
@@ -199,15 +206,19 @@ This is library code with nothing that grows with a tenant count. Each request i
 - New routes: `/rtl` and `/components`.
 - `apps/demo/browser/verify.sh` and `shots.sh` are the scripted pass and the screenshots.
 
-## Added after rev 2, at Glen's word
+## Added after rev 2, at Glen's word: as built
 
-### URL history
-- `QueryStore.replace(query, view?)` loads a state without going through an action, and `getHistoryWrite()` says whether the last change wants a new history entry.
-- A filter, range, sort, view or reset pushes; `setQuick`, `clearQuick` and `replace` do not. The quick filter applies on submit, so "typing" is each applied term.
-- The provider listens for `popstate`, and after every commit compares the address bar with the store, so a navigation it did not make is followed without relying on the `search` prop changing. With `syncUrl={false}` only the `search` prop is followed.
-- A URL no shape answers falls back to the default query and is rewritten in place.
+### URL history with nuqs
+- nuqs is a peer dependency of `-react` (`>=2.10.0`, the version checked for `parseAsNativeArrayOf`), because the host's adapter and the provider must share one copy. Core and `-postgres` have none.
+- nuqs supports the dynamic keys: the parser map is a plain object built once per def from core's new `listQueryKeys(def)`. An `f.<field>` key is `parseAsNativeArrayOf(parseAsString)`, so several values repeat the parameter; the rest are `parseAsString`.
+- The values nuqs reports are turned back into a search string and decoded with core's `decodeQuery`; a state is written by encoding it with core's `encodeQuery` and splitting it by key. No second codec exists.
+- Core's store gained `replace(query, view?)`, `normalizeQuery(def, capabilities, query)` and `getHistoryWrite()`. `replace` and store creation both normalize: a query nothing answers, or with an invalid value, becomes the default.
+- `dispatch` applies the action in the store at once and the provider writes the result through nuqs; when nuqs reports anything else, the store follows it. The store never disagrees with the URL for longer than one render.
+- A filter, range, sort, view or reset pushes. `setQuick` and `clearQuick` replace, throttled to 250 ms. The quick filter still applies on Enter, so "typing" is each applied term; live search per keystroke was not built, because each term is a trigram query under a 120 ms budget.
+- A URL nothing answers is rewritten in place to the default; a parameter the def does not own is left alone.
+- `syncUrl={false}` renders a provider that calls no nuqs hook and needs no adapter; it starts from `search` and follows it. Under nuqs the `search` prop is unused.
+- The demo mounts `NuqsAdapter` from `nuqs/adapters/next/app` in the root layout. Its pages no longer pass `searchParams`; an `AtRequest` server component awaits `connection()` inside the Suspense boundary, so a deep link is still server-rendered with its state.
 - Column layout stays out of the URL.
-- Not built on nuqs: the codec is core's and shared with the server.
 
 ### Migration generator at scale (design note, question 9)
 - Indexes are `CREATE INDEX CONCURRENTLY IF NOT EXISTS`, one statement each, outside any transaction. `{ concurrently: false }` opts out.

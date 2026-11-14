@@ -17,7 +17,7 @@ Three packages, released together at the same version.
 | Package                         | Depends on           | Holds                                                                                                                                 |
 | ------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `@kikstart/query-grid`          | nothing              | the core: the query contract, URL codec, validation, offers, feeds, the data source contract. No React, no DOM, no `pg`               |
-| `@kikstart/query-grid-react`    | core, React, UI SDK  | controlled base components, the provider and hooks, and the same components bound to the query state                                  |
+| `@kikstart/query-grid-react`    | core, React, UI SDK, nuqs | controlled base components, the provider and hooks, and the same components bound to the query state                                  |
 | `@kikstart/query-grid-postgres` | core                 | the server: declared shapes, the SQL builder, keyset paging, index and counter DDL, and one request handler. No React, no `pg` either |
 
 There is one query contract, in core. The React package encodes a query with core's `encodeQuery`, the Postgres package decodes it with core's `decodeQuery`, and both validate with core's `validateQueryValues`.
@@ -37,10 +37,10 @@ There is one query contract, in core. The React package encodes a query with cor
 ## Install
 
 ```bash
-npm install @kikstart/query-grid @kikstart/query-grid-react @kikstart/query-grid-postgres @ui-sdk/core@beta @ui-sdk/react@beta
+npm install @kikstart/query-grid @kikstart/query-grid-react @kikstart/query-grid-postgres @ui-sdk/core@beta @ui-sdk/react@beta nuqs
 ```
 
-React 19 and UI SDK `0.1.0-beta.1` or later are peer dependencies of the React package. Every package ships ESM and type declarations; the React package is compiled with the React Compiler.
+React 19, UI SDK `0.1.0-beta.1` or later and [nuqs](https://nuqs.dev) 2.10 or later are peer dependencies of the React package. Every package ships ESM and type declarations; the React package is compiled with the React Compiler.
 
 Import UI SDK's stylesheet once at the app entry, then the package's, in that order:
 
@@ -202,11 +202,10 @@ import {
   TotalFooter,
 } from "@kikstart/query-grid-react/ui";
 
-export function Orders({ search }: { search: string }) {
+export function Orders() {
   return (
     <QueryGridProvider
       def={ORDERS_GRID}
-      search={search}
       basePath="/api/orders"
       capabilities={ORDERS_CAPABILITIES}
     >
@@ -222,14 +221,23 @@ export function Orders({ search }: { search: string }) {
 }
 ```
 
-`search` is the page's query string at first render. `def.id` names the grid: it keys the column state the provider keeps in `localStorage`.
+`def.id` names the grid: it keys the column state the provider keeps in `localStorage`.
 
-The provider keeps the URL and the query state in step, both ways:
+The provider keeps the query in the URL through [nuqs](https://nuqs.dev), so mount a nuqs adapter once, above it: the one for your framework, or the plain React one where there is no router.
 
-- A filter, sort, view or reset is a new history entry (`history.pushState`), so Back steps through them. Applying the quick filter replaces the current entry instead.
-- On Back and Forward the provider decodes the URL, falls back to the default query if no shape answers it, and loads the result into the store; the data stores refetch as they do for any change.
-- It also follows a `search` prop that changes, and the address bar after a navigation it did not make, such as a `<Link>` to the same route. Its own writes never echo back, because it acts only when the URL and the store disagree.
-- Column layout stays out of the URL. `syncUrl={false}` turns the mirroring off; the `search` prop is still followed.
+```tsx
+// app/layout.tsx
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+
+<NuqsAdapter>{children}</NuqsAdapter>
+```
+
+- **The URL is the source of truth.** A control dispatches an action, `applyAction` checks that the capabilities answer the result, and the provider writes it through nuqs. Whatever nuqs then reports, the store follows.
+- **Back steps through deliberate changes.** A filter, sort, view or reset pushes a history entry. Applying the quick filter replaces the current one, throttled, so the terms tried on the way do not pile up.
+- **Back, Forward and a `<Link>` to the same route flow back into the grid.** The provider decodes what nuqs reports with core's `decodeQuery`. A URL no shape answers becomes the default query and is rewritten in place; a parameter the def does not own is left alone.
+- **One URL format.** The parser map is built from the def at runtime, on the keys core's `listQueryKeys` names (`f.<field>`, repeated per value; `r.<field>=min..max`; `q`; `sort`; `cursor`; `view`), and states go in and out through core's `encodeQuery` and `decodeQuery`. The server reads the same parameters with the same function.
+- nuqs stays inside the provider: no hook of the package returns it, and the base components never see it. Column layout stays out of the URL.
+- `syncUrl={false}` leaves the URL alone and needs no adapter. The provider then starts from its `search` prop and follows it when it changes.
 
 ## Capabilities
 
@@ -485,7 +493,7 @@ const source = createMemorySource(TASKS_GRID, rows, {
   transitions,
 });
 
-<QueryGridProvider def={TASKS_GRID} search={search} source={source}>
+<QueryGridProvider def={TASKS_GRID} source={source}>
 ```
 
 A source carries its own capabilities, so the provider needs no `capabilities` prop here. It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's [`/memory`](https://query-grid.vercel.app/memory) route) and still under a frame at 5,000. Past that, give the table shapes and an index.
@@ -626,7 +634,7 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 | Clearing a filter falls back: same sort, then the default sort, then the default query                       | The result must stay a declared shape                                                                                                          |
 | The URL carries the cursor the feed starts from                                                              | A view is shareable; changing a filter or sort resets it                                                                                       |
 | A filter, sort or view change is a new history entry; the quick filter replaces the current one              | Back should undo the last deliberate change, not every search term tried on the way                                                            |
-| URL history is the provider's own forty lines on `pushState` and `popstate`, not a routing library           | The codec is already core's and shared with the server; a library would add a second one, a peer dependency and an adapter in every host       |
+| URL state goes through nuqs, inside the provider only                                                        | Back, Forward, router navigations and throttled writes are a library's job; the parsers sit on core's codec, so the server still reads one format |
 | The counter backfill reads one snapshot instead of working in batches                                        | It is exact with no table lock; batches would need a watermark every write reads for ever                                                      |
 | Facet counts hide while another filter is active                                                             | Only the per-status totals have a counter                                                                                                      |
 | The filter sidebar is a non-modal Drawer                                                                     | The grid stays in view and usable while filters change                                                                                         |

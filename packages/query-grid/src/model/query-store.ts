@@ -5,7 +5,12 @@ import type {
   QueryRules,
   QueryState,
 } from "./field-types.ts";
-import { applyAction, type QueryAction } from "./query-actions.ts";
+import {
+  applyAction,
+  defaultQuery,
+  type QueryAction,
+} from "./query-actions.ts";
+import { validateQueryValues } from "./query-validate.ts";
 
 export type GridView = "grid" | "list" | "board";
 
@@ -26,6 +31,17 @@ export interface QueryStore {
   setQuickComplete: (complete: boolean) => void;
 }
 
+export function normalizeQuery(
+  def: GridDef,
+  capabilities: Capabilities,
+  query: QueryState,
+): QueryState {
+  const usable =
+    capabilities.isAnswerable(query) &&
+    validateQueryValues(def, query) === null;
+  return usable ? query : defaultQuery(def);
+}
+
 function resolveHistoryWrite(action: QueryAction): HistoryWrite {
   return action.type === "setQuick" || action.type === "clearQuick"
     ? "replace"
@@ -38,7 +54,7 @@ export function createQueryStore(
   initial: QueryState,
   initialView: GridView = "grid",
 ): QueryStore {
-  let query = initial;
+  let query = normalizeQuery(def, capabilities, initial);
   let view = initialView;
   let rules: QueryRules = { capabilities, quickComplete: false };
   let historyWrite: HistoryWrite = "replace";
@@ -66,7 +82,7 @@ export function createQueryStore(
       }
     },
     replace: (next, nextView = view) => {
-      query = next;
+      query = normalizeQuery(def, capabilities, next);
       view = nextView;
       historyWrite = "replace";
       emitter.emit();

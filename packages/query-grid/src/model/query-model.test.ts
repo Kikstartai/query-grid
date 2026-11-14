@@ -12,7 +12,7 @@ import {
   listOffers,
 } from "./query-actions.ts";
 import { createQueryStore } from "./query-store.ts";
-import { decodeQuery, encodeQuery } from "./query-url.ts";
+import { decodeQuery, encodeQuery, listQueryKeys } from "./query-url.ts";
 import { validateQueryValues } from "./query-validate.ts";
 
 const BASE = defaultQuery(TEST_DEF);
@@ -259,6 +259,24 @@ describe("the store and browser history", () => {
     expect(store.getView()).toBe("list");
     expect(emitted).toBe(3);
   });
+
+  test("a query from outside that nothing answers becomes the default", () => {
+    const store = createQueryStore(TEST_DEF, SERVER, BASE);
+    store.replace({ ...BASE, equals: { region: ["north"] } });
+    expect(store.getQuery()).toEqual(BASE);
+    store.replace({ ...BASE, equals: { status: ["nope"] } });
+    expect(store.getQuery()).toEqual(BASE);
+    const open: QueryState = { ...BASE, equals: { status: ["open"] } };
+    store.replace(open);
+    expect(store.getQuery()).toBe(open);
+    expect(
+      createQueryStore(TEST_DEF, SERVER, {
+        ...BASE,
+        sort: { field: "missing", direction: "asc" },
+        equals: { region: ["north"] },
+      }).getQuery(),
+    ).toEqual(BASE);
+  });
 });
 
 describe("the URL", () => {
@@ -291,6 +309,13 @@ describe("the URL", () => {
       decodeQuery(TEST_DEF, new URLSearchParams("f.status=open&f.status=open"))
         .equals,
     ).toEqual({ status: ["open"] });
+  });
+
+  test("the keys a def can put in the URL are known up front", () => {
+    expect(listQueryKeys(TEST_DEF)).toEqual({
+      repeated: ["f.status", "f.region"],
+      single: ["r.created_at", "r.total", "q", "sort", "cursor"],
+    });
   });
 
   test("the quick filter and the default sort", () => {

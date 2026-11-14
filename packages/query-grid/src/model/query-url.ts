@@ -9,7 +9,30 @@ import {
 const EQUALS_PREFIX = "f.";
 const RANGE_PREFIX = "r.";
 const QUICK_PARAM = "q";
+const SORT_PARAM = "sort";
+const CURSOR_PARAM = "cursor";
 const RANGE_SEPARATOR = "..";
+
+export interface QueryKeys {
+  repeated: string[];
+  single: string[];
+}
+
+export function listQueryKeys(def: GridDef): QueryKeys {
+  const keysFor = (operator: "eq" | "range", prefix: string) =>
+    def.fields
+      .filter((field) => field.operators.includes(operator))
+      .map((field) => `${prefix}${field.key}`);
+  return {
+    repeated: keysFor("eq", EQUALS_PREFIX),
+    single: [
+      ...keysFor("range", RANGE_PREFIX),
+      QUICK_PARAM,
+      SORT_PARAM,
+      CURSOR_PARAM,
+    ],
+  };
+}
 
 export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {
   const params = new URLSearchParams();
@@ -28,10 +51,10 @@ export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {
     params.set(QUICK_PARAM, query.quick);
   }
   if (!isDefaultSort(def, query.sort)) {
-    params.set("sort", `${query.sort.field}.${query.sort.direction}`);
+    params.set(SORT_PARAM, `${query.sort.field}.${query.sort.direction}`);
   }
   if (query.cursor) {
-    params.set("cursor", query.cursor);
+    params.set(CURSOR_PARAM, query.cursor);
   }
   return params;
 }
@@ -69,7 +92,7 @@ export function decodeQuery(def: GridDef, params: URLSearchParams): QueryState {
     equals,
     range,
     quick: params.get(QUICK_PARAM),
-    sort: decodeSort(def, params.get("sort")),
-    cursor: params.get("cursor"),
+    sort: decodeSort(def, params.get(SORT_PARAM)),
+    cursor: params.get(CURSOR_PARAM),
   };
 }

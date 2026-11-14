@@ -1,17 +1,15 @@
 import { Suspense } from "react";
 
 import { OrdersWorkspace } from "@/core/orders/ui/orders-workspace";
+import { AtRequest } from "@/lib/at-request";
 import { PageLoading } from "@/lib/page-loading";
-import type { SearchParams } from "@/lib/read-search";
 
-export default function RtlPage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+export default function RtlPage() {
   return (
     <Suspense fallback={<PageLoading />}>
-      <OrdersWorkspace searchParams={searchParams} dir="rtl" />
+      <AtRequest>
+        <OrdersWorkspace dir="rtl" />
+      </AtRequest>
     </Suspense>
   );
 }

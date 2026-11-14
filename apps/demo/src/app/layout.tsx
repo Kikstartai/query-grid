@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import type { ReactNode } from "react";
 
 import "@ui-sdk/core/web.css";
@@ -22,7 +23,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <NuqsAdapter>{children}</NuqsAdapter>
+      </body>
     </html>
   );
 }

@@ -9,14 +9,11 @@ import {
 
 import { SiteBrand } from "@/lib/site-brand";
 
-import {
-  OrdersQueryProvider,
-  type OrdersWorkspaceProps,
-} from "./orders-workspace";
+import { OrdersQueryProvider } from "./orders-workspace";
 
-export function RestyledWorkspace({ searchParams }: OrdersWorkspaceProps) {
+export function RestyledWorkspace() {
   return (
-    <OrdersQueryProvider searchParams={searchParams}>
+    <OrdersQueryProvider>
       <div className="restyled workspace">
         <header className="workspace-head">
           <SiteBrand />

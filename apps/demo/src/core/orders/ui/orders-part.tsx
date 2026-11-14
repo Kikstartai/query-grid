@@ -20,7 +20,6 @@ import {
   OrdersBoard,
   OrdersCardList,
   OrdersQueryProvider,
-  type OrdersWorkspaceProps,
 } from "./orders-workspace";
 
 type PartName = (typeof PART_NAMES)[number];
@@ -46,18 +45,18 @@ function QueryReadout() {
   );
 }
 
-interface OrdersPartProps extends OrdersWorkspaceProps {
+interface OrdersPartProps {
   params: Promise<{ part: string }>;
 }
 
-export function OrdersPart({ params, searchParams }: OrdersPartProps) {
+export function OrdersPart({ params }: OrdersPartProps) {
   const { part } = use(params);
   const Part = PARTS[part as PartName];
   if (!Part) {
     return <p className="part-missing">Unknown part: {part}</p>;
   }
   return (
-    <OrdersQueryProvider searchParams={searchParams}>
+    <OrdersQueryProvider>
       <div className="part-page" data-solo-part={part}>
         <SiteBrand />
         <p className="part-intro">

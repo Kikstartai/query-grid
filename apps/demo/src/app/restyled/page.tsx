@@ -1,17 +1,15 @@
 import { Suspense } from "react";
 
 import { RestyledWorkspace } from "@/core/orders/ui/restyled-workspace";
+import { AtRequest } from "@/lib/at-request";
 import { PageLoading } from "@/lib/page-loading";
-import type { SearchParams } from "@/lib/read-search";
 
-export default function RestyledPage({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+export default function RestyledPage() {
   return (
     <Suspense fallback={<PageLoading />}>
-      <RestyledWorkspace searchParams={searchParams} />
+      <AtRequest>
+        <RestyledWorkspace />
+      </AtRequest>
     </Suspense>
   );
 }

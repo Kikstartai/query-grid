@@ -1,6 +1,6 @@
 "use client";
 
-import { use, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { QueryGridProvider, useGridView } from "@kikstart/query-grid-react";
 import {
@@ -16,7 +16,6 @@ import {
   ViewSwitch,
 } from "@kikstart/query-grid-react/ui";
 
-import { normalizeSearch, type SearchParams } from "@/lib/read-search";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
@@ -26,23 +25,13 @@ import { ORDERS_CAPABILITIES, ORDERS_GRID } from "../orders-grid-def";
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 export interface OrdersWorkspaceProps {
-  searchParams: SearchParams;
   dir?: "rtl";
 }
 
-interface OrdersQueryProviderProps extends OrdersWorkspaceProps {
-  children: ReactNode;
-}
-
-export function OrdersQueryProvider({
-  searchParams,
-  children,
-}: OrdersQueryProviderProps) {
-  const search = normalizeSearch(use(searchParams));
+export function OrdersQueryProvider({ children }: { children: ReactNode }) {
   return (
     <QueryGridProvider
       def={ORDERS_GRID}
-      search={search}
       basePath={ORDERS_API}
       capabilities={ORDERS_CAPABILITIES}
     >
@@ -72,9 +61,9 @@ function OrdersView() {
   return <DataGrid />;
 }
 
-export function OrdersWorkspace({ searchParams, dir }: OrdersWorkspaceProps) {
+export function OrdersWorkspace({ dir }: OrdersWorkspaceProps) {
   return (
-    <OrdersQueryProvider searchParams={searchParams}>
+    <OrdersQueryProvider>
       <div className="workspace" dir={dir} data-dir={dir}>
         <header className="workspace-head">
           <SiteBrand />

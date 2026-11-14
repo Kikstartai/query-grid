@@ -67,11 +67,17 @@ export {
 export {
   createQueryStore,
   GRID_VIEWS,
+  normalizeQuery,
   type GridView,
   type HistoryWrite,
   type QueryStore,
 } from "./model/query-store.ts";
-export { decodeQuery, encodeQuery } from "./model/query-url.ts";
+export {
+  decodeQuery,
+  encodeQuery,
+  listQueryKeys,
+  type QueryKeys,
+} from "./model/query-url.ts";
 export {
   isValidFieldValue,
   isValidQuickValue,

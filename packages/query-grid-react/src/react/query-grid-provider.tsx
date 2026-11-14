@@ -16,15 +16,10 @@ import {
   createLabelStore,
   createQueryStore,
   createTotalStore,
-  decodeQuery,
-  defaultQuery,
-  encodeQuery,
   explainUnavailable,
   getFieldLabel,
-  GRID_VIEWS,
   listFilterChips,
   listOffers,
-  validateQueryValues,
   type Capabilities,
   type CountState,
   type CountStore,
@@ -48,6 +43,7 @@ import {
   type UnavailableReason,
 } from "@kikstart/query-grid";
 import { createHttpSource } from "@kikstart/query-grid/http";
+import { throttle, useQueryStates } from "nuqs";
 
 import {
   createLocalStoragePersistence,
@@ -66,9 +62,19 @@ import {
 } from "../components/messages.tsx";
 import { useStoreValue } from "../components/use-store-value.ts";
 import { createColumnStore, type ColumnStore } from "./column-store.ts";
+import {
+  buildUrlParsers,
+  encodeStore,
+  readStoreState,
+  readUrlState,
+  toSearch,
+  toUrlValues,
+  type UrlState,
+  type UrlValues,
+} from "./url-state.ts";
 
-const VIEW_PARAM = "view";
 const DEFAULT_PAGE_SIZE = 500;
+const REPLACE_THROTTLE_MS = 250;
 
 export interface QueryGridContextValue {
   def: ClientGridDef;
@@ -112,35 +118,6 @@ export interface LabelledChip {
 
 const QueryGridContext = createContext<QueryGridContextValue | null>(null);
 
-interface UrlState {
-  query: QueryState;
-  view: GridView;
-}
-
-function readUrlState(
-  def: GridDef,
-  search: string,
-  capabilities: Capabilities,
-): UrlState {
-  const params = new URLSearchParams(search);
-  const decoded = decodeQuery(def, params);
-  const usable =
-    capabilities.isAnswerable(decoded) &&
-    validateQueryValues(def, decoded) === null;
-  return {
-    query: usable ? decoded : defaultQuery(def),
-    view: GRID_VIEWS.find((view) => view === params.get(VIEW_PARAM)) ?? "grid",
-  };
-}
-
-function encodeUrlState(def: GridDef, state: UrlState): string {
-  const params = encodeQuery(def, state.query);
-  if (state.view !== "grid") {
-    params.set(VIEW_PARAM, state.view);
-  }
-  return params.size > 0 ? `?${params}` : "";
-}
-
 function resolveSource(props: QueryGridProviderProps): DataSource {
   if (props.source) {
     return props.source;
@@ -151,10 +128,12 @@ function resolveSource(props: QueryGridProviderProps): DataSource {
   return createHttpSource(props.def, props.basePath ?? "", props.capabilities);
 }
 
-function createValue(props: QueryGridProviderProps): QueryGridContextValue {
+function createValue(
+  props: QueryGridProviderProps,
+  source: DataSource,
+  initial: UrlState,
+): QueryGridContextValue {
   const { def } = props;
-  const source = resolveSource(props);
-  const initial = readUrlState(def, props.search ?? "", source.capabilities);
   const store = createQueryStore(
     def,
     source.capabilities,
@@ -178,69 +157,98 @@ function createValue(props: QueryGridProviderProps): QueryGridContextValue {
   };
 }
 
-function encodeStore(store: QueryStore): string {
-  return encodeUrlState(store.def, {
-    query: store.getQuery(),
-    view: store.getView(),
-  });
+function createFromSearch(
+  props: QueryGridProviderProps,
+  search: string,
+): QueryGridContextValue {
+  const source = resolveSource(props);
+  return createValue(
+    props,
+    source,
+    readUrlState(props.def, source.capabilities, search),
+  );
 }
 
-function mirrorToUrl(store: QueryStore): void {
-  const search = encodeStore(store);
-  if (search === window.location.search) {
-    return;
-  }
-  const url = `${window.location.pathname}${search}`;
-  if (store.getHistoryWrite() === "push") {
-    window.history.pushState(null, "", url);
-    return;
-  }
-  window.history.replaceState(null, "", url);
-}
-
-function followSearch(store: QueryStore, search: string): void {
-  const next = readUrlState(store.def, search, store.getRules().capabilities);
-  if (encodeUrlState(store.def, next) !== encodeStore(store)) {
+function followSearch(store: QueryStore, search: string): UrlState {
+  const next = readUrlState(store.def, store.getRules().capabilities, search);
+  const target = toSearch(store.def, toUrlValues(store.def, next));
+  if (target !== encodeStore(store)) {
     store.replace(next.query, next.view);
   }
+  return next;
 }
 
-export function QueryGridProvider(props: QueryGridProviderProps) {
-  const [value] = useState(() => createValue(props));
-  const syncUrl = props.syncUrl ?? true;
-  const search = props.search ?? "";
-  const appliedSearchRef = useRef(search);
+function UrlQueryGridProvider(props: QueryGridProviderProps) {
+  const [parsers] = useState(() => buildUrlParsers(props.def));
+  const [values, setValues] = useQueryStates(parsers);
+  const search = toSearch(props.def, values as UrlValues);
+  const [value] = useState(() => createFromSearch(props, search));
+  const writtenRef = useRef(search);
 
   useEffect(() => {
     void value.columns.restore();
-    if (!syncUrl) {
-      return;
-    }
-    const followLocation = () =>
-      followSearch(value.store, window.location.search);
-    mirrorToUrl(value.store);
-    const unsubscribe = value.store.subscribe(() => mirrorToUrl(value.store));
-    window.addEventListener("popstate", followLocation);
-    return () => {
-      unsubscribe();
-      window.removeEventListener("popstate", followLocation);
-    };
-  }, [value, syncUrl]);
+    const { store } = value;
+    return store.subscribe(() => {
+      const target = encodeStore(store);
+      if (target === writtenRef.current) {
+        return;
+      }
+      writtenRef.current = target;
+      const push = store.getHistoryWrite() === "push";
+      void setValues(
+        toUrlValues(store.def, readStoreState(store)),
+        push
+          ? { history: "push" }
+          : {
+              history: "replace",
+              limitUrlUpdates: throttle(REPLACE_THROTTLE_MS),
+            },
+      );
+    });
+  }, [value, setValues]);
 
   useEffect(() => {
-    if (syncUrl) {
-      followSearch(value.store, window.location.search);
+    const { store } = value;
+    writtenRef.current = toSearch(
+      store.def,
+      toUrlValues(
+        store.def,
+        readUrlState(store.def, store.getRules().capabilities, search),
+      ),
+    );
+    const next = followSearch(store, search);
+    if (writtenRef.current !== search) {
+      void setValues(toUrlValues(store.def, next), { history: "replace" });
     }
-  });
+  }, [value, search, setValues]);
+
+  return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
+}
+
+function StaticQueryGridProvider(props: QueryGridProviderProps) {
+  const search = props.search ?? "";
+  const [value] = useState(() => createFromSearch(props, search));
+  const appliedRef = useRef(search);
 
   useEffect(() => {
-    if (appliedSearchRef.current !== search) {
-      appliedSearchRef.current = search;
+    void value.columns.restore();
+  }, [value]);
+
+  useEffect(() => {
+    if (appliedRef.current !== search) {
+      appliedRef.current = search;
       followSearch(value.store, search);
     }
   }, [value, search]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
+}
+
+export function QueryGridProvider(props: QueryGridProviderProps) {
+  if (props.syncUrl === false) {
+    return <StaticQueryGridProvider {...props} />;
+  }
+  return <UrlQueryGridProvider {...props} />;
 }
 
 export function useQueryGrid(): QueryGridContextValue {

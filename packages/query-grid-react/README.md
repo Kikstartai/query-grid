@@ -3,10 +3,10 @@
 React components for [query-grid](https://github.com/Kikstartai/query-grid), built on [UI SDK](https://ui-sdk.dev): a composable filter and data grid for very large Postgres tables that only offers the filter and sort combinations an index answers.
 
 ```bash
-npm install @kikstart/query-grid @kikstart/query-grid-react @ui-sdk/core@beta @ui-sdk/react@beta
+npm install @kikstart/query-grid @kikstart/query-grid-react @ui-sdk/core@beta @ui-sdk/react@beta nuqs
 ```
 
-React 19 and UI SDK `0.1.0-beta.1` or later are peer dependencies. Import UI SDK's stylesheet first, then this package's:
+React 19, UI SDK `0.1.0-beta.1` or later and nuqs 2.10 or later are peer dependencies. The provider keeps the query in the URL through nuqs, so mount a nuqs adapter above it (`nuqs/adapters/next/app`, `nuqs/adapters/react`, or your router's); the base components need none. Import UI SDK's stylesheet first, then this package's:
 
 ```ts
 import "@ui-sdk/core/web.css";
@@ -42,7 +42,6 @@ import { DataGrid, FilterBar } from "@kikstart/query-grid-react/ui";
 
 <QueryGridProvider
   def={ORDERS_GRID}
-  search={search}
   basePath="/api/orders"
   capabilities={ORDERS_CAPABILITIES}
 >
