@@ -392,6 +392,10 @@
   color: var(--ui-primary);
 }
 
+:where(.qg-popover-filter) {
+  font-weight: 400;
+}
+
 :where(.qg-resize-handle) {
   position: absolute;
   top: 0;
