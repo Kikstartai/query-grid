@@ -67,4 +67,4 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 
 ## Commits
 
-Single-line subjects, one coherent milestone per commit, explicit file paths. Format only the files you touched.
+Single-line subjects, one coherent milestone per commit, explicit file paths. Format only the files you touched, with `bun x prettier --write <paths>`; prettier is pinned in the root `package.json`.

@@ -13,5 +13,8 @@
     "lint": "bun run --filter \"*\" lint",
     "test": "bun run build:package && bun run --filter \"*\" test",
     "typecheck": "bun run build:package && bun run --filter \"*\" typecheck"
+  },
+  "devDependencies": {
+    "prettier": "3.8.0"
   }
 }
