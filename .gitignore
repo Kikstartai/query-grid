@@ -9,6 +9,5 @@ next-env.d.ts
 !.env.example
 *.tgz
 .agent-browser/
-packages/query-grid/README.md
 packages/*/LICENSE
 .claude/skills/
