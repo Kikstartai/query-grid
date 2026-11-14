@@ -7,6 +7,7 @@ import {
 } from "./field-types.ts";
 import { formatValue, labelKey } from "./format.ts";
 import type { QueryAction } from "./query-actions.ts";
+import { fromDayBound } from "./range-bounds.ts";
 
 export interface ChipValue {
   value: string;
@@ -58,7 +59,7 @@ function formatBound(
     return null;
   }
   if (field.type === "datetime") {
-    return bound.slice(0, 10);
+    return fromDayBound(bound);
   }
   return formatValue(field, bound, def.format);
 }

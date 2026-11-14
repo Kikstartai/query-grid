@@ -17,22 +17,19 @@ export interface ResourceState<R> {
   error: Problem | null;
 }
 
-export type ResourceFetch<R> = (
-  query: QueryState,
-  signal: AbortSignal,
-) => Promise<R>;
+type ResourceFetch<R> = (query: QueryState, signal: AbortSignal) => Promise<R>;
 
-export interface ResourceOptions<R> {
+interface ResourceOptions<R> {
   initial: R;
   keepResult?: boolean;
-  follows?: (next: QueryState, current: QueryState) => boolean;
+  followsFilters?: boolean;
 }
 
 export interface QueryResource<R> {
   getState: () => ResourceState<R>;
   subscribe: (listener: Listener) => () => void;
   reload: () => void;
-  load: (fetch: ResourceFetch<R>, keepResult: boolean) => void;
+  refine: (fetch: ResourceFetch<R>) => void;
 }
 
 export function createQueryResource<R>(
@@ -40,10 +37,6 @@ export function createQueryResource<R>(
   fetch: ResourceFetch<R>,
   options: ResourceOptions<R>,
 ): QueryResource<R> {
-  const keepResult = options.keepResult ?? false;
-  const follows =
-    options.follows ??
-    ((next: QueryState, current: QueryState) => !sameFilters(next, current));
   const store = createStore<ResourceState<R>>({
     query: queryStore.getQuery(),
     result: options.initial,
@@ -53,12 +46,12 @@ export function createQueryResource<R>(
   const begin = createAbortable();
   let started = false;
 
-  const load = async (run: ResourceFetch<R>, keep: boolean) => {
+  const load = async (run: ResourceFetch<R>, keepResult: boolean) => {
     const controller = begin();
     const query = queryStore.getQuery();
     store.set({
       query,
-      result: keep ? store.get().result : options.initial,
+      result: keepResult ? store.get().result : options.initial,
       status: "loading",
       error: null,
     });
@@ -78,23 +71,25 @@ export function createQueryResource<R>(
     }
   };
 
-  const reload = () => void load(fetch, keepResult);
+  const reload = () => void load(fetch, options.keepResult ?? false);
 
   return {
     getState: store.get,
     subscribe: (listener) => {
       if (!started) {
         started = true;
-        queryStore.subscribe(() => {
-          if (follows(queryStore.getQuery(), store.get().query)) {
-            reload();
-          }
-        });
+        if (options.followsFilters ?? true) {
+          queryStore.subscribe(() => {
+            if (!sameFilters(queryStore.getQuery(), store.get().query)) {
+              reload();
+            }
+          });
+        }
         reload();
       }
       return store.subscribe(listener);
     },
     reload,
-    load: (run, keep) => void load(run, keep),
+    refine: (run) => void load(run, true),
   };
 }

@@ -24,7 +24,7 @@ import { ORDERS_CAPABILITIES, ORDERS_GRID } from "../orders-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
-export interface OrdersWorkspaceProps {
+interface OrdersWorkspaceProps {
   dir?: "rtl";
 }
 

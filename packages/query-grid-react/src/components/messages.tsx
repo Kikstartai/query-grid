@@ -121,19 +121,25 @@ export type QueryGridMessageOverrides = Partial<
   [K in NestedKey]?: Partial<QueryGridMessages[K]>;
 } & { errors?: QueryGridMessages["errors"] };
 
+const pluralRules = new Map<string, Intl.PluralRules>();
+const listFormats = new Map<string, Intl.ListFormat>();
+
 export function selectPlural(
   locale: string,
   count: number,
   forms: PluralForms,
 ): string {
-  return forms[new Intl.PluralRules(locale).select(count)] ?? forms.other;
+  const rules = pluralRules.get(locale) ?? new Intl.PluralRules(locale);
+  pluralRules.set(locale, rules);
+  return forms[rules.select(count)] ?? forms.other;
 }
 
 export function formatList(locale: string, items: string[]): string {
-  return new Intl.ListFormat(locale, {
-    style: "long",
-    type: "conjunction",
-  }).format(items);
+  const format =
+    listFormats.get(locale) ??
+    new Intl.ListFormat(locale, { style: "long", type: "conjunction" });
+  listFormats.set(locale, format);
+  return format.format(items);
 }
 
 export const DEFAULT_MESSAGES: QueryGridMessages = {
@@ -313,16 +319,20 @@ export function resolveLocale(format: GridFormat | undefined): string {
   return format?.locale ?? DEFAULT_LOCALE;
 }
 
+export function countParams(count: number, format?: GridFormat): CountParams {
+  return {
+    count,
+    formatted: formatCount(count, format),
+    locale: resolveLocale(format),
+  };
+}
+
 export function formatRows(
   messages: QueryGridMessages,
   count: number,
   format?: GridFormat,
 ): string {
-  return messages.rows({
-    count,
-    formatted: formatCount(count, format),
-    locale: resolveLocale(format),
-  });
+  return messages.rows(countParams(count, format));
 }
 
 export function formatLoaded(

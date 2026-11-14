@@ -230,8 +230,16 @@ function BoardLaneColumn({
   );
 }
 
+const laneIds = new WeakMap<BoardLane["rows"], Set<string>>();
+
+function listLaneIds(rows: BoardLane["rows"]): Set<string> {
+  const ids = laneIds.get(rows) ?? new Set(rows.map((row) => row.id));
+  laneIds.set(rows, ids);
+  return ids;
+}
+
 function laneOf(lanes: BoardLane[], id: string): BoardLane | null {
-  return lanes.find((lane) => lane.rows.some((row) => row.id === id)) ?? null;
+  return lanes.find((lane) => listLaneIds(lane.rows).has(id)) ?? null;
 }
 
 export function StatusBoard(props: StatusBoardProps) {

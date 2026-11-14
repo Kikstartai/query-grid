@@ -1,7 +1,7 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
+import { getField, isLookupField } from "./field-types.ts";
 import { labelKey } from "./format.ts";
-import { sameFilters } from "./load.ts";
 import {
   createQueryResource,
   type QueryResource,
@@ -41,9 +41,8 @@ export function createCountStore(
     subscribe: resource.subscribe,
     reload: resource.reload,
     requestExact: () =>
-      resource.load(
-        (query, signal) => source.fetchCount(query, true, signal),
-        true,
+      resource.refine((query, signal) =>
+        source.fetchCount(query, true, signal),
       ),
   };
 }
@@ -63,14 +62,13 @@ export function createFacetStore(
   store: QueryStore,
   source: DataSource,
 ): FacetStore {
-  const memory = source.capabilities.mode === "memory";
   return createQueryResource<FacetCount[]>(
     store,
     (query, signal) => source.fetchFacets(query, signal),
     {
       initial: [],
       keepResult: true,
-      follows: (next, current) => memory && !sameFilters(next, current),
+      followsFilters: source.capabilities.mode === "memory",
     },
   );
 }
@@ -79,12 +77,15 @@ export interface LabelStore {
   getLabels: () => Record<string, string>;
   subscribe: (listener: Listener) => () => void;
   remember: (field: string, value: string, label: string) => void;
-  request: (field: string, value: string) => void;
 }
 
-export function createLabelStore(source: DataSource): LabelStore {
+export function createLabelStore(
+  store: QueryStore,
+  source: DataSource,
+): LabelStore {
   const labels = createStore<Record<string, string>>({});
   const requested = new Set<string>();
+  let started = false;
   const remember = (field: string, value: string, label: string) => {
     const key = labelKey(field, value);
     if (labels.get()[key] !== label) {
@@ -106,16 +107,31 @@ export function createLabelStore(source: DataSource): LabelStore {
       requested.delete(labelKey(field, value));
     }
   };
+  const request = (field: string, value: string) => {
+    const key = labelKey(field, value);
+    if (!requested.has(key) && labels.get()[key] === undefined) {
+      requested.add(key);
+      void resolve(field, value);
+    }
+  };
+  const requestSelected = () => {
+    for (const [key, values] of Object.entries(store.getQuery().equals)) {
+      const field = getField(store.def, key);
+      if (field && isLookupField(field)) {
+        values.forEach((value) => request(key, value));
+      }
+    }
+  };
   return {
     getLabels: labels.get,
-    subscribe: labels.subscribe,
-    remember,
-    request: (field, value) => {
-      const key = labelKey(field, value);
-      if (!requested.has(key) && labels.get()[key] === undefined) {
-        requested.add(key);
-        void resolve(field, value);
+    subscribe: (listener) => {
+      if (!started) {
+        started = true;
+        store.subscribe(requestSelected);
+        requestSelected();
       }
+      return labels.subscribe(listener);
     },
+    remember,
   };
 }

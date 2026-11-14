@@ -1,0 +1,115 @@
+import { describe, expect, test } from "bun:test";
+
+import type { DataSource } from "./data-source.ts";
+import type { Capabilities, GridRow, QueryState } from "./field-types.ts";
+import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
+import { defaultQuery } from "./query-actions.ts";
+import { createQueryStore } from "./query-store.ts";
+import { createFeed } from "./row-feed.ts";
+import { createCountStore } from "./summary-stores.ts";
+
+const SERVER: Capabilities = {
+  mode: "server",
+  isAnswerable: () => true,
+  sortFields: ["created_at", "total"],
+  quickFields: TEST_QUICK_FIELDS,
+  isFacetCountShown: () => true,
+};
+
+const ROWS: GridRow[] = [
+  { id: "a", total: 300 },
+  { id: "b", total: 100 },
+  { id: "c", total: 200 },
+];
+
+interface Calls {
+  pages: QueryState[];
+  counts: boolean[];
+}
+
+function createSource(calls: Calls): DataSource {
+  const unused = async () => [];
+  return {
+    capabilities: SERVER,
+    fetchPage: async (query) => {
+      calls.pages.push(query);
+      return { rows: ROWS, nextCursor: null, hasNext: false };
+    },
+    fetchCount: async (_query, exact) => {
+      calls.counts.push(exact);
+      return { count: 3, capped: !exact, source: exact ? "exact" : "capped" };
+    },
+    fetchTotal: async () => ({
+      available: false,
+      code: "no_total",
+      params: {},
+    }),
+    fetchFacets: unused,
+    fetchOptions: unused,
+    fetchTransitions: unused,
+    changeFacetValue: async () => ROWS[0],
+  };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe("the row feed", () => {
+  test("a query change after a finished quick filter fetches one page, not two", async () => {
+    const calls: Calls = { pages: [], counts: [] };
+    const store = createQueryStore(TEST_DEF, SERVER, {
+      ...defaultQuery(TEST_DEF),
+      quick: "abc",
+    });
+    const feed = createFeed(store, createSource(calls), 50);
+    feed.subscribe(() => undefined);
+    await settle();
+    expect(calls.pages).toHaveLength(1);
+    expect(store.getRules().quickComplete).toBe(true);
+    store.dispatch({ type: "clearQuick" });
+    await settle();
+    expect(calls.pages).toHaveLength(2);
+    expect(feed.getState().query.quick).toBeNull();
+  });
+
+  test("a finished quick filter re-sorts in place without a request", async () => {
+    const calls: Calls = { pages: [], counts: [] };
+    const store = createQueryStore(TEST_DEF, SERVER, {
+      ...defaultQuery(TEST_DEF),
+      quick: "abc",
+    });
+    const feed = createFeed(store, createSource(calls), 50);
+    feed.subscribe(() => undefined);
+    await settle();
+    store.dispatch({ type: "setSort", field: "total", direction: "asc" });
+    await settle();
+    expect(calls.pages).toHaveLength(1);
+    expect(feed.getState().rows.map((row) => row.id)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("the count store on the shared resource", () => {
+  test("it loads on the first subscriber, follows the filters, and refines to exact in place", async () => {
+    const calls: Calls = { pages: [], counts: [] };
+    const store = createQueryStore(TEST_DEF, SERVER, defaultQuery(TEST_DEF));
+    const counts = createCountStore(store, createSource(calls));
+    expect(calls.counts).toEqual([]);
+    counts.subscribe(() => undefined);
+    await settle();
+    expect(counts.getState().result).toEqual({
+      count: 3,
+      capped: true,
+      source: "capped",
+    });
+    store.dispatch({ type: "setSort", field: "total", direction: "asc" });
+    await settle();
+    expect(calls.counts).toEqual([false]);
+    counts.requestExact();
+    expect(counts.getState().result?.source).toBe("capped");
+    await settle();
+    expect(counts.getState().result?.source).toBe("exact");
+    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    expect(counts.getState().result).toBeNull();
+    await settle();
+    expect(calls.counts).toEqual([false, true, false]);
+  });
+});

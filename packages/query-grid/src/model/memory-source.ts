@@ -1,5 +1,6 @@
 import type { DataSource } from "./data-source.ts";
 import {
+  getFacetField,
   getField,
   type Capabilities,
   type FieldDef,
@@ -7,9 +8,10 @@ import {
   type GridDef,
   type GridRow,
   type QueryState,
-  type SortState,
 } from "./field-types.ts";
+import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
+import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 import type { FacetCount } from "./wire-types.ts";
 
@@ -99,8 +101,9 @@ function listLookupOptions(field: FieldDef, rows: GridRow[]): FieldOption[] {
 }
 
 function listAllTransitions(def: GridDef): [string, string][] {
-  const options = def.facet ? getField(def, def.facet.field)?.options : null;
-  const values = (options ?? []).map((option) => option.value);
+  const values = (getFacetField(def)?.options ?? []).map(
+    (option) => option.value,
+  );
   return values.flatMap((from) =>
     values
       .filter((to) => to !== from)
@@ -110,10 +113,7 @@ function listAllTransitions(def: GridDef): [string, string][] {
 
 interface Selection {
   source: GridRow[];
-  equals: QueryState["equals"];
-  range: QueryState["range"];
-  quick: QueryState["quick"];
-  sort: SortState;
+  query: QueryState;
   rows: GridRow[];
 }
 
@@ -131,17 +131,12 @@ export function createMemorySource(
     const fresh =
       selected !== null &&
       selected.source === rows &&
-      selected.equals === query.equals &&
-      selected.range === query.range &&
-      selected.quick === query.quick &&
-      selected.sort === query.sort;
+      selected.query.sort === query.sort &&
+      sameFilters(selected.query, query);
     if (!fresh) {
       selected = {
         source: rows,
-        equals: query.equals,
-        range: query.range,
-        quick: query.quick,
-        sort: query.sort,
+        query,
         rows: sortRows(def, matching(query), query.sort),
       };
     }
@@ -184,9 +179,7 @@ export function createMemorySource(
         return [];
       }
       const totalKey = def.total?.field;
-      const others = Object.fromEntries(
-        Object.entries(query.equals).filter(([name]) => name !== key),
-      );
+      const others = withoutKey(query.equals, key);
       const counts = new Map<string, FacetCount>();
       for (const row of matching({ ...query, equals: others })) {
         const value = String(row[key] ?? "");

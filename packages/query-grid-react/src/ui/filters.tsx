@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
-
 import {
   explainUnavailable,
   getFieldLabel,
+  isLookupField,
   labelKey,
   listFilterFields,
   QUICK_MAX_LENGTH,
@@ -53,16 +52,8 @@ export function FieldFilter({ field, showReason }: FieldFilterProps) {
     kind: equality ? "equals" : "range",
     field: field.key,
   });
-  const lookup = equality && !field.options;
-  const equals = query.equals;
-  useEffect(() => {
-    if (lookup) {
-      (equals[field.key] ?? []).forEach((value) =>
-        labels.request(field.key, value),
-      );
-    }
-  }, [labels, lookup, field.key, equals]);
-  const values = equals[field.key] ?? [];
+  const lookup = isLookupField(field);
+  const values = query.equals[field.key] ?? [];
   return (
     <BaseFieldFilter
       field={field}

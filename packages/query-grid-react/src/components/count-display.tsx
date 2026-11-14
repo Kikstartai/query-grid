@@ -3,19 +3,16 @@
 import { Button } from "@ui-sdk/react/button";
 
 import {
-  formatCount,
   formatMoney,
+  type CountResult,
   type GridFormat,
+  type TotalAvailable,
 } from "@kikstart/query-grid";
 
 import type { LoadStatus } from "./fields.ts";
-import { formatRows, resolveLocale, useMessages } from "./messages.tsx";
+import { countParams, formatRows, useMessages } from "./messages.tsx";
 
-export interface CountValue {
-  count: number;
-  capped: boolean;
-  source: "counter" | "capped" | "exact";
-}
+export type CountValue = CountResult;
 
 export interface CountDisplayProps {
   status: LoadStatus;
@@ -77,11 +74,7 @@ export function CountDisplay({
         data-count-source={source}
       >
         {capped
-          ? messages.rowsCapped({
-              count,
-              formatted: formatCount(count, format),
-              locale: resolveLocale(format),
-            })
+          ? messages.rowsCapped(countParams(count, format))
           : formatRows(messages, count, format)}
       </bdi>
       <bdi className="qg-muted">
@@ -96,11 +89,7 @@ export function CountDisplay({
   );
 }
 
-export interface TotalValue {
-  sum: number;
-  rows: number;
-  source: "counter" | "live";
-}
+export type TotalValue = Pick<TotalAvailable, "sum" | "rows" | "source">;
 
 export interface TotalFooterProps {
   status: LoadStatus;

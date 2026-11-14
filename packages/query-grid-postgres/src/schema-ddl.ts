@@ -298,44 +298,55 @@ export function listTableMigrations(
   });
 }
 
-export function validateGridDefs(defs: ServerGridDef[]): string[] {
-  const problems = defs.flatMap((def) =>
-    validateGridDef(def).map((problem) => `${def.id}: ${problem}`),
-  );
+interface Declaration {
+  owner: string;
+  name: string;
+  definition: string;
+}
+
+function listConflicts(noun: string, declarations: Declaration[]): string[] {
   const seen = new Map<string, string>();
-  for (const def of defs) {
-    for (const index of listShapeIndexes(def)) {
-      const existing = seen.get(index.name);
-      if (existing !== undefined && existing !== index.ddl) {
-        problems.push(
-          `${def.id}: index ${index.name} is declared with two definitions`,
-        );
-      }
-      seen.set(index.name, index.ddl);
-    }
-  }
-  const counters = new Map<string, string>();
-  for (const def of defs) {
-    const [install] = counterSteps(def);
-    const table = def.facet?.counterTable;
-    if (!install || table === undefined) {
-      continue;
-    }
-    const existing = counters.get(table);
-    if (existing !== undefined && existing !== install.sql) {
-      problems.push(
-        `${def.id}: counter table ${table} is declared with two definitions`,
-      );
-    }
-    counters.set(table, install.sql);
-  }
+  return declarations.flatMap(({ owner, name, definition }) => {
+    const existing = seen.get(name);
+    seen.set(name, definition);
+    return existing !== undefined && existing !== definition
+      ? [`${owner}: ${noun} ${name} is declared with two definitions`]
+      : [];
+  });
+}
+
+export function validateGridDefs(defs: ServerGridDef[]): string[] {
   const ids = defs.map((def) => def.id);
-  for (const id of new Set(ids)) {
-    if (ids.filter((other) => other === id).length > 1) {
-      problems.push(`${id}: the id is used by more than one def`);
-    }
-  }
-  return problems;
+  return [
+    ...defs.flatMap((def) =>
+      validateGridDef(def).map((problem) => `${def.id}: ${problem}`),
+    ),
+    ...listConflicts(
+      "index",
+      defs.flatMap((def) =>
+        listShapeIndexes(def).map((index) => ({
+          owner: def.id,
+          name: index.name,
+          definition: index.ddl,
+        })),
+      ),
+    ),
+    ...listConflicts(
+      "counter table",
+      defs.flatMap((def) =>
+        counterSteps(def)
+          .slice(0, 1)
+          .map((install) => ({
+            owner: def.id,
+            name: def.facet?.counterTable ?? "",
+            definition: install.sql,
+          })),
+      ),
+    ),
+    ...[...new Set(ids.filter((id, at) => ids.indexOf(id) !== at))].map(
+      (id) => `${id}: the id is used by more than one def`,
+    ),
+  ];
 }
 
 interface ParsedIndex {

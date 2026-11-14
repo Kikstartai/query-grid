@@ -3,6 +3,7 @@
 import { CardList as BaseCardList } from "../components/card-list.tsx";
 import { ColumnsMenu as BaseColumnsMenu } from "../components/columns-menu.tsx";
 import { DataGrid as BaseDataGrid } from "../components/data-grid.tsx";
+import type { RowWindow } from "../components/fields.ts";
 import { formatProblemMessage, useMessages } from "../components/messages.tsx";
 import {
   useColumns,
@@ -14,9 +15,25 @@ import {
 } from "../react/query-grid-provider.tsx";
 import { FieldFilter } from "./filters.tsx";
 
-export function DataGrid() {
+function useRowWindow(): RowWindow {
   const { def, feed } = useQueryGrid();
   const messages = useMessages();
+  const state = useFeedState();
+  return {
+    rows: state.rows,
+    hasNext: state.hasNext,
+    onEndReached: feed.loadMore,
+    loading: state.status === "loading",
+    error: state.error
+      ? formatProblemMessage(messages, state.error, def.format)
+      : null,
+    pages: state.pages,
+  };
+}
+
+export function DataGrid() {
+  const { def } = useQueryGrid();
+  const rowWindow = useRowWindow();
   const state = useFeedState();
   const query = useQueryState();
   const offers = useOffers();
@@ -25,17 +42,8 @@ export function DataGrid() {
   return (
     <BaseDataGrid
       fields={def.fields}
-      rows={state.rows}
-      hasNext={state.hasNext}
-      onEndReached={feed.loadMore}
-      loading={state.status === "loading"}
-      error={
-        state.error
-          ? formatProblemMessage(messages, state.error, def.format)
-          : null
-      }
+      {...rowWindow}
       capped={state.capped}
-      pages={state.pages}
       format={def.format}
       resetKey={state.query}
       columns={columns}
@@ -83,22 +91,12 @@ export interface CardListProps {
 }
 
 export function CardList({ titleField, badgeField }: CardListProps) {
-  const { def, feed } = useQueryGrid();
-  const messages = useMessages();
-  const state = useFeedState();
+  const { def } = useQueryGrid();
+  const rowWindow = useRowWindow();
   return (
     <BaseCardList
       fields={def.fields}
-      rows={state.rows}
-      hasNext={state.hasNext}
-      onEndReached={feed.loadMore}
-      loading={state.status === "loading"}
-      error={
-        state.error
-          ? formatProblemMessage(messages, state.error, def.format)
-          : null
-      }
-      pages={state.pages}
+      {...rowWindow}
       titleField={titleField}
       badgeField={badgeField}
       format={def.format}

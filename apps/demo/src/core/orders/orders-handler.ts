@@ -7,6 +7,7 @@ import type { OptionSearch } from "@kikstart/query-grid/http";
 import {
   buildRowSql,
   createGridHandler,
+  escapeLike,
   QueryRejected,
 } from "@kikstart/query-grid-postgres";
 
@@ -44,7 +45,7 @@ async function listOrderOptions(
       values: [],
     });
   }
-  const pattern = `%${text.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
+  const pattern = `%${escapeLike(text)}%`;
   return executeSql<FieldOption>({
     text: `${OPTION_SELECT} WHERE c.name ILIKE $1 ORDER BY c.seq LIMIT ${OPTION_LIMIT}`,
     values: [pattern],

@@ -252,12 +252,29 @@ describe("the store and browser history", () => {
     store.setView("board");
     const next: QueryState = { ...BASE, equals: { region: ["north"] } };
     store.replace(next, "list");
-    expect(store.getQuery()).toBe(next);
+    expect(store.getQuery()).toEqual(next);
     expect(store.getView()).toBe("list");
     expect(store.getHistoryWrite()).toBe("replace");
     store.replace(BASE);
     expect(store.getView()).toBe("list");
     expect(emitted).toBe(3);
+  });
+
+  test("replace keeps what did not change, so nothing refetches for it", () => {
+    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    const before = store.getQuery();
+    store.replace({ ...before, equals: { status: ["open"] } }, "board");
+    expect(store.getQuery()).toBe(before);
+    expect(store.getView()).toBe("board");
+    store.replace({
+      ...before,
+      equals: { status: ["open"] },
+      sort: { field: "total", direction: "asc" },
+    });
+    expect(store.getQuery()).not.toBe(before);
+    expect(store.getQuery().equals).toBe(before.equals);
+    expect(store.getQuery().sort).toEqual({ field: "total", direction: "asc" });
   });
 
   test("a query from outside that nothing answers becomes the default", () => {
@@ -268,7 +285,7 @@ describe("the store and browser history", () => {
     expect(store.getQuery()).toEqual(BASE);
     const open: QueryState = { ...BASE, equals: { status: ["open"] } };
     store.replace(open);
-    expect(store.getQuery()).toBe(open);
+    expect(store.getQuery()).toEqual(open);
     expect(
       createQueryStore(TEST_DEF, SERVER, {
         ...BASE,

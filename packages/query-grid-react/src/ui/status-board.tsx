@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import {
   createFeed,
   createQueryStore,
-  getField,
+  formatValue,
+  getFacetField,
   toProblem,
   type Capabilities,
   type DataSource,
@@ -50,12 +51,24 @@ function createBoardData(
       ),
     ]),
   );
-  let states: Map<string, FeedState> | null = null;
+  const read = () =>
+    new Map([...feeds].map(([status, feed]) => [status, feed.getState()]));
+  let states = read();
   return {
     feeds,
     subscribe: (listener) => {
       const changed = () => {
-        states = null;
+        const next = read();
+        const same = [...next].every(([status, state]) => {
+          const current = states.get(status);
+          return (
+            current?.rows === state.rows && current.hasNext === state.hasNext
+          );
+        });
+        if (same) {
+          return;
+        }
+        states = next;
         listener();
       };
       const cleanups = [...feeds.values()].map((feed) =>
@@ -63,12 +76,7 @@ function createBoardData(
       );
       return () => cleanups.forEach((cleanup) => cleanup());
     },
-    getStates: () => {
-      states ??= new Map(
-        [...feeds].map(([status, feed]) => [status, feed.getState()]),
-      );
-      return states;
-    },
+    getStates: () => states,
   };
 }
 
@@ -77,7 +85,7 @@ function getLaneQueries(
   query: QueryState,
   capabilities: Capabilities,
 ): Map<string, QueryState> | null {
-  const field = def.facet ? getField(def, def.facet.field) : null;
+  const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }
@@ -125,7 +133,7 @@ function BoardLanes({
   const [data] = useState(() => createBoardData(def, source, queries));
   const states = useStoreValue(data.subscribe, data.getStates);
   const [error, setError] = useState<string | null>(null);
-  const facetField = getField(def, def.facet?.field ?? "");
+  const facetField = getFacetField(def);
 
   const onMove = async (id: string, to: string, details: BoardMoveDetails) => {
     try {
@@ -155,9 +163,9 @@ function BoardLanes({
         const facet = facetState.result.find((item) => item.value === status);
         return {
           id: status,
-          label:
-            facetField?.options?.find((item) => item.value === status)?.label ??
-            status,
+          label: facetField
+            ? formatValue(facetField, status, def.format)
+            : status,
           count: showCounts && facet ? facet.count : null,
           rows: state?.rows ?? [],
           hasNext: state?.hasNext ?? false,

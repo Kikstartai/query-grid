@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  use,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, use, useEffect, useState, type ReactNode } from "react";
 
 import {
   createCountStore,
@@ -46,10 +39,12 @@ import { createHttpSource } from "@kikstart/query-grid/http";
 import { throttle, useQueryStates } from "nuqs";
 
 import {
+  createColumnStore,
   createLocalStoragePersistence,
   layoutColumns,
   type ColumnPersistence,
   type ColumnState,
+  type ColumnStore,
   type GridColumn,
 } from "../components/column-state.ts";
 import type { ClientFieldDef, ClientGridDef } from "../components/fields.ts";
@@ -60,23 +55,19 @@ import {
   useMessages,
   type QueryGridMessages,
 } from "../components/messages.tsx";
+import { useLatest } from "../components/use-latest.ts";
 import { useStoreValue } from "../components/use-store-value.ts";
-import { createColumnStore, type ColumnStore } from "./column-store.ts";
 import {
   buildUrlParsers,
-  encodeStore,
-  encodeUrlState,
-  readStoreState,
   readUrlState,
   toSearch,
   toUrlValues,
-  type UrlState,
   type UrlValues,
 } from "./url-state.ts";
+import { createUrlSync } from "./url-sync.ts";
 
 const DEFAULT_PAGE_SIZE = 500;
 const REPLACE_THROTTLE_MS = 250;
-const PENDING_WRITE_MS = 1000;
 
 export interface QueryGridContextValue {
   def: ClientGridDef;
@@ -132,10 +123,11 @@ function resolveSource(props: QueryGridProviderProps): DataSource {
 
 function createValue(
   props: QueryGridProviderProps,
-  source: DataSource,
-  initial: UrlState,
+  search: string,
 ): QueryGridContextValue {
   const { def } = props;
+  const source = resolveSource(props);
+  const initial = readUrlState(def, source.capabilities, search);
   const store = createQueryStore(
     def,
     source.capabilities,
@@ -154,105 +146,58 @@ function createValue(
     counts: createCountStore(store, source),
     totals: createTotalStore(store, source),
     facets: createFacetStore(store, source),
-    labels: createLabelStore(source),
+    labels: createLabelStore(store, source),
     columns: createColumnStore(def.fields, persistence),
   };
-}
-
-function createFromSearch(
-  props: QueryGridProviderProps,
-  search: string,
-): QueryGridContextValue {
-  const source = resolveSource(props);
-  return createValue(
-    props,
-    source,
-    readUrlState(props.def, source.capabilities, search),
-  );
-}
-
-interface PendingWrite {
-  search: string;
-  at: number;
-}
-
-function followSearch(store: QueryStore, search: string): void {
-  const next = readUrlState(store.def, store.getRules().capabilities, search);
-  if (encodeUrlState(store.def, next) !== encodeStore(store)) {
-    store.replace(next.query, next.view);
-  }
 }
 
 function UrlQueryGridProvider(props: QueryGridProviderProps) {
   const [parsers] = useState(() => buildUrlParsers(props.def));
   const [values, setValues] = useQueryStates(parsers);
   const search = toSearch(props.def, values as UrlValues);
-  const [value] = useState(() => createFromSearch(props, search));
-  const pendingRef = useRef<PendingWrite[]>([]);
-  const writtenRef = useRef(search);
+  const [value] = useState(() => createValue(props, search));
+  const setter = useLatest(setValues);
+  const [sync] = useState(() =>
+    createUrlSync(value.store, search, (state, history) => {
+      void setter.current(
+        toUrlValues(value.def, state),
+        history === "push"
+          ? { history }
+          : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
+      );
+    }),
+  );
 
   useEffect(() => {
     void value.columns.restore();
-    const { store } = value;
-    return store.subscribe(() => {
-      const target = encodeStore(store);
-      if (target === writtenRef.current) {
-        return;
-      }
-      writtenRef.current = target;
-      pendingRef.current.push({ search: target, at: Date.now() });
-      const push = store.getHistoryWrite() === "push";
-      void setValues(
-        toUrlValues(store.def, readStoreState(store)),
-        push
-          ? { history: "push" }
-          : {
-              history: "replace",
-              limitUrlUpdates: throttle(REPLACE_THROTTLE_MS),
-            },
-      );
-    });
-  }, [value, setValues]);
+    return sync.connect();
+  }, [value, sync]);
 
   useEffect(() => {
-    const { store } = value;
-    const fresh = pendingRef.current.filter(
-      (write) => Date.now() - write.at < PENDING_WRITE_MS,
-    );
-    const echoed = fresh.findIndex((write) => write.search === search);
-    pendingRef.current = echoed < 0 ? [] : fresh.slice(echoed + 1);
-    if (echoed >= 0) {
-      return;
-    }
-    const next = readUrlState(store.def, store.getRules().capabilities, search);
-    const target = encodeUrlState(store.def, next);
-    writtenRef.current = target;
-    if (target !== encodeStore(store)) {
-      store.replace(next.query, next.view);
-    }
-    if (target !== search) {
-      void setValues(toUrlValues(store.def, next), { history: "replace" });
-    }
-  }, [value, search, setValues]);
+    sync.follow(search);
+  }, [sync, search]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }
 
+function ignoreWrite(): void {
+  return;
+}
+
 function StaticQueryGridProvider(props: QueryGridProviderProps) {
   const search = props.search ?? "";
-  const [value] = useState(() => createFromSearch(props, search));
-  const appliedRef = useRef(search);
+  const [value] = useState(() => createValue(props, search));
+  const [sync] = useState(() =>
+    createUrlSync(value.store, search, ignoreWrite),
+  );
 
   useEffect(() => {
     void value.columns.restore();
   }, [value]);
 
   useEffect(() => {
-    if (appliedRef.current !== search) {
-      appliedRef.current = search;
-      followSearch(value.store, search);
-    }
-  }, [value, search]);
+    sync.follow(search);
+  }, [sync, search]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }
@@ -432,18 +377,10 @@ export function formatChip(
 }
 
 export function useFilterChips(): LabelledChip[] {
-  const { def, labels } = useQueryGrid();
+  const { def } = useQueryGrid();
   const messages = useMessages();
   const query = useQueryState();
   const known = useFieldLabels();
-  useEffect(() => {
-    for (const [key, values] of Object.entries(query.equals)) {
-      const field = def.fields.find((item) => item.key === key);
-      if (field?.lookup) {
-        values.forEach((value) => labels.request(key, value));
-      }
-    }
-  }, [def, labels, query.equals]);
   return listFilterChips(def, query, known).map((chip) => ({
     chip,
     item: formatChip(messages, def, chip),

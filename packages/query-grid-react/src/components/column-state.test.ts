@@ -5,6 +5,7 @@ import {
   cancelResize,
   COLUMN_MAX_WIDTH,
   COLUMN_MIN_WIDTH,
+  createColumnStore,
   defaultColumns,
   layoutColumns,
   normalizeColumns,
@@ -14,7 +15,6 @@ import {
   stepWidth,
   type ColumnState,
 } from "./column-state.ts";
-import { createColumnStore } from "../react/column-store.ts";
 import { TEST_FIELDS } from "./fields.fixture.ts";
 
 describe("the width rule", () => {

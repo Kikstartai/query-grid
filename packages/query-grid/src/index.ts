@@ -11,9 +11,11 @@ export type { DataSource } from "./model/data-source.ts";
 export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
   DEFAULT_MAX_VALUES,
+  getFacetField,
   getField,
   getFieldLabel,
   isDefaultSort,
+  isLookupField,
   KEY_FIELD,
   listFilterFields,
   resolveMaxValues,
@@ -86,6 +88,12 @@ export {
   validateQueryValues,
 } from "./model/query-validate.ts";
 export { createFeed, type Feed, type FeedState } from "./model/row-feed.ts";
+export {
+  fromDayBound,
+  fromNumberBound,
+  toDayBound,
+  toNumberBound,
+} from "./model/range-bounds.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export { createStore, type Store } from "./model/store.ts";
 export {

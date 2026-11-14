@@ -1,6 +1,6 @@
 "use client";
 
-import { getField } from "@kikstart/query-grid";
+import { getFacetField, getField } from "@kikstart/query-grid";
 
 import {
   CountDisplay as BaseCountDisplay,
@@ -69,7 +69,7 @@ export function FacetPanel() {
   const dispatch = useQueryDispatch();
   const key = def.facet?.field ?? "";
   const offer = useOfferState({ kind: "equals", field: key });
-  const field = getField(def, key);
+  const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }

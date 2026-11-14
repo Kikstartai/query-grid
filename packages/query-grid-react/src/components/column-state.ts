@@ -1,11 +1,11 @@
-import type { FieldDef } from "@kikstart/query-grid";
+import { createStore, type FieldDef } from "@kikstart/query-grid";
 
 export const COLUMN_MIN_WIDTH = 60;
 export const COLUMN_MAX_WIDTH = 600;
 export const COLUMN_DEFAULT_WIDTH = 150;
 export const RESIZE_STEP = 10;
 export const RESIZE_LARGE_STEP = 50;
-export const COLUMN_SAVE_DELAY_MS = 200;
+const COLUMN_SAVE_DELAY_MS = 200;
 
 export interface ColumnState {
   key: string;
@@ -190,6 +190,50 @@ export function createLocalStoragePersistence(
         window.localStorage.setItem(storageKey, JSON.stringify(columns));
       } catch {
         return;
+      }
+    },
+  };
+}
+
+export interface ColumnStore {
+  getColumns: () => ColumnState[];
+  subscribe: (listener: () => void) => () => void;
+  setColumns: (columns: ColumnState[]) => void;
+  restore: () => Promise<void>;
+}
+
+export function createColumnStore(
+  fields: FieldDef[],
+  persistence: ColumnPersistence | null,
+): ColumnStore {
+  const store = createStore(defaultColumns(fields));
+  let restored = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const set = (next: ColumnState[]) => {
+    store.set(next);
+    if (!restored || !persistence) {
+      return;
+    }
+    if (timer) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(
+      () => void persistence.save(store.get()),
+      COLUMN_SAVE_DELAY_MS,
+    );
+  };
+  return {
+    getColumns: store.get,
+    subscribe: store.subscribe,
+    setColumns: set,
+    restore: async () => {
+      if (restored) {
+        return;
+      }
+      const stored = normalizeColumns(fields, await persistence?.load());
+      restored = true;
+      if (stored) {
+        set(stored);
       }
     },
   };

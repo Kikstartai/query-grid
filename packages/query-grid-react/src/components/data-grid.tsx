@@ -296,6 +296,7 @@ function GridStatus({
 }: GridStatusProps) {
   const messages = useMessages();
   const none = (value: string) => (value === "none" ? messages.none : value);
+  const loadedText = formatLoaded(messages, loaded, pages, format);
   return usePart(
     handle,
     "status",
@@ -306,7 +307,7 @@ function GridStatus({
         children: (status: SheetStatus) => (
           <>
             <bdi data-status="loaded" data-value={loaded}>
-              {formatLoaded(messages, loaded, pages, format)}
+              {loadedText}
             </bdi>
             <FeedProgress {...progress} />
             <bdi data-status="selected" data-value={status.selectedCount}>

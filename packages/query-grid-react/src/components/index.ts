@@ -73,9 +73,12 @@ export {
   QueryGridMessagesProvider,
   selectPlural,
   useMessages,
+  type CountParams,
+  type LabelParams,
   type QueryGridMessageOverrides,
   type QueryGridMessages,
   type QueryGridMessagesProviderProps,
+  type ReasonParams,
 } from "./messages.tsx";
 export {
   StatusBoard,

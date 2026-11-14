@@ -102,6 +102,14 @@ export function getField<F extends FieldDef>(
   return def.fields.find((field) => field.key === key) ?? null;
 }
 
+export function getFacetField<F extends FieldDef>(def: GridDef<F>): F | null {
+  return def.facet ? getField(def, def.facet.field) : null;
+}
+
+export function isLookupField(field: FieldDef): boolean {
+  return field.operators.includes("eq") && !field.options;
+}
+
 export function getFieldLabel(def: GridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }

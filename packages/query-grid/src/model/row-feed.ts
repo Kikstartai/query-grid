@@ -110,8 +110,8 @@ export function createFeed(
     const initial = initialFeedState(store.getQuery());
     insertedIds.clear();
     nextCursor = initial.query.cursor;
-    store.setQuickComplete(false);
     void load(initial);
+    store.setQuickComplete(false);
   };
 
   const follow = () => {

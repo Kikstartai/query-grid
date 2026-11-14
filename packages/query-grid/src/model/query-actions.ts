@@ -63,7 +63,7 @@ export function defaultQuery(def: GridDef): QueryState {
   };
 }
 
-function withoutKey(
+export function withoutKey(
   record: Record<string, string[]>,
   key: string,
 ): Record<string, string[]> {

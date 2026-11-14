@@ -55,6 +55,7 @@ export {
   buildPageSql,
   buildRowSql,
   DEFAULT_PAGE_LIMIT,
+  escapeLike,
   QueryRejected,
   quickExpression,
   toPageResult,

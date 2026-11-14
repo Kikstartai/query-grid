@@ -52,6 +52,25 @@ interface QueryStoreState {
   query: QueryState;
   view: GridView;
   rules: QueryRules;
+  historyWrite: HistoryWrite;
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function reuseQuery(current: QueryState, next: QueryState): QueryState {
+  if (sameJson(current, next)) {
+    return current;
+  }
+  return {
+    ...next,
+    equals: sameJson(current.equals, next.equals)
+      ? current.equals
+      : next.equals,
+    range: sameJson(current.range, next.range) ? current.range : next.range,
+    sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
+  };
 }
 
 export function createQueryStore(
@@ -64,40 +83,42 @@ export function createQueryStore(
     query: normalizeQuery(def, capabilities, initial),
     view: initialView,
     rules: { capabilities, quickComplete: false },
+    historyWrite: "replace",
   });
-  let historyWrite: HistoryWrite = "replace";
-  const change = (patch: Partial<QueryStoreState>, write: HistoryWrite) => {
-    historyWrite = write;
+  const change = (patch: Partial<QueryStoreState>) =>
     store.set({ ...store.get(), ...patch });
-  };
   return {
     def,
     getQuery: () => store.get().query,
     getView: () => store.get().view,
     getRules: () => store.get().rules,
-    getHistoryWrite: () => historyWrite,
+    getHistoryWrite: () => store.get().historyWrite,
     subscribe: store.subscribe,
     dispatch: (action) => {
       const { query, rules } = store.get();
       const next = applyAction(def, query, action, rules);
       if (next !== query) {
-        change({ query: next }, resolveHistoryWrite(action));
+        change({ query: next, historyWrite: resolveHistoryWrite(action) });
       }
     },
     setView: (view) => {
       if (view !== store.get().view) {
-        change({ view }, "push");
+        change({ view, historyWrite: "push" });
       }
     },
     replace: (next, view = store.get().view) =>
-      change(
-        { query: normalizeQuery(def, capabilities, next), view },
-        "replace",
-      ),
+      change({
+        query: reuseQuery(
+          store.get().query,
+          normalizeQuery(def, capabilities, next),
+        ),
+        view,
+        historyWrite: "replace",
+      }),
     setQuickComplete: (quickComplete) => {
       const { rules } = store.get();
       if (quickComplete !== rules.quickComplete) {
-        change({ rules: { ...rules, quickComplete } }, historyWrite);
+        change({ rules: { ...rules, quickComplete } });
       }
     },
   };

@@ -46,6 +46,10 @@ import { useState } from "react";
 
 import {
   DEFAULT_CURRENCY,
+  fromDayBound,
+  fromNumberBound,
+  toDayBound,
+  toNumberBound,
   type FieldDef,
   type FieldOption,
   type GridFormat,
@@ -158,21 +162,6 @@ function EqualsSelect(props: FieldFilterProps) {
   );
 }
 
-function EqualsFilter(props: FieldFilterProps) {
-  return (
-    <FieldFrame
-      name={props.field.key}
-      kind="equals"
-      label={props.field.label}
-      disabled={props.disabled}
-      reason={props.reason}
-      showReason={props.showReason}
-    >
-      <EqualsSelect {...props} />
-    </FieldFrame>
-  );
-}
-
 interface LookupProps extends FieldFilterProps {
   loadOptions: LoadOptions;
 }
@@ -223,41 +212,32 @@ function LookupSingle(props: LookupProps) {
   const current = values[0] ?? null;
   const label = { label: field.label };
   return (
-    <FieldFrame
-      name={field.key}
-      kind="equals"
-      label={field.label}
+    <Combobox<string>
+      key={current ? (valueLabels[current] ?? "") : ""}
+      items={options.items}
+      filter={false}
+      status={options.status}
+      value={current}
       disabled={disabled}
-      reason={props.reason}
-      showReason={props.showReason}
+      itemToLabel={(value) => valueLabels[value] ?? value}
+      onQueryChange={(text: string) => options.setQuery(text)}
+      onValueChange={choose}
     >
-      <Combobox<string>
-        key={current ? (valueLabels[current] ?? "") : ""}
-        items={options.items}
-        filter={false}
-        status={options.status}
-        value={current}
-        disabled={disabled}
-        itemToLabel={(value) => valueLabels[value] ?? value}
-        onQueryChange={(text: string) => options.setQuery(text)}
-        onValueChange={choose}
+      <ComboboxInput
+        className="qg-combobox-input"
+        aria-label={messages.fieldFilter(label)}
+        placeholder={messages.searchField(label)}
+        data-filter={field.key}
+      />
+      <ComboboxClear
+        className="qg-clear"
+        aria-label={messages.clearField(label)}
+        data-filter-clear={field.key}
       >
-        <ComboboxInput
-          className="qg-combobox-input"
-          aria-label={messages.fieldFilter(label)}
-          placeholder={messages.searchField(label)}
-          data-filter={field.key}
-        />
-        <ComboboxClear
-          className="qg-clear"
-          aria-label={messages.clearField(label)}
-          data-filter-clear={field.key}
-        >
-          <XIcon size={12} />
-        </ComboboxClear>
-        <LookupItems items={options.items} />
-      </Combobox>
-    </FieldFrame>
+        <XIcon size={12} />
+      </ComboboxClear>
+      <LookupItems items={options.items} />
+    </Combobox>
   );
 }
 
@@ -271,63 +251,50 @@ function LookupMultiple(props: LookupProps) {
   const { options, choose } = useLookup(props);
   const label = { label: field.label };
   return (
-    <FieldFrame
-      name={field.key}
-      kind="equals"
-      label={field.label}
+    <Combobox<string>
+      multiple
+      items={options.items}
+      filter={false}
+      status={options.status}
+      value={values}
       disabled={disabled}
-      reason={props.reason}
-      showReason={props.showReason}
+      itemToLabel={(value) => valueLabels[value] ?? value}
+      onQueryChange={(text: string) => options.setQuery(text)}
+      onValueChange={choose}
     >
-      <Combobox<string>
-        multiple
-        items={options.items}
-        filter={false}
-        status={options.status}
-        value={values}
-        disabled={disabled}
-        itemToLabel={(value) => valueLabels[value] ?? value}
-        onQueryChange={(text: string) => options.setQuery(text)}
-        onValueChange={choose}
-      >
-        <ComboboxChips className="qg-combobox-chips">
-          <ComboboxValue>
-            {(state: LookupChipState) =>
-              toValues(state.value as string[]).map((value) => (
-                <ComboboxChip
-                  key={value}
-                  value={value}
-                  className="qg-combobox-chip"
+      <ComboboxChips className="qg-combobox-chips">
+        <ComboboxValue>
+          {(state: LookupChipState) =>
+            toValues(state.value as string[]).map((value) => (
+              <ComboboxChip
+                key={value}
+                value={value}
+                className="qg-combobox-chip"
+              >
+                <bdi>{valueLabels[value] ?? value}</bdi>
+                <ComboboxChipRemove
+                  className="qg-chip-remove"
+                  aria-label={messages.removeChip({
+                    label: valueLabels[value] ?? value,
+                  })}
                 >
-                  <bdi>{valueLabels[value] ?? value}</bdi>
-                  <ComboboxChipRemove
-                    className="qg-chip-remove"
-                    aria-label={messages.removeChip({
-                      label: valueLabels[value] ?? value,
-                    })}
-                  >
-                    <XIcon size={12} />
-                  </ComboboxChipRemove>
-                </ComboboxChip>
-              ))
-            }
-          </ComboboxValue>
-          <ComboboxInput
-            className="qg-combobox-input"
-            aria-label={messages.fieldFilter(label)}
-            placeholder={messages.searchField(label)}
-            data-filter={field.key}
-            data-multiple=""
-          />
-        </ComboboxChips>
-        <LookupItems items={options.items} />
-      </Combobox>
-    </FieldFrame>
+                  <XIcon size={12} />
+                </ComboboxChipRemove>
+              </ComboboxChip>
+            ))
+          }
+        </ComboboxValue>
+        <ComboboxInput
+          className="qg-combobox-input"
+          aria-label={messages.fieldFilter(label)}
+          placeholder={messages.searchField(label)}
+          data-filter={field.key}
+          data-multiple=""
+        />
+      </ComboboxChips>
+      <LookupItems items={options.items} />
+    </Combobox>
   );
-}
-
-function toDayBound(day: string, end: boolean): string {
-  return `${day}T${end ? "23:59:59.999999" : "00:00:00.000000"}Z`;
 }
 
 function toDateValue(
@@ -336,7 +303,7 @@ function toDateValue(
   if (!range?.min || !range.max) {
     return null;
   }
-  return [range.min.slice(0, 10), range.max.slice(0, 10)];
+  return [fromDayBound(range.min), fromDayBound(range.max)];
 }
 
 function DateRange(props: FieldFilterProps) {
@@ -356,72 +323,49 @@ function DateRange(props: FieldFilterProps) {
     }
   };
   return (
-    <FieldFrame
-      name={field.key}
-      kind="range"
-      label={field.label}
+    <DatePicker
+      mode="range"
+      value={toDateValue(range)}
       disabled={disabled}
-      reason={props.reason}
-      showReason={props.showReason}
+      onValueChange={change}
     >
-      <DatePicker
-        mode="range"
-        value={toDateValue(range)}
-        disabled={disabled}
-        onValueChange={change}
-      >
-        <div className="qg-range">
-          <DatePickerInput
-            aria-label={messages.rangeFrom(label)}
-            placeholder={range?.min?.slice(0, 10) ?? messages.from}
-            data-filter={`${field.key}.min`}
-          />
-          <span className="qg-range-dash">–</span>
-          <DatePickerInput
-            end
-            placeholder={range?.max?.slice(0, 10) ?? messages.to}
-            aria-label={messages.rangeTo(label)}
-            data-filter={`${field.key}.max`}
-          />
-          <DatePickerTrigger
-            aria-label={messages.pickDates(label)}
-            data-filter={`${field.key}.calendar`}
-          />
-        </div>
-        <DatePickerContent>
-          <CalendarPrevious>
-            <ChevronLeftIcon />
-          </CalendarPrevious>
-          <CalendarHeading />
-          <CalendarNext>
-            <ChevronRightIcon />
-          </CalendarNext>
-          <CalendarGrid>
-            <CalendarWeekdays>
-              {(index) => <CalendarWeekday index={index} />}
-            </CalendarWeekdays>
-            <CalendarWeeks>
-              {(cell) => <CalendarDay value={cell.date} />}
-            </CalendarWeeks>
-          </CalendarGrid>
-        </DatePickerContent>
-      </DatePicker>
-    </FieldFrame>
+      <div className="qg-range">
+        <DatePickerInput
+          aria-label={messages.rangeFrom(label)}
+          placeholder={range?.min ? fromDayBound(range.min) : messages.from}
+          data-filter={`${field.key}.min`}
+        />
+        <span className="qg-range-dash">–</span>
+        <DatePickerInput
+          end
+          placeholder={range?.max ? fromDayBound(range.max) : messages.to}
+          aria-label={messages.rangeTo(label)}
+          data-filter={`${field.key}.max`}
+        />
+        <DatePickerTrigger
+          aria-label={messages.pickDates(label)}
+          data-filter={`${field.key}.calendar`}
+        />
+      </div>
+      <DatePickerContent>
+        <CalendarPrevious>
+          <ChevronLeftIcon />
+        </CalendarPrevious>
+        <CalendarHeading />
+        <CalendarNext>
+          <ChevronRightIcon />
+        </CalendarNext>
+        <CalendarGrid>
+          <CalendarWeekdays>
+            {(index) => <CalendarWeekday index={index} />}
+          </CalendarWeekdays>
+          <CalendarWeeks>
+            {(cell) => <CalendarDay value={cell.date} />}
+          </CalendarWeeks>
+        </CalendarGrid>
+      </DatePickerContent>
+    </DatePicker>
   );
-}
-
-function fromNumberBound(field: FieldDef, bound: string | null): number | null {
-  if (bound === null) {
-    return null;
-  }
-  return field.type === "money" ? Number(bound) / 100 : Number(bound);
-}
-
-function toNumberBound(field: FieldDef, value: number | null): string | null {
-  if (value === null) {
-    return null;
-  }
-  return String(Math.round(field.type === "money" ? value * 100 : value));
 }
 
 function NumberRange(props: FieldFilterProps) {
@@ -452,81 +396,95 @@ function NumberRange(props: FieldFilterProps) {
       : undefined;
   const label = { label: field.label };
   return (
-    <FieldFrame
-      name={field.key}
-      kind="range"
-      label={field.label}
-      disabled={disabled}
-      reason={props.reason}
-      showReason={props.showReason}
-    >
-      <div className="qg-range">
-        <NumberInput
-          value={min}
-          min={0}
-          format={numberFormat}
-          locale={format?.locale}
-          disabled={disabled}
-          onValueChange={(value: number | null) => setMin(value)}
-          onValueCommit={(value: number | null) => apply(value, max)}
-        >
-          <NumberInputGroup>
-            <NumberInputControl
-              className="qg-number-input"
-              aria-label={messages.rangeFrom(label)}
-              placeholder={messages.min}
-              data-filter={`${field.key}.min`}
-            />
-          </NumberInputGroup>
-        </NumberInput>
-        <span className="qg-range-dash">–</span>
-        <NumberInput
-          value={max}
-          min={0}
-          format={numberFormat}
-          locale={format?.locale}
-          disabled={disabled}
-          onValueChange={(value: number | null) => setMax(value)}
-          onValueCommit={(value: number | null) => apply(min, value)}
-        >
-          <NumberInputGroup>
-            <NumberInputControl
-              className="qg-number-input"
-              aria-label={messages.rangeTo(label)}
-              placeholder={messages.max}
-              data-filter={`${field.key}.max`}
-            />
-          </NumberInputGroup>
-        </NumberInput>
-      </div>
-    </FieldFrame>
+    <div className="qg-range">
+      <NumberInput
+        value={min}
+        min={0}
+        format={numberFormat}
+        locale={format?.locale}
+        disabled={disabled}
+        onValueChange={(value: number | null) => setMin(value)}
+        onValueCommit={(value: number | null) => apply(value, max)}
+      >
+        <NumberInputGroup>
+          <NumberInputControl
+            className="qg-number-input"
+            aria-label={messages.rangeFrom(label)}
+            placeholder={messages.min}
+            data-filter={`${field.key}.min`}
+          />
+        </NumberInputGroup>
+      </NumberInput>
+      <span className="qg-range-dash">–</span>
+      <NumberInput
+        value={max}
+        min={0}
+        format={numberFormat}
+        locale={format?.locale}
+        disabled={disabled}
+        onValueChange={(value: number | null) => setMax(value)}
+        onValueCommit={(value: number | null) => apply(min, value)}
+      >
+        <NumberInputGroup>
+          <NumberInputControl
+            className="qg-number-input"
+            aria-label={messages.rangeTo(label)}
+            placeholder={messages.max}
+            data-filter={`${field.key}.max`}
+          />
+        </NumberInputGroup>
+      </NumberInput>
+    </div>
   );
 }
 
-function LookupFilter(props: FieldFilterProps) {
-  const { loadOptions } = props;
+function LookupFilter(props: LookupProps) {
+  if (props.multiple) {
+    return <LookupMultiple {...props} />;
+  }
+  return <LookupSingle {...props} />;
+}
+
+function RangeFilter(props: FieldFilterProps) {
+  if (props.field.type === "datetime") {
+    return <DateRange {...props} />;
+  }
+  return <NumberRange {...props} />;
+}
+
+function FieldControl(props: FieldFilterProps) {
+  const { field, loadOptions } = props;
+  if (!field.operators.includes("eq")) {
+    return <RangeFilter {...props} />;
+  }
+  if (field.options) {
+    return <EqualsSelect {...props} />;
+  }
   if (!loadOptions) {
     return null;
   }
-  if (props.multiple) {
-    return <LookupMultiple {...props} loadOptions={loadOptions} />;
-  }
-  return <LookupSingle {...props} loadOptions={loadOptions} />;
+  return <LookupFilter {...props} loadOptions={loadOptions} />;
 }
 
 export function FieldFilter(props: FieldFilterProps) {
   const { field } = props;
-  if (field.operators.includes("eq") && field.options) {
-    return <EqualsFilter {...props} />;
+  const equality = field.operators.includes("eq");
+  if (!equality && !field.operators.includes("range")) {
+    return null;
   }
-  if (field.operators.includes("eq")) {
-    return <LookupFilter {...props} />;
+  if (equality && !field.options && !props.loadOptions) {
+    return null;
   }
-  if (field.operators.includes("range") && field.type === "datetime") {
-    return <DateRange {...props} />;
-  }
-  if (field.operators.includes("range")) {
-    return <NumberRange {...props} />;
-  }
-  return null;
+  return (
+    <FieldFrame
+      name={field.key}
+      kind={equality ? "equals" : "range"}
+      label={field.label}
+      disabled={props.disabled}
+      reason={props.reason}
+      showReason={props.showReason}
+    >
+      <FieldControl {...props} />
+    </FieldFrame>
+  );
 }
