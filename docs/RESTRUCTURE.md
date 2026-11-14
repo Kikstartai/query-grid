@@ -237,7 +237,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 - nuqs supports the dynamic keys: the parser map is a plain object built once per def from core's new `listQueryKeys(def)`. An `f.<field>` key is `parseAsNativeArrayOf(parseAsString)`, so several values repeat the parameter; the rest are `parseAsString`.
 - The values nuqs reports are turned back into a search string and decoded with core's `decodeQuery`; a state is written by encoding it with core's `encodeQuery` and splitting it by key. No second codec exists.
 - Core's store gained `replace(query, view?)`, `normalizeQuery(def, capabilities, query)` and `getHistoryWrite()`. `replace` and store creation both normalize: a query nothing answers, or with an invalid value, becomes the default.
-- `dispatch` applies the action in the store at once and the provider writes the result through nuqs; when nuqs reports anything else, the store follows it. The store never disagrees with the URL for longer than one render.
+- `dispatch` applies the action in the store at once and the provider writes the result through nuqs; when nuqs reports anything else, the store follows it. A report that only echoes one of the provider's own writes from the last second is skipped, so two quick changes do not bounce the store back to the first.
 - A filter, range, sort, view or reset pushes. `setQuick` and `clearQuick` replace, throttled to 250 ms. The quick filter still applies on Enter, so "typing" is each applied term; live search per keystroke was not built, because each term is a trigram query under a 120 ms budget.
 - A URL nothing answers is rewritten in place to the default; a parameter the def does not own is left alone.
 - `syncUrl={false}` renders a provider that calls no nuqs hook and needs no adapter; it starts from `search` and follows it. Under nuqs the `search` prop is unused.
@@ -250,7 +250,8 @@ This is library code with nothing that grows with a tenant count. Each request i
 - The counter backfill is three transactions: install the triggers in logging mode; backfill from one `REPEATABLE READ` snapshot and delete the logged changes that snapshot can see; fold the rest and switch to direct mode. `SHARE ROW EXCLUSIVE` is held for the trigger swap and the fold only.
 - It is a snapshot backfill, not a batched one. Batches cannot be exact without a watermark that every write reads for the life of the table.
 - `shortenIdentifier` keeps a name within 63 characters with an FNV-1a hash suffix. It covers index names and the counter's function, trigger and pending-table names.
-- `listTableMigrations(defs)` gives one migration per table and writes a shared index once; `validateGridDefs(defs)` validates them together; `listGridMigrationSteps(def)` gives the steps to send one at a time.
+- `listTableMigrations(defs)` gives one migration per table and writes a shared index once; `validateGridDefs(defs)` validates them together, including an index or a counter table declared with two definitions; `listGridMigrationSteps(def)` gives the steps to send one at a time.
+- A run interrupted between the first and the third counter step leaves the counters frozen and the pending table in place; re-running the steps repairs it, and the demo's DB test fails while the pending table exists.
 - `PgIndexRow.valid` lets `listMissingIndexes` treat an invalid index as missing.
 - The demo writes `db/migrations/0002_query_grid_<table>.sql` and applies the steps one at a time.
 - The index count stays the cost of principle 1; the README says so under "Cost at scale".

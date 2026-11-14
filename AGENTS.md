@@ -52,7 +52,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 - Never read a mutable UI SDK object (`virtual.size()`, `virtual.items()`, `handle.state`) directly in render. Read it through `useSyncExternalStore` or a part's `state` / `children` function: the React Compiler caches the read on the stable object.
 - Grid cells render as plain elements under a row part, never one `usePart` per cell.
 - UI SDK components take their look from `@ui-sdk/core/web.css` and its `--ui-*` tokens; the app imports it once, before the package's CSS. `packages/query-grid-react/src/styles.css` styles only the package's own elements (`qg-` classes), reads the same `--ui-*` tokens, defines none of its own, keeps every selector inside `:where()` and uses logical properties only. Never restyle the look of a UI SDK component there. Layout the grid cannot work without stays inline, on `insetInlineStart` and never `left`.
-- Text a component renders goes inside `<bdi>`, so it keeps its own order in a right-to-left page.
+- A message, a count or a formatted value a component renders goes inside `<bdi>`, so it keeps its own order in a right-to-left page.
 - Relative imports carry their `.ts` / `.tsx` extension; the build rewrites them.
 
 ## House style

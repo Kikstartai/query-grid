@@ -79,7 +79,7 @@ describe("generated schema", () => {
     expect(missing.map((index) => index.name)).toEqual([]);
   });
 
-  test("the counter table has its columns and the table its three triggers", async () => {
+  test("the counter table has its columns, the table its three triggers, and no backfill is left half done", async () => {
     const counter = listCounterObjects(ORDERS_GRID)!;
     const columns = await client.query<{ column_name: string }>(
       "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1",
@@ -95,6 +95,11 @@ describe("generated schema", () => {
     expect(triggers.rows.map((row) => row.tgname).sort()).toEqual(
       [...counter.triggers].sort(),
     );
+    const pending = await client.query(
+      "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = $1",
+      [counter.pending],
+    );
+    expect(pending.rows).toEqual([]);
   });
 });
 

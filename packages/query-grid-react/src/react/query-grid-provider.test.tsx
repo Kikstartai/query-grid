@@ -94,12 +94,10 @@ describe("the URL parsers", () => {
     });
     const search = toSearch(DEF, values);
     const core = encodeQuery(DEF, state.query);
-    core.set("view", "list");
-    expect(new URLSearchParams(search).toString()).toBe(
-      new URLSearchParams(
-        [...core].sort(([a], [b]) => search.indexOf(a) - search.indexOf(b)),
-      ).toString(),
-    );
+    for (const [name, value] of core) {
+      expect(new URLSearchParams(search).getAll(name)).toContain(value);
+    }
+    expect([...new URLSearchParams(search)]).toHaveLength([...core].length + 1);
     expect(readUrlState(DEF, source.capabilities, search)).toEqual(state);
   });
 });

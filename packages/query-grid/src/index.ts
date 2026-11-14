@@ -76,7 +76,7 @@ export {
   decodeQuery,
   encodeQuery,
   listQueryKeys,
-  type QueryKeys,
+  type QueryKey,
 } from "./model/query-url.ts";
 export {
   isValidFieldValue,

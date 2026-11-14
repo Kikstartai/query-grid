@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# The scripted agent-browser pass behind the README's verification record.
-# Usage: BASE=http://localhost:3040 bash apps/demo/browser/verify.sh [section...]
 cd "$(dirname "$0")" && . ./lib.sh
 
 run_refusals() {

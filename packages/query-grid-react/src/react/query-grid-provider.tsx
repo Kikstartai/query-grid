@@ -65,6 +65,7 @@ import { createColumnStore, type ColumnStore } from "./column-store.ts";
 import {
   buildUrlParsers,
   encodeStore,
+  encodeUrlState,
   readStoreState,
   readUrlState,
   toSearch,
@@ -75,6 +76,7 @@ import {
 
 const DEFAULT_PAGE_SIZE = 500;
 const REPLACE_THROTTLE_MS = 250;
+const PENDING_WRITE_MS = 1000;
 
 export interface QueryGridContextValue {
   def: ClientGridDef;
@@ -169,13 +171,16 @@ function createFromSearch(
   );
 }
 
-function followSearch(store: QueryStore, search: string): UrlState {
+interface PendingWrite {
+  search: string;
+  at: number;
+}
+
+function followSearch(store: QueryStore, search: string): void {
   const next = readUrlState(store.def, store.getRules().capabilities, search);
-  const target = toSearch(store.def, toUrlValues(store.def, next));
-  if (target !== encodeStore(store)) {
+  if (encodeUrlState(store.def, next) !== encodeStore(store)) {
     store.replace(next.query, next.view);
   }
-  return next;
 }
 
 function UrlQueryGridProvider(props: QueryGridProviderProps) {
@@ -183,6 +188,7 @@ function UrlQueryGridProvider(props: QueryGridProviderProps) {
   const [values, setValues] = useQueryStates(parsers);
   const search = toSearch(props.def, values as UrlValues);
   const [value] = useState(() => createFromSearch(props, search));
+  const pendingRef = useRef<PendingWrite[]>([]);
   const writtenRef = useRef(search);
 
   useEffect(() => {
@@ -194,6 +200,7 @@ function UrlQueryGridProvider(props: QueryGridProviderProps) {
         return;
       }
       writtenRef.current = target;
+      pendingRef.current.push({ search: target, at: Date.now() });
       const push = store.getHistoryWrite() === "push";
       void setValues(
         toUrlValues(store.def, readStoreState(store)),
@@ -209,15 +216,21 @@ function UrlQueryGridProvider(props: QueryGridProviderProps) {
 
   useEffect(() => {
     const { store } = value;
-    writtenRef.current = toSearch(
-      store.def,
-      toUrlValues(
-        store.def,
-        readUrlState(store.def, store.getRules().capabilities, search),
-      ),
+    const fresh = pendingRef.current.filter(
+      (write) => Date.now() - write.at < PENDING_WRITE_MS,
     );
-    const next = followSearch(store, search);
-    if (writtenRef.current !== search) {
+    const echoed = fresh.findIndex((write) => write.search === search);
+    pendingRef.current = echoed < 0 ? [] : fresh.slice(echoed + 1);
+    if (echoed >= 0) {
+      return;
+    }
+    const next = readUrlState(store.def, store.getRules().capabilities, search);
+    const target = encodeUrlState(store.def, next);
+    writtenRef.current = target;
+    if (target !== encodeStore(store)) {
+      store.replace(next.query, next.view);
+    }
+    if (target !== search) {
       void setValues(toUrlValues(store.def, next), { history: "replace" });
     }
   }, [value, search, setValues]);

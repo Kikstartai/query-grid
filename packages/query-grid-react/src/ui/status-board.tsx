@@ -72,7 +72,7 @@ function createBoardData(
   };
 }
 
-function listLaneQueries(
+function getLaneQueries(
   def: GridDef,
   query: QueryState,
   capabilities: Capabilities,
@@ -201,7 +201,7 @@ export function StatusBoard(props: StatusBoardProps) {
   const messages = useMessages();
   const query = useQueryState();
   const transitions = useTransitions(source);
-  const queries = listLaneQueries(def, query, source.capabilities);
+  const queries = getLaneQueries(def, query, source.capabilities);
   if (!queries) {
     return (
       <p className="qg-notice" data-board-state="unavailable">

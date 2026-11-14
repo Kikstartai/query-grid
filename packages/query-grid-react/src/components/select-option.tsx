@@ -6,11 +6,22 @@ interface SelectOptionProps {
   value: string;
   label: string;
   disabled?: boolean;
+  reason?: string | null;
 }
 
-export function SelectOption({ value, label, disabled }: SelectOptionProps) {
+export function SelectOption({
+  value,
+  label,
+  disabled,
+  reason,
+}: SelectOptionProps) {
   return (
-    <SelectItem value={value} disabled={disabled} data-option={value}>
+    <SelectItem
+      value={value}
+      disabled={disabled}
+      title={reason ?? undefined}
+      data-option={value}
+    >
       {label}
       <SelectItemIndicator />
     </SelectItem>

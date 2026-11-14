@@ -13,25 +13,25 @@ const SORT_PARAM = "sort";
 const CURSOR_PARAM = "cursor";
 const RANGE_SEPARATOR = "..";
 
-export interface QueryKeys {
-  repeated: string[];
-  single: string[];
+export interface QueryKey {
+  name: string;
+  repeated: boolean;
 }
 
-export function listQueryKeys(def: GridDef): QueryKeys {
+export function listQueryKeys(def: GridDef): QueryKey[] {
   const keysFor = (operator: "eq" | "range", prefix: string) =>
     def.fields
       .filter((field) => field.operators.includes(operator))
       .map((field) => `${prefix}${field.key}`);
-  return {
-    repeated: keysFor("eq", EQUALS_PREFIX),
-    single: [
+  return [
+    ...keysFor("eq", EQUALS_PREFIX).map((name) => ({ name, repeated: true })),
+    ...[
       ...keysFor("range", RANGE_PREFIX),
       QUICK_PARAM,
       SORT_PARAM,
       CURSOR_PARAM,
-    ],
-  };
+    ].map((name) => ({ name, repeated: false })),
+  ];
 }
 
 export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {

@@ -45,10 +45,10 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
     const body = (await response
       .json()
       .catch(() => null)) as Partial<ErrorBody> | null;
-    throw new SourceError(
-      body?.code ?? "request_failed",
-      body?.params ?? { status: response.status },
-    );
+    if (!body?.code) {
+      throw new SourceError("request_failed", { status: response.status });
+    }
+    throw new SourceError(body.code, body.params ?? {});
   }
   return (await response.json()) as T;
 }

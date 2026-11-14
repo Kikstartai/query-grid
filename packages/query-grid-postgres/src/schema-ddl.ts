@@ -314,6 +314,21 @@ export function validateGridDefs(defs: ServerGridDef[]): string[] {
       seen.set(index.name, index.ddl);
     }
   }
+  const counters = new Map<string, string>();
+  for (const def of defs) {
+    const [install] = counterSteps(def);
+    const table = def.facet?.counterTable;
+    if (!install || table === undefined) {
+      continue;
+    }
+    const existing = counters.get(table);
+    if (existing !== undefined && existing !== install.sql) {
+      problems.push(
+        `${def.id}: counter table ${table} is declared with two definitions`,
+      );
+    }
+    counters.set(table, install.sql);
+  }
   const ids = defs.map((def) => def.id);
   for (const id of new Set(ids)) {
     if (ids.filter((other) => other === id).length > 1) {

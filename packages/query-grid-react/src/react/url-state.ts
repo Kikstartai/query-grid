@@ -9,11 +9,12 @@ import {
   type Capabilities,
   type GridDef,
   type GridView,
+  type QueryKey,
   type QueryState,
   type QueryStore,
 } from "@kikstart/query-grid";
 
-export const VIEW_PARAM = "view";
+const VIEW_KEY: QueryKey = { name: "view", repeated: false };
 
 export type UrlValues = Record<string, string | string[] | null>;
 
@@ -22,24 +23,24 @@ export interface UrlState {
   view: GridView;
 }
 
+function listUrlKeys(def: GridDef): QueryKey[] {
+  return [...listQueryKeys(def), VIEW_KEY];
+}
+
 export function buildUrlParsers(def: GridDef) {
-  const keys = listQueryKeys(def);
-  return {
-    ...Object.fromEntries(
-      keys.repeated.map((key) => [key, parseAsNativeArrayOf(parseAsString)]),
-    ),
-    ...Object.fromEntries(
-      [...keys.single, VIEW_PARAM].map((key) => [key, parseAsString]),
-    ),
-  };
+  return Object.fromEntries(
+    listUrlKeys(def).map((key) => [
+      key.name,
+      key.repeated ? parseAsNativeArrayOf(parseAsString) : parseAsString,
+    ]),
+  );
 }
 
 export function toSearch(def: GridDef, values: UrlValues): string {
-  const keys = listQueryKeys(def);
   const params = new URLSearchParams();
-  for (const key of [...keys.repeated, ...keys.single, VIEW_PARAM]) {
-    for (const item of [values[key] ?? []].flat()) {
-      params.append(key, item);
+  for (const key of listUrlKeys(def)) {
+    for (const item of [values[key.name] ?? []].flat()) {
+      params.append(key.name, item);
     }
   }
   return params.toString();
@@ -53,29 +54,26 @@ export function readUrlState(
   const params = new URLSearchParams(search);
   return {
     query: normalizeQuery(def, capabilities, decodeQuery(def, params)),
-    view: GRID_VIEWS.find((view) => view === params.get(VIEW_PARAM)) ?? "grid",
+    view:
+      GRID_VIEWS.find((view) => view === params.get(VIEW_KEY.name)) ?? "grid",
   };
-}
-
-export function encodeUrlState(def: GridDef, state: UrlState): URLSearchParams {
-  const params = encodeQuery(def, state.query);
-  if (state.view !== "grid") {
-    params.set(VIEW_PARAM, state.view);
-  }
-  return params;
 }
 
 export function toUrlValues(def: GridDef, state: UrlState): UrlValues {
-  const keys = listQueryKeys(def);
-  const params = encodeUrlState(def, state);
-  return {
-    ...Object.fromEntries(
-      keys.repeated.map((key) => [key, params.getAll(key)]),
-    ),
-    ...Object.fromEntries(
-      [...keys.single, VIEW_PARAM].map((key) => [key, params.get(key)]),
-    ),
-  };
+  const params = encodeQuery(def, state.query);
+  if (state.view !== "grid") {
+    params.set(VIEW_KEY.name, state.view);
+  }
+  return Object.fromEntries(
+    listUrlKeys(def).map((key) => [
+      key.name,
+      key.repeated ? params.getAll(key.name) : params.get(key.name),
+    ]),
+  );
+}
+
+export function encodeUrlState(def: GridDef, state: UrlState): string {
+  return toSearch(def, toUrlValues(def, state));
 }
 
 export function readStoreState(store: QueryStore): UrlState {
@@ -83,5 +81,5 @@ export function readStoreState(store: QueryStore): UrlState {
 }
 
 export function encodeStore(store: QueryStore): string {
-  return toSearch(store.def, toUrlValues(store.def, readStoreState(store)));
+  return encodeUrlState(store.def, readStoreState(store));
 }

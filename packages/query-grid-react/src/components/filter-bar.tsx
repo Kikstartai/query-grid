@@ -66,6 +66,7 @@ export function SortControl({
               value={item.value}
               label={item.label}
               disabled={item.disabled}
+              reason={item.reason}
             />
           ))}
         </SelectContent>

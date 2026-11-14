@@ -30,20 +30,25 @@ export function useColumnState(options: ColumnStateOptions): ColumnStateModel {
   const persistence = options.columnPersistence ?? null;
   const controlled = options.columns !== undefined;
   const [own, setOwn] = useState(() => defaultColumns(fields));
-  const columns = options.columns ?? own;
-  const columnsRef = useRef(columns);
+  const columns =
+    normalizeColumns(fields, options.columns ?? own) ?? defaultColumns(fields);
+  const latestRef = useRef({ columns, fields, persistence });
   useLayoutEffect(() => {
-    columnsRef.current = columns;
+    latestRef.current = { columns, fields, persistence };
   });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (controlled || !persistence) {
+    const source = latestRef.current.persistence;
+    if (controlled || !source) {
       return;
     }
     let live = true;
     const restore = async () => {
-      const stored = normalizeColumns(fields, await persistence.load());
+      const stored = normalizeColumns(
+        latestRef.current.fields,
+        await source.load(),
+      );
       if (live && stored) {
         setOwn(stored);
       }
@@ -52,11 +57,11 @@ export function useColumnState(options: ColumnStateOptions): ColumnStateModel {
     return () => {
       live = false;
     };
-  }, [controlled, persistence, fields]);
+  }, [controlled]);
 
   const update = (change: ColumnUpdate) => {
-    const next = change(columnsRef.current);
-    columnsRef.current = next;
+    const next = change(latestRef.current.columns);
+    latestRef.current = { ...latestRef.current, columns: next };
     onColumnsChange?.(next);
     if (controlled) {
       return;

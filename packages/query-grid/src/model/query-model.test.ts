@@ -312,10 +312,20 @@ describe("the URL", () => {
   });
 
   test("the keys a def can put in the URL are known up front", () => {
-    expect(listQueryKeys(TEST_DEF)).toEqual({
-      repeated: ["f.status", "f.region"],
-      single: ["r.created_at", "r.total", "q", "sort", "cursor"],
-    });
+    const keys = listQueryKeys(TEST_DEF);
+    expect(keys.map((key) => key.name)).toEqual([
+      "f.status",
+      "f.region",
+      "r.created_at",
+      "r.total",
+      "q",
+      "sort",
+      "cursor",
+    ]);
+    expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual([
+      "f.status",
+      "f.region",
+    ]);
   });
 
   test("the quick filter and the default sort", () => {

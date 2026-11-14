@@ -485,6 +485,14 @@ describe("generated DDL", () => {
       "things: the id is used by more than one def",
     ]);
     expect(
+      validateGridDefs([
+        TEST_DEF,
+        { ...TEST_DEF, id: "things-untotalled", total: undefined },
+      ]),
+    ).toEqual([
+      "things-untotalled: counter table thing_status_counts is declared with two definitions",
+    ]);
+    expect(
       validateGridDefs([{ ...other, shapes: [{ equals: [], sort: "total" }] }]),
     ).toEqual([
       "things-by-region: the default sort with no filter is not a declared shape",

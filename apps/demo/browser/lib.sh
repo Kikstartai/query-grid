@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Shared helpers for the scripted agent-browser pass. Source it; it expects BASE and SID.
-
 BASE="${BASE:-http://localhost:3040}"
 SID="${SID:-$(agent-browser session id --scope worktree --prefix qg)}"
 
@@ -18,7 +16,6 @@ center() {
   js "(() => { const b = document.querySelector('$1').getBoundingClientRect(); return Math.round(b.left + b.width / 2) + ' ' + Math.round(b.top + b.height / 2); })()" | tr -d '"'
 }
 
-# dragby <selector> <dx> <dy> [hold]: press on the element, move in four steps, release unless hold is set
 dragby() {
   local c; c=($(center "$1")); local x=${c[0]} y=${c[1]}
   ab mouse move "$x" "$y" >/dev/null
@@ -30,7 +27,6 @@ dragby() {
   settle 0.5
 }
 
-# dragto <from selector> <to selector> [hold]
 dragto() {
   local a b; a=($(center "$1")); b=($(center "$2"))
   ab mouse move "${a[0]}" "${a[1]}" >/dev/null
@@ -54,7 +50,6 @@ width() { js "Math.round(document.querySelector('[data-header=$1]').getBoundingC
 headers() { js "[...document.querySelectorAll('[data-header]')].map((e) => e.dataset.header).slice(0, ${1:-8}).join(',')"; }
 errors() { ab errors 2>&1 | grep -v '^✗ *$' | head -20; }
 
-# pick <field> <option...>: open a filter-bar select and choose options; a multi-select stays open, so close it
 pick() {
   local field="$1"; shift
   click "[data-part=filter-bar] [data-filter=\"$field\"]"

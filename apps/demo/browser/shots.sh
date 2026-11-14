@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Retakes every screenshot in docs/screenshots at 1500 by 900.
-# Usage: BASE=http://localhost:3040 bash apps/demo/browser/shots.sh
 cd "$(dirname "$0")" && . ./lib.sh
 OUT="$(cd ../../../docs/screenshots && pwd)"
 
