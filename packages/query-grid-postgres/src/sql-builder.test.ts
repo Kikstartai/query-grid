@@ -209,6 +209,18 @@ describe("buildPageSql", () => {
     expect(() =>
       buildPageSql(TEST_DEF, { ...BASE, cursor: "garbage" }, 10),
     ).toThrow(QueryRejected);
+    for (const forged of [
+      encodeCursor({ sortValue: "not a date", id: ID }),
+      encodeCursor({ sortValue: "2026-01-01T00:00:00Z", id: "not-a-uuid" }),
+    ]) {
+      let refusal: unknown = null;
+      try {
+        buildPageSql(TEST_DEF, { ...BASE, cursor: forged }, 10);
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal).toMatchObject({ error: "invalid_cursor" });
+    }
   });
 });
 

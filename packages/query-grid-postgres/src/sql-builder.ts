@@ -1,6 +1,7 @@
 import {
   formatProblem,
   getField,
+  isValidFieldValue,
   KEY_FIELD,
   validateQueryValues,
   type FieldDef,
@@ -226,7 +227,11 @@ export function buildPageSql(
   const direction = query.sort.direction === "asc" ? "ASC" : "DESC";
   if (query.cursor) {
     const cursor = decodeCursor(query.cursor);
-    if (!cursor) {
+    const usable =
+      cursor !== null &&
+      isValidFieldValue(def, sortField.key, cursor.sortValue) &&
+      isValidFieldValue(def, keyField.key, cursor.id);
+    if (!cursor || !usable) {
       throw new QueryRejected("invalid_cursor");
     }
     const comparator = query.sort.direction === "asc" ? ">" : "<";

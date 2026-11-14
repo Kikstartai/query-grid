@@ -274,6 +274,14 @@ describe("refusals", () => {
     expect(seen).toEqual([]);
   });
 
+  test("a field named like an object internal is a 400, not a crash", async () => {
+    const { handle, seen } = createHandler([]);
+    const response = await handle("?f.__proto__=x");
+    expect(response.status).toBe(400);
+    expect((await readError(response)).error).toBe("undeclared_shape");
+    expect(seen).toEqual([]);
+  });
+
   test("a bad value is a 400 that names the field in params", async () => {
     const { handle } = createHandler([]);
     const response = await handle("?f.status=nope");

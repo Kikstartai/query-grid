@@ -328,6 +328,19 @@ describe("the URL", () => {
     ]);
   });
 
+  test("a field named like an object internal is just an unknown field", () => {
+    const decoded = decodeQuery(
+      TEST_DEF,
+      new URLSearchParams("f.__proto__=x&f.constructor=y"),
+    );
+    expect(Object.keys(decoded.equals)).toEqual(["__proto__", "constructor"]);
+    expect(validateQueryValues(TEST_DEF, decoded)).toEqual({
+      code: "unknown_field",
+      params: { field: "__proto__" },
+    });
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
+
   test("the quick filter and the default sort", () => {
     const query = { ...BASE, quick: "smi th" };
     const params = encodeQuery(TEST_DEF, query);

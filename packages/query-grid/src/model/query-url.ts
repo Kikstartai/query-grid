@@ -76,20 +76,20 @@ function decodeSort(def: GridDef, raw: string | null): QueryState["sort"] {
 }
 
 export function decodeQuery(def: GridDef, params: URLSearchParams): QueryState {
-  const equals: Record<string, string[]> = {};
+  const equals = new Map<string, string[]>();
   let range: RangeState | null = null;
   for (const [name, value] of params) {
     if (name.startsWith(EQUALS_PREFIX)) {
       const field = name.slice(EQUALS_PREFIX.length);
-      const values = equals[field] ?? [];
-      equals[field] = values.includes(value) ? values : [...values, value];
+      const values = equals.get(field) ?? [];
+      equals.set(field, values.includes(value) ? values : [...values, value]);
     }
     if (name.startsWith(RANGE_PREFIX)) {
       range = decodeRange(name.slice(RANGE_PREFIX.length), value);
     }
   }
   return {
-    equals,
+    equals: Object.fromEntries(equals),
     range,
     quick: params.get(QUICK_PARAM),
     sort: decodeSort(def, params.get(SORT_PARAM)),
