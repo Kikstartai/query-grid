@@ -1,0 +1,51 @@
+# @kikstart/query-grid-postgres
+
+The Postgres server half of [query-grid](https://github.com/Kikstartai/query-grid): a filter and data grid for very large tables that only offers the filter and sort combinations an index answers, and refuses the rest here.
+
+```bash
+npm install @kikstart/query-grid @kikstart/query-grid-postgres
+```
+
+It depends on `@kikstart/query-grid` for the query contract and on nothing else: no React, and no `pg`. You pass it one function that runs SQL.
+
+```ts
+import {
+  createGridHandler,
+  generateGridMigration,
+  type ServerGridDef,
+  type SqlExecutor,
+} from "@kikstart/query-grid-postgres";
+
+const ORDERS: ServerGridDef = {
+  ...ORDERS_BASE,
+  table: "orders",
+  shapes: [
+    { equals: [], sort: "created_at", range: true },
+    { equals: ["status_code"], sort: "created_at", range: true },
+    { quick: ["customer_name", "order_number"] },
+  ],
+  facet: { field: "status_code", counterTable: "order_status_counts" },
+};
+
+const execute: SqlExecutor = async (sql) =>
+  (await pool.query(sql.text, sql.values)).rows;
+
+const handle = createGridHandler({
+  def: ORDERS,
+  execute,
+  basePath: "/api/orders",
+});
+
+export const GET = (request: Request) => handle(request);
+export const POST = (request: Request) => handle(request);
+```
+
+- **`createGridHandler({ def, execute, basePath?, options?, moves?, onError? })`** turns a fetch-standard `Request` into a `Response`. It answers the page, `/count`, `/total` and `/facets` itself, and `/options`, `/transitions` and `POST /status` through the `options` and `moves` hooks; an omitted hook is a 404. A refusal is a 400, a refused transition a 409, anything else a 500. Error bodies are `{ error, message, code, params }`: codes, never sentences.
+- **Shapes.** A shape is one index: a set of equality fields, a sort, optionally a range on the sort, or the quick-filter columns. `validateGridDef` checks a def, `matchShape` decides whether a query is declared, and `generateGridMigration` writes one index per shape plus the counter table and its triggers. `listMissingIndexes` compares the def with `pg_indexes`.
+- **`capabilities(shapes, { facetField })`**, also at `@kikstart/query-grid-postgres/capabilities` for the browser, tells the client what the server accepts, from the same shapes.
+- **Several values of one field** are one array parameter under `= ANY`, capped per field by `maxValues`. A shape opts out with `multi: false`.
+- **The runner** (`listGridPage`, `getGridCount`, `getGridTotal`, `listFacetCounts`, `walkGridPages`) and the SQL builder are exported for a host that wants its own routes.
+
+The full documentation, the design, the benchmarks and the verification record are in the [repository README](https://github.com/Kikstartai/query-grid#readme). The three packages, `@kikstart/query-grid`, `@kikstart/query-grid-react` and `@kikstart/query-grid-postgres`, are released together at the same version.
+
+MIT licensed.

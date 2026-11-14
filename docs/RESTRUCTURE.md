@@ -139,3 +139,82 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 
 ## Scale
 This is library code with nothing that grows with a tenant count. Each request is one query against a declared shape's index. The benchmark proves 72 of 72 shapes on 620k rows. Capabilities are computed once per def.
+
+## As built: calls the spec left open
+
+### Names and types
+- Core's field type is `FieldDef`; `-react` adds `ClientFieldDef` (with `cell`) and `ClientGridDef`. Core's `GridDef` is generic over its field type, so one def shape serves both.
+- The server def is `ServerGridDef extends GridDef`: it adds `table`, `shapes` and `facet.counterTable`, and keeps `id`.
+- `QueryMode` is `"server" | "memory"`; the old `"indexed"` is gone.
+- `QueryRules` is `{ capabilities, quickComplete }`. `applyAction`, `listOffers`, `listControlActions` and `enumerateReachableStates` take it as a required argument; `explainUnavailable(query, target, rules)` no longer takes a def.
+- `DataSource.mode` is replaced by `DataSource.capabilities`. The provider takes `capabilities` for the HTTP source and throws if it has neither a source nor capabilities.
+
+### Capabilities
+- `capabilities(shapes, { facetField })` takes the facet field as an option, because `isFacetCountShown` needs it and shapes do not name it.
+- It is exported from the `-postgres` root and alone from `@kikstart/query-grid-postgres/capabilities`, which a browser bundle imports without the SQL builder.
+- `memoryCapabilities(def, quickFields)` is exported from `@kikstart/query-grid/memory`; `createMemorySource` takes the quick fields as `options.quick`.
+
+### Wire
+- The result types live in core's root, because `DataSource` names them, and are re-exported from `./http` beside `SUB_ROUTES`, `LIMIT_PARAM`, `EXACT_PARAM`, `ErrorBody` and `MoveBody`.
+- An error body is `{ error, message, code, params }`. `error` is the category it always was (`undeclared_shape`, `invalid_value`, `invalid_cursor`, `invalid_limit`, `too_broad`, `transition_refused`, `not_found`, `method_not_allowed`, `internal`). `code` is the specific reason (`unknown_field`, `too_many_values`, `quick_length`, a host's own). `message` is the code followed by its params as `key=value`, for logs.
+- `TotalUnavailable` is `{ available: false, code, params }` with `no_total` or `over_cap` and the cap.
+- `formatCount` stays in core; `-postgres` does not call it, because the cap now travels as a number in `params` and the client formats it.
+- The client throws `SourceError` (`code`, `params`); a failed request with no body is `request_failed`.
+
+### createGridHandler
+- `basePath` is optional. With it, routing is exact and an unknown path is a 404. Without it, the last path segment picks the route.
+- A wrong method is a 405. `onError` receives anything that becomes a 500; it defaults to `console.error`.
+- `limit` must be one to nine digits and at least 1, or it is a 400 `invalid_limit`. A missing `limit` is 200 rows; a large one is capped at 1,000.
+- `POST /status` validates `id` against the key field and `to` against the facet field before the hook runs.
+
+### Several values per field
+- Actions: `setEquals { field, values }`, `removeEqualsValue { field, value }`, `clearEquals`. An empty list clears the field; duplicates are dropped.
+- The URL repeats the parameter per value.
+- `Offers.multi` lists the fields that take a second value now.
+- One value keeps `= $n`, so the single-value plans are unchanged; two or more use `= ANY($n::type[])`. `SqlQuery.values` is `(string | string[])[]`.
+- The cap is enforced in `validateQueryValues`, in `applyAction`, and by the server.
+- The board shows one lane per selected facet value.
+
+### Components
+- The base `DataGrid` takes a row window (`rows`, `hasNext`, `onEndReached`, `loading`, optional `error`, `pages`, `capped`), `resetKey` to clear the selection and scroll to the top, a header `filters` map of field key to node, and `sort` with `onSortChange`.
+- `StatusBoard.onMove` is `(id, to, { from, index })`. A rejected promise puts the card back.
+- `FilterBar` and `FilterSidebar` are containers that take children; the bound ones fill them.
+- Column state in the base grid is a hook over `useState` with optional persistence. Under the provider it is `createColumnStore`, which lives in `-react` beside the provider.
+- `useFilterChips()` returns each chip as data plus its labelled item.
+
+### Messages and direction
+- `QueryGridMessages` is one flat object with four nested maps (`countSources`, `facetNotes`, `reasons`, `reasonParts`) and `errors` keyed by code with `errorFallback`. Numbers in a problem's params are formatted by locale before a message sees them.
+- Text is isolated with `<bdi>`, so English inside a right-to-left page keeps its order.
+- The `/rtl` route sets `dir` on the workspace element. UI SDK renders popups in place, so they inherit it.
+- English that stays, because no user reads it and it never crosses the wire: `validateGridDef` problems, `describeShape`, comments in generated SQL, thrown programming errors, and the UI SDK `keys` note in the grid primitive.
+
+### Tests
+- Base components are mounted with `renderToStaticMarkup`, with no provider.
+- Three `purity.test.ts` files replace the hand-run greps: core imports no React, UI SDK, `pg` or DOM global and has no dependency; `-postgres` imports no React or `pg`, depends on core alone and defines no contract symbol; no base component imports a provider hook or holds an English literal.
+- Core's action tests use a hand-written `Capabilities`. The offers that depend on shapes are tested in `-postgres`, over core's actions and `capabilities(shapes)`.
+- The codec test encodes with core, sends the request through `createGridHandler` and reads the SQL parameters; a second test drives `createHttpSource` against the handler.
+
+### Demo
+- `orders-fields.ts` is the shared React-free module; `orders-server-def.ts` and `orders-grid-def.tsx` build on it. The client def adds a status badge cell.
+- New routes: `/rtl` and `/components`.
+- `apps/demo/browser/verify.sh` and `shots.sh` are the scripted pass and the screenshots.
+
+## Added after rev 2, at Glen's word
+
+### URL history
+- `QueryStore.replace(query, view?)` loads a state without going through an action, and `getHistoryWrite()` says whether the last change wants a new history entry.
+- A filter, range, sort, view or reset pushes; `setQuick`, `clearQuick` and `replace` do not. The quick filter applies on submit, so "typing" is each applied term.
+- The provider listens for `popstate`, and after every commit compares the address bar with the store, so a navigation it did not make is followed without relying on the `search` prop changing. With `syncUrl={false}` only the `search` prop is followed.
+- A URL no shape answers falls back to the default query and is rewritten in place.
+- Column layout stays out of the URL.
+- Not built on nuqs: the codec is core's and shared with the server.
+
+### Migration generator at scale (design note, question 9)
+- Indexes are `CREATE INDEX CONCURRENTLY IF NOT EXISTS`, one statement each, outside any transaction. `{ concurrently: false }` opts out.
+- The counter backfill is three transactions: install the triggers in logging mode; backfill from one `REPEATABLE READ` snapshot and delete the logged changes that snapshot can see; fold the rest and switch to direct mode. `SHARE ROW EXCLUSIVE` is held for the trigger swap and the fold only.
+- It is a snapshot backfill, not a batched one. Batches cannot be exact without a watermark that every write reads for the life of the table.
+- `shortenIdentifier` keeps a name within 63 characters with an FNV-1a hash suffix. It covers index names and the counter's function, trigger and pending-table names.
+- `listTableMigrations(defs)` gives one migration per table and writes a shared index once; `validateGridDefs(defs)` validates them together; `listGridMigrationSteps(def)` gives the steps to send one at a time.
+- `PgIndexRow.valid` lets `listMissingIndexes` treat an invalid index as missing.
+- The demo writes `db/migrations/0002_query_grid_<table>.sql` and applies the steps one at a time.
+- The index count stays the cost of principle 1; the README says so under "Cost at scale".
