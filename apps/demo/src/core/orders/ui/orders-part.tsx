@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { use, type ComponentType } from "react";
 
 import { useQueryState } from "@kikstart/query-grid";
 import {
@@ -20,6 +20,7 @@ import {
   OrdersBoard,
   OrdersCardList,
   OrdersQueryProvider,
+  type OrdersWorkspaceProps,
 } from "./orders-workspace";
 
 type PartName = (typeof PART_NAMES)[number];
@@ -45,18 +46,18 @@ function QueryReadout() {
   );
 }
 
-interface OrdersPartProps {
-  part: string;
-  search: string;
+interface OrdersPartProps extends OrdersWorkspaceProps {
+  params: Promise<{ part: string }>;
 }
 
-export function OrdersPart({ part, search }: OrdersPartProps) {
+export function OrdersPart({ params, searchParams }: OrdersPartProps) {
+  const { part } = use(params);
   const Part = PARTS[part as PartName];
   if (!Part) {
     return <p className="part-missing">Unknown part: {part}</p>;
   }
   return (
-    <OrdersQueryProvider search={search}>
+    <OrdersQueryProvider searchParams={searchParams}>
       <div className="part-page" data-solo-part={part}>
         <SiteBrand />
         <p className="part-intro">

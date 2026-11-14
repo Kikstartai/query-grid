@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 
 import {
   createMemorySource,
@@ -20,6 +20,7 @@ import {
   ViewSwitch,
 } from "@kikstart/query-grid/ui";
 
+import { normalizeSearch, type SearchParams } from "@/lib/read-search";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
@@ -45,7 +46,12 @@ function TasksView() {
   return <DataGrid />;
 }
 
-export function TasksWorkspace({ search }: { search: string }) {
+interface TasksWorkspaceProps {
+  searchParams: SearchParams;
+}
+
+export function TasksWorkspace({ searchParams }: TasksWorkspaceProps) {
+  const search = normalizeSearch(use(searchParams));
   const [source] = useState(() =>
     createMemorySource(TASKS_GRID, listTaskRows(), {
       transitions: TASK_TRANSITIONS,

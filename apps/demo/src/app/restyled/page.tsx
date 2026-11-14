@@ -1,6 +1,8 @@
+import { Suspense } from "react";
+
 import { RestyledWorkspace } from "@/core/orders/ui/restyled-workspace";
+import { PageLoading } from "@/lib/page-loading";
 import type { SearchParams } from "@/lib/read-search";
-import { SearchPage } from "@/lib/search-page";
 
 export default function RestyledPage({
   searchParams,
@@ -8,6 +10,8 @@ export default function RestyledPage({
   searchParams: SearchParams;
 }) {
   return (
-    <SearchPage searchParams={searchParams} workspace={RestyledWorkspace} />
+    <Suspense fallback={<PageLoading />}>
+      <RestyledWorkspace searchParams={searchParams} />
+    </Suspense>
   );
 }

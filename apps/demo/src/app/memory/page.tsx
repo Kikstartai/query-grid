@@ -1,11 +1,17 @@
+import { Suspense } from "react";
+
 import { TasksWorkspace } from "@/core/tasks/tasks-workspace";
+import { PageLoading } from "@/lib/page-loading";
 import type { SearchParams } from "@/lib/read-search";
-import { SearchPage } from "@/lib/search-page";
 
 export default function MemoryPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  return <SearchPage searchParams={searchParams} workspace={TasksWorkspace} />;
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <TasksWorkspace searchParams={searchParams} />
+    </Suspense>
+  );
 }
