@@ -30,9 +30,10 @@ import type { ServerGridDef } from "./storage.ts";
 type Route = "page" | SubRoute;
 
 const LIMIT = /^\d{1,9}$/;
+const CLIENT_CLOSED_REQUEST = 499;
 
 export interface GridMoves {
-  transitions: () => Promise<[string, string][]>;
+  transitions: (signal: AbortSignal) => Promise<[string, string][]>;
   change: (id: string, to: string) => Promise<GridRow>;
 }
 
@@ -40,7 +41,11 @@ export interface GridHandlerConfig {
   def: ServerGridDef;
   execute: SqlExecutor;
   basePath?: string;
-  options?: (field: string, search: OptionSearch) => Promise<FieldOption[]>;
+  options?: (
+    field: string,
+    search: OptionSearch,
+    signal: AbortSignal,
+  ) => Promise<FieldOption[]>;
   moves?: GridMoves;
   onError?: (error: unknown) => void;
 }
@@ -132,6 +137,7 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
 
   const answer = async (route: Route, request: Request): Promise<unknown> => {
     const params = new URL(request.url).searchParams;
+    const { signal } = request;
     switch (route) {
       case "page":
         return listGridPage(
@@ -139,6 +145,7 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           execute,
           decodeQuery(def, params),
           readLimit(params.get(LIMIT_PARAM)),
+          signal,
         );
       case "count":
         return getGridCount(
@@ -146,24 +153,29 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           execute,
           decodeQuery(def, params),
           params.get(EXACT_PARAM) === "1",
+          signal,
         );
       case "total":
-        return getGridTotal(def, execute, decodeQuery(def, params));
+        return getGridTotal(def, execute, decodeQuery(def, params), signal);
       case "facets":
-        return listFacetCounts(def, execute);
+        return listFacetCounts(def, execute, signal);
       case "options":
         if (!config.options) {
           throw new QueryRejected("not_found");
         }
-        return config.options(params.get("field") ?? "", {
-          query: params.get("query") ?? undefined,
-          value: params.get("value") ?? undefined,
-        });
+        return config.options(
+          params.get("field") ?? "",
+          {
+            query: params.get("query") ?? undefined,
+            value: params.get("value") ?? undefined,
+          },
+          signal,
+        );
       case "transitions":
         if (!config.moves) {
           throw new QueryRejected("not_found");
         }
-        return config.moves.transitions();
+        return config.moves.transitions(signal);
       case "status": {
         if (!config.moves) {
           throw new QueryRejected("not_found");
@@ -192,6 +204,9 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
         },
       });
     } catch (error) {
+      if (request.signal.aborted) {
+        return new Response(null, { status: CLIENT_CLOSED_REQUEST });
+      }
       if (error instanceof QueryRejected) {
         return errorResponse(
           resolveStatus(error),

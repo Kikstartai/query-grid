@@ -36,6 +36,7 @@ const WALK_PAGE_SIZE = 1000;
 export type SqlExecutor = <T extends object>(
   sql: SqlQuery,
   settings?: string[],
+  signal?: AbortSignal,
 ) => Promise<T[]>;
 
 function resolveCap(query: QueryState): number {
@@ -47,14 +48,16 @@ async function runFiltered<T extends object>(
   query: QueryState,
   sql: SqlQuery,
   settings?: string[],
+  signal?: AbortSignal,
 ): Promise<T[]> {
   if (query.quick === null) {
-    return execute<T>(sql, settings);
+    return execute<T>(sql, settings, signal);
   }
   try {
-    return await execute<T>(sql, QUICK_SETTINGS);
+    return await execute<T>(sql, QUICK_SETTINGS, signal);
   } catch (error) {
-    if ((error as { code?: string }).code === QUERY_CANCELED) {
+    const canceled = (error as { code?: string }).code === QUERY_CANCELED;
+    if (canceled && !signal?.aborted) {
       throw new QueryRejected("too_broad");
     }
     throw error;
@@ -66,11 +69,14 @@ export async function listGridPage(
   execute: SqlExecutor,
   query: QueryState,
   limit: number,
+  signal?: AbortSignal,
 ): Promise<PageResult> {
   const rows = await runFiltered<GridRow>(
     execute,
     query,
     buildPageSql(def, query, limit),
+    undefined,
+    signal,
   );
   return toPageResult(def, query, rows, limit);
 }
@@ -80,6 +86,7 @@ export async function* walkGridPages(
   execute: SqlExecutor,
   query: QueryState,
   pageSize: number = WALK_PAGE_SIZE,
+  signal?: AbortSignal,
 ): AsyncGenerator<GridRow[]> {
   let cursor: string | null = query.cursor;
   do {
@@ -88,6 +95,7 @@ export async function* walkGridPages(
       execute,
       { ...query, cursor },
       pageSize,
+      signal,
     );
     yield page.rows;
     cursor = page.nextCursor;
@@ -97,17 +105,19 @@ export async function* walkGridPages(
 export async function listFacetCounts(
   def: ServerGridDef,
   execute: SqlExecutor,
+  signal?: AbortSignal,
 ): Promise<FacetCount[]> {
   const sql = buildFacetSql(def);
-  return sql ? execute<FacetCount>(sql) : [];
+  return sql ? execute<FacetCount>(sql, undefined, signal) : [];
 }
 
 async function listSelectedCounters(
   def: ServerGridDef,
   execute: SqlExecutor,
   query: QueryState,
+  signal?: AbortSignal,
 ): Promise<FacetCount[]> {
-  const counts = await listFacetCounts(def, execute);
+  const counts = await listFacetCounts(def, execute, signal);
   const selected = def.facet ? query.equals[def.facet.field] : undefined;
   return selected
     ? counts.filter((facet) => selected.includes(facet.value))
@@ -119,10 +129,11 @@ export async function getGridCount(
   execute: SqlExecutor,
   query: QueryState,
   exact: boolean,
+  signal?: AbortSignal,
 ): Promise<CountResult> {
   assertDeclared(def, query);
   if (isFacetOnlyQuery(def.facet?.field, query)) {
-    const counters = await listSelectedCounters(def, execute, query);
+    const counters = await listSelectedCounters(def, execute, query, signal);
     return {
       count: counters.reduce((sum, facet) => sum + facet.count, 0),
       capped: false,
@@ -135,6 +146,7 @@ export async function getGridCount(
       query,
       buildExactCountSql(def, query),
       EXACT_COUNT_SETTINGS,
+      signal,
     );
     return { count: row.count, capped: false, source: "exact" };
   }
@@ -143,6 +155,8 @@ export async function getGridCount(
     execute,
     query,
     buildCappedCountSql(def, query, cap),
+    undefined,
+    signal,
   );
   return {
     count: Math.min(row.count, cap),
@@ -155,13 +169,14 @@ export async function getGridTotal(
   def: ServerGridDef,
   execute: SqlExecutor,
   query: QueryState,
+  signal?: AbortSignal,
 ): Promise<TotalResult> {
   assertDeclared(def, query);
   if (!def.total) {
     return { available: false, code: "no_total", params: {} };
   }
   if (isFacetOnlyQuery(def.facet?.field, query)) {
-    const counters = await listSelectedCounters(def, execute, query);
+    const counters = await listSelectedCounters(def, execute, query, signal);
     return {
       available: true,
       sum: counters.reduce((sum, facet) => sum + (facet.sum ?? 0), 0),
@@ -175,6 +190,7 @@ export async function getGridTotal(
     query,
     buildCappedTotalSql(def, query, cap),
     TOTAL_SETTINGS,
+    signal,
   );
   if (row.count > cap) {
     return { available: false, code: "over_cap", params: { cap } };

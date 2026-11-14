@@ -1,10 +1,11 @@
-import { Pool, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 import type { SqlExecutor, SqlQuery } from "@kikstart/query-grid-postgres";
 
 const STATEMENT_BUDGET_MS = 5000;
 
 let pool: Pool | null = null;
+const backendPids = new WeakMap<PoolClient, number>();
 
 function getPool(): Pool {
   if (pool) {
@@ -23,11 +24,36 @@ function getPool(): Pool {
   return pool;
 }
 
-async function executeWithSettings<T extends QueryResultRow>(
+// A proxy in front of Postgres reports its own key as `client.processID`, so the pid to cancel is asked from the server, once per connection.
+async function getBackendPid(client: PoolClient): Promise<number> {
+  const known = backendPids.get(client);
+  if (known !== undefined) {
+    return known;
+  }
+  const { rows } = await client.query<{ pid: number }>(
+    "SELECT pg_backend_pid() AS pid",
+  );
+  backendPids.set(client, rows[0].pid);
+  return rows[0].pid;
+}
+
+async function cancelBackend(pid: number): Promise<void> {
+  try {
+    await getPool().query("SELECT pg_cancel_backend($1)", [pid]);
+  } catch {
+    return;
+  }
+}
+
+async function runOnClient<T extends QueryResultRow>(
+  client: PoolClient,
   query: SqlQuery,
   settings: string[],
 ): Promise<T[]> {
-  const client = await getPool().connect();
+  if (settings.length === 0) {
+    const result = await client.query<T>(query.text, query.values);
+    return result.rows;
+  }
   try {
     await client.query(
       ["BEGIN", ...settings.map((setting) => `SET LOCAL ${setting}`)].join(
@@ -40,21 +66,47 @@ async function executeWithSettings<T extends QueryResultRow>(
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
+  }
+}
+
+async function runCancellable<T extends QueryResultRow>(
+  client: PoolClient,
+  query: SqlQuery,
+  settings: string[],
+  signal: AbortSignal,
+): Promise<T[]> {
+  const pid = await getBackendPid(client);
+  signal.throwIfAborted();
+  const cancels: Promise<void>[] = [];
+  const cancel = () => cancels.push(cancelBackend(pid));
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    return await runOnClient<T>(client, query, settings);
   } finally {
-    client.release();
+    signal.removeEventListener("abort", cancel);
+    // The connection is held until a cancel in flight has landed, so it cannot hit the next query to use it.
+    await Promise.all(cancels);
   }
 }
 
 export const executeSql: SqlExecutor = async <T extends object>(
   query: SqlQuery,
-  settings?: string[],
+  settings: string[] = [],
+  signal?: AbortSignal,
 ) => {
-  if (settings?.length) {
-    return executeWithSettings<T & QueryResultRow>(query, settings);
+  signal?.throwIfAborted();
+  const client = await getPool().connect();
+  try {
+    if (signal) {
+      return await runCancellable<T & QueryResultRow>(
+        client,
+        query,
+        settings,
+        signal,
+      );
+    }
+    return await runOnClient<T & QueryResultRow>(client, query, settings);
+  } finally {
+    client.release();
   }
-  const result = await getPool().query<T & QueryResultRow>(
-    query.text,
-    query.values,
-  );
-  return result.rows;
 };

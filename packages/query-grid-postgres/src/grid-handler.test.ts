@@ -314,6 +314,72 @@ describe("refusals", () => {
     expect((await readError(response)).error).toBe("too_broad");
   });
 
+  test("every read runs under the signal of its request", async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    const execute: SqlExecutor = async <T extends object>(
+      _sql: SqlQuery,
+      _settings?: string[],
+      signal?: AbortSignal,
+    ) => {
+      signals.push(signal);
+      return [{ count: 1, sum: 1 }] as T[];
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute,
+      basePath: BASE_PATH,
+      options: async (_field, _search, signal) => {
+        signals.push(signal);
+        return [];
+      },
+      moves: {
+        ...MOVES,
+        transitions: async (signal) => {
+          signals.push(signal);
+          return [];
+        },
+      },
+    });
+    const paths = [
+      "",
+      "/count?f.region=north",
+      "/total?f.region=north",
+      "/facets",
+      "/options?field=region",
+      "/transitions",
+    ];
+    for (const path of paths) {
+      const request = new Request(`${ORIGIN}${BASE_PATH}${path}`);
+      expect((await handler(request)).status).toBe(200);
+      expect(signals.at(-1)).toBe(request.signal);
+    }
+    expect(signals).toHaveLength(paths.length);
+  });
+
+  test("a request aborted mid-query is no too_broad, no 500 and no report", async () => {
+    const reported: unknown[] = [];
+    const controller = new AbortController();
+    const canceled: SqlExecutor = async () => {
+      controller.abort();
+      throw Object.assign(new Error("canceling statement"), { code: "57014" });
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute: canceled,
+      onError: (error) => reported.push(error),
+    });
+    for (const path of ["?q=acme", ""]) {
+      const response = await handler(
+        new Request(`${ORIGIN}${BASE_PATH}${path}`, {
+          signal: controller.signal,
+        }),
+      );
+      expect(response.status).toBe(499);
+      expect(await response.text()).toBe("");
+    }
+    expect(reported).toEqual([]);
+  });
+
   test("an omitted hook is a 404, and so is an unknown route", async () => {
     const { handle } = createHandler([]);
     for (const path of ["/options?field=region", "/transitions", "/nope"]) {

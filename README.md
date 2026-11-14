@@ -259,7 +259,7 @@ interface Capabilities {
 
 ## The two patterns
 
-- **The SQL executor is a Strategy.** `SqlExecutor` is one function, `(sql, settings?) => Promise<rows>`. The runner decides what to run and under which statement budget; the host decides how: `pg`, a serverless driver, a tenant router, a read replica. A value in `sql.values` is a string or, for several values of one field, an array of strings. The client's `DataSource` is the same pattern one layer up: `createHttpSource` and `createMemorySource` are two strategies behind the same parts.
+- **The SQL executor is a Strategy.** `SqlExecutor` is one function, `(sql, settings?, signal?) => Promise<rows>`. The runner decides what to run and under which statement budget, and hands every read the `signal` of its request, so an executor can cancel the statement of a request the client dropped (the demo's does, with `pg_cancel_backend`); such a request is answered 499 and is not reported; the host decides how: `pg`, a serverless driver, a tenant router, a read replica. A value in `sql.values` is a string or, for several values of one field, an array of strings. The client's `DataSource` is the same pattern one layer up: `createHttpSource` and `createMemorySource` are two strategies behind the same parts.
 - **The defs are models the engine reads.** Fields, shapes, the facet and the total are plain data. The offers, the SQL, the DDL, the chips and the controls are all derived from them, so the design is metadata-driven and a host can build its defs from its own database or configuration at runtime. The library accepts a def as input and never imports one.
 
 ## Base components
