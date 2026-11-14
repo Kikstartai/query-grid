@@ -22,7 +22,7 @@ const PROBE: ServerGridDef = {
       label: "Kind",
       type: "enum",
       operators: ["eq"],
-      options: ["a", "b", "c"].map((value) => ({ value, label: value })),
+      options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })),
     },
     { key: "amount", label: "Amount", type: "money", operators: [] },
     { key: "created_at", label: "Created", type: "datetime", operators: [] },
@@ -101,22 +101,31 @@ async function readGrouped(): Promise<Counter[]> {
   return rows;
 }
 
-async function migrate(between: () => Promise<void>): Promise<void> {
-  const steps = listGridMigrationSteps(PROBE);
-  const [install, backfill, switchOver] = steps.filter(
-    (step) => step.transaction,
+const STEPS = listGridMigrationSteps(PROBE);
+const [INSTALL, BACKFILL, SWITCH_OVER] = STEPS.filter(
+  (step) => step.transaction,
+).map((step) => step.sql);
+
+async function hasPending(): Promise<boolean> {
+  const { rows } = await migrator.query(
+    "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = $1",
+    [counter.pending],
   );
-  for (const step of steps.filter((item) => !item.transaction)) {
+  return rows.length > 0;
+}
+
+async function migrate(between: () => Promise<void>): Promise<void> {
+  for (const step of STEPS.filter((item) => !item.transaction)) {
     await migrator.query(step.sql);
   }
-  await migrator.query(install.sql);
+  await migrator.query(INSTALL);
   await between();
   await straggler.query("BEGIN");
-  await insertRows(straggler, 11, "b");
-  await migrator.query(backfill.sql);
+  await insertRows(straggler, 11, "d");
+  await migrator.query(BACKFILL);
   await between();
   await straggler.query("COMMIT");
-  await migrator.query(switchOver.sql);
+  await migrator.query(SWITCH_OVER);
 }
 
 beforeAll(async () => {
@@ -142,11 +151,7 @@ describe("the counter backfill", () => {
   test("it stays exact with writes before, during and after each step, and with a transaction open across the scan", async () => {
     await migrate(() => churn(writer));
     expect(await readCounters()).toEqual(await readGrouped());
-    const pending = await migrator.query(
-      "SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = $1",
-      [counter.pending],
-    );
-    expect(pending.rows).toEqual([]);
+    expect(await hasPending()).toBe(false);
   }, 120_000);
 
   test("after the switch the triggers write to the counter table directly", async () => {
@@ -159,8 +164,52 @@ describe("the counter backfill", () => {
     await churn(writer);
     const counters = await readCounters();
     expect(counters).toEqual(await readGrouped());
-    expect(counters.map((row) => row.kind)).toEqual(["a", "b", "c"]);
+    expect(counters.map((row) => row.kind)).toEqual(["a", "b", "c", "d"]);
   }, 120_000);
+
+  test("a run that stops after any step leaves the counters current", async () => {
+    await migrator.query(INSTALL);
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    await migrator.query(BACKFILL.replace(/COMMIT;$/, "ROLLBACK;"));
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    await migrator.query(BACKFILL);
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(true);
+  }, 120_000);
+
+  test("the run after a stopped one is exact, from the top or from the step that was next", async () => {
+    await migrator.query(SWITCH_OVER);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(false);
+    await migrator.query(INSTALL);
+    await churn(writer);
+    await migrate(() => churn(writer));
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(false);
+  }, 120_000);
+
+  test("the switch refuses to run before a count, and changes nothing", async () => {
+    await migrator.query(INSTALL);
+    await churn(writer);
+    await expect(migrator.query(SWITCH_OVER)).rejects.toThrow(/backfill/);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(true);
+    await migrator.query(BACKFILL);
+    await migrator.query(SWITCH_OVER);
+    expect(await readCounters()).toEqual(await readGrouped());
+  }, 120_000);
+
+  test("a finished step run again does nothing", async () => {
+    await migrator.query(BACKFILL);
+    await migrator.query(SWITCH_OVER);
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(false);
+  }, 60_000);
 
   test("its indexes are valid and none is missing", async () => {
     const { rows } = await migrator.query<{

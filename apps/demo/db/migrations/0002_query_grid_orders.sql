@@ -1,4 +1,4 @@
--- Generated from the orders grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run.
+-- Generated from the orders grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.
 -- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.
 -- The quick filter needs trigram indexes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -22,12 +22,14 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__region__created_a
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
 -- quick filter over customer_name, order_number
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_quick ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
--- Counter table for status_code and the sum of total: install the triggers, logging each change to order_status_counts_pending. The table lock is held only for the trigger swap.
+-- Counter table for status_code and the sum of total: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is held only for the trigger swap.
 BEGIN;
 CREATE TABLE IF NOT EXISTS order_status_counts (status_code text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);
 ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL);
 CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO order_status_counts (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
+  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum;
   INSERT INTO order_status_counts_pending (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum);
 $$;
 CREATE OR REPLACE FUNCTION order_status_counts_on_insert() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -57,23 +59,38 @@ CREATE TRIGGER order_status_counts_on_insert AFTER INSERT ON orders FOR EACH ROW
 CREATE TRIGGER order_status_counts_on_delete AFTER DELETE ON orders FOR EACH ROW EXECUTE FUNCTION order_status_counts_on_delete();
 CREATE TRIGGER order_status_counts_on_update AFTER UPDATE OF status_code, total ON orders FOR EACH ROW WHEN (OLD.status_code IS DISTINCT FROM NEW.status_code OR OLD.total IS DISTINCT FROM NEW.total) EXECUTE FUNCTION order_status_counts_on_update();
 COMMIT;
--- Backfill order_status_counts from one snapshot of orders, with no table lock. Changes logged before the snapshot are already in it and are discarded; later ones stay in order_status_counts_pending.
+-- Count orders from one snapshot into order_status_counts_pending, with no table lock. Changes logged before the snapshot are in the count and are discarded; later ones stay beside it. Does nothing once order_status_counts_pending is gone.
 BEGIN ISOLATION LEVEL REPEATABLE READ;
-UPDATE order_status_counts SET row_count = 0, total_sum = 0;
-INSERT INTO order_status_counts (status_code, row_count, total_sum)
-  SELECT status_code, count(*), coalesce(sum(total), 0) FROM orders GROUP BY status_code
-  ON CONFLICT (status_code) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;
-DELETE FROM order_status_counts_pending;
+DO $backfill$
+BEGIN
+  IF to_regclass('order_status_counts_pending') IS NULL THEN
+    RETURN;
+  END IF;
+  DELETE FROM order_status_counts_pending;
+  INSERT INTO order_status_counts_pending (status_code, row_count, total_sum)
+    SELECT status_code, count(*), coalesce(sum(total), 0) FROM orders GROUP BY status_code;
+  COMMENT ON TABLE order_status_counts_pending IS 'backfilled';
+END
+$backfill$;
 COMMIT;
--- Fold the changes logged during the backfill into order_status_counts and switch the triggers to write there directly. The table lock is held only for the fold.
-BEGIN;
-LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
-INSERT INTO order_status_counts (status_code, row_count, total_sum)
-  SELECT status_code, sum(row_count), sum(total_sum) FROM order_status_counts_pending GROUP BY status_code
-  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum;
-CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql AS $$
+-- Replace order_status_counts with the count plus the changes logged since, and switch the triggers to write there only. The table lock is held only for this. Does nothing once order_status_counts_pending is gone, and refuses to run before the count.
+DO $switch$
+BEGIN
+  IF to_regclass('order_status_counts_pending') IS NULL THEN
+    RETURN;
+  END IF;
+  IF obj_description(to_regclass('order_status_counts_pending'), 'pg_class') IS DISTINCT FROM 'backfilled' THEN
+    RAISE EXCEPTION 'order_status_counts_pending holds no backfill: run the backfill step first';
+  END IF;
+  LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
+  UPDATE order_status_counts SET row_count = 0, total_sum = 0;
+  INSERT INTO order_status_counts (status_code, row_count, total_sum)
+    SELECT status_code, sum(row_count), sum(total_sum) FROM order_status_counts_pending GROUP BY status_code
+    ON CONFLICT (status_code) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;
+  CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql AS $bump$
   INSERT INTO order_status_counts (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
   ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum;
-$$;
-DROP TABLE order_status_counts_pending;
-COMMIT;
+$bump$;
+  DROP TABLE order_status_counts_pending;
+END
+$switch$;

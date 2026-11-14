@@ -388,7 +388,7 @@ describe("generated DDL", () => {
     }
   });
 
-  test("the counter is backfilled from one snapshot, with no lock held across the scan", () => {
+  test("the counter is backfilled from one snapshot, with no lock held across the scan, and stays current meanwhile", () => {
     const steps = listGridMigrationSteps(TEST_DEF).filter(
       (step) => step.transaction,
     );
@@ -397,8 +397,10 @@ describe("generated DDL", () => {
     expect(install).toContain(
       "CREATE TABLE IF NOT EXISTS thing_status_counts (status text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);",
     );
+    const bumpCounter =
+      "ON CONFLICT (status) DO UPDATE SET row_count = thing_status_counts.row_count + EXCLUDED.row_count, total_sum = thing_status_counts.total_sum + EXCLUDED.total_sum;";
     expect(install).toContain(
-      "INSERT INTO thing_status_counts_pending (status, row_count, total_sum) VALUES (p_value, p_rows, p_sum);",
+      `${bumpCounter}\n  INSERT INTO thing_status_counts_pending (status, row_count, total_sum) VALUES (p_value, p_rows, p_sum);\n$$;`,
     );
     expect(install).toContain(
       "PERFORM thing_status_counts_bump(OLD.status, -1, -OLD.total);",
@@ -412,13 +414,25 @@ describe("generated DDL", () => {
       "SELECT status, count(*), coalesce(sum(total), 0) FROM things GROUP BY status",
     );
     expect(backfill).toContain("DELETE FROM thing_status_counts_pending;");
+    expect(backfill).toContain(
+      "INSERT INTO thing_status_counts_pending (status, row_count, total_sum)\n    SELECT status, count(*)",
+    );
+    expect(backfill).not.toContain("UPDATE thing_status_counts ");
     expect(switchOver).toContain(
       "SELECT status, sum(row_count), sum(total_sum) FROM thing_status_counts_pending GROUP BY status",
     );
     expect(switchOver).toContain(
-      "ON CONFLICT (status) DO UPDATE SET row_count = thing_status_counts.row_count + EXCLUDED.row_count, total_sum = thing_status_counts.total_sum + EXCLUDED.total_sum;\n$$;",
+      "ON CONFLICT (status) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;",
     );
+    expect(switchOver).toContain(`${bumpCounter}\n$bump$;`);
     expect(switchOver).toContain("DROP TABLE thing_status_counts_pending;");
+    const skip =
+      "IF to_regclass('thing_status_counts_pending') IS NULL THEN\n    RETURN;";
+    expect(backfill).toContain(skip);
+    expect(switchOver).toContain(skip);
+    expect(switchOver).toContain(
+      "IF obj_description(to_regclass('thing_status_counts_pending'), 'pg_class') IS DISTINCT FROM 'backfilled' THEN\n    RAISE EXCEPTION",
+    );
     const migration = generateGridMigration(TEST_DEF);
     expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
     expect(migration.match(/LOCK TABLE/g)).toHaveLength(2);

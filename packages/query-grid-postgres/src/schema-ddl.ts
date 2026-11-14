@@ -47,6 +47,7 @@ export interface TableMigration {
 }
 
 const TRGM_OPS = "gin_trgm_ops";
+const BACKFILLED = "backfilled";
 
 function hashName(name: string): string {
   let hash = 0x811c9dc5;
@@ -149,12 +150,18 @@ function counterSteps(def: ServerGridDef): MigrationStep[] {
     .join(" OR ");
   const signature = `${bump}(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql`;
   const lock = `LOCK TABLE ${table} IN SHARE ROW EXCLUSIVE MODE;`;
+  const bumpCounter = `INSERT INTO ${ct} (${facet}, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
+  ON CONFLICT (${facet}) DO UPDATE SET row_count = ${ct}.row_count + EXCLUDED.row_count, total_sum = ${ct}.total_sum + EXCLUDED.total_sum;`;
+  const skipWithoutPending = `IF to_regclass('${pending}') IS NULL THEN
+    RETURN;
+  END IF;`;
   const install = [
     "BEGIN;",
     `CREATE TABLE IF NOT EXISTS ${ct} (${facet} text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);`,
     `ALTER TABLE ${ct} ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;`,
     `CREATE TABLE IF NOT EXISTS ${pending} (${facet} text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL);`,
     `CREATE OR REPLACE FUNCTION ${signature} AS $$
+  ${bumpCounter}
   INSERT INTO ${pending} (${facet}, row_count, total_sum) VALUES (p_value, p_rows, p_sum);
 $$;`,
     `CREATE OR REPLACE FUNCTION ${onInsert}() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -187,41 +194,49 @@ $$;`,
   ];
   const backfill = [
     "BEGIN ISOLATION LEVEL REPEATABLE READ;",
-    `UPDATE ${ct} SET row_count = 0, total_sum = 0;`,
-    `INSERT INTO ${ct} (${facet}, row_count, total_sum)
-  SELECT ${facet}, count(*), ${total ? `coalesce(sum(${total}), 0)` : "0"} FROM ${table} GROUP BY ${facet}
-  ON CONFLICT (${facet}) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;`,
-    `DELETE FROM ${pending};`,
+    `DO $backfill$
+BEGIN
+  ${skipWithoutPending}
+  DELETE FROM ${pending};
+  INSERT INTO ${pending} (${facet}, row_count, total_sum)
+    SELECT ${facet}, count(*), ${total ? `coalesce(sum(${total}), 0)` : "0"} FROM ${table} GROUP BY ${facet};
+  COMMENT ON TABLE ${pending} IS '${BACKFILLED}';
+END
+$backfill$;`,
     "COMMIT;",
   ];
-  const switchOver = [
-    "BEGIN;",
-    lock,
-    `INSERT INTO ${ct} (${facet}, row_count, total_sum)
-  SELECT ${facet}, sum(row_count), sum(total_sum) FROM ${pending} GROUP BY ${facet}
-  ON CONFLICT (${facet}) DO UPDATE SET row_count = ${ct}.row_count + EXCLUDED.row_count, total_sum = ${ct}.total_sum + EXCLUDED.total_sum;`,
-    `CREATE OR REPLACE FUNCTION ${signature} AS $$
-  INSERT INTO ${ct} (${facet}, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
-  ON CONFLICT (${facet}) DO UPDATE SET row_count = ${ct}.row_count + EXCLUDED.row_count, total_sum = ${ct}.total_sum + EXCLUDED.total_sum;
-$$;`,
-    `DROP TABLE ${pending};`,
-    "COMMIT;",
-  ];
+  const switchOver = `DO $switch$
+BEGIN
+  ${skipWithoutPending}
+  IF obj_description(to_regclass('${pending}'), 'pg_class') IS DISTINCT FROM '${BACKFILLED}' THEN
+    RAISE EXCEPTION '${pending} holds no backfill: run the backfill step first';
+  END IF;
+  ${lock}
+  UPDATE ${ct} SET row_count = 0, total_sum = 0;
+  INSERT INTO ${ct} (${facet}, row_count, total_sum)
+    SELECT ${facet}, sum(row_count), sum(total_sum) FROM ${pending} GROUP BY ${facet}
+    ON CONFLICT (${facet}) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;
+  CREATE OR REPLACE FUNCTION ${signature} AS $bump$
+  ${bumpCounter}
+$bump$;
+  DROP TABLE ${pending};
+END
+$switch$;`;
   const subject = `${facet}${total ? ` and the sum of ${total}` : ""}`;
   return [
     {
-      note: `Counter table for ${subject}: install the triggers, logging each change to ${pending}. The table lock is held only for the trigger swap.`,
+      note: `Counter table for ${subject}: install the triggers. They keep ${ct} current and also log each change to ${pending}. The table lock is held only for the trigger swap.`,
       sql: install.join("\n"),
       transaction: true,
     },
     {
-      note: `Backfill ${ct} from one snapshot of ${table}, with no table lock. Changes logged before the snapshot are already in it and are discarded; later ones stay in ${pending}.`,
+      note: `Count ${table} from one snapshot into ${pending}, with no table lock. Changes logged before the snapshot are in the count and are discarded; later ones stay beside it. Does nothing once ${pending} is gone.`,
       sql: backfill.join("\n"),
       transaction: true,
     },
     {
-      note: `Fold the changes logged during the backfill into ${ct} and switch the triggers to write there directly. The table lock is held only for the fold.`,
-      sql: switchOver.join("\n"),
+      note: `Replace ${ct} with the count plus the changes logged since, and switch the triggers to write there only. The table lock is held only for this. Does nothing once ${pending} is gone, and refuses to run before the count.`,
+      sql: switchOver,
       transaction: true,
     },
   ];
@@ -262,7 +277,7 @@ export function listGridMigrationSteps(
 
 function renderMigration(table: string, steps: MigrationStep[]): string {
   const lines = [
-    `-- Generated from the ${table} grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run.`,
+    `-- Generated from the ${table} grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.`,
     "-- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.",
     ...steps.flatMap((step) => [`-- ${step.note}`, step.sql]),
   ];
