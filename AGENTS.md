@@ -31,6 +31,12 @@ bun run dev
 
 The demo needs `apps/demo/.env.local` with `QUERY_GRID_DATABASE_URL`. `bun run --filter demo test:db` and `db:bench` run against that database.
 
+The browser suite is Playwright in `apps/demo/e2e`. It needs `bun run build` first and starts `next start` on port 3040 (`E2E_PORT` picks another) unless a server already listens there. Board moves write to the database, so they run after the read-only tests.
+
+```bash
+bun run --filter demo e2e
+```
+
 ## UI SDK
 
 Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/ui-sdk`), and read `node_modules/@ui-sdk/react/docs/llms.txt`. To build a new component, also search `node_modules/@ui-sdk/react/docs/core.md` by heading and read `rendering.md` next to it.
