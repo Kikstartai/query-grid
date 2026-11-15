@@ -295,8 +295,8 @@
 
 :where(.qg-total) {
   min-block-size: calc(var(--ui-spacing) * 6);
-  padding-top: calc(var(--ui-spacing) * 2);
-  border-top: 1px solid var(--ui-border);
+  padding-block-start: calc(var(--ui-spacing) * 2);
+  border-block-start: 1px solid var(--ui-border);
 }
 
 :where(.qg-total-cell) {
@@ -397,7 +397,7 @@
   gap: var(--ui-spacing);
   padding-inline: calc(var(--ui-spacing) * 2);
   border-inline-end: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
+  border-block-end: 1px solid var(--ui-border);
   background: var(--ui-muted);
   font-weight: 600;
 }
@@ -469,7 +469,7 @@
 
 :where(.qg-resize-handle) {
   position: absolute;
-  top: 0;
+  inset-block-start: 0;
   inset-inline-end: 0;
   inline-size: 6px;
   block-size: 100%;
@@ -532,7 +532,7 @@
 }
 
 :where(.qg-row) {
-  border-bottom: 1px solid var(--ui-border);
+  border-block-end: 1px solid var(--ui-border);
   background: var(--ui-background);
 }
 
@@ -578,7 +578,7 @@
 
 :where(.qg-card-slot) {
   box-sizing: border-box;
-  padding-bottom: calc(var(--ui-spacing) * 2);
+  padding-block-end: calc(var(--ui-spacing) * 2);
 }
 
 :where(.qg-card, .qg-board-card) {
@@ -662,7 +662,7 @@
   align-items: center;
   justify-content: space-between;
   padding: calc(var(--ui-spacing) * 1.5) calc(var(--ui-spacing) * 2);
-  border-bottom: 1px solid var(--ui-border);
+  border-block-end: 1px solid var(--ui-border);
   font-weight: 600;
 }
 

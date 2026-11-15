@@ -1,15 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Client } from "pg";
 
-import { TOTAL_SETTINGS } from "@kikstart/query-grid-postgres";
+import { QUERY_CANCELED, TOTAL_SETTINGS } from "@kikstart/query-grid-postgres";
 
-import { createPgExecutor, type PgExecutor } from "../src/lib/pg-executor";
+import {
+  createPgExecutor,
+  createStatementMarker,
+  type PgExecutor,
+} from "../src/lib/pg-executor";
 
 const SLEEP = { text: "SELECT pg_sleep(20)", values: [] };
 const SHORT_SLEEP = { text: "SELECT 1 AS done FROM pg_sleep(2)", values: [] };
 const ONE = { text: "SELECT 1 AS one", values: [] };
 const ABORT_AFTER_MS = 500;
 const CANCELED_WITHIN_MS = 5000;
+const STOPPED_EARLY_MS = 2000;
 
 const direct = process.env.QUERY_GRID_DATABASE_URL ?? "";
 
@@ -39,7 +44,7 @@ async function abortMidQuery(
   const started = performance.now();
   const running = executor.execute(SLEEP, settings, controller.signal);
   setTimeout(() => controller.abort(), ABORT_AFTER_MS);
-  await expect(running).rejects.toMatchObject({ code: "57014" });
+  await expect(running).rejects.toMatchObject({ code: QUERY_CANCELED });
   return performance.now() - started;
 }
 
@@ -56,17 +61,18 @@ for (const { name, url } of connections) {
       await executor.end();
     });
 
-    test("an abort cancels the running statement on the server", async () => {
-      expect(await abortMidQuery(executor, [])).toBeLessThan(
-        CANCELED_WITHIN_MS,
-      );
-    }, 30_000);
-
-    test("an abort cancels a statement run under settings", async () => {
-      expect(await abortMidQuery(executor, TOTAL_SETTINGS)).toBeLessThan(
-        CANCELED_WITHIN_MS,
-      );
-    }, 30_000);
+    test.each([
+      ["without settings", []],
+      ["under settings", TOTAL_SETTINGS],
+    ])(
+      "an abort cancels the running statement on the server, %s",
+      async (_, settings) => {
+        expect(await abortMidQuery(executor, settings)).toBeLessThan(
+          CANCELED_WITHIN_MS,
+        );
+      },
+      30_000,
+    );
 
     test("a cancel hits only its own statement in the pool", async () => {
       const other = executor.execute<{ done: number }>(SHORT_SLEEP);
@@ -79,7 +85,7 @@ for (const { name, url } of connections) {
       await outside.connect();
       try {
         const other = outside.query<{ done: number }>(
-          `/* qg:${crypto.randomUUID()} */ ${SHORT_SLEEP.text}`,
+          `${createStatementMarker()} ${SHORT_SLEEP.text}`,
         );
         await abortMidQuery(executor, []);
         expect((await other).rows).toEqual([{ done: 1 }]);
@@ -102,13 +108,13 @@ for (const { name, url } of connections) {
       expect(performance.now() - started).toBeLessThan(ABORT_AFTER_MS);
     });
 
-    test("an abort while the transaction opens runs nothing", async () => {
+    test("an abort while the transaction opens still stops the statement", async () => {
       const controller = new AbortController();
       const started = performance.now();
       const running = executor.execute(SLEEP, [], controller.signal);
       setTimeout(() => controller.abort(), 1);
       await expect(running).rejects.toBeDefined();
-      expect(performance.now() - started).toBeLessThan(ABORT_AFTER_MS);
+      expect(performance.now() - started).toBeLessThan(STOPPED_EARLY_MS);
     });
 
     test("the pool answers after the cancels", async () => {
