@@ -3,6 +3,7 @@ import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { encodeQuery } from "./query-url.ts";
 import { gridDefRunnable, type IndexedGridDef } from "./indexes.ts";
+import type { GridLimits } from "./limits.ts";
 import type {
   CountResult,
   FacetCount,
@@ -15,6 +16,7 @@ export const SUB_ROUTES = [
   "total",
   "facets",
   "options",
+  "limits",
   "transitions",
   "status",
 ] as const;
@@ -88,6 +90,7 @@ export function createHttpSource(
         signal,
       });
     },
+    fetchLimits: (signal) => readJson<GridLimits>(route("limits"), { signal }),
     fetchTransitions: (signal) =>
       readJson<[string, string][]>(route("transitions"), { signal }),
     changeFacetValue: (id, to) => {

@@ -10,6 +10,7 @@ export {
   useFeedState,
   useFieldLabels,
   useFilterChips,
+  useGridLimits,
   useGridView,
   useOffers,
   useOfferState,

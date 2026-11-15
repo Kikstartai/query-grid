@@ -67,6 +67,7 @@ export function createTestSource(
     fetchTotals: none,
     fetchFacets: none,
     fetchOptions: none,
+    fetchLimits: async () => null,
     fetchTransitions: none,
     changeFacetValue: async (id) => ({ id }),
     ...overrides,

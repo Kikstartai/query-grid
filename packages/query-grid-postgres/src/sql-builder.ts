@@ -1,5 +1,5 @@
 import {
-  COUNT_CAP,
+  DEFAULT_LIMITS,
   formatProblem,
   getField,
   isValidFieldValue,
@@ -7,10 +7,10 @@ import {
   isQueryIndexed,
   listSearchFields,
   PAGE_LIMIT_MAX,
-  SEARCH_LIMIT,
   validateQueryValues,
   type BaseFieldDef,
   type FieldType,
+  type GridLimits,
   type GridRow,
   type PageResult,
   type ProblemParams,
@@ -19,8 +19,6 @@ import {
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
 import type { PostgresGridDef } from "./storage.ts";
-
-export const DEFAULT_PAGE_LIMIT = 200;
 
 export type SqlValue = string | string[];
 
@@ -223,9 +221,9 @@ function whereClause(clauses: string[]): string {
   return clauses.length > 0 ? ` WHERE ${clauses.join(" AND ")}` : "";
 }
 
-function clampLimit(requested: number): number {
+function clampLimit(requested: number, limits: GridLimits): number {
   if (!Number.isFinite(requested) || requested < 1) {
-    return DEFAULT_PAGE_LIMIT;
+    return limits.pageLimit;
   }
   return Math.min(Math.floor(requested), PAGE_LIMIT_MAX);
 }
@@ -234,13 +232,14 @@ export function buildPageSql(
   def: PostgresGridDef,
   query: QueryState,
   limit: number,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): SqlQuery {
   const { params, clauses } = filter(def, query);
   const select = selectList(def);
   const table = from(def);
   if (query.search !== null) {
     return {
-      text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${SEARCH_LIMIT + 1}`,
+      text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${limits.searchLimit + 1}`,
       values: params.values,
     };
   }
@@ -264,7 +263,7 @@ export function buildPageSql(
     );
   }
   return {
-    text: `SELECT ${select} FROM ${table}${whereClause(clauses)} ORDER BY ${sort} ${direction}, ${key} ${direction} LIMIT ${clampLimit(limit) + 1}`,
+    text: `SELECT ${select} FROM ${table}${whereClause(clauses)} ORDER BY ${sort} ${direction}, ${key} ${direction} LIMIT ${clampLimit(limit, limits) + 1}`,
     values: params.values,
   };
 }
@@ -281,7 +280,7 @@ export function buildRowSql(def: PostgresGridDef, id: string): SqlQuery {
 export function buildCappedCountSql(
   def: PostgresGridDef,
   query: QueryState,
-  cap: number = COUNT_CAP,
+  cap: number = DEFAULT_LIMITS.countCap,
 ): SqlQuery {
   const { params, clauses } = filter(def, query);
   return {
@@ -304,7 +303,7 @@ export function buildExactCountSql(
 export function buildCappedTotalSql(
   def: PostgresGridDef,
   query: QueryState,
-  cap: number = COUNT_CAP,
+  cap: number = DEFAULT_LIMITS.countCap,
 ): SqlQuery {
   const totals = def.totals ?? [];
   if (totals.length === 0) {
@@ -344,16 +343,17 @@ export function toPageResult(
   query: QueryState,
   rows: GridRow[],
   limit: number,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): PageResult {
   if (query.search !== null) {
-    const hasNext = rows.length > SEARCH_LIMIT;
+    const hasNext = rows.length > limits.searchLimit;
     return {
-      rows: hasNext ? rows.slice(0, SEARCH_LIMIT) : rows,
+      rows: hasNext ? rows.slice(0, limits.searchLimit) : rows,
       nextCursor: null,
       hasNext,
     };
   }
-  const size = clampLimit(limit);
+  const size = clampLimit(limit, limits);
   const hasNext = rows.length > size;
   const page = hasNext ? rows.slice(0, size) : rows;
   const last = page[page.length - 1];

@@ -2,6 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import { getField } from "./field-types.ts";
 import { labelKey } from "./format.ts";
+import type { GridLimits } from "./limits.ts";
 import {
   createQueryResource,
   type QueryResource,
@@ -71,6 +72,33 @@ export function createFacetStore(
       followsFilters: source.runnable.facetCountsFollowFilters,
     },
   );
+}
+
+export interface LimitsStore {
+  getLimits: () => GridLimits | null;
+  subscribe: (listener: Listener) => () => void;
+}
+
+export function createLimitsStore(source: DataSource): LimitsStore {
+  const limits = createStore<GridLimits | null>(null);
+  let started = false;
+  const load = async () => {
+    try {
+      limits.set(await source.fetchLimits(new AbortController().signal));
+    } catch {
+      started = false;
+    }
+  };
+  return {
+    getLimits: limits.get,
+    subscribe: (listener) => {
+      if (!started) {
+        started = true;
+        void load();
+      }
+      return limits.subscribe(listener);
+    },
+  };
 }
 
 export interface LabelStore {

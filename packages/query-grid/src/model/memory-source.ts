@@ -238,6 +238,7 @@ export function createMemorySource(
         .filter((option) => option.label.toLowerCase().includes(needle))
         .slice(0, OPTION_LIMIT);
     },
+    fetchLimits: async () => null,
     fetchTransitions: async () => listAllTransitions(def),
     changeFacetValue: async (id, to) => {
       const key = def.facet?.field;

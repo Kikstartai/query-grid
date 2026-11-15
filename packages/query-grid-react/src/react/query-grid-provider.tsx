@@ -7,6 +7,7 @@ import {
   createFacetStore,
   createFeed,
   createLabelStore,
+  createLimitsStore,
   createQueryStore,
   createTotalStore,
   explainUnavailable,
@@ -25,9 +26,11 @@ import {
   type FieldOption,
   type FilterChip,
   type BaseGridDef,
+  type GridLimits,
   type GridRow,
   type GridView,
   type LabelStore,
+  type LimitsStore,
   type Offers,
   type OfferTarget,
   type QueryAction,
@@ -81,6 +84,7 @@ export interface QueryGridContextValue {
   totals: TotalStore;
   facets: FacetStore;
   labels: LabelStore;
+  limits: LimitsStore;
   columns: ColumnStore;
   actions: QueryGridActions;
 }
@@ -159,6 +163,7 @@ function createValue(
     totals,
     facets,
     labels,
+    limits: createLimitsStore(source),
     columns: createColumnStore(def.fields, persistence),
     actions: {
       dispatch: store.dispatch,
@@ -307,6 +312,11 @@ export function useFacetState(): FacetState {
 export function useFieldLabels(): Record<string, string> {
   const { labels } = useQueryGrid();
   return useStoreValue(labels.subscribe, labels.getLabels);
+}
+
+export function useGridLimits(): GridLimits | null {
+  const { limits } = useQueryGrid();
+  return useStoreValue(limits.subscribe, limits.getLimits);
 }
 
 export function formatReason(

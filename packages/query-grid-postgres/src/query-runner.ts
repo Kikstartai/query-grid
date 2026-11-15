@@ -1,9 +1,9 @@
 import {
-  COUNT_CAP,
+  DEFAULT_LIMITS,
   isFacetOnlyQuery,
-  SEARCH_LIMIT,
   type CountResult,
   type FacetCount,
+  type GridLimits,
   type GridRow,
   type PageResult,
   type QueryState,
@@ -24,11 +24,14 @@ import {
 } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
-export const SEARCH_BUDGET_MS = 120;
-export const SEARCH_SETTINGS = [
-  "enable_seqscan = off",
-  `statement_timeout = ${SEARCH_BUDGET_MS}`,
-];
+export function listSearchSettings(
+  limits: GridLimits = DEFAULT_LIMITS,
+): string[] {
+  return [
+    "enable_seqscan = off",
+    `statement_timeout = ${limits.searchBudgetMs}`,
+  ];
+}
 export const TOTAL_SETTINGS = ["enable_sort = off"];
 export const QUERY_CANCELED = "57014";
 
@@ -41,14 +44,15 @@ export type SqlExecutor = <T extends object>(
   signal?: AbortSignal,
 ) => Promise<T[]>;
 
-function resolveCap(query: QueryState): number {
-  return query.search !== null ? SEARCH_LIMIT : COUNT_CAP;
+function resolveCap(query: QueryState, limits: GridLimits): number {
+  return query.search !== null ? limits.searchLimit : limits.countCap;
 }
 
 async function runFiltered<T extends object>(
   execute: SqlExecutor,
   query: QueryState,
   sql: SqlQuery,
+  limits: GridLimits,
   settings?: string[],
   signal?: AbortSignal,
 ): Promise<T[]> {
@@ -56,7 +60,7 @@ async function runFiltered<T extends object>(
     return execute<T>(sql, settings, signal);
   }
   try {
-    return await execute<T>(sql, SEARCH_SETTINGS, signal);
+    return await execute<T>(sql, listSearchSettings(limits), signal);
   } catch (error) {
     const canceled = (error as { code?: string }).code === QUERY_CANCELED;
     if (canceled && !signal?.aborted) {
@@ -72,15 +76,17 @@ export async function listGridPage(
   query: QueryState,
   limit: number,
   signal?: AbortSignal,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): Promise<PageResult> {
   const rows = await runFiltered<GridRow>(
     execute,
     query,
-    buildPageSql(def, query, limit),
+    buildPageSql(def, query, limit, limits),
+    limits,
     undefined,
     signal,
   );
-  return toPageResult(def, query, rows, limit);
+  return toPageResult(def, query, rows, limit, limits);
 }
 
 export async function* walkGridPages(
@@ -89,6 +95,7 @@ export async function* walkGridPages(
   query: QueryState,
   pageSize: number = WALK_PAGE_SIZE,
   signal?: AbortSignal,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): AsyncGenerator<GridRow[]> {
   let cursor: string | null = query.cursor;
   do {
@@ -99,6 +106,7 @@ export async function* walkGridPages(
       { ...query, cursor },
       pageSize,
       signal,
+      limits,
     );
     yield page.rows;
     cursor = page.nextCursor;
@@ -152,6 +160,7 @@ export async function getGridCount(
   query: QueryState,
   exact: boolean,
   signal?: AbortSignal,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): Promise<CountResult> {
   assertDeclared(def, query);
   if (isFacetOnlyQuery(def.facet?.field, query)) {
@@ -167,16 +176,18 @@ export async function getGridCount(
       execute,
       query,
       buildExactCountSql(def, query),
+      limits,
       EXACT_COUNT_SETTINGS,
       signal,
     );
     return { count: row.count, capped: false, source: "exact" };
   }
-  const cap = resolveCap(query);
+  const cap = resolveCap(query, limits);
   const [row] = await runFiltered<{ count: number }>(
     execute,
     query,
     buildCappedCountSql(def, query, cap),
+    limits,
     undefined,
     signal,
   );
@@ -192,6 +203,7 @@ export async function listGridTotals(
   execute: SqlExecutor,
   query: QueryState,
   signal?: AbortSignal,
+  limits: GridLimits = DEFAULT_LIMITS,
 ): Promise<TotalResult[]> {
   assertDeclared(def, query);
   const totals = def.totals ?? [];
@@ -209,11 +221,12 @@ export async function listGridTotals(
       source: "counter",
     }));
   }
-  const cap = resolveCap(query);
+  const cap = resolveCap(query, limits);
   const [row] = await runFiltered<Record<string, number>>(
     execute,
     query,
     buildCappedTotalSql(def, query, cap),
+    limits,
     TOTAL_SETTINGS,
     signal,
   );

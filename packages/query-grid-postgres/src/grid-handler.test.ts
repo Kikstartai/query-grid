@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEFAULT_LIMITS,
   decodeQuery,
   encodeQuery,
   type GridRow,
@@ -521,5 +522,76 @@ describe("routing without a base path", () => {
     const page = await handler(new Request(`${ORIGIN}/any/where`));
     expect(page.status).toBe(200);
     expect(seen).toHaveLength(2);
+  });
+});
+
+describe("limits", () => {
+  test("/limits answers the defaults when the host sets none", async () => {
+    const { handle, seen } = createHandler([]);
+    const response = await handle("/limits");
+    expect(await response.json()).toEqual(DEFAULT_LIMITS);
+    expect(seen).toEqual([]);
+  });
+
+  test("/limits answers the host's limits and the source reads them", async () => {
+    const { handle } = createHandler([], { limits: { countCap: 250 } });
+    const response = await handle("/limits");
+    expect(await response.json()).toEqual({ ...DEFAULT_LIMITS, countCap: 250 });
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL) =>
+      handle(String(input).slice(BASE_PATH.length))) as typeof fetch;
+    try {
+      const source = createHttpSource(TEST_DEF, BASE_PATH);
+      const limits = await source.fetchLimits(new AbortController().signal);
+      expect(limits?.countCap).toBe(250);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test("every limit shapes its own statement", async () => {
+    const settings: (string[] | undefined)[] = [];
+    const seen: SqlQuery[] = [];
+    const execute: SqlExecutor = async <T extends object>(
+      sql: SqlQuery,
+      given?: string[],
+    ) => {
+      seen.push(sql);
+      settings.push(given);
+      return [{ count: 3 }] as T[];
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute,
+      basePath: BASE_PATH,
+      limits: {
+        pageLimit: 40,
+        countCap: 250,
+        searchLimit: 30,
+        searchBudgetMs: 75,
+      },
+    });
+    const get = (path: string) =>
+      handler(new Request(`${ORIGIN}${BASE_PATH}${path}`));
+    await get("");
+    await get("/count?f.region=north");
+    await get("?q=smith");
+    await get("/count?q=smith");
+    expect(seen[0].text).toEndWith("LIMIT 41");
+    expect(seen[1].text).toContain("LIMIT 251");
+    expect(seen[2].text).toEndWith("LIMIT 31");
+    expect(seen[3].text).toContain("LIMIT 31");
+    expect(settings[2]).toContain("statement_timeout = 75");
+    expect(settings[0]).toBeUndefined();
+  });
+
+  test("a limit that is no positive integer fails when the handler is made", () => {
+    expect(() =>
+      createGridHandler({
+        def: TEST_DEF,
+        execute: async () => [],
+        limits: { narrowLimit: -1 },
+      }),
+    ).toThrow("narrowLimit");
   });
 });

@@ -3,7 +3,9 @@ import {
   formatProblem,
   isValidFieldValue,
   KEY_FIELD,
+  resolveLimits,
   type FieldOption,
+  type GridLimits,
   type GridRow,
   type OptionSearch,
   type ProblemParams,
@@ -25,7 +27,7 @@ import {
   QUERY_CANCELED,
   type SqlExecutor,
 } from "./query-runner.ts";
-import { DEFAULT_PAGE_LIMIT, QueryRejected } from "./sql-builder.ts";
+import { QueryRejected } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
 type Route = "page" | SubRoute;
@@ -49,6 +51,7 @@ export interface GridHandlerConfig {
   def: PostgresGridDef;
   execute: SqlExecutor;
   basePath?: string;
+  limits?: Partial<GridLimits>;
   options?: (
     field: string,
     search: OptionSearch,
@@ -77,9 +80,9 @@ function resolveRoute(pathname: string, basePath?: string): Route | null {
   return SUB_ROUTES.find((route) => route === rest) ?? null;
 }
 
-function readLimit(raw: string | null): number {
+function readLimit(raw: string | null, limits: GridLimits): number {
   if (raw === null) {
-    return DEFAULT_PAGE_LIMIT;
+    return limits.pageLimit;
   }
   if (!LIMIT.test(raw) || Number(raw) < 1) {
     throw new QueryRejected("invalid_limit");
@@ -141,6 +144,7 @@ async function readMove(
 
 export function createGridHandler(config: GridHandlerConfig): GridHandler {
   const { def, execute } = config;
+  const limits = resolveLimits(config.limits);
   const report = config.onError ?? ((error: unknown) => console.error(error));
 
   const answer = async (route: Route, request: Request): Promise<unknown> => {
@@ -152,8 +156,9 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           def,
           execute,
           decodeQuery(def, params),
-          readLimit(params.get(LIMIT_PARAM)),
+          readLimit(params.get(LIMIT_PARAM), limits),
           signal,
+          limits,
         );
       case "count":
         return getGridCount(
@@ -162,9 +167,16 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           decodeQuery(def, params),
           params.get(EXACT_PARAM) === "1",
           signal,
+          limits,
         );
       case "total":
-        return listGridTotals(def, execute, decodeQuery(def, params), signal);
+        return listGridTotals(
+          def,
+          execute,
+          decodeQuery(def, params),
+          signal,
+          limits,
+        );
       case "facets":
         return listFacetCounts(def, execute, signal);
       case "options":
@@ -179,6 +191,8 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           },
           signal,
         );
+      case "limits":
+        return limits;
       case "transitions":
         if (!config.moves) {
           throw new QueryRejected("not_found");

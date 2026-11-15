@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  DEFAULT_LIMITS,
   defaultQuery,
   getField,
   resolveMaxValues,
@@ -18,9 +19,8 @@ import {
   describeSearch,
   describeIndex,
   encodeCursor,
+  listSearchSettings,
   QUERY_CANCELED,
-  SEARCH_BUDGET_MS,
-  SEARCH_SETTINGS,
   TOTAL_SETTINGS,
   type SqlQuery,
 } from "@kikstart/query-grid-postgres";
@@ -127,7 +127,7 @@ async function measure(
       variant,
       p50: Number.NaN,
       p95: Number.NaN,
-      nodes: `refused by the server in ${refused} of ${RUNS + 3} runs: over the ${SEARCH_BUDGET_MS} ms search budget`,
+      nodes: `refused by the server in ${refused} of ${RUNS + 3} runs: over the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget`,
       ok: true,
     };
   }
@@ -374,7 +374,7 @@ async function benchSearch(
         describeSearch(search),
         `“${value}”, capped page`,
         buildPageSql(ORDERS_GRID_DEF, query, PAGE),
-        SEARCH_SETTINGS,
+        listSearchSettings(),
       ),
     );
   }

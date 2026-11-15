@@ -4,6 +4,7 @@ import type {
   GridRow,
   QueryState,
 } from "./field-types.ts";
+import type { GridLimits } from "./limits.ts";
 import type {
   CountResult,
   FacetCount,
@@ -37,6 +38,7 @@ export interface DataSource {
     search: OptionSearch,
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
+  fetchLimits: (signal: AbortSignal) => Promise<GridLimits | null>;
   fetchTransitions: (signal: AbortSignal) => Promise<[string, string][]>;
   changeFacetValue: (id: string, to: string) => Promise<GridRow>;
 }
