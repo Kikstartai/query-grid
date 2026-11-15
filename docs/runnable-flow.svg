@@ -30,9 +30,9 @@
     <text class="ts" x="340" y="78" text-anchor="middle" dominant-baseline="central">FieldDef, GridDef</text></g>
   <g class="core"><rect x="100" y="136" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="210" y="154" text-anchor="middle" dominant-baseline="central">Memory source</text>
-    <text class="ts" x="210" y="174" text-anchor="middle" dominant-baseline="central">From field operators</text></g>
+    <text class="ts" x="210" y="174" text-anchor="middle" dominant-baseline="central">memoryRunnable(def)</text></g>
   <g class="pg"><rect x="360" y="136" width="220" height="56" rx="8" stroke-width="0.5"/>
-    <text class="th" x="470" y="154" text-anchor="middle" dominant-baseline="central">Postgres</text>
+    <text class="th" x="470" y="154" text-anchor="middle" dominant-baseline="central">Indexes</text>
     <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">indexRunnable(indexes)</text></g>
   <g class="core"><rect x="230" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="340" y="250" text-anchor="middle" dominant-baseline="central">RunnableQueries</text>

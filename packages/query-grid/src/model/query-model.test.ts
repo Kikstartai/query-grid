@@ -247,7 +247,7 @@ describe("the reason a control is unavailable", () => {
   });
 });
 
-describe("memory mode", () => {
+describe("the memory source", () => {
   test("every field is a filter and a sort, in any combination", () => {
     const busy: QueryState = {
       ...BASE,

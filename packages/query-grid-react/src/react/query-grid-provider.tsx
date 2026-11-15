@@ -61,9 +61,9 @@ import { useLatest } from "../components/use-latest.ts";
 import { useStoreValue } from "../components/use-store-value.ts";
 import {
   buildUrlParsers,
-  normalizeSearch,
+  normalizeQueryString,
   readUrlState,
-  toSearch,
+  toQueryString,
   toUrlValues,
   type UrlValues,
 } from "./url-state.ts";
@@ -109,7 +109,7 @@ export interface QueryGridProviderProps {
 }
 
 export interface StaticQueryGridProviderProps extends QueryGridProviderProps {
-  search: string;
+  queryString: string;
 }
 
 export interface ColumnsModel {
@@ -132,10 +132,10 @@ const QueryGridContext = createContext<QueryGridContextValue | null>(null);
 
 function createValue(
   props: QueryGridProviderProps,
-  search: string,
+  queryString: string,
 ): QueryGridContextValue {
   const { def, source } = props;
-  const initial = readUrlState(def, source.runnable, search);
+  const initial = readUrlState(def, source.runnable, queryString);
   const store = createQueryStore(
     def,
     source.runnable,
@@ -185,11 +185,11 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
   const { runnable } = props.source;
   const [parsers] = useState(() => buildUrlParsers(runnable, prefix));
   const [values, setValues] = useQueryStates(parsers);
-  const search = toSearch(runnable, values as UrlValues, prefix);
-  const [value] = useState(() => createValue(props, search));
+  const queryString = toQueryString(runnable, values as UrlValues, prefix);
+  const [value] = useState(() => createValue(props, queryString));
   const setter = useLatest(setValues);
   const [sync] = useState(() =>
-    createUrlSync(value.store, search, (state, history) => {
+    createUrlSync(value.store, queryString, (state, history) => {
       void setter.current(
         toUrlValues(value.def, runnable, state, prefix),
         history === "push"
@@ -205,8 +205,8 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
   }, [value, sync]);
 
   useEffect(() => {
-    sync.follow(search);
-  }, [sync, search]);
+    sync.follow(queryString);
+  }, [sync, queryString]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }
@@ -216,14 +216,14 @@ function ignoreWrite(): void {
 }
 
 export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
-  const search = normalizeSearch(
+  const queryString = normalizeQueryString(
     props.source.runnable,
-    props.search,
+    props.queryString,
     props.urlPrefix ?? "",
   );
-  const [value] = useState(() => createValue(props, search));
+  const [value] = useState(() => createValue(props, queryString));
   const [sync] = useState(() =>
-    createUrlSync(value.store, search, ignoreWrite),
+    createUrlSync(value.store, queryString, ignoreWrite),
   );
 
   useEffect(() => {
@@ -231,8 +231,8 @@ export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   }, [value]);
 
   useEffect(() => {
-    sync.follow(search);
-  }, [sync, search]);
+    sync.follow(queryString);
+  }, [sync, queryString]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }

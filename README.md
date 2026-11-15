@@ -226,7 +226,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 - **Back, Forward and a `<Link>` to the same route flow back into the grid.** The provider decodes what nuqs reports with core's `decodeQuery`. A URL no index answers becomes the default query and is rewritten in place; a parameter the def does not own is left alone.
 - **One URL format.** The parser map is built at runtime from the runnable queries, on the keys core's `listQueryKeys` names for the fields the grid can filter (`f.<field>`, repeated per value; `r.<field>=min..max`; `q`; `sort`; `cursor`; `view`), and states go in and out through core's `encodeQuery` and `decodeQuery`. The server reads the same parameters with the same function.
 - nuqs stays inside the provider: no hook of the package returns it, and the base components never see it. Column layout stays out of the URL.
-- `StaticQueryGridProvider` leaves the URL alone and needs no adapter. It takes the same props plus a required `search` string, starts from it and follows it when it changes.
+- `StaticQueryGridProvider` leaves the URL alone and needs no adapter. It takes the same props plus a required `queryString`, starts from it and follows it when it changes.
 - Two grids on one page each take a `urlPrefix`: `urlPrefix="a"` writes `a.f.status`, `a.q`, `a.sort` and `a.view`, so neither grid reads or overwrites the other's keys. Without a prefix they would share `q`, `sort`, `cursor` and `view`.
 
 ## Runnable queries

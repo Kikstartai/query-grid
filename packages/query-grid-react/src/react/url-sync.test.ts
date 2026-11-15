@@ -15,7 +15,7 @@ import { createUrlSync } from "./url-sync.ts";
 const DEF = TEST_GRID_DEF;
 
 interface Written {
-  search: string;
+  queryString: string;
   history: HistoryWrite;
 }
 
@@ -36,7 +36,7 @@ function createHarness(): Harness {
     encodeStore(store),
     (state: UrlState, history) =>
       written.push({
-        search: encodeUrlState(DEF, source.runnable, state),
+        queryString: encodeUrlState(DEF, source.runnable, state),
         history,
       }),
     () => clock.now,
@@ -49,7 +49,9 @@ describe("createUrlSync", () => {
   test("a discrete change is written once, as a push", () => {
     const { store, written } = createHarness();
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
-    expect(written).toEqual([{ search: "f.status=open", history: "push" }]);
+    expect(written).toEqual([
+      { queryString: "f.status=open", history: "push" },
+    ]);
   });
 
   test("the search is written as a replace", () => {
@@ -66,9 +68,9 @@ describe("createUrlSync", () => {
       field: "status",
       values: ["open", "done"],
     });
-    sync.follow(written[0].search);
+    sync.follow(written[0].queryString);
     expect(store.getQuery().equals.status).toEqual(["open", "done"]);
-    sync.follow(written[1].search);
+    sync.follow(written[1].queryString);
     expect(store.getQuery().equals.status).toEqual(["open", "done"]);
     expect(written).toHaveLength(2);
   });
@@ -76,7 +78,7 @@ describe("createUrlSync", () => {
   test("Back to an earlier URL is followed by the store and not written again", () => {
     const { store, written, sync } = createHarness();
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
-    sync.follow(written[0].search);
+    sync.follow(written[0].queryString);
     sync.follow("");
     expect(store.getQuery().equals).toEqual({});
     expect(written).toHaveLength(1);
@@ -87,7 +89,7 @@ describe("createUrlSync", () => {
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
     store.dispatch({ type: "clearEquals", field: "status" });
     clock.now = 5000;
-    sync.follow(written[0].search);
+    sync.follow(written[0].queryString);
     expect(store.getQuery().equals.status).toEqual(["open"]);
   });
 
@@ -95,6 +97,6 @@ describe("createUrlSync", () => {
     const { store, written, sync } = createHarness();
     sync.follow("f.nope=1&view=sideways");
     expect(store.getQuery()).toEqual(defaultQuery(DEF));
-    expect(written).toEqual([{ search: "", history: "replace" }]);
+    expect(written).toEqual([{ queryString: "", history: "replace" }]);
   });
 });

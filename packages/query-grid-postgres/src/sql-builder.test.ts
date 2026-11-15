@@ -424,6 +424,20 @@ describe("generated DDL", () => {
     }
   });
 
+  test("each index is marked auto-created right after it is built", () => {
+    const steps = listGridMigrationSteps(TEST_DEF);
+    const names = listIndexDdl(TEST_DEF).map((index) => index.name);
+    for (const name of names) {
+      const built = steps.findIndex((step) =>
+        step.sql.includes(`EXISTS ${name} ON`),
+      );
+      expect(steps[built + 1]).toMatchObject({
+        sql: `COMMENT ON INDEX ${name} IS 'Auto-created.';`,
+        transaction: false,
+      });
+    }
+  });
+
   test("the counter is backfilled from one snapshot, with no lock held across the scan, and stays current meanwhile", () => {
     const steps = listGridMigrationSteps(TEST_DEF).filter(
       (step) => step.transaction,

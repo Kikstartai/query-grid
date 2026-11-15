@@ -40,7 +40,7 @@ export function buildUrlParsers(runnable: RunnableQueries, prefix = "") {
   );
 }
 
-export function toSearch(
+export function toQueryString(
   runnable: RunnableQueries,
   values: UrlValues,
   prefix = "",
@@ -54,12 +54,12 @@ export function toSearch(
   return params.toString();
 }
 
-export function normalizeSearch(
+export function normalizeQueryString(
   runnable: RunnableQueries,
-  search: string,
+  queryString: string,
   prefix: string,
 ): string {
-  const params = new URLSearchParams(search);
+  const params = new URLSearchParams(queryString);
   const own = new URLSearchParams();
   for (const key of listUrlKeys(runnable)) {
     for (const value of params.getAll(urlName(key, prefix))) {
@@ -72,9 +72,9 @@ export function normalizeSearch(
 export function readUrlState(
   def: BaseGridDef,
   runnable: RunnableQueries,
-  search: string,
+  queryString: string,
 ): UrlState {
-  const params = new URLSearchParams(search);
+  const params = new URLSearchParams(queryString);
   return {
     query: normalizeQuery(def, runnable, decodeQuery(def, params)),
     view:
@@ -105,7 +105,7 @@ export function encodeUrlState(
   runnable: RunnableQueries,
   state: UrlState,
 ): string {
-  return toSearch(runnable, toUrlValues(def, runnable, state));
+  return toQueryString(runnable, toUrlValues(def, runnable, state));
 }
 
 export function readStoreState(store: QueryStore): UrlState {

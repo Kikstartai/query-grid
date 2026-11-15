@@ -28,7 +28,7 @@ import {
 import {
   buildUrlParsers,
   readUrlState,
-  toSearch,
+  toQueryString,
   toUrlValues,
   type UrlValues,
 } from "./url-state.ts";
@@ -114,13 +114,15 @@ describe("the URL parsers", () => {
       cursor: null,
       view: "list",
     });
-    const search = toSearch(RUNNABLE, values);
+    const queryString = toQueryString(RUNNABLE, values);
     const core = encodeQuery(DEF, state.query);
     for (const [name, value] of core) {
-      expect(new URLSearchParams(search).getAll(name)).toContain(value);
+      expect(new URLSearchParams(queryString).getAll(name)).toContain(value);
     }
-    expect([...new URLSearchParams(search)]).toHaveLength([...core].length + 1);
-    expect(readUrlState(DEF, source.runnable, search)).toEqual(state);
+    expect([...new URLSearchParams(queryString)]).toHaveLength(
+      [...core].length + 1,
+    );
+    expect(readUrlState(DEF, source.runnable, queryString)).toEqual(state);
   });
 });
 
@@ -227,7 +229,7 @@ describe("two grids on one page", () => {
     const second = connectGrid(url, "b");
     first.store.dispatch({ type: "setSearch", value: "acme" });
     first.store.setView("board");
-    second.sync.follow(toSearch(RUNNABLE, url, "b"));
+    second.sync.follow(toQueryString(RUNNABLE, url, "b"));
     expect(second.store.getQuery()).toEqual(BASE);
     expect(second.store.getView()).toBe("grid");
     second.store.dispatch({
@@ -235,10 +237,10 @@ describe("two grids on one page", () => {
       field: "status",
       values: ["done"],
     });
-    first.sync.follow(toSearch(RUNNABLE, url, "a"));
+    first.sync.follow(toQueryString(RUNNABLE, url, "a"));
     expect(first.store.getQuery()).toEqual({ ...BASE, search: "acme" });
-    expect(toSearch(RUNNABLE, url, "a")).toBe("q=acme&view=board");
-    expect(toSearch(RUNNABLE, url, "b")).toBe("f.status=done");
+    expect(toQueryString(RUNNABLE, url, "a")).toBe("q=acme&view=board");
+    expect(toQueryString(RUNNABLE, url, "b")).toBe("f.status=done");
     expect(url["a.q"]).toBe("acme");
     expect(url["b.f.status"]).toEqual(["done"]);
     expect(url.q).toBeUndefined();
@@ -276,7 +278,7 @@ describe("the actions", () => {
       <StaticQueryGridProvider
         def={DEF}
         source={counting}
-        search=""
+        queryString=""
         columnPersistence={NO_PERSISTENCE}
       >
         <Capture />
@@ -304,7 +306,7 @@ describe("the static provider", () => {
           def={DEF}
           source={source}
           urlPrefix="b"
-          search="f.region=north&b.f.region=south&b.view=list"
+          queryString="f.region=north&b.f.region=south&b.view=list"
           columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
@@ -322,7 +324,7 @@ describe("the static provider", () => {
         <StaticQueryGridProvider
           def={DEF}
           source={source}
-          search="f.region=south&view=list"
+          queryString="f.region=south&view=list"
           columnPersistence={NO_PERSISTENCE}
         >
           <Readout />

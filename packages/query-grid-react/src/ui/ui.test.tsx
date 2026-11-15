@@ -19,7 +19,7 @@ function render(element: ReactElement): string {
     <StaticQueryGridProvider
       def={DEF}
       source={source}
-      search=""
+      queryString=""
       columnPersistence={NO_PERSISTENCE}
     >
       {element}

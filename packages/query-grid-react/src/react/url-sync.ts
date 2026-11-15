@@ -11,7 +11,7 @@ import {
 const PENDING_WRITE_MS = 1000;
 
 interface PendingWrite {
-  search: string;
+  queryString: string;
   at: number;
 }
 
@@ -19,16 +19,16 @@ export type UrlWriter = (state: UrlState, history: HistoryWrite) => void;
 
 export interface UrlSync {
   connect: () => () => void;
-  follow: (search: string) => void;
+  follow: (queryString: string) => void;
 }
 
 export function createUrlSync(
   store: QueryStore,
-  search: string,
+  queryString: string,
   write: UrlWriter,
   now: () => number = Date.now,
 ): UrlSync {
-  let written = search;
+  let written = queryString;
   let pending: PendingWrite[] = [];
   return {
     connect: () =>
@@ -38,14 +38,14 @@ export function createUrlSync(
           return;
         }
         written = target;
-        pending.push({ search: target, at: now() });
+        pending.push({ queryString: target, at: now() });
         write(readStoreState(store), store.getHistoryWrite());
       }),
     follow: (next) => {
       const fresh = pending.filter(
         (item) => now() - item.at < PENDING_WRITE_MS,
       );
-      const echoed = fresh.findIndex((item) => item.search === next);
+      const echoed = fresh.findIndex((item) => item.queryString === next);
       pending = echoed < 0 ? [] : fresh.slice(echoed + 1);
       if (echoed >= 0) {
         return;

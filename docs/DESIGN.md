@@ -56,7 +56,7 @@ Three npm packages in one repo, released together at one version.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
 - The filter controls are `EqualsSelect`, `LookupFilter` and `RangeFilter`. The bound `FieldFilter` picks one from the runnable queries, the field's `type` and its `options`.
 - The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then the sort. Without it they show every filterable field. `children` replaces everything.
-- `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `search` string and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
+- `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `queryString` and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
 - `styles.css` styles only the package's own elements, reads the `--ui-*` tokens of `@ui-sdk/core/web.css` and defines none.
 
 ### `@kikstart/query-grid-postgres`
@@ -169,7 +169,7 @@ interface QueryState {
 - **Counts.** A query that filters on the facet alone reads the counter table. Any other is counted up to the cap, and the exact count is a separate request.
 - **Totals.** A query that filters on the facet alone reads the counter table. Any other is summed live in one statement for every total field, over the index scan, and only when at most 10,000 rows match.
 - **The search** runs under a 120 ms statement budget and answers `too_broad` past it.
-- **The migration** is generated from the defs: one `CREATE INDEX CONCURRENTLY` per index, then three counter steps. The first installs the triggers, which keep the counter table current and log each change. The second counts the table from one snapshot, with no table lock. The third replaces the counters with the count plus the changes logged since. A run that stops anywhere leaves the counters following every write, and resumes from the top or from the step that failed.
+- **The migration** is generated from the defs: one `CREATE INDEX CONCURRENTLY` per index, each named `auto_<table>_<columns>` and followed by `COMMENT ON INDEX … IS 'Auto-created.'`, then three counter steps. The comment is written even when `IF NOT EXISTS` skips the build, so a hand-made index must never take an `auto_` name. The first installs the triggers, which keep the counter table current and log each change. The second counts the table from one snapshot, with no table lock. The third replaces the counters with the count plus the changes logged since. A run that stops anywhere leaves the counters following every write, and resumes from the top or from the step that failed.
 - **A total added to a def** is a new counter column. The migration is run again, and the new sum is exact once its third step has run.
 
 ## Localization
