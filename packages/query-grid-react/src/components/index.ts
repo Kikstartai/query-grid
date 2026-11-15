@@ -1,25 +1,20 @@
 export { CardList, type CardListProps } from "./card-list.tsx";
 export {
-  beginResize,
-  cancelResize,
   clampWidth,
   COLUMN_DEFAULT_WIDTH,
   COLUMN_MAX_WIDTH,
   COLUMN_MIN_WIDTH,
+  createColumnStore,
   createLocalStoragePersistence,
   defaultColumns,
   layoutColumns,
   normalizeColumns,
   patchColumn,
   reorderColumns,
-  RESIZE_LARGE_STEP,
-  RESIZE_STEP,
-  resizeWidth,
-  stepWidth,
   type ColumnPersistence,
   type ColumnState,
+  type ColumnStore,
   type GridColumn,
-  type ResizeSession,
 } from "./column-state.ts";
 export { ColumnsMenu, type ColumnsMenuProps } from "./columns-menu.tsx";
 export {

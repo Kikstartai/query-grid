@@ -1,5 +1,8 @@
 import { formatValue, shapeCapabilities } from "@kikstart/query-grid";
-import type { ClientFieldDef, ClientGridDef } from "@kikstart/query-grid-react";
+import type {
+  ClientFieldDef,
+  ClientGridDef,
+} from "@kikstart/query-grid-react/components";
 
 import {
   ORDERS_BASE,
