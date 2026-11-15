@@ -437,14 +437,28 @@ run_shift() {
 
 THEME_PAGES="/ /orders /orders?view=list /orders?view=board /memory /memory?view=board /restyled /rtl /rtl?view=list /components /parts/filter-bar /parts/chips /parts/sidebar /parts/facets /parts/count /parts/total /parts/grid /parts/list /parts/board /nope"
 
-CONTRAST="(() => { const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true }); const rgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; }; const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }; const ratio = (a, b) => { const x = lum(a); const y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }; const back = (el) => { for (let e = el; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c[3] > 0.5) { return c; } } return rgb(getComputedStyle(document.body).backgroundColor); }; const inactive = (el) => { if (el.closest('[disabled], [aria-disabled=true], [data-disabled], [data-unavailable], [aria-hidden=true]')) { return true; } for (let e = el; e; e = e.parentElement) { if (Number(getComputedStyle(e).opacity) < 1) { return true; } } return false; }; const low = []; let min = 99; let n = 0; for (const el of document.querySelectorAll('body *')) { if (![...el.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) { continue; } const box = el.getBoundingClientRect(); const cs = getComputedStyle(el); if (box.width < 2 || box.height < 2 || cs.visibility !== 'visible' || inactive(el)) { continue; } const r = ratio(rgb(cs.color), back(el)); const size = parseFloat(cs.fontSize); const large = size >= 24 || (size >= 18.6 && Number(cs.fontWeight) >= 700); n++; min = Math.min(min, r); if (r < (large ? 3 : 4.5)) { low.push(el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : '') + ' [' + el.textContent.trim().slice(0, 16) + '] ' + r.toFixed(2)); } } return n + ' texts, min ' + min.toFixed(2) + ', below AA ' + low.length + (low.length ? ': ' + low.slice(0, 5).join(' | ') : ''); })()"
+RGB="const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true }); const seen = new Map(); const rgb = (c) => { if (!seen.has(c)) { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; seen.set(c, [d[0], d[1], d[2], d[3] / 255]); } return seen.get(c); }; const tone = (c) => { const v = rgb(c); return v[0] + v[1] + v[2] < 384 ? 'dark' : 'light'; }; const theme = () => 'data-theme ' + (document.documentElement.dataset.theme ?? 'none');"
 
-PAINT="(() => { const ctx = document.createElement('canvas').getContext('2d'); ctx.fillStyle = getComputedStyle(document.body).backgroundColor; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return 'data-theme ' + (document.documentElement.dataset.theme ?? 'none') + ', body ' + (d[0] + d[1] + d[2] < 384 ? 'dark' : 'light'); })()"
+CONTRAST="(() => { $RGB const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }; const ratio = (a, b) => { const x = lum(a); const y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }; const back = (el) => { for (let e = el; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c[3] > 0.5) { return c; } } return rgb(getComputedStyle(document.body).backgroundColor); }; const inactive = (el) => { if (el.closest('[disabled], [aria-disabled=true], [data-disabled], [data-unavailable], [aria-hidden=true]')) { return true; } for (let e = el; e; e = e.parentElement) { if (Number(getComputedStyle(e).opacity) < 1) { return true; } } return false; }; const low = []; let min = 99; let n = 0; for (const el of document.querySelectorAll('body *')) { if (![...el.childNodes].some((c) => c.nodeType === 3 && c.textContent.trim())) { continue; } const box = el.getBoundingClientRect(); const cs = getComputedStyle(el); if (box.width < 2 || box.height < 2 || cs.visibility !== 'visible' || inactive(el)) { continue; } const r = ratio(rgb(cs.color), back(el)); const size = parseFloat(cs.fontSize); const large = size >= 24 || (size >= 18.6 && Number(cs.fontWeight) >= 700); n++; min = Math.min(min, r); if (r < (large ? 3 : 4.5)) { low.push(el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : '') + ' [' + el.textContent.trim().slice(0, 16) + '] ' + r.toFixed(2)); } } return n + ' texts, min ' + min.toFixed(2) + ', below AA ' + low.length + (low.length ? ': ' + low.slice(0, 5).join(' | ') : ''); })()"
 
-FIRST_FRAME="requestAnimationFrame(() => { const probe = document.createElement('i'); probe.style.color = 'var(--background)'; document.documentElement.append(probe); const ctx = document.createElement('canvas').getContext('2d'); ctx.fillStyle = getComputedStyle(probe).color; probe.remove(); ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; window.__firstFrame = 'data-theme ' + (document.documentElement.dataset.theme ?? 'none') + ', background ' + (d[0] + d[1] + d[2] < 384 ? 'dark' : 'light'); });"
+PAINT="(() => { $RGB return theme() + ', body ' + tone(getComputedStyle(document.body).backgroundColor); })()"
+
+FIRST_FRAME="requestAnimationFrame(() => { $RGB const probe = document.createElement('i'); probe.style.color = 'var(--background)'; document.documentElement.append(probe); const color = getComputedStyle(probe).color; probe.remove(); window.__firstFrame = theme() + ', background ' + tone(color); });"
 
 theme_store() { js "(() => { try { const v = '$1'; if (v) { localStorage.setItem('query-grid:theme', v); } else { localStorage.removeItem('query-grid:theme'); } } catch {} return 1; })()" >/dev/null; }
 pressed() { js "[...document.querySelectorAll('[data-part=theme-toggle] [data-theme-choice]')].filter((e) => e.getAttribute('aria-checked') === 'true' || e.getAttribute('aria-pressed') === 'true' || e.hasAttribute('data-checked') || e.dataset.state === 'on').map((e) => e.dataset.themeChoice).join(',')"; }
+
+first_frame() {
+  ab set media "$1" >/dev/null; theme_store "$2"
+  go "/orders" 5; note "$3, first frame" "$(js "window.__firstFrame ?? 'none'")"
+}
+
+choose_and_reload() {
+  click "[data-part=theme-toggle] [data-theme-choice=$1]" 1
+  note "$3, chosen" "$(pressed); $(js "$PAINT"); stored $(js "localStorage.getItem('query-grid:theme')")"
+  ab set media "$2" >/dev/null; ab reload >/dev/null; settle 5
+  note "$3, after reload" "$(pressed); $(js "$PAINT")"
+}
 
 theme_popovers() {
   go "/orders" 5
@@ -459,7 +473,7 @@ theme_popovers() {
 theme_pages() {
   for path in $THEME_PAGES; do
     go "$path" 5
-    note "$path" "$(js "$PAINT"); $(js "$CONTRAST")"
+    note "$path" "$(js "$PAINT + '; ' + $CONTRAST")"
   done
   theme_popovers
 }
@@ -468,13 +482,11 @@ run_theme() {
   say "No flash of the wrong theme"
   local probe="${TMPDIR:-/tmp}/qg-first-frame.js"; printf '%s' "$FIRST_FRAME" > "$probe"
   local main="$SID"; SID="$main-first-frame"
+  ab close >/dev/null 2>&1
   ab --init-script "$probe" open "$BASE/" >/dev/null; settle 2
-  ab set media dark >/dev/null; theme_store ""
-  go "/orders" 5; note "OS dark, no choice, first frame" "$(js "window.__firstFrame ?? 'none'")"
-  ab set media light >/dev/null; theme_store dark
-  go "/orders" 5; note "OS light, Dark chosen, first frame" "$(js "window.__firstFrame ?? 'none'")"
-  ab set media dark >/dev/null; theme_store light
-  go "/orders" 5; note "OS dark, Light chosen, first frame" "$(js "window.__firstFrame ?? 'none'")"
+  first_frame dark "" "OS dark, no choice"
+  first_frame light dark "OS light, Dark chosen"
+  first_frame dark light "OS dark, Light chosen"
   theme_store ""
   ab close >/dev/null 2>&1; SID="$main"; rm -f "$probe"
   note "server html" "$(curl -s -m 60 "$BASE/orders" | node -e "let h='';process.stdin.on('data',(d)=>h+=d).on('end',()=>{const s=h.indexOf('query-grid:theme');const b=h.indexOf('<body');const tag=h.match(/<html[^>]*>/)?.[0]??'';console.log('theme script in head '+(s>0&&s<b)+', data-theme on html '+tag.includes('data-theme'))})")"
@@ -483,16 +495,9 @@ run_theme() {
   ab set media light >/dev/null
   go "/orders" 5
   note "start" "$(pressed); $(js "$PAINT")"
-  click '[data-part=theme-toggle] [data-theme-choice=dark]' 1
-  note "Dark" "$(pressed); $(js "$PAINT"); stored $(js "localStorage.getItem('query-grid:theme')")"
-  ab reload >/dev/null; settle 5
-  note "after reload" "$(pressed); $(js "$PAINT")"
-  click '[data-part=theme-toggle] [data-theme-choice=light]' 1
-  ab set media dark >/dev/null; ab reload >/dev/null; settle 5
-  note "Light under OS dark, after reload" "$(pressed); $(js "$PAINT")"
-  click '[data-part=theme-toggle] [data-theme-choice=system]' 1
-  ab reload >/dev/null; settle 5
-  note "System under OS dark, after reload" "$(pressed); $(js "$PAINT"); stored $(js "localStorage.getItem('query-grid:theme')")"
+  choose_and_reload dark light "Dark under OS light"
+  choose_and_reload light dark "Light under OS dark"
+  choose_and_reload system dark "System under OS dark"
 
   say "Every page in dark"
   ab errors --clear >/dev/null 2>&1
