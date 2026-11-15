@@ -1,30 +1,35 @@
 @layer ui-sdk;
 
 :root {
-  --background: oklch(0.99 0.002 80);
-  --foreground: oklch(0.15 0.005 285.823);
-  --card: oklch(1 0 0);
-  --primary: oklch(0.21 0.006 285.885);
-  --primary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --border: oklch(0.92 0.004 286.32);
-  --destructive: oklch(0.577 0.245 27.325);
-  --brand: oklch(0.57 0.2 27);
-  --brand-muted: oklch(0.96 0.02 25);
-  --ember: oklch(0.62 0.2 30);
+  color-scheme: light dark;
+  --background: light-dark(oklch(0.99 0.002 80), oklch(0.17 0.005 285));
+  --foreground: light-dark(oklch(0.15 0.005 285.823), oklch(0.96 0.003 286));
+  --card: light-dark(oklch(1 0 0), oklch(0.21 0.006 285));
+  --primary: light-dark(oklch(0.21 0.006 285.885), oklch(0.96 0.003 286));
+  --primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.21 0.006 285));
+  --muted: light-dark(oklch(0.967 0.001 286.375), oklch(0.27 0.006 286));
+  --muted-foreground: light-dark(
+    oklch(0.52 0.016 285.938),
+    oklch(0.72 0.015 286)
+  );
+  --border: light-dark(oklch(0.92 0.004 286.32), oklch(0.3 0.006 286));
+  --destructive: light-dark(oklch(0.56 0.245 27.325), oklch(0.7 0.19 22));
+  --brand: light-dark(oklch(0.55 0.2 27), oklch(0.7 0.17 28));
+  --brand-fill: light-dark(oklch(0.55 0.2 27), oklch(0.57 0.2 27));
+  --brand-muted: light-dark(oklch(0.97 0.015 25), oklch(0.29 0.06 25));
+  --logo-from: light-dark(#d42f2a, #ef4b3f);
+  --logo-to: light-dark(#a3161a, #c8231f);
   --radius: 0.75rem;
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, Menlo, Consolas, monospace;
 
-  color-scheme: light;
   --ui-background: var(--card);
   --ui-foreground: var(--foreground);
   --ui-muted: var(--muted);
   --ui-muted-foreground: var(--muted-foreground);
   --ui-border: var(--border);
-  --ui-input: oklch(0.87 0.004 286.32);
-  --ui-primary: var(--brand);
+  --ui-input: light-dark(oklch(0.87 0.004 286.32), oklch(0.52 0.006 286));
+  --ui-primary: var(--brand-fill);
   --ui-primary-foreground: oklch(0.985 0 0);
   --ui-destructive: var(--destructive);
   --ui-ring: color-mix(in oklab, var(--brand) 25%, transparent);
@@ -33,6 +38,14 @@
   --ui-font-size: 0.875rem;
   --ui-font-sans: var(--font-sans);
   --ui-font-mono: var(--font-mono);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 html,
@@ -106,6 +119,21 @@ pre {
   font-weight: 650;
   letter-spacing: -0.01em;
   text-decoration: none;
+}
+
+.brand-logo {
+  display: inline-block;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--logo-from), var(--logo-to));
+  mask: var(--logo) center / contain no-repeat;
+}
+
+.brand-logo[data-logo="mark"] {
+  --logo: url("/brand/kikstart-mark.svg");
+}
+
+.brand-logo[data-logo="wordmark"] {
+  --logo: url("/brand/kikstart-wordmark.svg");
 }
 
 .by-kikstart {

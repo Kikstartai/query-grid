@@ -7,6 +7,8 @@ import "@ui-sdk/core/web.css";
 import "@kikstart/query-grid-react/styles.css";
 import "./globals.css";
 
+import { THEME_SCRIPT } from "@/lib/theme";
+
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -22,7 +24,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body>
         <NuqsAdapter>{children}</NuqsAdapter>
       </body>

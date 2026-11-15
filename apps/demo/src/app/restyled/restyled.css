@@ -1,14 +1,14 @@
 .restyled {
-  --ui-background: #fffbeb;
-  --ui-foreground: #0f172a;
-  --ui-muted: #fde68a;
-  --ui-muted-foreground: #475569;
-  --ui-border: #0f172a;
-  --ui-input: #0f172a;
-  --ui-primary: #0f172a;
-  --ui-primary-foreground: #fffbeb;
+  --ui-background: light-dark(#fffbeb, #1c1408);
+  --ui-foreground: light-dark(#0f172a, #fef3c7);
+  --ui-muted: light-dark(#fde68a, #78350f);
+  --ui-muted-foreground: light-dark(#475569, #fcd34d);
+  --ui-border: light-dark(#0f172a, #fef3c7);
+  --ui-input: light-dark(#0f172a, #fef3c7);
+  --ui-primary: light-dark(#0f172a, #fde68a);
+  --ui-primary-foreground: light-dark(#fffbeb, #1c1408);
   --ui-ring: #f59e0b;
-  --ui-ring-border: #0f172a;
+  --ui-ring-border: light-dark(#0f172a, #fef3c7);
   --ui-radius: 0;
   --ui-font-size: 0.75rem;
   --ui-font-sans: var(--font-mono);
