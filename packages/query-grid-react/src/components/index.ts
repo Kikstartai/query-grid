@@ -33,10 +33,14 @@ export {
   type FacetPanelProps,
 } from "./facet-panel.tsx";
 export {
-  FieldFilter,
-  type FieldFilterProps,
+  EqualsSelect,
+  LookupFilter,
+  RangeFilter,
+  type EqualsSelectProps,
   type FieldRange,
   type LoadOptions,
+  type LookupFilterProps,
+  type RangeFilterProps,
 } from "./field-filter.tsx";
 export { FieldFrame, type FieldFrameProps } from "./field-frame.tsx";
 export type {

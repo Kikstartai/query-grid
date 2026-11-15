@@ -8,7 +8,7 @@ import { ColumnsMenu } from "./columns-menu.tsx";
 import { CountDisplay, TotalFooter } from "./count-display.tsx";
 import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
-import { FieldFilter } from "./field-filter.tsx";
+import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -185,14 +185,14 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).toContain("Not now");
   });
 
-  test("FieldFilter in each of its forms", () => {
+  test("each filter variant", () => {
     const single = render(
-      <FieldFilter field={STATUS} values={["open"]} onValuesChange={noop} />,
+      <EqualsSelect field={STATUS} values={["open"]} onValuesChange={noop} />,
     );
     expect(single).toContain('aria-label="Status filter"');
     expect(single).not.toContain("data-multiple");
     const multiple = render(
-      <FieldFilter
+      <EqualsSelect
         field={STATUS}
         values={["open", "done"]}
         onValuesChange={noop}
@@ -201,7 +201,7 @@ describe("each base component mounts alone, with plain props and no provider", (
     );
     expect(multiple).toContain("data-multiple");
     const lookup = render(
-      <FieldFilter
+      <LookupFilter
         field={NAME}
         values={["a", "b"]}
         valueLabels={{ a: "Alpha", b: "Beta" }}
@@ -213,14 +213,16 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(lookup).toContain("Alpha");
     expect(lookup).toContain('aria-label="Remove Beta"');
     const money = render(
-      <FieldFilter
+      <RangeFilter
         field={TOTAL}
         range={{ min: "1000", max: null }}
         onRangeChange={noop}
       />,
     );
     expect(money).toContain('aria-label="Total from"');
-    const dates = render(<FieldFilter field={CREATED} onRangeChange={noop} />);
+    const dates = render(
+      <RangeFilter field={CREATED} range={null} onRangeChange={noop} />,
+    );
     expect(dates).toContain('aria-label="Pick Created dates"');
   });
 

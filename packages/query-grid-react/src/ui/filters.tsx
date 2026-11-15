@@ -9,9 +9,14 @@ import {
   QUICK_MAX_LENGTH,
   QUICK_MIN_LENGTH,
   type FieldDef,
+  type FieldOption,
 } from "@kikstart/query-grid";
 
-import { FieldFilter as BaseFieldFilter } from "../components/field-filter.tsx";
+import {
+  EqualsSelect,
+  LookupFilter,
+  RangeFilter,
+} from "../components/field-filter.tsx";
 import {
   FilterBar as BaseFilterBar,
   FilterChips as BaseFilterChips,
@@ -42,27 +47,65 @@ interface ControlProps {
   showReason?: boolean;
 }
 
-export function FieldFilter({ field, showReason }: FieldFilterProps) {
-  const { def } = useQueryGrid();
-  const { dispatch, loadOptions, rememberLabel } = useQueryGridActions();
+function useFieldOffer(field: FieldDef, kind: "equals" | "range") {
+  const offer = useOfferState({ kind, field: field.key });
+  return { disabled: !offer.offered, reason: offer.reason };
+}
+
+function useEqualsFilter(field: FieldDef) {
+  const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   const offers = useOffers();
-  const known = useFieldLabels();
-  const equality = field.operators.includes("eq");
-  const offer = useOfferState({
-    kind: equality ? "equals" : "range",
-    field: field.key,
-  });
-  const lookup = isLookupField(field);
-  const values = query.equals[field.key] ?? [];
+  return {
+    values: query.equals[field.key] ?? [],
+    multiple: offers.multi.includes(field.key),
+    onValuesChange: (values: string[]) =>
+      dispatch({ type: "setEquals", field: field.key, values }),
+  };
+}
+
+function BoundEqualsSelect({ field, showReason }: FieldFilterProps) {
   return (
-    <BaseFieldFilter
+    <EqualsSelect
       field={field}
-      values={values}
-      multiple={offers.multi.includes(field.key)}
-      onValuesChange={(next) =>
-        dispatch({ type: "setEquals", field: field.key, values: next })
+      {...useEqualsFilter(field)}
+      {...useFieldOffer(field, "equals")}
+      showReason={showReason}
+    />
+  );
+}
+
+function BoundLookupFilter({ field, showReason }: FieldFilterProps) {
+  const { loadOptions, rememberLabel } = useQueryGridActions();
+  const known = useFieldLabels();
+  const equals = useEqualsFilter(field);
+  return (
+    <LookupFilter
+      field={field}
+      {...equals}
+      {...useFieldOffer(field, "equals")}
+      loadOptions={(text, signal) => loadOptions(field.key, text, signal)}
+      valueLabels={Object.fromEntries(
+        equals.values.flatMap((value) => {
+          const label = known[labelKey(field.key, value)];
+          return label ? [[value, label]] : [];
+        }),
+      )}
+      onOptionPick={(option: FieldOption) =>
+        rememberLabel(field.key, option.value, option.label)
       }
+      showReason={showReason}
+    />
+  );
+}
+
+function BoundRangeFilter({ field, showReason }: FieldFilterProps) {
+  const { def } = useQueryGrid();
+  const { dispatch } = useQueryGridActions();
+  const query = useQueryState();
+  return (
+    <RangeFilter
+      field={field}
       range={query.range?.field === field.key ? query.range : null}
       onRangeChange={(next) =>
         dispatch(
@@ -71,26 +114,25 @@ export function FieldFilter({ field, showReason }: FieldFilterProps) {
             : { type: "clearRange" },
         )
       }
-      loadOptions={
-        lookup
-          ? (text, signal) => loadOptions(field.key, text, signal)
-          : undefined
-      }
-      valueLabels={Object.fromEntries(
-        values.flatMap((value) => {
-          const label = known[labelKey(field.key, value)];
-          return label ? [[value, label]] : [];
-        }),
-      )}
-      onOptionPick={(option) =>
-        rememberLabel(field.key, option.value, option.label)
-      }
       format={def.format}
-      disabled={!offer.offered}
-      reason={offer.reason}
+      {...useFieldOffer(field, "range")}
       showReason={showReason}
     />
   );
+}
+
+export function FieldFilter(props: FieldFilterProps) {
+  const { field } = props;
+  if (isLookupField(field)) {
+    return <BoundLookupFilter {...props} />;
+  }
+  if (field.operators.includes("eq")) {
+    return <BoundEqualsSelect {...props} />;
+  }
+  if (field.operators.includes("range")) {
+    return <BoundRangeFilter {...props} />;
+  }
+  return null;
 }
 
 export function SortControl({ showReason }: ControlProps) {

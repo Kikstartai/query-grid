@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import {
   DEFAULT_CURRENCY,
@@ -71,17 +71,39 @@ export type LoadOptions = (
   signal: AbortSignal,
 ) => Promise<FieldOption[]>;
 
-export interface FieldFilterProps extends ControlState {
+interface FilterProps extends ControlState {
   field: FieldDef;
-  values?: string[];
-  onValuesChange?: (values: string[]) => void;
+}
+
+export interface EqualsSelectProps extends FilterProps {
+  values: string[];
+  onValuesChange: (values: string[]) => void;
   multiple?: boolean;
-  range?: FieldRange | null;
-  onRangeChange?: (range: FieldRange | null) => void;
-  loadOptions?: LoadOptions;
+}
+
+export interface LookupFilterProps extends EqualsSelectProps {
+  loadOptions: LoadOptions;
   valueLabels?: Record<string, string>;
   onOptionPick?: (option: FieldOption) => void;
+}
+
+export interface RangeFilterProps extends FilterProps {
+  range: FieldRange | null;
+  onRangeChange: (range: FieldRange | null) => void;
   format?: GridFormat;
+}
+
+interface FilterFrameProps extends FilterProps {
+  kind: "equals" | "range";
+  children: ReactNode;
+}
+
+function FilterFrame({ field, kind, children, ...state }: FilterFrameProps) {
+  return (
+    <FieldFrame name={field.key} kind={kind} label={field.label} {...state}>
+      {children}
+    </FieldFrame>
+  );
 }
 
 const MAX_LABELS = 2;
@@ -96,7 +118,7 @@ function toValues(value: string | string[] | null): string[] {
 function EqualsSelectParts({
   field,
   multiple,
-}: Pick<FieldFilterProps, "field" | "multiple">) {
+}: Pick<EqualsSelectProps, "field" | "multiple">) {
   const messages = useMessages();
   const label = { label: field.label };
   return (
@@ -132,8 +154,8 @@ function EqualsSelectParts({
   );
 }
 
-function EqualsSelect(props: FieldFilterProps) {
-  const { field, values = [], disabled, onValuesChange } = props;
+function EqualsControl(props: EqualsSelectProps) {
+  const { field, values, disabled, onValuesChange } = props;
   const messages = useMessages();
   if (props.multiple) {
     return (
@@ -143,7 +165,7 @@ function EqualsSelect(props: FieldFilterProps) {
         value={values}
         disabled={disabled}
         placeholder={messages.any}
-        onValueChange={(next: string[]) => onValuesChange?.(next)}
+        onValueChange={(next: string[]) => onValuesChange(next)}
       >
         <EqualsSelectParts field={field} multiple />
       </Select>
@@ -155,18 +177,18 @@ function EqualsSelect(props: FieldFilterProps) {
       value={values[0] ?? null}
       disabled={disabled}
       placeholder={messages.any}
-      onValueChange={(next: string | null) => onValuesChange?.(toValues(next))}
+      onValueChange={(next: string | null) => onValuesChange(toValues(next))}
     >
       <EqualsSelectParts field={field} />
     </Select>
   );
 }
 
-interface LookupProps extends FieldFilterProps {
-  loadOptions: LoadOptions;
-}
-
-function useLookup({ loadOptions, onOptionPick, onValuesChange }: LookupProps) {
+function useLookup({
+  loadOptions,
+  onOptionPick,
+  onValuesChange,
+}: LookupFilterProps) {
   const options = useAsyncOptions<FieldOption>(
     (text, { signal }) => loadOptions(text, signal),
     { debounce: 250, immediate: true },
@@ -178,7 +200,7 @@ function useLookup({ loadOptions, onOptionPick, onValuesChange }: LookupProps) {
         onOptionPick?.(option);
       }
     }
-    onValuesChange?.(next);
+    onValuesChange(next);
   };
   return { options, choose };
 }
@@ -205,8 +227,8 @@ function LookupItems({ items }: { items: FieldOption[] }) {
   );
 }
 
-function LookupSingle(props: LookupProps) {
-  const { field, values = [], valueLabels = {}, disabled } = props;
+function LookupSingle(props: LookupFilterProps) {
+  const { field, values, valueLabels = {}, disabled } = props;
   const messages = useMessages();
   const { options, choose } = useLookup(props);
   const current = values[0] ?? null;
@@ -245,8 +267,8 @@ interface LookupChipState {
   value: unknown;
 }
 
-function LookupMultiple(props: LookupProps) {
-  const { field, values = [], valueLabels = {}, disabled } = props;
+function LookupMultiple(props: LookupFilterProps) {
+  const { field, values, valueLabels = {}, disabled } = props;
   const messages = useMessages();
   const { options, choose } = useLookup(props);
   const label = { label: field.label };
@@ -297,29 +319,27 @@ function LookupMultiple(props: LookupProps) {
   );
 }
 
-function toDateValue(
-  range: FieldRange | null | undefined,
-): [string, string] | null {
+function toDateValue(range: FieldRange | null): [string, string] | null {
   if (!range?.min || !range.max) {
     return null;
   }
   return [fromDayBound(range.min), fromDayBound(range.max)];
 }
 
-function DateRange(props: FieldFilterProps) {
+function DateRange(props: RangeFilterProps) {
   const { field, range, disabled, onRangeChange } = props;
   const messages = useMessages();
   const label = { label: field.label };
   const change = (value: unknown) => {
     if (Array.isArray(value) && value.length === 2) {
-      onRangeChange?.({
+      onRangeChange({
         min: toDayBound(String(value[0]), false),
         max: toDayBound(String(value[1]), true),
       });
       return;
     }
     if (range) {
-      onRangeChange?.(null);
+      onRangeChange(null);
     }
   };
   return (
@@ -368,7 +388,7 @@ function DateRange(props: FieldFilterProps) {
   );
 }
 
-function NumberRange(props: FieldFilterProps) {
+function NumberRange(props: RangeFilterProps) {
   const { field, range, disabled, format, onRangeChange } = props;
   const messages = useMessages();
   const rangeKey = `${range?.min ?? ""}|${range?.max ?? ""}`;
@@ -382,10 +402,10 @@ function NumberRange(props: FieldFilterProps) {
   }
   const apply = (lower: number | null, upper: number | null) => {
     if (lower === null && upper === null) {
-      onRangeChange?.(null);
+      onRangeChange(null);
       return;
     }
-    onRangeChange?.({
+    onRangeChange({
       min: toNumberBound(field, lower),
       max: toNumberBound(field, upper),
     });
@@ -438,53 +458,58 @@ function NumberRange(props: FieldFilterProps) {
   );
 }
 
-function LookupFilter(props: LookupProps) {
+function LookupControl(props: LookupFilterProps) {
   if (props.multiple) {
     return <LookupMultiple {...props} />;
   }
   return <LookupSingle {...props} />;
 }
 
-function RangeFilter(props: FieldFilterProps) {
+function RangeControl(props: RangeFilterProps) {
   if (props.field.type === "datetime") {
     return <DateRange {...props} />;
   }
   return <NumberRange {...props} />;
 }
 
-function FieldControl(props: FieldFilterProps) {
-  const { field, loadOptions } = props;
-  if (!field.operators.includes("eq")) {
-    return <RangeFilter {...props} />;
-  }
-  if (field.options) {
-    return <EqualsSelect {...props} />;
-  }
-  if (!loadOptions) {
-    return null;
-  }
-  return <LookupFilter {...props} loadOptions={loadOptions} />;
-}
-
-export function FieldFilter(props: FieldFilterProps) {
-  const { field } = props;
-  const equality = field.operators.includes("eq");
-  if (!equality && !field.operators.includes("range")) {
-    return null;
-  }
-  if (equality && !field.options && !props.loadOptions) {
-    return null;
-  }
+export function EqualsSelect(props: EqualsSelectProps) {
   return (
-    <FieldFrame
-      name={field.key}
-      kind={equality ? "equals" : "range"}
-      label={field.label}
+    <FilterFrame
+      field={props.field}
+      kind="equals"
       disabled={props.disabled}
       reason={props.reason}
       showReason={props.showReason}
     >
-      <FieldControl {...props} />
-    </FieldFrame>
+      <EqualsControl {...props} />
+    </FilterFrame>
+  );
+}
+
+export function LookupFilter(props: LookupFilterProps) {
+  return (
+    <FilterFrame
+      field={props.field}
+      kind="equals"
+      disabled={props.disabled}
+      reason={props.reason}
+      showReason={props.showReason}
+    >
+      <LookupControl {...props} />
+    </FilterFrame>
+  );
+}
+
+export function RangeFilter(props: RangeFilterProps) {
+  return (
+    <FilterFrame
+      field={props.field}
+      kind="range"
+      disabled={props.disabled}
+      reason={props.reason}
+      showReason={props.showReason}
+    >
+      <RangeControl {...props} />
+    </FilterFrame>
   );
 }
