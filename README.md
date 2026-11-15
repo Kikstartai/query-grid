@@ -411,7 +411,7 @@ To go further than tokens, target the hooks:
 
 The package has no theme of its own: it follows the host's `--ui-*` tokens, so it is dark wherever they are. `web.css` already gives every token a light and a dark value with `light-dark()` and `color-scheme: light dark`, so with no tokens of your own it follows the system. A host with its own palette writes its tokens the same way and sets `color-scheme` to pick the theme; a light-only app sets `color-scheme: light` on `:root`. The grid also uses `--ui-primary` as a text colour, for a sorted header and an active pin, so pick a primary that reads at 4.5:1 on `--ui-background` in each theme as well as under `--ui-primary-foreground`.
 
-The demo follows the system and lets a header toggle (System, Light, Dark) override it. Its tokens are `light-dark()` pairs, `:root[data-theme="light"]` and `:root[data-theme="dark"]` each set only `color-scheme`, and a one-line script in `<head>` copies the stored choice onto `<html>` before the first paint. No component carries a dark-mode rule, and the `/restyled` palette above has its own dark pair.
+The demo starts on the system theme, and a Light / Dark toggle in the header overrides it from then on. Its tokens are `light-dark()` pairs, `:root[data-theme="light"]` and `:root[data-theme="dark"]` each set only `color-scheme`, and a one-line script in `<head>` copies the stored choice onto `<html>` before the first paint. No component carries a dark-mode rule, and the `/restyled` palette above has its own dark pair.
 
 ## Using the hooks alone
 

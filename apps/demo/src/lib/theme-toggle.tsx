@@ -7,73 +7,76 @@ import {
 } from "@ui-sdk/react/segmented-control";
 import { useSyncExternalStore } from "react";
 
-import {
-  normalizeThemeChoice,
-  THEME_STORAGE_KEY,
-  type ThemeChoice,
-} from "./theme";
+import { normalizeTheme, THEME_STORAGE_KEY, type Theme } from "./theme";
 
 interface ThemeOption {
-  choice: ThemeChoice;
+  theme: Theme;
   label: string;
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  { choice: "system", label: "System" },
-  { choice: "light", label: "Light" },
-  { choice: "dark", label: "Dark" },
+  { theme: "light", label: "Light" },
+  { theme: "dark", label: "Dark" },
 ];
+
+const SYSTEM_DARK = "(prefers-color-scheme: dark)";
 
 const listeners = new Set<() => void>();
 
-function applyTheme(choice: ThemeChoice) {
-  const root = document.documentElement;
-  if (choice === "system") {
-    delete root.dataset.theme;
-  } else {
-    root.dataset.theme = choice;
-  }
+function notify() {
   for (const listener of listeners) {
     listener();
   }
 }
 
-function chooseTheme(choice: ThemeChoice) {
+function applyTheme(theme: Theme | null) {
+  const root = document.documentElement;
+  if (theme === null) {
+    delete root.dataset.theme;
+  } else {
+    root.dataset.theme = theme;
+  }
+  notify();
+}
+
+function chooseTheme(theme: Theme) {
   try {
-    if (choice === "system") {
-      localStorage.removeItem(THEME_STORAGE_KEY);
-    } else {
-      localStorage.setItem(THEME_STORAGE_KEY, choice);
-    }
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch {}
-  applyTheme(choice);
+  applyTheme(theme);
 }
 
 function onStorage(event: StorageEvent) {
   if (event.key === THEME_STORAGE_KEY || event.key === null) {
-    applyTheme(normalizeThemeChoice(event.newValue));
+    applyTheme(normalizeTheme(event.newValue));
   }
 }
 
 function subscribe(onChange: () => void) {
   if (listeners.size === 0) {
     window.addEventListener("storage", onStorage);
+    matchMedia(SYSTEM_DARK).addEventListener("change", notify);
   }
   listeners.add(onChange);
   return () => {
     listeners.delete(onChange);
     if (listeners.size === 0) {
       window.removeEventListener("storage", onStorage);
+      matchMedia(SYSTEM_DARK).removeEventListener("change", notify);
     }
   };
 }
 
-function getThemeChoice(): ThemeChoice {
-  return normalizeThemeChoice(document.documentElement.dataset.theme);
+function getTheme(): Theme {
+  const chosen = normalizeTheme(document.documentElement.dataset.theme);
+  if (chosen !== null) {
+    return chosen;
+  }
+  return matchMedia(SYSTEM_DARK).matches ? "dark" : "light";
 }
 
-function getServerThemeChoice(): ThemeChoice {
-  return "system";
+function getServerTheme(): Theme | null {
+  return null;
 }
 
 function subscribeNothing() {
@@ -94,28 +97,25 @@ function ThemeToggleIndicator() {
 }
 
 export function ThemeToggle() {
-  const choice = useSyncExternalStore(
-    subscribe,
-    getThemeChoice,
-    getServerThemeChoice,
-  );
+  const theme = useSyncExternalStore(subscribe, getTheme, getServerTheme);
   return (
     <SegmentedControl
       aria-label="Theme"
       data-part="theme-toggle"
-      value={choice}
+      value={theme}
       onValueChange={(next: string | null) => {
-        if (next !== null) {
-          chooseTheme(normalizeThemeChoice(next));
+        const chosen = normalizeTheme(next);
+        if (chosen !== null) {
+          chooseTheme(chosen);
         }
       }}
     >
       <ThemeToggleIndicator />
       {THEME_OPTIONS.map((option) => (
         <SegmentedControlItem
-          key={option.choice}
-          value={option.choice}
-          data-theme-choice={option.choice}
+          key={option.theme}
+          value={option.theme}
+          data-theme-choice={option.theme}
         >
           {option.label}
         </SegmentedControlItem>

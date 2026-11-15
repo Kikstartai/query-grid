@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { normalizeThemeChoice, THEME_SCRIPT, THEME_STORAGE_KEY } from "./theme";
+import { normalizeTheme, THEME_SCRIPT, THEME_STORAGE_KEY } from "./theme";
 
 function runThemeScript(stored: string | null, throws = false) {
   const dataset: Record<string, string> = {};
@@ -21,12 +21,12 @@ function runThemeScript(stored: string | null, throws = false) {
 }
 
 describe("theme", () => {
-  test("normalizeThemeChoice keeps light and dark and falls back to system", () => {
-    expect(normalizeThemeChoice("light")).toBe("light");
-    expect(normalizeThemeChoice("dark")).toBe("dark");
-    expect(normalizeThemeChoice("system")).toBe("system");
-    expect(normalizeThemeChoice("blue")).toBe("system");
-    expect(normalizeThemeChoice(null)).toBe("system");
+  test("normalizeTheme keeps light and dark and nothing else", () => {
+    expect(normalizeTheme("light")).toBe("light");
+    expect(normalizeTheme("dark")).toBe("dark");
+    expect(normalizeTheme("system")).toBeNull();
+    expect(normalizeTheme("blue")).toBeNull();
+    expect(normalizeTheme(null)).toBeNull();
   });
 
   test("the head script applies a stored choice and nothing else", () => {

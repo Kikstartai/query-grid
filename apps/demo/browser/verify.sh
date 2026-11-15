@@ -497,7 +497,8 @@ run_theme() {
   note "start" "$(pressed); $(js "$PAINT")"
   choose_and_reload dark light "Dark under OS light"
   choose_and_reload light dark "Light under OS dark"
-  choose_and_reload system dark "System under OS dark"
+  theme_store ""; ab reload >/dev/null; settle 5
+  note "no choice under OS dark" "$(pressed); $(js "$PAINT")"
 
   say "Every page in dark"
   ab errors --clear >/dev/null 2>&1
