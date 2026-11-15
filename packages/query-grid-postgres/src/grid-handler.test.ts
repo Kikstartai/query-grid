@@ -375,6 +375,28 @@ describe("refusals", () => {
     expect(reported).toEqual([]);
   });
 
+  test("the abort's own reason is not reported, whatever a server calls it", async () => {
+    const reported: unknown[] = [];
+    const controller = new AbortController();
+    const aborting: SqlExecutor = async (_sql, _settings, signal) => {
+      controller.abort(
+        Object.assign(new Error(""), { name: "ResponseAborted" }),
+      );
+      signal?.throwIfAborted();
+      return [];
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute: aborting,
+      onError: (error) => reported.push(error),
+    });
+    const response = await handler(
+      new Request(`${ORIGIN}${BASE_PATH}`, { signal: controller.signal }),
+    );
+    expect(response.status).toBe(499);
+    expect(reported).toEqual([]);
+  });
+
   test("a failure that is not the abort is still reported when the client has gone", async () => {
     const reported: unknown[] = [];
     const controller = new AbortController();

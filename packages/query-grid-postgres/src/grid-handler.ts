@@ -30,9 +30,11 @@ import type { PostgresGridDef } from "./storage.ts";
 
 type Route = "page" | SubRoute;
 
-function isAbortError(error: unknown): boolean {
+function isAbortError(error: unknown, signal: AbortSignal): boolean {
   const { name, code } = error as { name?: string; code?: string };
-  return name === "AbortError" || code === QUERY_CANCELED;
+  return (
+    error === signal.reason || name === "AbortError" || code === QUERY_CANCELED
+  );
 }
 
 const LIMIT = /^\d{1,9}$/;
@@ -211,7 +213,7 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
       });
     } catch (error) {
       if (request.signal.aborted) {
-        if (!isAbortError(error)) {
+        if (!isAbortError(error, request.signal)) {
           report(error);
         }
         return new Response(null, { status: CLIENT_CLOSED_REQUEST });
