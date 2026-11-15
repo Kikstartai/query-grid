@@ -119,13 +119,16 @@ export async function listFacetCounts(
   if (!sql) {
     return [];
   }
-  const totals = def.totals ?? [];
+  const columns = (def.totals ?? []).map((field): [string, string] => [
+    field,
+    sumColumn(field),
+  ]);
   const rows = await execute<CounterRow>(sql, undefined, signal);
   return rows.map((row) => ({
     value: row.value,
     count: row.count,
     sums: Object.fromEntries(
-      totals.map((field) => [field, Number(row[sumColumn(field)])]),
+      columns.map(([field, column]) => [field, Number(row[column])]),
     ),
   }));
 }

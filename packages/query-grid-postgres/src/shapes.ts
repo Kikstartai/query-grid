@@ -1,6 +1,7 @@
 import {
   getField,
   isQuickShape,
+  isCurrencyCode,
   isRangeType,
   KEY_FIELD,
   listOrderedShapes,
@@ -82,15 +83,6 @@ function validateOrderedShape(
   return problems;
 }
 
-function isCurrencyCode(code: string): boolean {
-  try {
-    new Intl.NumberFormat("en", { style: "currency", currency: code });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function validateTotals(def: PostgresGridDef): string[] {
   const problems: string[] = [];
   if (def.facet && !getField(def, def.facet.field)?.options) {
@@ -102,11 +94,6 @@ function validateTotals(def: PostgresGridDef): string[] {
     const summable = field?.type === "money" || field?.type === "integer";
     if (!summable || field?.nullable) {
       problems.push(`total: ${key} is not a non-null money or integer field`);
-    }
-  }
-  for (const field of def.fields) {
-    if (field.currency !== undefined && !isCurrencyCode(field.currency)) {
-      problems.push(`total: ${field.currency} is not a currency code`);
     }
   }
   const repeated = totals.filter((key, at) => totals.indexOf(key) !== at);
@@ -145,5 +132,10 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     problems.push("the default sort with no filter is not a declared shape");
   }
   problems.push(...validateTotals(def));
+  for (const field of def.fields) {
+    if (field.currency !== undefined && !isCurrencyCode(field.currency)) {
+      problems.push(`${field.key}: ${field.currency} is not a currency code`);
+    }
+  }
   return problems;
 }

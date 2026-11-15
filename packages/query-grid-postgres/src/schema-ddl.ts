@@ -135,7 +135,7 @@ function counterSteps(def: PostgresGridDef): MigrationStep[] {
   const pending = counter.pending;
   const [bump] = counter.functions;
   const [onInsert, onDelete, onUpdate] = counter.triggers;
-  const columns = [facet, ...counted].join(", ");
+  const columns = counter.columns.join(", ");
   const amounts = (row: string, sign: string) =>
     `ARRAY[${totals.map((total) => `${sign}${row}.${total}`).join(", ")}]::bigint[]`;
   const changed = [facet, ...totals]
@@ -161,10 +161,11 @@ function counterSteps(def: PostgresGridDef): MigrationStep[] {
     "BEGIN;",
     lock,
     `CREATE TABLE IF NOT EXISTS ${ct} (${facet} text PRIMARY KEY, ${ROW_COUNT} bigint NOT NULL DEFAULT 0);`,
-    ...sums.map(
-      (sum) =>
-        `ALTER TABLE ${ct} ADD COLUMN IF NOT EXISTS ${sum} bigint NOT NULL DEFAULT 0;`,
-    ),
+    ...(sums.length > 0
+      ? [
+          `ALTER TABLE ${ct} ${sums.map((sum) => `ADD COLUMN IF NOT EXISTS ${sum} bigint NOT NULL DEFAULT 0`).join(", ")};`,
+        ]
+      : []),
     `DROP TABLE IF EXISTS ${pending};`,
     `CREATE TABLE ${pending} (${pendingColumns});`,
     `DROP FUNCTION IF EXISTS ${bump}(text, bigint, bigint);`,

@@ -26,8 +26,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_quick ON orders USING gin ((cu
 BEGIN;
 LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
 CREATE TABLE IF NOT EXISTS order_status_counts (status_code text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);
-ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
-ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
+ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
 DROP TABLE IF EXISTS order_status_counts_pending;
 CREATE TABLE order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL, item_count_sum bigint NOT NULL);
 DROP FUNCTION IF EXISTS order_status_counts_bump(text, bigint, bigint);

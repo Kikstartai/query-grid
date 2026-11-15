@@ -45,13 +45,13 @@ import {
 import { useState, type ReactNode } from "react";
 
 import {
-  DEFAULT_CURRENCY,
   fromDayBound,
   fromNumberBound,
   toDayBound,
   toNumberBound,
   type BaseFieldDef,
   type FieldOption,
+  resolveCurrency,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
@@ -418,7 +418,7 @@ function NumberRange(props: RangeFilterProps) {
   };
   const numberFormat: Intl.NumberFormatOptions | undefined =
     field.type === "money"
-      ? { style: "currency", currency: field.currency ?? DEFAULT_CURRENCY }
+      ? { style: "currency", currency: resolveCurrency(field) }
       : undefined;
   const label = { label: field.label };
   return (

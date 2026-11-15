@@ -57,7 +57,7 @@ export function TotalFooter() {
       reason: problem ? formatProblemMessage(messages, problem, locale) : null,
     };
   });
-  return <BaseTotalFooter status={state.status} totals={totals} />;
+  return <BaseTotalFooter totals={totals} />;
 }
 
 export function FacetPanel() {

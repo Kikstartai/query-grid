@@ -17,6 +17,22 @@ function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
   return created;
 }
 
+export function resolveCurrency(field: BaseFieldDef): string {
+  return field.currency ?? DEFAULT_CURRENCY;
+}
+
+export function isCurrencyCode(code: string): boolean {
+  try {
+    new Intl.NumberFormat(DEFAULT_LOCALE, {
+      style: "currency",
+      currency: code,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function formatCount(count: number, locale = DEFAULT_LOCALE): string {
   return cached(integers, locale, () => new Intl.NumberFormat(locale)).format(
     count,
@@ -53,7 +69,7 @@ export function formatSum(
   locale = DEFAULT_LOCALE,
 ): string {
   return field.type === "money"
-    ? formatMoney(sum, locale, field.currency)
+    ? formatMoney(sum, locale, resolveCurrency(field))
     : formatCount(sum, locale);
 }
 
@@ -73,7 +89,7 @@ export function formatValue(
         : formatDateTime(date, locale);
     }
     case "money":
-      return formatMoney(Number(value), locale, field.currency);
+      return formatMoney(Number(value), locale, resolveCurrency(field));
     case "integer":
       return String(value);
     case "enum":

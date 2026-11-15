@@ -47,7 +47,6 @@ export {
   QueryRejected,
   quickExpression,
   shortenIdentifier,
-  sumColumn,
   toPageResult,
   type RejectionCode,
   type SqlQuery,

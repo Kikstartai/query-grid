@@ -16,7 +16,6 @@ import {
 
 export const ORDERS_API = "/api/orders";
 export const ORDERS_FACET_FIELD = "status_code";
-export const ORDERS_LOCALE = "en-ZA";
 
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));

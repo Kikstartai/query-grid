@@ -404,7 +404,6 @@ describe("each base component mounts alone, with plain props and no provider", (
   test("TotalFooter", () => {
     const live = render(
       <TotalFooter
-        status="idle"
         totals={[
           { field: TOTAL, value: { sum: 123456, rows: 2, source: "live" } },
           { field: NUMBER, value: { sum: 2001, rows: 2, source: "live" } },
@@ -420,7 +419,6 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(live.match(/summed live over 2 rows/g)).toHaveLength(1);
     const refused = render(
       <TotalFooter
-        status="idle"
         totals={[
           { field: TOTAL, value: null, reason: "Too many" },
           { field: NUMBER, value: null, reason: "Too many" },
@@ -430,14 +428,9 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(refused.match(/Too many/g)).toHaveLength(1);
     expect(refused).toContain('data-total="unavailable"');
     expect(
-      render(
-        <TotalFooter
-          status="loading"
-          totals={[{ field: TOTAL, value: null }]}
-        />,
-      ),
+      render(<TotalFooter totals={[{ field: TOTAL, value: null }]} />),
     ).toContain("Totalling…");
-    expect(render(<TotalFooter status="idle" totals={[]} />)).toBe("");
+    expect(render(<TotalFooter totals={[]} />)).toBe("");
   });
 });
 
@@ -468,7 +461,6 @@ describe("messages", () => {
           value={{ count: 620000, capped: false, source: "exact" }}
         />
         <TotalFooter
-          status="idle"
           totals={[
             { field: rand, value: { sum: 123456, rows: 1200, source: "live" } },
             { field: euro, value: { sum: 123456, rows: 1200, source: "live" } },

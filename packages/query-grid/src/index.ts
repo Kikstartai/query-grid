@@ -53,7 +53,9 @@ export {
   formatMoney,
   formatSum,
   formatValue,
+  isCurrencyCode,
   labelKey,
+  resolveCurrency,
 } from "./model/format.ts";
 export type { LoadStatus } from "./model/load.ts";
 export {

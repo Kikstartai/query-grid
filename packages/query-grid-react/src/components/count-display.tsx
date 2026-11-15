@@ -102,7 +102,6 @@ export interface TotalCell {
 }
 
 export interface TotalFooterProps {
-  status: LoadStatus;
   totals: TotalCell[];
 }
 
@@ -118,52 +117,54 @@ function TotalUnavailable({ reason }: { reason: string }) {
   );
 }
 
-function TotalCellView({ cell }: { cell: TotalCell }) {
+interface TotalCellProps {
+  cell: TotalCell;
+}
+
+function TotalCellValue({ cell }: TotalCellProps) {
   const messages = useMessages();
   const locale = useLocale();
-  const { field, value, reason } = cell;
-  const label = messages.totalSum({ label: field.label });
-  if (reason) {
+  if (cell.reason) {
     return (
-      <div
-        className="qg-total-cell"
-        data-total-field={field.key}
-        data-total="unavailable"
-      >
-        <bdi className="qg-total-label">{label}</bdi>
-        <bdi className="qg-muted" data-total-reason>
-          {reason}
-        </bdi>
-      </div>
+      <bdi className="qg-muted" data-total-reason>
+        {cell.reason}
+      </bdi>
     );
   }
-  if (!value) {
-    return (
-      <div
-        className="qg-total-cell"
-        data-total-field={field.key}
-        data-total="loading"
-      >
-        <bdi className="qg-total-label">{label}</bdi>
-        <bdi className="qg-muted">{messages.totalling}</bdi>
-      </div>
-    );
+  if (!cell.value) {
+    return <bdi className="qg-muted">{messages.totalling}</bdi>;
   }
+  return (
+    <bdi className="qg-total-value" data-total-sum={cell.value.sum}>
+      {formatSum(cell.field, cell.value.sum, locale)}
+    </bdi>
+  );
+}
+
+function resolveCellState(cell: TotalCell): string {
+  if (cell.reason) {
+    return "unavailable";
+  }
+  return cell.value?.source ?? "loading";
+}
+
+function TotalCellView({ cell }: TotalCellProps) {
+  const messages = useMessages();
   return (
     <div
       className="qg-total-cell"
-      data-total-field={field.key}
-      data-total={value.source}
+      data-total-field={cell.field.key}
+      data-total={resolveCellState(cell)}
     >
-      <bdi className="qg-total-label">{label}</bdi>
-      <bdi className="qg-total-value" data-total-sum={value.sum}>
-        {formatSum(field, value.sum, locale)}
+      <bdi className="qg-total-label">
+        {messages.totalSum({ label: cell.field.label })}
       </bdi>
+      <TotalCellValue cell={cell} />
     </div>
   );
 }
 
-export function TotalFooter({ status, totals }: TotalFooterProps) {
+export function TotalFooter({ totals }: TotalFooterProps) {
   const messages = useMessages();
   const locale = useLocale();
   if (totals.length === 0) {
@@ -177,7 +178,7 @@ export function TotalFooter({ status, totals }: TotalFooterProps) {
   if (!first) {
     return (
       <div className="qg-total qg-muted" data-part="total" data-total="loading">
-        {status === "error" ? messages.noTotal : messages.totalling}
+        {messages.totalling}
       </div>
     );
   }

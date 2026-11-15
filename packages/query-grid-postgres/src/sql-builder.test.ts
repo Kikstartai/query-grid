@@ -436,11 +436,9 @@ describe("generated DDL", () => {
     expect(install).toStartWith(
       "BEGIN;\nLOCK TABLE things IN SHARE ROW EXCLUSIVE MODE;\nCREATE TABLE IF NOT EXISTS thing_status_counts",
     );
-    for (const column of ["total_sum", "number_sum"]) {
-      expect(install).toContain(
-        `ALTER TABLE thing_status_counts ADD COLUMN IF NOT EXISTS ${column} bigint NOT NULL DEFAULT 0;`,
-      );
-    }
+    expect(install).toContain(
+      "ALTER TABLE thing_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS number_sum bigint NOT NULL DEFAULT 0;",
+    );
     expect(install).toContain(
       "DROP TABLE IF EXISTS thing_status_counts_pending;\nCREATE TABLE thing_status_counts_pending (status text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL, number_sum bigint NOT NULL);",
     );

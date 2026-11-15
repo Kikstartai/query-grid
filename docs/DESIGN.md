@@ -169,7 +169,7 @@ interface QueryState {
 
 ## Localization
 
-- **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`) and `messages`. Every number, date, plural and list a component renders is formatted in that locale, so messages and numbers cannot disagree. A def carries no locale.
+- **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`) and `messages`. Every count, sum, money value, date, plural and list a component renders is formatted in that locale (an integer field's own value, such as an order number, is shown as written), so messages and numbers cannot disagree. A def carries no locale.
 - **The currency is the data's.** A money field carries its own `currency` (default `USD`), so two money fields of one grid can differ.
 - **Every sentence a user reads comes from one messages object**, through `useMessages()`. English is built in, and with no provider a component renders English. An override names only what it changes, and a nested provider keeps the locale and the messages the outer one set and it does not name.
 - **Core and the Postgres package emit codes and params, never English.** A refusal reason, a `QueryRejected`, a failed request and an unavailable total are codes; a chip is data. The React package turns each into a sentence.

@@ -121,13 +121,24 @@ function listAllTransitions(def: BaseGridDef): [string, string][] {
   );
 }
 
-function sumRows(fields: string[], rows: GridRow[]): Record<string, number> {
-  return Object.fromEntries(
-    fields.map((field) => [
-      field,
-      rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0),
-    ]),
-  );
+interface FacetTally {
+  value: string;
+  count: number;
+  sums: Record<string, number>;
+}
+
+function emptySums(fields: string[]): Record<string, number> {
+  return Object.fromEntries(fields.map((field) => [field, 0]));
+}
+
+function addToSums(
+  sums: Record<string, number>,
+  fields: string[],
+  row: GridRow,
+): void {
+  for (const field of fields) {
+    sums[field] += Number(row[field] ?? 0);
+  }
 }
 
 interface Selection {
@@ -182,10 +193,14 @@ export function createMemorySource(
     }),
     fetchTotals: async (query) => {
       const found = matching(query);
-      return Object.entries(sumRows(totals, found)).map(([field, sum]) => ({
+      const sums = emptySums(totals);
+      for (const row of found) {
+        addToSums(sums, totals, row);
+      }
+      return totals.map((field) => ({
         field,
         available: true,
-        sum,
+        sum: sums[field],
         rows: found.length,
         source: "live",
       }));
@@ -196,21 +211,19 @@ export function createMemorySource(
         return [];
       }
       const others = withoutKey(query.equals, key);
-      const groups = new Map<string, GridRow[]>();
+      const tallies = new Map<string, FacetTally>();
       for (const row of matching({ ...query, equals: others })) {
         const value = String(row[key] ?? "");
-        const group = groups.get(value);
-        if (group) {
-          group.push(row);
-        } else {
-          groups.set(value, [row]);
-        }
+        const tally = tallies.get(value) ?? {
+          value,
+          count: 0,
+          sums: emptySums(totals),
+        };
+        tally.count += 1;
+        addToSums(tally.sums, totals, row);
+        tallies.set(value, tally);
       }
-      return [...groups].map(([value, group]) => ({
-        value,
-        count: group.length,
-        sums: sumRows(totals, group),
-      }));
+      return [...tallies.values()];
     },
     fetchOptions: async (key, search) => {
       const field = getField(def, key);
