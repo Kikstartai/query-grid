@@ -350,6 +350,7 @@
   display: flex;
   align-items: center;
   gap: calc(var(--ui-spacing) * 4);
+  min-block-size: 1lh;
 }
 
 :where(.qg-status-feed) {
