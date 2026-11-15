@@ -10,7 +10,6 @@ import {
   TotalFooter,
 } from "@kikstart/query-grid-react/ui";
 
-import { AtRequest } from "@/lib/at-request";
 import type { PartName } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
@@ -58,12 +57,10 @@ export function OrdersPart({ part }: OrdersPartProps) {
         shared query state shown below, and the URL.
       </p>
       <Suspense fallback={<OrdersPartSkeleton />}>
-        <AtRequest>
-          <OrdersQueryProvider>
-            <QueryReadout />
-            <Part />
-          </OrdersQueryProvider>
-        </AtRequest>
+        <OrdersQueryProvider>
+          <QueryReadout />
+          <Part />
+        </OrdersQueryProvider>
       </Suspense>
     </div>
   );

@@ -57,6 +57,10 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 - A message, a count or a formatted value a component renders goes inside `<bdi>`, so it keeps its own order in a right-to-left page.
 - Relative imports carry their `.ts` / `.tsx` extension; the build rewrites them.
 
+## Demo
+
+- Never force a subtree dynamic to satisfy the framework (`connection()`, `noStore`, `force-dynamic`, an `AtRequest`-style wrapper). A page renders static unless it reads real request data, and if a build complains, fix the cause, not the symptom.
+
 ## House style
 
 - Brace every control-flow body (`if`, `else`, `for`, `while`), even single statements.

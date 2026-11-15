@@ -9,7 +9,6 @@ import {
   FilterChips,
 } from "@kikstart/query-grid-react/ui";
 
-import { AtRequest } from "@/lib/at-request";
 import { SiteBrand } from "@/lib/site-brand";
 import {
   SkeletonChips,
@@ -70,9 +69,7 @@ export function RestyledWorkspace() {
         in the package changed.
       </p>
       <Suspense fallback={<RestyledSkeleton />}>
-        <AtRequest>
-          <RestyledGrid />
-        </AtRequest>
+        <RestyledGrid />
       </Suspense>
     </div>
   );

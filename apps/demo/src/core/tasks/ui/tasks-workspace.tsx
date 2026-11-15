@@ -2,7 +2,6 @@ import { Suspense } from "react";
 
 import { memoryCapabilities } from "@kikstart/query-grid/memory";
 
-import { AtRequest } from "@/lib/at-request";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
@@ -37,13 +36,11 @@ export function TasksWorkspace() {
           />
         }
       >
-        <AtRequest>
-          <TasksQueryProvider>
-            <WorkspaceParts filterFields={TASK_FILTER_FIELDS}>
-              <TasksView />
-            </WorkspaceParts>
-          </TasksQueryProvider>
-        </AtRequest>
+        <TasksQueryProvider>
+          <WorkspaceParts filterFields={TASK_FILTER_FIELDS}>
+            <TasksView />
+          </WorkspaceParts>
+        </TasksQueryProvider>
       </Suspense>
       <footer className="workspace-foot">
         <ByKikstart />

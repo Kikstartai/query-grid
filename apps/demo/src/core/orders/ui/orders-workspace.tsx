@@ -2,7 +2,6 @@ import { Suspense } from "react";
 
 import { gridDefCapabilities } from "@kikstart/query-grid";
 
-import { AtRequest } from "@/lib/at-request";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
@@ -31,13 +30,11 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
           />
         }
       >
-        <AtRequest>
-          <OrdersQueryProvider>
-            <WorkspaceParts>
-              <OrdersView />
-            </WorkspaceParts>
-          </OrdersQueryProvider>
-        </AtRequest>
+        <OrdersQueryProvider>
+          <WorkspaceParts>
+            <OrdersView />
+          </WorkspaceParts>
+        </OrdersQueryProvider>
       </Suspense>
       <footer className="workspace-foot">
         <ByKikstart />
