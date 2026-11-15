@@ -22,12 +22,18 @@ import {
   getGridTotal,
   listFacetCounts,
   listGridPage,
+  QUERY_CANCELED,
   type SqlExecutor,
 } from "./query-runner.ts";
 import { DEFAULT_PAGE_LIMIT, QueryRejected } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
 type Route = "page" | SubRoute;
+
+function isAbortError(error: unknown): boolean {
+  const { name, code } = error as { name?: string; code?: string };
+  return name === "AbortError" || code === QUERY_CANCELED;
+}
 
 const LIMIT = /^\d{1,9}$/;
 const CLIENT_CLOSED_REQUEST = 499;
@@ -205,6 +211,9 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
       });
     } catch (error) {
       if (request.signal.aborted) {
+        if (!isAbortError(error)) {
+          report(error);
+        }
         return new Response(null, { status: CLIENT_CLOSED_REQUEST });
       }
       if (error instanceof QueryRejected) {

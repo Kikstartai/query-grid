@@ -59,17 +59,14 @@ export function normalizeSearch(
   search: string,
   prefix: string,
 ): string {
-  if (!prefix) {
-    return search;
-  }
   const params = new URLSearchParams(search);
-  const values = Object.fromEntries(
-    listUrlKeys(capabilities).map((key) => [
-      urlName(key, prefix),
-      params.getAll(urlName(key, prefix)),
-    ]),
-  );
-  return toSearch(capabilities, values, prefix);
+  const own = new URLSearchParams();
+  for (const key of listUrlKeys(capabilities)) {
+    for (const value of params.getAll(urlName(key, prefix))) {
+      own.append(key.name, value);
+    }
+  }
+  return own.toString();
 }
 
 export function readUrlState(

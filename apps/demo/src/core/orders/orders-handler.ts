@@ -9,6 +9,7 @@ import {
   createGridHandler,
   escapeLike,
   QueryRejected,
+  type SqlQuery,
 } from "@kikstart/query-grid-postgres";
 
 import { executeSql } from "@/lib/db";
@@ -33,39 +34,30 @@ async function listOrderOptions(
   if (field !== CUSTOMER_FIELD) {
     throw new QueryRejected("invalid_value", "no_option_lookup", { field });
   }
+  return executeSql<FieldOption>(resolveOptionSql(field, search), [], signal);
+}
+
+function resolveOptionSql(field: string, search: OptionSearch): SqlQuery {
   if (search.value !== undefined) {
     if (!isValidFieldValue(ORDERS_GRID_DEF, CUSTOMER_FIELD, search.value)) {
       throw new QueryRejected("invalid_value", "invalid_value", { field });
     }
-    return executeSql<FieldOption>(
-      {
-        text: `${OPTION_SELECT} WHERE c.id = $1::uuid`,
-        values: [search.value],
-      },
-      [],
-      signal,
-    );
+    return {
+      text: `${OPTION_SELECT} WHERE c.id = $1::uuid`,
+      values: [search.value],
+    };
   }
   const text = (search.query ?? "").trim().slice(0, OPTION_QUERY_MAX);
   if (text.length < 2) {
-    return executeSql<FieldOption>(
-      {
-        text: `${OPTION_SELECT} ORDER BY c.seq LIMIT ${OPTION_LIMIT}`,
-        values: [],
-      },
-      [],
-      signal,
-    );
+    return {
+      text: `${OPTION_SELECT} ORDER BY c.seq LIMIT ${OPTION_LIMIT}`,
+      values: [],
+    };
   }
-  const pattern = `%${escapeLike(text)}%`;
-  return executeSql<FieldOption>(
-    {
-      text: `${OPTION_SELECT} WHERE c.name ILIKE $1 ORDER BY c.seq LIMIT ${OPTION_LIMIT}`,
-      values: [pattern],
-    },
-    [],
-    signal,
-  );
+  return {
+    text: `${OPTION_SELECT} WHERE c.name ILIKE $1 ORDER BY c.seq LIMIT ${OPTION_LIMIT}`,
+    values: [`%${escapeLike(text)}%`],
+  };
 }
 
 async function listStatusTransitions(

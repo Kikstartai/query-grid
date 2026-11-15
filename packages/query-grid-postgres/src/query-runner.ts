@@ -91,6 +91,7 @@ export async function* walkGridPages(
 ): AsyncGenerator<GridRow[]> {
   let cursor: string | null = query.cursor;
   do {
+    signal?.throwIfAborted();
     const page = await listGridPage(
       def,
       execute,

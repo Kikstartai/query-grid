@@ -375,6 +375,25 @@ describe("refusals", () => {
     expect(reported).toEqual([]);
   });
 
+  test("a failure that is not the abort is still reported when the client has gone", async () => {
+    const reported: unknown[] = [];
+    const controller = new AbortController();
+    const broken: SqlExecutor = async () => {
+      controller.abort();
+      throw new Error("relation does not exist");
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute: broken,
+      onError: (error) => reported.push(error),
+    });
+    const response = await handler(
+      new Request(`${ORIGIN}${BASE_PATH}`, { signal: controller.signal }),
+    );
+    expect(response.status).toBe(499);
+    expect(reported).toHaveLength(1);
+  });
+
   test("an omitted hook is a 404, and so is an unknown route", async () => {
     const { handle } = createHandler([]);
     for (const path of ["/options?field=region", "/transitions", "/nope"]) {

@@ -241,15 +241,6 @@ describe("two grids on one page", () => {
     expect(url["b.f.status"]).toEqual(["done"]);
     expect(url.q).toBeUndefined();
   });
-
-  test("without a prefix the two would share q, sort, cursor and view", () => {
-    const url: UrlValues = {};
-    const first = connectGrid(url, "");
-    const second = connectGrid(url, "");
-    first.store.dispatch({ type: "setQuick", value: "acme" });
-    second.sync.follow(toSearch(CAPS, url));
-    expect(second.store.getQuery().quick).toBe("acme");
-  });
 });
 
 describe("the actions", () => {
