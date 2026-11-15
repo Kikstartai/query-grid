@@ -55,6 +55,14 @@ export const TEST_DEF: BaseGridDef = {
   ],
 };
 
+export const UNTIERED = {
+  narrowLimited: false,
+  matchAny: false,
+  isNarrowed: () => false,
+  narrowBasis: () => "",
+  containsFields: [],
+};
+
 export function createTestSource(
   runnable: RunnableQueries,
   overrides: Partial<DataSource> = {},
@@ -67,6 +75,7 @@ export function createTestSource(
     fetchTotals: none,
     fetchFacets: none,
     fetchOptions: none,
+    fetchNarrowed: async () => null,
     fetchLimits: async () => null,
     fetchTransitions: none,
     changeFacetValue: async (id) => ({ id }),

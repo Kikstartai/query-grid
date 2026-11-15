@@ -29,6 +29,8 @@ export interface LabelParams {
 export interface ReasonParams {
   label: string;
   blockers: string;
+  rows: string;
+  narrowBy: string;
 }
 
 type MessageParams = Record<string, string | number>;
@@ -76,6 +78,8 @@ export interface QueryGridMessages {
   chipPreset: (params: { label: string; preset: string }) => string;
   chipRange: (params: { label: string; min: string; max: string }) => string;
   chipSearch: (params: { value: string }) => string;
+  chipContains: (params: { label: string; value: string }) => string;
+  chipMatchAny: string;
   chipSort: (params: { label: string; direction: string }) => string;
   openBound: string;
   any: string;
@@ -86,6 +90,13 @@ export interface QueryGridMessages {
   datePresets: Record<DatePreset, string>;
   customRange: string;
   presetField: (params: LabelParams) => string;
+  containsFilter: string;
+  containsField: string;
+  containsText: (params: LabelParams) => string;
+  containsPlaceholder: string;
+  matchMode: string;
+  matchAll: string;
+  matchAny: string;
   moreValues: (params: { count: number }) => string;
   fieldFilter: (params: LabelParams) => string;
   clearField: (params: LabelParams) => string;
@@ -148,11 +159,16 @@ export function selectPlural(
   return forms[rules.select(count)] ?? forms.other;
 }
 
-export function formatList(locale: string, items: string[]): string {
+export function formatList(
+  locale: string,
+  items: string[],
+  type: Intl.ListFormatType = "conjunction",
+): string {
+  const key = `${locale}|${type}`;
   const format =
-    listFormats.get(locale) ??
-    new Intl.ListFormat(locale, { style: "long", type: "conjunction" });
-  listFormats.set(locale, format);
+    listFormats.get(key) ??
+    new Intl.ListFormat(locale, { style: "long", type });
+  listFormats.set(key, format);
   return format.format(items);
 }
 
@@ -208,6 +224,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   chipPreset: ({ label, preset }) => `${label}: ${preset}`,
   chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
   chipSearch: ({ value }) => `Search: “${value}”`,
+  chipContains: ({ label, value }) => `${label} contains “${value}”`,
+  chipMatchAny: "Match any",
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
   openBound: "…",
   any: "any",
@@ -226,6 +244,13 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   },
   customRange: "Custom…",
   presetField: ({ label }) => `${label} period`,
+  containsFilter: "Contains",
+  containsField: "Field to search in",
+  containsText: ({ label }) => `${label} contains`,
+  containsPlaceholder: "text…",
+  matchMode: "Match",
+  matchAll: "Match all",
+  matchAny: "Match any",
   moreValues: ({ count }) => `${count} more`,
   fieldFilter: ({ label }) => `${label} filter`,
   clearField: ({ label }) => `Clear ${label}`,
@@ -260,11 +285,10 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   moveFailed: "The move failed",
   reasons: {
     search_alone: () =>
-      "The search does not combine with a range: clear the range first.",
+      "The search combines with equality filters only: clear the range, the contains filter and Match any first.",
     search_unordered: () =>
       "A search result is unordered until every match is loaded: narrow it under the cap to sort.",
-    search_no_combine: ({ label }) =>
-      `The search does not combine with a ${label} range.`,
+    search_no_combine: () => "The search combines with equality filters only.",
     no_sort_index: ({ label }) => `No index sorts by ${label}.`,
     range_needs_sort: ({ label }) =>
       `No index answers a ${label} range unless the sort is ${label}.`,
@@ -274,6 +298,11 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
       `No index answers ${label} with ${blockers}.`,
     no_range_with: ({ label, blockers }) =>
       `No index answers a ${label} range with ${blockers}.`,
+    narrow_first: ({ rows, narrowBy }) =>
+      narrowBy
+        ? `Narrow by ${narrowBy} first: ${rows}.`
+        : `Narrow the filters first: ${rows}.`,
+    narrow_counting: () => "Counting the rows these filters leave…",
   },
   reasonParts: {
     filter: (label) => `the ${label} filter`,
@@ -293,6 +322,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     invalid_limit: () => "The page size is not a number.",
     too_broad: () =>
       "That search matches too much to answer fast. Add more characters.",
+    narrow_first: ({ limit }) =>
+      `These filters leave more than ${limit} rows. Narrow them first, or clear the range, the contains filter or Match any.`,
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
     unknown_row: () => "That row no longer exists.",
     over_cap: ({ cap }) =>

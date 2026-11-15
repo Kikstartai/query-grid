@@ -86,7 +86,12 @@ describe("the bound filter containers", () => {
     const shown = [...html.matchAll(/data-field="([a-z_]+)"/g)].map(
       (match) => match[1],
     );
-    expect(shown).toEqual(["search", "region", "status", "sort"]);
+    expect(shown).toEqual(["search", "region", "status", "match", "sort"]);
+    const withText = render(
+      <FilterBar fields={["region"]} contains={["note"]} />,
+    );
+    expect(withText).toContain('data-field="contains"');
+    expect(withText).toContain("Note");
   });
 
   test("without fields a client grid shows a filter for every field", () => {
@@ -131,5 +136,30 @@ describe("exclude and presets, bound", () => {
     const html = render(<FacetPanel />, "f.status=!open");
     expect(html).toMatch(/data-facet="done"[^>]*aria-pressed="true"/);
     expect(html).toMatch(/data-facet="open"[^>]*aria-pressed="false"/);
+  });
+});
+
+describe("the narrowed-set controls, bound", () => {
+  test("a client grid offers Contains and Match any with no limit", () => {
+    const html = render(<FilterBar />);
+    expect(html).toContain('data-field="contains"');
+    expect(html).toContain('data-field="match"');
+    expect(html).not.toMatch(/data-field="contains"[^>]*data-unavailable/);
+    expect(html).not.toMatch(/data-match="any"[^>]*disabled/);
+  });
+
+  test("the URL sets them and the chips word them", () => {
+    const html = render(
+      <>
+        <FilterBar />
+        <FilterChips />
+      </>,
+      "f.status=open&r.total=100..&c.note=gift&match=any",
+    );
+    expect(html).toMatch(/data-match="any"[^>]*aria-checked="true"/);
+    expect(html).toContain('value="gift"');
+    expect(html).toContain("Note contains “gift”");
+    expect(html).toContain('data-chip="match"');
+    expect(html).toContain("Match any");
   });
 });

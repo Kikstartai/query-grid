@@ -1,5 +1,10 @@
 import type { DataSource } from "./data-source.ts";
-import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
+import type {
+  FieldOption,
+  GridRow,
+  NarrowedResult,
+  QueryState,
+} from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
 import { encodeQuery } from "./query-url.ts";
@@ -17,6 +22,7 @@ export const SUB_ROUTES = [
   "total",
   "facets",
   "options",
+  "narrowed",
   "limits",
   "transitions",
   "status",
@@ -94,6 +100,13 @@ export function createHttpSource(
           signal,
         });
       },
+      fetchNarrowed: (query, signal) =>
+        readJson<NarrowedResult>(
+          `${route("narrowed")}?${filterParams(query)}`,
+          {
+            signal,
+          },
+        ),
       fetchLimits: (signal) =>
         readJson<GridLimits>(route("limits"), { signal }),
       fetchTransitions: (signal) =>

@@ -4,9 +4,7 @@ import {
   CountDisplay,
   DataGrid,
   FacetPanel,
-  FilterBar,
   FilterChips,
-  FilterSidebar,
   TotalFooter,
 } from "@kikstart/query-grid-react/ui";
 
@@ -14,13 +12,18 @@ import type { PartName } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
 import { OrdersQueryProvider } from "../orders-provider";
-import { OrdersBoard, OrdersCardList } from "./orders-view";
+import {
+  OrdersBoard,
+  OrdersCardList,
+  OrdersFilterBar,
+  OrdersFilterSidebar,
+} from "./orders-view";
 import { QueryReadout } from "./query-readout";
 
 const PARTS: Record<PartName, ComponentType> = {
-  "filter-bar": FilterBar,
+  "filter-bar": OrdersFilterBar,
   chips: FilterChips,
-  sidebar: FilterSidebar,
+  sidebar: OrdersFilterSidebar,
   facets: FacetPanel,
   count: CountDisplay,
   total: TotalFooter,

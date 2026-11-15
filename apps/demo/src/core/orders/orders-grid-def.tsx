@@ -17,6 +17,16 @@ import {
 
 export const ORDERS_API = "/api/orders";
 export const ORDERS_FACET_FIELD = "status_code";
+export const ORDER_BAR_FIELDS = [
+  "status_code",
+  "customer_id",
+  "region",
+  "channel",
+  "assignee",
+  "created_at",
+  "total",
+];
+export const ORDER_CONTAINS_FIELDS = ["customer_name", "note"];
 
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));

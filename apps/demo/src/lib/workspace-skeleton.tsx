@@ -15,6 +15,19 @@ interface SkeletonProps {
 interface SkeletonFiltersProps extends SkeletonProps {
   runnable: RunnableQueries;
   fields?: string[];
+  contains?: string[];
+}
+
+interface SkeletonControlProps {
+  kind: string;
+  shown: boolean;
+}
+
+function SkeletonControl({ kind, shown }: SkeletonControlProps) {
+  if (!shown) {
+    return null;
+  }
+  return <span className="skeleton skeleton-control" data-kind={kind} />;
 }
 
 export function SkeletonTools() {
@@ -31,7 +44,12 @@ export function SkeletonFilters({
   def,
   runnable,
   fields,
+  contains,
 }: SkeletonFiltersProps) {
+  const listed = contains ?? fields;
+  const searchable = runnable.containsFields.some(
+    (key) => listed === undefined || listed.includes(key),
+  );
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />
@@ -42,6 +60,8 @@ export function SkeletonFilters({
           data-kind={resolveFilterKind(field, runnable)}
         />
       ))}
+      <SkeletonControl kind="contains" shown={searchable} />
+      <SkeletonControl kind="match" shown={runnable.matchAny} />
       <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
   );
@@ -98,6 +118,7 @@ export function WorkspaceSkeleton({
   def,
   runnable,
   fields,
+  contains,
 }: SkeletonFiltersProps) {
   return (
     <>
@@ -108,7 +129,12 @@ export function WorkspaceSkeleton({
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters def={def} runnable={runnable} fields={fields} />
+        <SkeletonFilters
+          def={def}
+          runnable={runnable}
+          fields={fields}
+          contains={contains}
+        />
         <SkeletonChips />
         <div className="workspace-main">
           <SkeletonFacets def={def} />

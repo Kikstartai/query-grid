@@ -8,6 +8,7 @@ import {
   type QueryState,
 } from "./field-types.ts";
 import { expandEquals } from "./field-values.ts";
+import { isMatchAny } from "./indexes.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
@@ -92,8 +93,9 @@ export function getLaneQueries(
       { ...base, equals: { ...query.equals, [field.key]: [status] } },
     ]),
   );
+  const plain = query.contains === null && query.ranges.length === 0;
   const combinable =
-    holdsAllRows || (query.search === null && query.ranges.length === 0);
+    !isMatchAny(query) && (holdsAllRows || (query.search === null && plain));
   const answerable = combinable && [...queries.values()].every(runnable.canRun);
   return answerable ? queries : null;
 }

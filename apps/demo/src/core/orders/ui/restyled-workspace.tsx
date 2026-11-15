@@ -5,7 +5,6 @@ import { gridDefRunnable } from "@kikstart/query-grid";
 import {
   CountDisplay,
   DataGrid,
-  FilterBar,
   FilterChips,
 } from "@kikstart/query-grid-react/ui";
 
@@ -17,7 +16,12 @@ import {
   SkeletonTools,
 } from "@/lib/workspace-skeleton";
 
-import { ORDERS_GRID_DEF } from "../orders-grid-def";
+import {
+  ORDER_BAR_FIELDS,
+  ORDER_CONTAINS_FIELDS,
+  ORDERS_GRID_DEF,
+} from "../orders-grid-def";
+import { OrdersFilterBar } from "./orders-view";
 import { OrdersQueryProvider } from "../orders-provider";
 
 function RestyledSkeleton() {
@@ -33,6 +37,8 @@ function RestyledSkeleton() {
         <SkeletonFilters
           def={ORDERS_GRID_DEF}
           runnable={gridDefRunnable(ORDERS_GRID_DEF)}
+          fields={ORDER_BAR_FIELDS}
+          contains={ORDER_CONTAINS_FIELDS}
         />
         <SkeletonChips />
         <SkeletonGrid />
@@ -48,7 +54,7 @@ function RestyledGrid() {
         <CountDisplay />
       </div>
       <div className="workspace-body">
-        <FilterBar />
+        <OrdersFilterBar />
         <FilterChips />
         <DataGrid />
       </div>

@@ -1,9 +1,27 @@
 "use client";
 
 import { useGridView } from "@kikstart/query-grid-react";
-import { CardList, DataGrid, StatusBoard } from "@kikstart/query-grid-react/ui";
+import {
+  CardList,
+  DataGrid,
+  FilterBar,
+  FilterSidebar,
+  StatusBoard,
+} from "@kikstart/query-grid-react/ui";
+
+import { ORDER_BAR_FIELDS, ORDER_CONTAINS_FIELDS } from "../orders-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
+
+export function OrdersFilterBar() {
+  return (
+    <FilterBar fields={ORDER_BAR_FIELDS} contains={ORDER_CONTAINS_FIELDS} />
+  );
+}
+
+export function OrdersFilterSidebar() {
+  return <FilterSidebar contains={ORDER_CONTAINS_FIELDS} />;
+}
 
 export function OrdersCardList() {
   return <CardList titleField="order_number" badgeField="status_code" />;

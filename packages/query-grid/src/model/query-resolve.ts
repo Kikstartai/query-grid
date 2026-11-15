@@ -118,11 +118,22 @@ export function withQueryResolution(
 ): DataSource {
   const resolve = createResolver(def, options.now ?? (() => new Date()));
   const shape = (query: QueryState) => resolveQuery(def, query, null);
+  // A preset has no bounds until it is resolved, so its name stands in for them where two queries are compared.
+  const mark = (query: QueryState): QueryState => ({
+    ...shape(query),
+    ranges: query.ranges.map((range) =>
+      range.preset === undefined
+        ? range
+        : { field: range.field, min: range.preset, max: null },
+    ),
+  });
   return {
     ...source,
     runnable: {
       ...source.runnable,
       canRun: (query) => source.runnable.canRun(shape(query)),
+      isNarrowed: (query) => source.runnable.isNarrowed(shape(query)),
+      narrowBasis: (query) => source.runnable.narrowBasis(mark(query)),
       isFacetCountExact: (query) =>
         source.runnable.isFacetCountExact(shape(query)),
     },
@@ -132,5 +143,7 @@ export function withQueryResolution(
       source.fetchCount(resolve(query), exact, signal),
     fetchTotals: (query, signal) => source.fetchTotals(resolve(query), signal),
     fetchFacets: (query, signal) => source.fetchFacets(resolve(query), signal),
+    fetchNarrowed: (query, signal) =>
+      source.fetchNarrowed(resolve(query), signal),
   };
 }

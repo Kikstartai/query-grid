@@ -59,9 +59,18 @@ export interface RangeState {
   preset?: string;
 }
 
+export interface ContainsState {
+  field: string;
+  value: string;
+}
+
+export type MatchMode = "all" | "any";
+
 export interface QueryState {
   equals: Record<string, string[]>;
   ranges: RangeState[];
+  contains: ContainsState | null;
+  match: MatchMode;
   search: string | null;
   sort: SortState;
   cursor: string | null;
@@ -71,17 +80,39 @@ export interface RunnableQueries {
   holdsAllRows: boolean;
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
+  narrowLimited: boolean;
+  matchAny: boolean;
   canRun: (query: QueryState) => boolean;
+  isNarrowed: (query: QueryState) => boolean;
+  narrowBasis: (query: QueryState) => string;
   equalsFields: string[];
   rangeFields: string[];
+  containsFields: string[];
   sortFields: string[];
   searchFields: string[];
   isFacetCountExact: (query: QueryState) => boolean;
 }
 
+export interface SizeResult {
+  rows: number;
+  over: boolean;
+}
+
+export interface NarrowedResult {
+  limit: number;
+  all: SizeResult;
+  any: SizeResult | null;
+}
+
+export interface NarrowedState extends NarrowedResult {
+  allBasis: string;
+  anyBasis: string;
+}
+
 export interface OfferContext {
   runnable: RunnableQueries;
   allSearchMatchesLoaded: boolean;
+  narrowed?: NarrowedState | null;
 }
 
 export const KEY_FIELD = "id";
@@ -125,6 +156,8 @@ export function getFieldLabel(def: BaseGridDef, key: string): string {
 }
 
 export type FilterKind = "lookup" | "equals" | "range";
+
+export const CONTAINS_MAX_LENGTH = 80;
 
 export function resolveFilterKind(
   field: BaseFieldDef,

@@ -8,15 +8,10 @@ import {
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
 import { isQueryIndexed, getIndex, indexRunnable } from "./indexes.ts";
+import { defaultQuery } from "./query-actions.ts";
 
 const INDEXES = TEST_INDEXES;
-const BASE: QueryState = {
-  equals: {},
-  ranges: [],
-  search: null,
-  sort: TEST_DEF.defaultSort,
-  cursor: null,
-};
+const BASE: QueryState = defaultQuery(TEST_DEF);
 
 describe("getIndex", () => {
   test("the equality set must match exactly", () => {

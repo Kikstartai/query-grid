@@ -1,6 +1,7 @@
 import type { FieldOption, BaseGridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
+export const TASK_CONTAINS_FIELDS = ["title"];
 export const TASK_FILTER_FIELDS = [
   "status",
   "team",

@@ -1,8 +1,10 @@
 import {
+  isRangeType,
   listSearchFields,
+  type BaseFieldDef,
   type BaseGridDef,
-  type RunnableQueries,
   type QueryState,
+  type RunnableQueries,
 } from "./field-types.ts";
 
 export interface IndexDef {
@@ -19,6 +21,13 @@ export interface IndexedGridDef extends BaseGridDef {
 export interface IndexRunnableOptions {
   facetField?: string;
   searchFields?: string[];
+  fields?: BaseFieldDef[];
+}
+
+export interface QueryPlan {
+  core: QueryState;
+  narrowed: boolean;
+  terms: QueryState[] | null;
 }
 
 export function indexId(index: IndexDef): string {
@@ -45,12 +54,40 @@ export function listSortFields(indexes: IndexDef[]): string[] {
   return [...new Set(indexes.map((index) => index.sort))];
 }
 
+export function listNarrowRangeFields(fields: BaseFieldDef[]): string[] {
+  return fields
+    .filter((field) => isRangeType(field.type) && !field.options)
+    .map((field) => field.key);
+}
+
+export function listContainsFields(fields: BaseFieldDef[]): string[] {
+  return fields
+    .filter((field) => field.type === "text" && !field.options)
+    .map((field) => field.key);
+}
+
+export function countFilterTerms(query: QueryState): number {
+  return (
+    Object.keys(query.equals).length +
+    query.ranges.length +
+    (query.contains ? 1 : 0)
+  );
+}
+
+export function isMatchAny(query: QueryState): boolean {
+  return query.match === "any" && countFilterTerms(query) > 1;
+}
+
+function hasNarrowParts(query: QueryState): boolean {
+  return query.contains !== null || isMatchAny(query);
+}
+
 export function getIndex(
   indexes: IndexDef[],
   query: QueryState,
 ): IndexDef | null {
   const equals = Object.keys(query.equals);
-  if (query.search !== null) {
+  if (query.search !== null || hasNarrowParts(query)) {
     return null;
   }
   const ordered = indexes.find(
@@ -83,10 +120,128 @@ export function isQueryIndexed(
   const equalsFields = listEqualsFields(indexes);
   return (
     searchFields.length > 0 &&
+    !hasNarrowParts(query) &&
     Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
     query.ranges.length === 0 &&
     listSortFields(indexes).includes(query.sort.field)
   );
+}
+
+function bare(query: QueryState): QueryState {
+  return {
+    ...query,
+    equals: {},
+    ranges: [],
+    contains: null,
+    match: "all",
+    cursor: null,
+  };
+}
+
+function listTerms(indexes: IndexDef[], query: QueryState): QueryState[] {
+  const base = bare(query);
+  const terms: QueryState[] = [];
+  for (const [key, values] of Object.entries(query.equals)) {
+    const index = indexes.find((item) => sameSet(item.equals, [key]));
+    terms.push({
+      ...base,
+      equals: { [key]: values },
+      sort: { ...base.sort, field: index?.sort ?? base.sort.field },
+    });
+  }
+  for (const range of query.ranges) {
+    terms.push({
+      ...base,
+      ranges: [range],
+      sort: { ...base.sort, field: range.field },
+    });
+  }
+  return terms;
+}
+
+function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
+  if (!listSortFields(indexes).includes(query.sort.field)) {
+    return null;
+  }
+  const terms = listTerms(indexes, query);
+  const countable =
+    query.contains === null &&
+    terms.every((term) => getIndex(indexes, term) !== null);
+  return { core: bare(query), narrowed: true, terms: countable ? terms : null };
+}
+
+function planAll(indexes: IndexDef[], query: QueryState): QueryPlan | null {
+  const base: QueryState = { ...query, contains: null, match: "all" };
+  const onSort = query.ranges.filter(
+    (range) => range.field === query.sort.field,
+  );
+  const cores = [
+    { ...base, ranges: onSort },
+    { ...base, ranges: [] },
+  ];
+  const core = cores.find((candidate) => getIndex(indexes, candidate));
+  if (!core) {
+    return null;
+  }
+  const narrowed =
+    query.contains !== null || query.ranges.length > core.ranges.length;
+  return { core, narrowed, terms: null };
+}
+
+export function planQuery(
+  indexes: IndexDef[],
+  query: QueryState,
+): QueryPlan | null {
+  if (query.search !== null) {
+    return null;
+  }
+  return isMatchAny(query) ? planAny(indexes, query) : planAll(indexes, query);
+}
+
+function isTierRunnable(
+  indexes: IndexDef[],
+  searchFields: string[],
+  fields: BaseFieldDef[],
+  query: QueryState,
+): boolean {
+  if (query.search !== null) {
+    return isQueryIndexed(indexes, searchFields, query);
+  }
+  const rangeFields = listNarrowRangeFields(fields);
+  const containsFields = listContainsFields(fields);
+  return (
+    query.ranges.every((range) => rangeFields.includes(range.field)) &&
+    (query.contains === null ||
+      containsFields.includes(query.contains.field)) &&
+    planQuery(indexes, query) !== null
+  );
+}
+
+export function isQueryRunnable(
+  def: IndexedGridDef,
+  query: QueryState,
+): boolean {
+  return isTierRunnable(def.indexes, listSearchFields(def), def.fields, query);
+}
+
+function describeBasis(indexes: IndexDef[], query: QueryState): string {
+  const plan = planQuery(indexes, query);
+  if (!plan) {
+    return "";
+  }
+  if (!isMatchAny(query)) {
+    return JSON.stringify([
+      "all",
+      Object.entries(plan.core.equals).sort(),
+      plan.core.ranges,
+    ]);
+  }
+  return JSON.stringify([
+    "any",
+    Object.entries(query.equals).sort(),
+    query.ranges,
+    query.contains,
+  ]);
 }
 
 export function isFacetOnlyQuery(
@@ -97,6 +252,7 @@ export function isFacetOnlyQuery(
     facetField !== undefined &&
     query.ranges.length === 0 &&
     query.search === null &&
+    !hasNarrowParts(query) &&
     Object.keys(query.equals).every((key) => key === facetField)
   );
 }
@@ -106,13 +262,25 @@ export function indexRunnable(
   options: IndexRunnableOptions = {},
 ): RunnableQueries {
   const searchFields = options.searchFields ?? [];
+  const { fields } = options;
   return {
     holdsAllRows: false,
     searchIsOrdered: false,
     facetCountsFollowFilters: false,
-    canRun: (query) => isQueryIndexed(indexes, searchFields, query),
+    narrowLimited: fields !== undefined,
+    matchAny: fields !== undefined,
+    canRun: (query) =>
+      fields
+        ? isTierRunnable(indexes, searchFields, fields, query)
+        : isQueryIndexed(indexes, searchFields, query),
+    isNarrowed: (query) =>
+      fields !== undefined && (planQuery(indexes, query)?.narrowed ?? false),
+    narrowBasis: (query) => describeBasis(indexes, query),
     equalsFields: listEqualsFields(indexes),
-    rangeFields: listRangeFields(indexes),
+    rangeFields: fields
+      ? listNarrowRangeFields(fields)
+      : listRangeFields(indexes),
+    containsFields: fields ? listContainsFields(fields) : [],
     sortFields: listSortFields(indexes),
     searchFields,
     isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),
@@ -123,5 +291,6 @@ export function gridDefRunnable(def: IndexedGridDef): RunnableQueries {
   return indexRunnable(def.indexes, {
     facetField: def.facet?.field,
     searchFields: listSearchFields(def),
+    fields: def.fields,
   });
 }

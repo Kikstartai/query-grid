@@ -1,4 +1,5 @@
 import {
+  CONTAINS_MAX_LENGTH,
   getField,
   resolveMaxValues,
   type BaseFieldDef,
@@ -105,6 +106,25 @@ export function validateQueryValues(
         return problem;
       }
     }
+  }
+  if (query.contains !== null) {
+    const { field, value } = query.contains;
+    const target = getField(def, field);
+    if (!target) {
+      return { code: "unknown_field", params: { field } };
+    }
+    const length = value.trim().length;
+    const valid =
+      target.type === "text" &&
+      !target.options &&
+      length > 0 &&
+      length <= CONTAINS_MAX_LENGTH;
+    if (!valid) {
+      return { code: "invalid_value", params: { field } };
+    }
+  }
+  if (query.match !== "all" && query.match !== "any") {
+    return { code: "invalid_value", params: { field: "match" } };
   }
   if (query.search !== null && !isValidSearchValue(query.search)) {
     return {

@@ -14,6 +14,7 @@ import {
   type RangeState,
 } from "./field-types.ts";
 import { matchesEquals } from "./field-values.ts";
+import { isMatchAny, listContainsFields } from "./indexes.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
@@ -30,13 +31,21 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
   const equalsFields = def.fields
     .filter((field) => !ranged(field))
     .map((field) => field.key);
+  const containsFields = listContainsFields(def.fields);
   return {
     holdsAllRows: true,
     searchIsOrdered: true,
     facetCountsFollowFilters: true,
+    narrowLimited: false,
+    matchAny: true,
+    isNarrowed: () => false,
+    narrowBasis: () => "",
+    containsFields,
     canRun: (query) =>
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
+      (query.contains === null ||
+        containsFields.includes(query.contains.field)) &&
       (query.search === null || searchFields.length > 0) &&
       getField(def, query.sort.field) !== null,
     equalsFields,
@@ -77,22 +86,43 @@ function matchesSearch(
     .includes(needle);
 }
 
+type RowTest = (row: GridRow) => boolean;
+
+function listRowTests(def: BaseGridDef, query: QueryState): RowTest[] {
+  const tests: RowTest[] = [];
+  for (const [key, values] of Object.entries(query.equals)) {
+    const field = getField(def, key);
+    tests.push((row) => matchesEquals(field, values, row[key]));
+  }
+  for (const range of query.ranges) {
+    tests.push((row) => matchesRange(def, row, range));
+  }
+  if (query.contains) {
+    const { field, value } = query.contains;
+    const part = value.trim().toLowerCase();
+    tests.push((row) =>
+      String(row[field] ?? "")
+        .toLowerCase()
+        .includes(part),
+    );
+  }
+  return tests;
+}
+
 export function filterRows(
   def: BaseGridDef,
   rows: GridRow[],
   query: QueryState,
   searchFields: string[] = [],
 ): GridRow[] {
-  const equals = Object.entries(query.equals).map(
-    ([key, values]) => [getField(def, key), key, values] as const,
-  );
+  const tests = listRowTests(def, query);
+  const any = isMatchAny(query);
   const needle = query.search?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
-      equals.every(([field, key, values]) =>
-        matchesEquals(field, values, row[key]),
-      ) &&
-      query.ranges.every((range) => matchesRange(def, row, range)) &&
+      (any
+        ? tests.some((test) => test(row))
+        : tests.every((test) => test(row))) &&
       (needle === null || matchesSearch(row, searchFields, needle)),
   );
 }
@@ -246,6 +276,7 @@ export function createMemorySource(
           .filter((option) => option.label.toLowerCase().includes(needle))
           .slice(0, OPTION_LIMIT);
       },
+      fetchNarrowed: async () => null,
       fetchLimits: async () => null,
       fetchTransitions: async () => listAllTransitions(def),
       changeFacetValue: async (id, to) => {

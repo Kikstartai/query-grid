@@ -49,6 +49,8 @@ describe("offers from declared indexes", () => {
       exclude: ["status"],
       sorts: ["created_at", "total"],
       ranges: ["total"],
+      contains: [],
+      matchAny: false,
       search: true,
     });
     expect(listOffers(TEST_DEF, BASE, CAPPED).equals).toEqual([
@@ -103,6 +105,8 @@ describe("offers from declared indexes", () => {
       exclude: ["status", "region"],
       sorts: [],
       ranges: [],
+      contains: [],
+      matchAny: false,
       search: true,
     });
     expect(listOffers(TEST_DEF, search, COMPLETE).sorts).toEqual([

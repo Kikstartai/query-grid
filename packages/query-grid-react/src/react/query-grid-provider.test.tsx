@@ -82,11 +82,14 @@ describe("the URL parsers", () => {
       "r.number",
       "r.created_at",
       "r.total",
+      ...RUNNABLE.containsFields.map((key) => `c.${key}`),
+      "match",
       "q",
       "sort",
       "cursor",
       "view",
     ]);
+    expect(RUNNABLE.containsFields).toEqual(["name", "note"]);
   });
 
   test("a state written for nuqs is the one core encodes, and reads back", () => {
@@ -109,6 +112,9 @@ describe("the URL parsers", () => {
       "r.number": null,
       "r.created_at": null,
       "r.total": "100..",
+      "c.name": null,
+      "c.note": null,
+      match: null,
       q: null,
       sort: "total.asc",
       cursor: null,

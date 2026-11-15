@@ -42,6 +42,8 @@ import type { PostgresGridDef } from "./storage.ts";
 const BASE: QueryState = {
   equals: {},
   ranges: [],
+  contains: null,
+  match: "all",
   search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,

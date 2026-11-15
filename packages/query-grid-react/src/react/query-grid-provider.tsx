@@ -8,6 +8,7 @@ import {
   createFeed,
   createLabelStore,
   createLimitsStore,
+  createNarrowedStore,
   createQueryStore,
   createTotalStore,
   explainUnavailable,
@@ -32,6 +33,7 @@ import {
   type GridView,
   type LabelStore,
   type LimitsStore,
+  type NarrowedStore,
   type Offers,
   type OfferTarget,
   type QueryAction,
@@ -56,8 +58,10 @@ import {
 import type { FieldDef, GridDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
+  countParams,
   formatList,
   formatReservedValue,
+  formatRows,
   useLocale,
   useMessages,
   type QueryGridMessages,
@@ -87,6 +91,7 @@ export interface QueryGridContextValue {
   facets: FacetStore;
   labels: LabelStore;
   limits: LimitsStore;
+  narrowed: NarrowedStore;
   columns: ColumnStore;
   actions: QueryGridActions;
 }
@@ -166,6 +171,7 @@ function createValue(
     facets,
     labels,
     limits: createLimitsStore(source),
+    narrowed: createNarrowedStore(store, source),
     columns: createColumnStore(def.fields, persistence),
     actions: {
       dispatch: store.dispatch,
@@ -185,6 +191,19 @@ function createValue(
       },
     },
   };
+}
+
+function ignoreChange(): void {
+  return;
+}
+
+function useNarrowedSizes({ source, narrowed }: QueryGridContextValue): void {
+  useEffect(() => {
+    if (!source.runnable.narrowLimited) {
+      return;
+    }
+    return narrowed.subscribe(ignoreChange);
+  }, [source, narrowed]);
 }
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
@@ -211,6 +230,8 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
     return sync.connect();
   }, [value, sync]);
 
+  useNarrowedSizes(value);
+
   useEffect(() => {
     sync.follow(queryString);
   }, [sync, queryString]);
@@ -236,6 +257,8 @@ export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   useEffect(() => {
     void value.columns.restore();
   }, [value]);
+
+  useNarrowedSizes(value);
 
   useEffect(() => {
     sync.follow(queryString);
@@ -328,6 +351,15 @@ export function formatReason(
   locale: string,
 ): string {
   const label = reason.field ? getFieldLabel(def, reason.field) : "";
+  const count = formatRows(messages, reason.rows ?? 0, locale);
+  const rows = reason.capped
+    ? messages.rowsCapped(countParams(reason.rows ?? 0, locale))
+    : count;
+  const narrowBy = formatList(
+    locale,
+    reason.narrowBy.map((key) => getFieldLabel(def, key)),
+    "disjunction",
+  );
   const blockers = formatList(locale, [
     ...reason.filters.map((key) =>
       messages.reasonParts.filter(getFieldLabel(def, key)),
@@ -337,16 +369,20 @@ export function formatReason(
     ),
     messages.reasonParts.sort(getFieldLabel(def, reason.sort)),
   ]);
-  return messages.reasons[reason.code]({ label, blockers });
+  return messages.reasons[reason.code]({ label, blockers, rows, narrowBy });
 }
 
 function isOffered(offers: Offers, target: OfferTarget): boolean {
   if (target.kind === "search") {
     return offers.search;
   }
+  if (target.kind === "match") {
+    return offers.matchAny;
+  }
   const fields = {
     equals: offers.equals,
     range: offers.ranges,
+    contains: offers.contains,
     sort: offers.sorts,
   }[target.kind];
   return fields.includes(target.field);
@@ -411,6 +447,20 @@ export function formatChip(
                 min: chip.min ?? messages.openBound,
                 max: chip.max ?? messages.openBound,
               }),
+        removable,
+      };
+    case "contains":
+      return {
+        id: chip.id,
+        kind: chip.kind,
+        label: messages.chipContains({ label, value: chip.value }),
+        removable,
+      };
+    case "match":
+      return {
+        id: chip.id,
+        kind: chip.kind,
+        label: messages.chipMatchAny,
         removable,
       };
     case "search":

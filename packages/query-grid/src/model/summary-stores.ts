@@ -1,6 +1,12 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
-import { getField } from "./field-types.ts";
+import {
+  getField,
+  type NarrowedResult,
+  type NarrowedState,
+  type QueryState,
+  type RunnableQueries,
+} from "./field-types.ts";
 import { getReservedValue } from "./field-values.ts";
 import { labelKey } from "./format.ts";
 import type { GridLimits } from "./limits.ts";
@@ -73,6 +79,49 @@ export function createFacetStore(
       followsFilters: source.runnable.facetCountsFollowFilters,
     },
   );
+}
+
+export type NarrowedStore = ResourceStore<NarrowedResult | null>;
+
+function toNarrowedState(
+  runnable: RunnableQueries,
+  query: QueryState,
+  result: NarrowedResult,
+): NarrowedState {
+  return {
+    ...result,
+    allBasis: runnable.narrowBasis({ ...query, match: "all" }),
+    anyBasis: runnable.narrowBasis({ ...query, match: "any" }),
+  };
+}
+
+export function createNarrowedStore(
+  store: QueryStore,
+  source: DataSource,
+): NarrowedStore {
+  const resource = createQueryResource<NarrowedResult | null>(
+    store,
+    (query, signal) => source.fetchNarrowed(query, signal),
+    { initial: null, keepResult: true },
+  );
+  let started = false;
+  const publish = () => {
+    const { query, result, status, loaded } = resource.getState();
+    if (status === "idle" && loaded && result) {
+      store.setNarrowed(toNarrowedState(source.runnable, query, result));
+    }
+  };
+  return {
+    getState: resource.getState,
+    subscribe: (listener) => {
+      if (!started) {
+        started = true;
+        resource.subscribe(publish);
+      }
+      return resource.subscribe(listener);
+    },
+    reload: resource.reload,
+  };
 }
 
 export interface LimitsStore {

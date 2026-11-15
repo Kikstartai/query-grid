@@ -3,9 +3,10 @@ import {
   formatProblem,
   getField,
   getReservedValue,
+  isMatchAny,
+  isQueryRunnable,
   isValidFieldValue,
   KEY_FIELD,
-  isQueryIndexed,
   listSearchFields,
   PAGE_LIMIT_MAX,
   validateQueryValues,
@@ -16,6 +17,7 @@ import {
   type PageResult,
   type ProblemParams,
   type QueryState,
+  type RangeState,
 } from "@kikstart/query-grid";
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
@@ -34,6 +36,7 @@ export type RejectionCode =
   | "invalid_cursor"
   | "invalid_limit"
   | "too_broad"
+  | "narrow_first"
   | "transition_refused"
   | "not_found";
 
@@ -143,7 +146,7 @@ export function searchExpression(def: PostgresGridDef, prefix = ""): string {
 }
 
 export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
-  if (!isQueryIndexed(def.indexes, listSearchFields(def), query)) {
+  if (!isQueryRunnable(def, query)) {
     throw new QueryRejected("unindexed_query");
   }
   const problem = validateQueryValues(def, query);
@@ -184,22 +187,46 @@ interface Filter {
   clauses: string[];
 }
 
+function rangeClauses(
+  field: BaseFieldDef,
+  range: RangeState,
+  params: Params,
+): string[] {
+  const name = column(field.key);
+  const parts: string[] = [];
+  if (range.min !== null) {
+    parts.push(`${name} >= ${params.add(range.min, field)}`);
+  }
+  if (range.max !== null) {
+    parts.push(`${name} <= ${params.add(range.max, field)}`);
+  }
+  return parts;
+}
+
+function anyOf(terms: string[][]): string[] {
+  const alternatives = terms
+    .filter((parts) => parts.length > 0)
+    .map((parts) => (parts.length > 1 ? `(${parts.join(" AND ")})` : parts[0]));
+  return alternatives.length > 0 ? [`(${alternatives.join(" OR ")})`] : [];
+}
+
 function filter(def: PostgresGridDef, query: QueryState): Filter {
   assertDeclared(def, query);
   const params = new Params();
-  const clauses: string[] = [];
+  const terms: string[][] = [];
   for (const [key, values] of Object.entries(query.equals)) {
-    clauses.push(equalsClause(requireField(def, key), values, params));
+    terms.push([equalsClause(requireField(def, key), values, params)]);
   }
   for (const range of query.ranges) {
-    const field = requireField(def, range.field);
-    if (range.min !== null) {
-      clauses.push(`${column(field.key)} >= ${params.add(range.min, field)}`);
-    }
-    if (range.max !== null) {
-      clauses.push(`${column(field.key)} <= ${params.add(range.max, field)}`);
-    }
+    terms.push(rangeClauses(requireField(def, range.field), range, params));
   }
+  if (query.contains) {
+    const pattern = `%${escapeLike(query.contains.value.trim())}%`;
+    terms.push([
+      `${column(requireField(def, query.contains.field).key)} ILIKE ${params.addText(pattern)}`,
+    ]);
+  }
+  const clauses = isMatchAny(query) ? anyOf(terms) : terms.flat();
   if (query.search !== null) {
     const pattern = `%${escapeLike(query.search.trim())}%`;
     clauses.push(

@@ -2,6 +2,7 @@ import {
   getField,
   isDefaultSort,
   type BaseGridDef,
+  type MatchMode,
   type OfferContext,
   type QueryState,
   type RangeState,
@@ -21,6 +22,9 @@ export type QueryAction =
       preset?: string;
     }
   | { type: "clearRange"; field?: string }
+  | { type: "setContains"; field: string; value: string }
+  | { type: "clearContains" }
+  | { type: "setMatch"; mode: MatchMode }
   | { type: "setSort"; field: string; direction: SortDirection }
   | { type: "setSearch"; value: string }
   | { type: "clearSearch" }
@@ -32,13 +36,17 @@ export interface Offers {
   exclude: string[];
   sorts: string[];
   ranges: string[];
+  contains: string[];
+  matchAny: boolean;
   search: boolean;
 }
 
 export type OfferTarget =
   | { kind: "equals"; field: string }
   | { kind: "range"; field: string }
+  | { kind: "contains"; field: string }
   | { kind: "sort"; field: string }
+  | { kind: "match" }
   | { kind: "search" };
 
 export type ReasonCode =
@@ -49,7 +57,9 @@ export type ReasonCode =
   | "range_needs_sort"
   | "no_sort_with"
   | "no_filter_with"
-  | "no_range_with";
+  | "no_range_with"
+  | "narrow_first"
+  | "narrow_counting";
 
 export interface UnavailableReason {
   code: ReasonCode;
@@ -57,6 +67,9 @@ export interface UnavailableReason {
   filters: string[];
   ranges: string[];
   sort: string;
+  rows: number | null;
+  capped: boolean;
+  narrowBy: string[];
 }
 
 const PROBE = ["x", "y"];
@@ -65,6 +78,8 @@ export function defaultQuery(def: BaseGridDef): QueryState {
   return {
     equals: {},
     ranges: [],
+    contains: null,
+    match: "all",
     search: null,
     sort: def.defaultSort,
     cursor: null,
@@ -170,6 +185,14 @@ function proposeAction(
           ),
         },
       ];
+    case "setContains":
+      return [
+        { ...top, contains: { field: action.field, value: action.value } },
+      ];
+    case "clearContains":
+      return [{ ...top, contains: null }];
+    case "setMatch":
+      return [{ ...top, match: action.mode }];
     case "setSort": {
       const unordered =
         !searchIsOrdered &&
@@ -194,6 +217,41 @@ function proposeAction(
   }
 }
 
+type NarrowFit = "fits" | "over" | "unknown";
+
+function fitNarrowLimit(
+  candidate: QueryState,
+  context: OfferContext,
+): NarrowFit {
+  const { runnable, narrowed } = context;
+  if (!runnable.narrowLimited || !runnable.isNarrowed(candidate)) {
+    return "fits";
+  }
+  const basis = runnable.narrowBasis(candidate);
+  if (narrowed && basis === narrowed.allBasis) {
+    return narrowed.all.over ? "over" : "fits";
+  }
+  if (narrowed?.any && basis === narrowed.anyBasis) {
+    return narrowed.any.over ? "over" : "fits";
+  }
+  return "unknown";
+}
+
+// A set whose size is not known yet may only be entered from a query already running over a narrowed set, where the server has the last word.
+function isAnswerable(
+  query: QueryState,
+  candidate: QueryState,
+  context: OfferContext,
+): boolean {
+  if (!context.runnable.canRun(candidate)) {
+    return false;
+  }
+  const fit = fitNarrowLimit(candidate, context);
+  return (
+    fit === "fits" || (fit === "unknown" && context.runnable.isNarrowed(query))
+  );
+}
+
 export function applyAction(
   def: BaseGridDef,
   query: QueryState,
@@ -201,7 +259,7 @@ export function applyAction(
   context: OfferContext,
 ): QueryState {
   const next = proposeAction(def, query, action, context).find((candidate) =>
-    context.runnable.canRun(candidate),
+    isAnswerable(query, candidate, context),
   );
   return next ?? query;
 }
@@ -213,7 +271,7 @@ function isOffered(
   context: OfferContext,
 ): boolean {
   const [first] = proposeAction(def, query, action, context);
-  return first !== undefined && context.runnable.canRun(first);
+  return first !== undefined && isAnswerable(query, first, context);
 }
 
 export function listOffers(
@@ -256,6 +314,17 @@ export function listOffers(
         context,
       ),
     ),
+    contains: context.runnable.containsFields.filter((field) =>
+      isOffered(
+        def,
+        query,
+        { type: "setContains", field, value: "xx" },
+        context,
+      ),
+    ),
+    matchAny:
+      context.runnable.matchAny &&
+      isOffered(def, query, { type: "setMatch", mode: "any" }, context),
     search: isOffered(def, query, { type: "setSearch", value: "xxx" }, context),
   };
 }
@@ -273,6 +342,63 @@ function describeQuery(
       .map((range) => range.field)
       .filter((key) => key !== field),
     sort: query.sort.field,
+    rows: null,
+    capped: false,
+    narrowBy: [],
+  };
+}
+
+const NARROW_BY_MAX = 2;
+
+function toCandidate(query: QueryState, target: OfferTarget): QueryState {
+  switch (target.kind) {
+    case "range":
+      return {
+        ...query,
+        ranges: [
+          ...query.ranges.filter((range) => range.field !== target.field),
+          { field: target.field, min: "x", max: null },
+        ],
+      };
+    case "contains":
+      return { ...query, contains: { field: target.field, value: "xx" } };
+    case "match":
+      return { ...query, match: "any" };
+    default:
+      return query;
+  }
+}
+
+function explainNarrowing(
+  query: QueryState,
+  target: OfferTarget,
+  context: OfferContext,
+): UnavailableReason | null {
+  const { runnable, narrowed } = context;
+  const candidate = toCandidate(query, target);
+  if (candidate === query || !runnable.canRun(candidate)) {
+    return null;
+  }
+  const field = "field" in target ? target.field : null;
+  const fit = fitNarrowLimit(candidate, context);
+  if (fit === "fits") {
+    return null;
+  }
+  if (fit === "unknown" || !narrowed) {
+    return describeQuery(query, "narrow_counting", field);
+  }
+  const size = target.kind === "match" ? narrowed.any : narrowed.all;
+  const rows = size?.rows ?? narrowed.limit;
+  return {
+    ...describeQuery(query, "narrow_first", field),
+    rows,
+    capped: rows <= narrowed.limit,
+    narrowBy:
+      target.kind === "match"
+        ? []
+        : runnable.equalsFields
+            .filter((key) => query.equals[key] === undefined)
+            .slice(0, NARROW_BY_MAX),
   };
 }
 
@@ -283,6 +409,17 @@ export function explainUnavailable(
 ): UnavailableReason {
   if (target.kind === "search") {
     return describeQuery(query, "search_alone", null);
+  }
+  if (query.search !== null && target.kind === "match") {
+    return describeQuery(query, "search_no_combine", null);
+  }
+  const narrowing =
+    query.search === null ? explainNarrowing(query, target, context) : null;
+  if (narrowing) {
+    return narrowing;
+  }
+  if (target.kind === "match") {
+    return describeQuery(query, "no_filter_with", null);
   }
   if (query.search !== null && target.kind === "sort") {
     return describeQuery(
@@ -320,6 +457,8 @@ function stateKey(query: QueryState): string {
       .map((range) => `range:${range.field}`)
       .sort()
       .join("+"),
+    query.contains ? `contains:${query.contains.field}` : "",
+    query.match,
     query.search !== null ? "search" : "",
     query.sort.field,
   ].join("|");
@@ -351,6 +490,18 @@ export function listControlActions(
   }
   for (const range of query.ranges) {
     actions.push({ type: "clearRange", field: range.field });
+  }
+  for (const field of offers.contains) {
+    actions.push({ type: "setContains", field, value: "xx" });
+  }
+  if (query.contains) {
+    actions.push({ type: "clearContains" });
+  }
+  if (offers.matchAny) {
+    actions.push({ type: "setMatch", mode: "any" });
+  }
+  if (query.match === "any") {
+    actions.push({ type: "setMatch", mode: "all" });
   }
   if (offers.search) {
     actions.push({ type: "setSearch", value: "xxx" });

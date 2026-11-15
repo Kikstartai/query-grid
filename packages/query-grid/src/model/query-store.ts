@@ -1,6 +1,7 @@
 import type {
   RunnableQueries,
   BaseGridDef,
+  NarrowedState,
   OfferContext,
   QueryState,
 } from "./field-types.ts";
@@ -30,6 +31,7 @@ export interface QueryStore {
   setView: (view: GridView) => void;
   replace: (query: QueryState, view?: GridView) => void;
   setAllSearchMatchesLoaded: (complete: boolean) => void;
+  setNarrowed: (narrowed: NarrowedState | null) => void;
 }
 
 export function normalizeQuery(
@@ -72,6 +74,9 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
     ranges: sameJson(current.ranges, next.ranges)
       ? current.ranges
       : next.ranges,
+    contains: sameJson(current.contains, next.contains)
+      ? current.contains
+      : next.contains,
     sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
   };
 }
@@ -85,7 +90,7 @@ export function createQueryStore(
   const store = createStore<QueryStoreState>({
     query: normalizeQuery(def, runnable, initial),
     view: initialView,
-    context: { runnable, allSearchMatchesLoaded: false },
+    context: { runnable, allSearchMatchesLoaded: false, narrowed: null },
     historyWrite: "replace",
   });
   const change = (patch: Partial<QueryStoreState>) =>
@@ -122,6 +127,12 @@ export function createQueryStore(
       const { context } = store.get();
       if (allSearchMatchesLoaded !== context.allSearchMatchesLoaded) {
         change({ context: { ...context, allSearchMatchesLoaded } });
+      }
+    },
+    setNarrowed: (narrowed) => {
+      const { context } = store.get();
+      if (!sameJson(narrowed, context.narrowed ?? null)) {
+        change({ context: { ...context, narrowed } });
       }
     },
   };

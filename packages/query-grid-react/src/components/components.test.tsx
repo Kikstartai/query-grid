@@ -12,6 +12,7 @@ import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
 import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
 import { ReasonDisplayContext } from "./field-frame.tsx";
+import { ContainsFilter, MatchToggle } from "./narrow-filters.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -396,6 +397,57 @@ describe("each base component mounts alone, with plain props and no provider", (
       />,
     );
     expect(idle).toMatch(/data-filter-exclude="status"[^>]*disabled/);
+  });
+
+  test("ContainsFilter names its field and its text, and carries a reason when held", () => {
+    const options = [
+      { value: "name", label: "Name" },
+      { value: "note", label: "Note" },
+    ];
+    const html = render(
+      <ContainsFilter
+        options={options}
+        field="note"
+        value="gift"
+        onContainsChange={noop}
+      />,
+    );
+    expect(html).toContain('data-field="contains"');
+    expect(html).toContain('aria-label="Note contains"');
+    expect(html).toContain('value="gift"');
+    const held = render(
+      <ReasonDisplayContext value={true}>
+        <ContainsFilter
+          options={options}
+          field={null}
+          value=""
+          onContainsChange={noop}
+          disabled
+          reason="Narrow by Status first: 2,300,000+ rows."
+        />
+      </ReasonDisplayContext>,
+    );
+    expect(held).toContain("data-unavailable");
+    expect(held).toContain("Narrow by Status first: 2,300,000+ rows.");
+    expect(held).toContain('aria-label="Name contains"');
+  });
+
+  test("MatchToggle keeps Match all reachable when Match any is held", () => {
+    const free = render(<MatchToggle value="any" onValueChange={noop} />);
+    expect(free).toContain("Match all");
+    expect(free).toContain("Match any");
+    expect(free).toMatch(/data-match="any"[^>]*aria-checked="true"/);
+    const held = render(
+      <MatchToggle
+        value="all"
+        onValueChange={noop}
+        disabled
+        reason="Narrow the filters first."
+      />,
+    );
+    expect(held).toContain('title="Narrow the filters first."');
+    expect(held).toMatch(/data-match="any"[^>]*disabled/);
+    expect(held).not.toMatch(/data-match="all"[^>]*disabled/);
   });
 
   test("FilterChips with one chip per field and one remove per value", () => {

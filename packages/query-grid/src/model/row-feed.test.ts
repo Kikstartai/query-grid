@@ -7,6 +7,7 @@ import {
   settle,
   TEST_DEF,
   TEST_SEARCH_FIELDS,
+  UNTIERED,
 } from "./grid-def.fixture.ts";
 import { defaultQuery } from "./query-actions.ts";
 import { createQueryStore } from "./query-store.ts";
@@ -14,6 +15,7 @@ import { createFeed } from "./row-feed.ts";
 import { createCountStore } from "./summary-stores.ts";
 
 const SERVER: RunnableQueries = {
+  ...UNTIERED,
   holdsAllRows: false,
   searchIsOrdered: false,
   facetCountsFollowFilters: false,

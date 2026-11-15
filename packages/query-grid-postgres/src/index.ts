@@ -7,11 +7,13 @@ export {
 } from "./grid-handler.ts";
 export {
   getGridCount,
+  getNarrowedSizes,
   listFacetCounts,
   listGridPage,
   listGridTotals,
   QUERY_CANCELED,
   listSearchSettings,
+  NARROW_SETTINGS,
   TOTAL_SETTINGS,
   walkGridPages,
   type SqlExecutor,

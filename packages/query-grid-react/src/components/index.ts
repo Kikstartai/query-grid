@@ -75,6 +75,12 @@ export {
 } from "./filter-bar.tsx";
 export { FilterSidebar, type FilterSidebarProps } from "./filter-sidebar.tsx";
 export {
+  ContainsFilter,
+  MatchToggle,
+  type ContainsFilterProps,
+  type MatchToggleProps,
+} from "./narrow-filters.tsx";
+export {
   DEFAULT_MESSAGES,
   formatList,
   formatLoaded,

@@ -370,7 +370,7 @@ test.describe("search with equality filters", () => {
 
     const period = bar(page).locator('[data-field="created_at"]');
     await expect(period).toHaveAttribute("data-unavailable", "");
-    await expect(period).toHaveAttribute("title", /range/);
+    await expect(period).toHaveAttribute("title", /equality filters only/);
     const refused = await page.request.get(
       "/api/orders?q=smith&r.created_at=2026-01-01T00:00:00Z..",
     );
@@ -391,6 +391,207 @@ test.describe("search with equality filters", () => {
       "title",
       /range/,
     );
+  });
+});
+
+test.describe("the narrowed-set tier", () => {
+  const field = (page: Page, name: string) =>
+    bar(page).locator(`[data-field="${name}"]`);
+
+  async function setContains(page: Page, key: string, text: string) {
+    await bar(page).locator('[data-filter="contains.field"]').click();
+    await page.locator(`[data-option="${key}"]`).click();
+    const input = bar(page).locator('[data-filter="contains"]');
+    await input.fill(text);
+    await input.press("Enter");
+  }
+
+  test("on the whole table the expensive controls are held with the size, and narrowing frees them", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders");
+    await expect(field(page, "contains")).toHaveAttribute(
+      "title",
+      /^Narrow by Status or Customer account first: 620.000 rows\.$/,
+    );
+    await expect(field(page, "contains")).toHaveAttribute(
+      "data-unavailable",
+      "",
+    );
+    await expect(field(page, "total")).toHaveAttribute("data-unavailable", "");
+    await expect(field(page, "created_at")).not.toHaveAttribute(
+      "data-unavailable",
+      "",
+    );
+    await expect(bar(page).locator('[data-filter="contains"]')).toBeDisabled();
+
+    await pick(page, "status_code", "failed");
+    await expect(field(page, "contains")).not.toHaveAttribute(
+      "data-unavailable",
+      "",
+    );
+    await expect(field(page, "total")).not.toHaveAttribute(
+      "data-unavailable",
+      "",
+    );
+    await setContains(page, "note", "gift");
+    await expect(page).toHaveURL(/c\.note=gift/);
+    await expect(chip(page, "contains")).toHaveText(/Note contains “gift”/);
+    const matches = await apiCount(page, "f.status_code=failed&c.note=gift");
+    expect(matches).toBeGreaterThan(0);
+    await expectCount(page, matches, "capped");
+    for (const note of await cells(page, "note")) {
+      expect(note.toLowerCase()).toContain("gift");
+    }
+
+    const min = bar(page).locator('[data-filter="total.min"]');
+    await min.fill("200");
+    await min.press("Enter");
+    await expect(page).toHaveURL(/r\.total=20000\.\./);
+    await expectCount(
+      page,
+      await apiCount(page, "f.status_code=failed&c.note=gift&r.total=20000.."),
+      "capped",
+    );
+    await expect(page.locator("[data-chip]")).toHaveCount(4);
+
+    await page.locator('[data-chip-remove="contains"]').click();
+    await expect(page).not.toHaveURL(/c\.note/);
+    await expect(bar(page).locator('[data-filter="contains"]')).toHaveValue("");
+  });
+
+  test("match any unions two filters when their rows fit the limit, and is held when they do not", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders?f.status_code=failed&f.channel=phone");
+    const both = await apiCount(page, "f.status_code=failed&f.channel=phone");
+    const any = bar(page).locator('[data-match="any"]');
+    await expect(any).toBeEnabled();
+    await any.click();
+    await expect(page).toHaveURL(/match=any/);
+    await expect(chip(page, "match")).toHaveText(/Match any/);
+    const either = await apiCount(
+      page,
+      "f.status_code=failed&f.channel=phone&match=any",
+    );
+    expect(either).toBeGreaterThan(both);
+    await expectCount(page, either, "capped");
+    const rows = await page.request.get(
+      "/api/orders?f.status_code=failed&f.channel=phone&match=any&limit=1000",
+    );
+    const body = (await rows.json()) as {
+      rows: { status_code: string; channel: string }[];
+    };
+    expect(
+      body.rows.every(
+        (row) => row.status_code === "failed" || row.channel === "phone",
+      ),
+    ).toBe(true);
+    expect(body.rows.some((row) => row.status_code !== "failed")).toBe(true);
+
+    await bar(page).locator('[data-match="all"]').click();
+    await expect(page).not.toHaveURL(/match=any/);
+    await expectCount(page, both, "capped");
+
+    await openGrid(page, "/orders?f.status_code=completed&f.region=gauteng");
+    await expect(bar(page).locator('[data-match="any"]')).toBeDisabled();
+    await expect(field(page, "match")).toHaveAttribute(
+      "title",
+      /^Narrow the filters first: .* rows\.$/,
+    );
+  });
+
+  test("a URL over the limit is refused by the server and says how to get under it", async ({
+    page,
+  }) => {
+    await page.goto("/orders?c.customer_name=smith");
+    await expect(page.locator("[data-feed-state=error]")).toContainText(
+      /more than 100.000 rows/,
+    );
+    const refused = await page.request.get("/api/orders?c.customer_name=smith");
+    expect(refused.status()).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      code: "narrow_first",
+      params: { limit: 100000 },
+    });
+    await pick(page, "status_code", "failed");
+    await expect(page.locator("[data-feed-state=error]")).toHaveCount(0);
+    await expect(loaded(page)).toBeVisible();
+    for (const name of await cells(page, "customer_name")) {
+      expect(name.toLowerCase()).toContain("smith");
+    }
+  });
+
+  test("the sidebar spells the reason out under each held control", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders");
+    await page.locator("[data-part=filter-sidebar-trigger]").click();
+    const sidebar = page.locator("[data-part=filter-sidebar]");
+    await expect(
+      sidebar.locator('[data-field="contains"] [data-field-reason]'),
+    ).toHaveText(/Narrow by Status or Customer account first/);
+    await expect(
+      sidebar.locator('[data-field="item_count"] [data-field-reason]'),
+    ).toHaveText(/Narrow by/);
+  });
+
+  test("the limits the host set are served, and the sizes behind the controls", async ({
+    page,
+  }) => {
+    const limits = await page.request.get("/api/orders/limits");
+    expect(await limits.json()).toEqual({
+      pageLimit: 200,
+      countCap: 10000,
+      searchLimit: 500,
+      searchBudgetMs: 120,
+      narrowLimit: 100000,
+    });
+    const sizes = await page.request.get(
+      "/api/orders/narrowed?f.status_code=failed&f.channel=phone",
+    );
+    const body = (await sizes.json()) as {
+      limit: number;
+      all: { rows: number; over: boolean };
+      any: { rows: number; over: boolean };
+    };
+    expect(body.limit).toBe(100000);
+    expect(body.all.over).toBe(false);
+    expect(body.any.rows).toBeGreaterThan(body.all.rows);
+  });
+
+  test("the in-memory grid takes contains, a second range and match any with no limit", async ({
+    page,
+  }) => {
+    await openGrid(page, "/memory");
+    await expect(field(page, "contains")).not.toHaveAttribute(
+      "data-unavailable",
+      "",
+    );
+    const input = bar(page).locator('[data-filter="contains"]');
+    await input.fill("fix");
+    await input.press("Enter");
+    await expect(page).toHaveURL(/c\.title=fix/);
+    await expect
+      .poll(async () => {
+        const titles = await cells(page, "title");
+        return (
+          titles.length > 0 &&
+          titles.every((title) => title.toLowerCase().includes("fix"))
+        );
+      })
+      .toBe(true);
+    const narrowed = Number(await countValue(page).getAttribute("data-count"));
+    await pick(page, "status", "todo");
+    const all = Number(await countValue(page).getAttribute("data-count"));
+    await bar(page).locator('[data-match="any"]').click();
+    await expect(page).toHaveURL(/match=any/);
+    await expect
+      .poll(async () =>
+        Number(await countValue(page).getAttribute("data-count")),
+      )
+      .toBeGreaterThan(narrowed);
+    expect(all).toBeLessThanOrEqual(narrowed);
   });
 });
 

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import {
+  CONTAINS_MAX_LENGTH,
   explainUnavailable,
   getField,
   getFieldLabel,
@@ -32,6 +33,10 @@ import {
   SortControl as BaseSortControl,
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
+import {
+  ContainsFilter as BaseContainsFilter,
+  MatchToggle as BaseMatchToggle,
+} from "../components/narrow-filters.tsx";
 import { useLocale, useMessages } from "../components/messages.tsx";
 import {
   formatReason,
@@ -217,6 +222,62 @@ export function SearchFilter() {
   );
 }
 
+export interface ContainsFilterProps {
+  fields?: string[];
+}
+
+export function ContainsFilter({ fields }: ContainsFilterProps) {
+  const { def, source } = useQueryGrid();
+  const query = useQueryState();
+  const { dispatch } = useQueryGridActions();
+  const keys = source.runnable.containsFields.filter(
+    (key) => fields === undefined || fields.includes(key),
+  );
+  const current = query.contains?.field ?? keys[0] ?? "";
+  const offer = useOfferState({ kind: "contains", field: current });
+  if (keys.length === 0) {
+    return null;
+  }
+  return (
+    <BaseContainsFilter
+      options={keys.map((key) => ({
+        value: key,
+        label: getFieldLabel(def, key),
+      }))}
+      field={query.contains?.field ?? null}
+      value={query.contains?.value ?? ""}
+      maxLength={CONTAINS_MAX_LENGTH}
+      onContainsChange={(field, value) =>
+        dispatch(
+          value
+            ? { type: "setContains", field, value }
+            : { type: "clearContains" },
+        )
+      }
+      disabled={!offer.offered && query.contains === null}
+      reason={offer.reason}
+    />
+  );
+}
+
+export function MatchToggle() {
+  const { source } = useQueryGrid();
+  const query = useQueryState();
+  const { dispatch } = useQueryGridActions();
+  const offer = useOfferState({ kind: "match" });
+  if (!source.runnable.matchAny) {
+    return null;
+  }
+  return (
+    <BaseMatchToggle
+      value={query.match}
+      onValueChange={(mode) => dispatch({ type: "setMatch", mode })}
+      disabled={!offer.offered}
+      reason={offer.reason}
+    />
+  );
+}
+
 export function FilterChips() {
   const chips = useFilterChips();
   const { dispatch } = useQueryGridActions();
@@ -241,9 +302,10 @@ export function FilterChips() {
 
 interface DefaultFiltersProps {
   fields?: string[];
+  contains?: string[];
 }
 
-function DefaultFilters({ fields }: DefaultFiltersProps) {
+function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
   const { def, source } = useQueryGrid();
   return (
     <>
@@ -251,6 +313,8 @@ function DefaultFilters({ fields }: DefaultFiltersProps) {
       {listFilterFields(def, source.runnable, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
+      <ContainsFilter fields={contains ?? fields} />
+      <MatchToggle />
       <SortControl />
     </>
   );
@@ -258,13 +322,14 @@ function DefaultFilters({ fields }: DefaultFiltersProps) {
 
 export interface FilterBarProps {
   fields?: string[];
+  contains?: string[];
   children?: ReactNode;
 }
 
-export function FilterBar({ fields, children }: FilterBarProps) {
+export function FilterBar({ fields, contains, children }: FilterBarProps) {
   return (
     <BaseFilterBar>
-      {children ?? <DefaultFilters fields={fields} />}
+      {children ?? <DefaultFilters fields={fields} contains={contains} />}
     </BaseFilterBar>
   );
 }
@@ -273,6 +338,7 @@ export interface FilterSidebarProps {
   side?: "start" | "end";
   label?: string;
   fields?: string[];
+  contains?: string[];
   children?: ReactNode;
 }
 
@@ -280,6 +346,7 @@ export function FilterSidebar({
   side,
   label,
   fields,
+  contains,
   children,
 }: FilterSidebarProps) {
   const { dispatch } = useQueryGridActions();
@@ -291,7 +358,7 @@ export function FilterSidebar({
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      {children ?? <DefaultFilters fields={fields} />}
+      {children ?? <DefaultFilters fields={fields} contains={contains} />}
     </BaseFilterSidebar>
   );
 }

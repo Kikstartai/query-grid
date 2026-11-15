@@ -2,6 +2,7 @@ import type {
   RunnableQueries,
   FieldOption,
   GridRow,
+  NarrowedResult,
   QueryState,
 } from "./field-types.ts";
 import type { GridLimits } from "./limits.ts";
@@ -38,6 +39,10 @@ export interface DataSource {
     search: OptionSearch,
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
+  fetchNarrowed: (
+    query: QueryState,
+    signal: AbortSignal,
+  ) => Promise<NarrowedResult | null>;
   fetchLimits: (signal: AbortSignal) => Promise<GridLimits | null>;
   fetchTransitions: (signal: AbortSignal) => Promise<[string, string][]>;
   changeFacetValue: (id: string, to: string) => Promise<GridRow>;

@@ -8,7 +8,7 @@ import {
   type OfferContext,
   type QueryState,
 } from "./field-types.ts";
-import { TEST_DEF, TEST_SEARCH_FIELDS } from "./grid-def.fixture.ts";
+import { TEST_DEF, TEST_SEARCH_FIELDS, UNTIERED } from "./grid-def.fixture.ts";
 import { memoryRunnable } from "./memory-source.ts";
 import {
   applyAction,
@@ -24,6 +24,7 @@ import { validateQueryValues } from "./query-validate.ts";
 const BASE = defaultQuery(TEST_DEF);
 
 const SERVER: RunnableQueries = {
+  ...UNTIERED,
   holdsAllRows: false,
   searchIsOrdered: false,
   facetCountsFollowFilters: false,
@@ -209,6 +210,9 @@ describe("the reason a control is unavailable", () => {
       filters: ["status"],
       ranges: [],
       sort: "total",
+      rows: null,
+      capped: false,
+      narrowBy: [],
     });
     expect(
       explainUnavailable(
@@ -225,6 +229,9 @@ describe("the reason a control is unavailable", () => {
       filters: ["status"],
       ranges: [],
       sort: "total",
+      rows: null,
+      capped: false,
+      narrowBy: [],
     });
     expect(explainUnavailable(byTotal, { kind: "search" }, CAPPED).code).toBe(
       "search_alone",
@@ -370,9 +377,9 @@ describe("the store and browser history", () => {
 describe("the URL", () => {
   test("a query round-trips", () => {
     const query: QueryState = {
+      ...BASE,
       equals: { status: ["open"] },
       ranges: [{ field: "total", min: "100", max: null }],
-      search: null,
       sort: { field: "total", direction: "asc" },
       cursor: "abc",
     };

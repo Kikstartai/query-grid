@@ -10,7 +10,9 @@ export {
 export {
   listFilterChips,
   type ChipValue,
+  type ContainsChip,
   type EqualsChip,
+  type MatchChip,
   type FilterChip,
   type SearchChip,
   type RangeChip,
@@ -26,6 +28,7 @@ export {
 } from "./model/date-presets.ts";
 export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
+  CONTAINS_MAX_LENGTH,
   DEFAULT_MAX_VALUES,
   getFacetField,
   listSearchFields,
@@ -49,8 +52,13 @@ export {
   type BaseGridDef,
   type GridRow,
   type OfferContext,
+  type ContainsState,
+  type MatchMode,
+  type NarrowedResult,
+  type NarrowedState,
   type QueryState,
   type RangeState,
+  type SizeResult,
   type SortDirection,
   type SortState,
 } from "./model/field-types.ts";
@@ -140,9 +148,15 @@ export {
   toNumberBound,
 } from "./model/range-bounds.ts";
 export {
+  countFilterTerms,
   gridDefRunnable,
   isFacetOnlyQuery,
+  isMatchAny,
   isQueryIndexed,
+  isQueryRunnable,
+  listContainsFields,
+  listNarrowRangeFields,
+  planQuery,
   listSortFields,
   getIndex,
   indexRunnable,
@@ -150,6 +164,7 @@ export {
   type IndexDef,
   type IndexRunnableOptions,
   type IndexedGridDef,
+  type QueryPlan,
 } from "./model/indexes.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export { createStore, type Store } from "./model/store.ts";
@@ -158,6 +173,7 @@ export {
   createFacetStore,
   createLabelStore,
   createLimitsStore,
+  createNarrowedStore,
   createTotalStore,
   type CountState,
   type CountStore,
@@ -165,6 +181,7 @@ export {
   type FacetStore,
   type LabelStore,
   type LimitsStore,
+  type NarrowedStore,
   type TotalState,
   type TotalStore,
 } from "./model/summary-stores.ts";

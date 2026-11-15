@@ -319,6 +319,14 @@ pre {
   width: 11rem;
 }
 
+.skeleton-control[data-kind="contains"] {
+  width: 22rem;
+}
+
+.skeleton-control[data-kind="match"] {
+  width: 12rem;
+}
+
 .skeleton-line {
   width: 100%;
   height: 1rem;

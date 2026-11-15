@@ -12,6 +12,7 @@ import {
   type ReservedValue,
 } from "./field-values.ts";
 import { formatValue, labelKey } from "./format.ts";
+import { isMatchAny } from "./indexes.ts";
 import type { QueryAction } from "./query-actions.ts";
 import { fromDayBound } from "./range-bounds.ts";
 
@@ -56,7 +57,27 @@ export interface SortChip {
   clear: QueryAction | null;
 }
 
-export type FilterChip = EqualsChip | RangeChip | SearchChip | SortChip;
+export interface ContainsChip {
+  id: string;
+  kind: "contains";
+  field: string;
+  value: string;
+  clear: QueryAction;
+}
+
+export interface MatchChip {
+  id: string;
+  kind: "match";
+  clear: QueryAction;
+}
+
+export type FilterChip =
+  | EqualsChip
+  | RangeChip
+  | ContainsChip
+  | MatchChip
+  | SearchChip
+  | SortChip;
 
 function formatBound(
   def: BaseGridDef,
@@ -141,6 +162,22 @@ export function listFilterChips(
       max: formatBound(def, field, max, locale),
       preset: preset ?? null,
       clear: { type: "clearRange", field },
+    });
+  }
+  if (query.contains) {
+    chips.push({
+      id: "contains",
+      kind: "contains",
+      field: query.contains.field,
+      value: query.contains.value,
+      clear: { type: "clearContains" },
+    });
+  }
+  if (isMatchAny(query)) {
+    chips.push({
+      id: "match",
+      kind: "match",
+      clear: { type: "setMatch", mode: "all" },
     });
   }
   if (query.search !== null) {
