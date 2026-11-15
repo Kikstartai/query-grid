@@ -1,78 +1,50 @@
+import { randomUUID } from "node:crypto";
+
 import { Client, Pool, type PoolClient, type QueryResultRow } from "pg";
 
 import type { SqlExecutor, SqlQuery } from "@kikstart/query-grid-postgres";
 
-import { isPooledConnection } from "./pg-connection";
-
 const STATEMENT_BUDGET_MS = 5000;
+const IDLE_MS = 10_000;
+const BUDGET_SETTING = `statement_timeout = ${STATEMENT_BUDGET_MS}`;
+const CANCEL_SQL =
+  "SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE starts_with(query, $1) AND state = 'active' AND pid <> pg_backend_pid()";
 
-let pool: Pool | null = null;
-const backendPids = new WeakMap<PoolClient, number>();
+export interface PgExecutor {
+  execute: SqlExecutor;
+  end: () => Promise<void>;
+}
 
-function getConnectionString(): string {
-  const connectionString = process.env.QUERY_GRID_DATABASE_URL;
-  if (!connectionString) {
+class ConnectionPoisoned extends Error {
+  constructor(readonly original: unknown) {
+    super("the connection could not roll back");
+  }
+}
+
+function normalizeConnectionString(value: string | undefined): string {
+  if (!value) {
     throw new Error("QUERY_GRID_DATABASE_URL is not set");
   }
-  return connectionString;
-}
-
-function getPool(): Pool {
-  if (pool) {
-    return pool;
-  }
-  pool = new Pool({
-    connectionString: getConnectionString(),
-    max: 4,
-    statement_timeout: STATEMENT_BUDGET_MS,
-    idleTimeoutMillis: 10_000,
-  });
-  return pool;
-}
-
-// A proxy in front of Postgres reports its own key as `client.processID`, so the pid to cancel is asked from the server, once per connection.
-async function getBackendPid(client: PoolClient): Promise<number> {
-  const known = backendPids.get(client);
-  if (known !== undefined) {
-    return known;
-  }
-  const { rows } = await client.query<{ pid: number }>(
-    "SELECT pg_backend_pid() AS pid",
-  );
-  backendPids.set(client, rows[0].pid);
-  return rows[0].pid;
-}
-
-// The cancel opens its own connection: one borrowed from the pool could wait forever behind the queries it is meant to stop.
-async function cancelBackend(pid: number): Promise<void> {
-  const client = new Client({
-    connectionString: getConnectionString(),
-    connectionTimeoutMillis: STATEMENT_BUDGET_MS,
-  });
   try {
-    await client.connect();
-    await client.query("SELECT pg_cancel_backend($1)", [pid]);
+    new Client({ connectionString: value });
   } catch {
-    return;
-  } finally {
-    await client.end().catch(() => undefined);
+    throw new Error("QUERY_GRID_DATABASE_URL is not a valid connection string");
   }
+  return value;
 }
 
+// A statement budget given at connect time is a startup parameter, which a transaction pooler drops, so it rides in the transaction instead.
 async function runOnClient<T extends QueryResultRow>(
   client: PoolClient,
   query: SqlQuery,
   settings: string[],
 ): Promise<T[]> {
-  if (settings.length === 0) {
-    const result = await client.query<T>(query.text, query.values);
-    return result.rows;
-  }
   try {
     await client.query(
-      ["BEGIN", ...settings.map((setting) => `SET LOCAL ${setting}`)].join(
-        "; ",
-      ),
+      [
+        "BEGIN",
+        ...[BUDGET_SETTING, ...settings].map((s) => `SET LOCAL ${s}`),
+      ].join("; "),
     );
     const result = await client.query<T>(query.text, query.values);
     await client.query("COMMIT");
@@ -85,60 +57,108 @@ async function runOnClient<T extends QueryResultRow>(
   }
 }
 
-async function runCancellable<T extends QueryResultRow>(
-  client: PoolClient,
-  query: SqlQuery,
-  settings: string[],
-  signal: AbortSignal,
-): Promise<T[]> {
-  const pid = await getBackendPid(client);
-  signal.throwIfAborted();
-  let canceling: Promise<void> | undefined;
-  const cancel = () => {
-    canceling = cancelBackend(pid);
-  };
-  signal.addEventListener("abort", cancel, { once: true });
-  try {
-    return await runOnClient<T>(client, query, settings);
-  } finally {
-    signal.removeEventListener("abort", cancel);
-    // The connection is held until a cancel in flight has landed, so it cannot hit the next query to use it.
-    await canceling;
+export function createPgExecutor(connectionString: string): PgExecutor {
+  const pool = new Pool({
+    connectionString,
+    max: 4,
+    statement_timeout: STATEMENT_BUDGET_MS,
+    idleTimeoutMillis: IDLE_MS,
+    connectionTimeoutMillis: STATEMENT_BUDGET_MS,
+  });
+  // An idle client the server drops emits an error the pool already handles; without a listener it would end the process.
+  pool.on("error", () => undefined);
+  let canceller: Promise<Client> | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function dropCanceller() {
+    const closing = canceller;
+    canceller = null;
+    clearTimeout(idleTimer);
+    void closing?.then((client) => client.end()).catch(() => undefined);
   }
+
+  // One connection outside the pool answers every cancel, so a cancel never waits behind the queries it is meant to stop; the client runs its queries one at a time.
+  function getCanceller(): Promise<Client> {
+    if (canceller) {
+      return canceller;
+    }
+    const client = new Client({
+      connectionString,
+      connectionTimeoutMillis: STATEMENT_BUDGET_MS,
+      query_timeout: STATEMENT_BUDGET_MS,
+    });
+    const connecting = client.connect().then(() => client);
+    client.on("error", () => {
+      if (canceller === connecting) {
+        dropCanceller();
+      }
+    });
+    canceller = connecting;
+    return connecting;
+  }
+
+  async function cancelStatement(marker: string): Promise<void> {
+    try {
+      const client = await getCanceller();
+      await client.query(CANCEL_SQL, [marker]);
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(dropCanceller, IDLE_MS);
+      idleTimer.unref?.();
+    } catch {
+      dropCanceller();
+    }
+  }
+
+  const execute: SqlExecutor = async <T extends object>(
+    query: SqlQuery,
+    settings: string[] = [],
+    signal?: AbortSignal,
+  ) => {
+    signal?.throwIfAborted();
+    const client = await pool.connect();
+    let poisoned = false;
+    const marker = `/* qg:${randomUUID()} */`;
+    const cancel = () => {
+      void cancelStatement(marker);
+    };
+    try {
+      signal?.throwIfAborted();
+      signal?.addEventListener("abort", cancel, { once: true });
+      return await runOnClient<T & QueryResultRow>(
+        client,
+        { text: `${marker} ${query.text}`, values: query.values },
+        settings,
+      );
+    } catch (error) {
+      if (error instanceof ConnectionPoisoned) {
+        poisoned = true;
+        throw error.original;
+      }
+      throw error;
+    } finally {
+      signal?.removeEventListener("abort", cancel);
+      client.release(poisoned);
+    }
+  };
+
+  return {
+    execute,
+    end: async () => {
+      dropCanceller();
+      await pool.end();
+    },
+  };
 }
 
-class ConnectionPoisoned extends Error {
-  constructor(readonly original: unknown) {
-    super("the connection could not roll back");
-  }
-}
+let shared: PgExecutor | null = null;
 
 export const executeSql: SqlExecutor = async <T extends object>(
   query: SqlQuery,
-  settings: string[] = [],
+  settings?: string[],
   signal?: AbortSignal,
 ) => {
-  signal?.throwIfAborted();
-  const client = await getPool().connect();
-  let poisoned = false;
-  try {
-    // Behind a transaction pooler the backend changes between statements, so a pid could name another session's query; there the statement budget bounds an abandoned query instead.
-    if (signal && !isPooledConnection(getConnectionString())) {
-      return await runCancellable<T & QueryResultRow>(
-        client,
-        query,
-        settings,
-        signal,
-      );
-    }
-    return await runOnClient<T & QueryResultRow>(client, query, settings);
-  } catch (error) {
-    if (error instanceof ConnectionPoisoned) {
-      poisoned = true;
-      throw error.original;
-    }
-    throw error;
-  } finally {
-    client.release(poisoned);
-  }
+  shared ??= createPgExecutor(
+    normalizeConnectionString(process.env.QUERY_GRID_DATABASE_URL),
+  );
+  return shared.execute<T>(query, settings, signal);
 };
