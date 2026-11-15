@@ -20,7 +20,7 @@ import {
   type SqlQuery,
 } from "@kikstart/query-grid-postgres";
 
-import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
+import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-def";
 
 interface Counter {
   rows: number;

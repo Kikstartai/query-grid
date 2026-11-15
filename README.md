@@ -57,8 +57,13 @@ import "@kikstart/query-grid-react/styles.css";
 Declare the fields once, in a module with no React in it. Both the server and the client import it, so their keys and types cannot drift. The library has no domain names of its own; a host passes its defs in.
 
 ```ts
-// orders-fields.ts
-import type { GridDef, QueryShape } from "@kikstart/query-grid";
+// orders-def.ts
+import {
+  shapeCapabilities,
+  type GridDef,
+  type QueryShape,
+} from "@kikstart/query-grid";
+import type { ServerGridDef } from "@kikstart/query-grid-postgres";
 
 export const ORDERS_BASE: GridDef = {
   id: "orders",
@@ -100,18 +105,20 @@ export const ORDERS_SHAPES: QueryShape[] = [
 ];
 ```
 
-The server def is those fields plus storage: the table, the shapes and the counter table.
+The server def is those fields plus storage: the table, the shapes and the counter table. The capabilities are what the client needs to know of the same shapes. Both sit in the same React-free file:
 
 ```ts
-// orders-server-def.ts
-import type { ServerGridDef } from "@kikstart/query-grid-postgres";
-
+// orders-def.ts, continued
 export const ORDERS_SERVER_GRID: ServerGridDef = {
   ...ORDERS_BASE,
   table: "orders",
   shapes: ORDERS_SHAPES,
   facet: { field: "status_code", counterTable: "order_status_counts" },
 };
+
+export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
+  facetField: "status_code",
+});
 ```
 
 Generate the DDL from it: one index per shape, then the counter table and its triggers. `listTableMigrations` takes every server def you have and returns one migration per table.
@@ -169,21 +176,16 @@ export const POST = (request: Request) => handle(request);
 - Responses carry `cache-control: no-store` and `server-timing`.
 - With `basePath` the routing is exact. Without it the last path segment picks the route.
 
-The client def is the same fields plus cells, and the capabilities derived from the same shapes:
+The client def is the same fields plus cells, in the one file that holds React:
 
 ```tsx
-// orders-grid-def.tsx
-import { shapeCapabilities } from "@kikstart/query-grid";
+// orders-grid.tsx
 import type { ClientGridDef } from "@kikstart/query-grid-react/components";
 
 export const ORDERS_GRID: ClientGridDef = {
   ...ORDERS_BASE,
   fields: ORDERS_BASE.fields.map(addCells),
 };
-
-export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
-  facetField: "status_code",
-});
 ```
 
 Give the provider a source, then mount the parts. Each one reads and writes the same query state; mount as many or as few as you need.

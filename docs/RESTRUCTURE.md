@@ -131,7 +131,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 
 - **Core stays React-free:** core has no React, DOM or pg import, which a grep and its `package.json` confirm. `-postgres` has no React or pg import.
 - **Round trip:** `encodeQuery` → `decodeQuery` across `-react`'s use and `-postgres`'s use, both on core's one codec.
-- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-grid-def.test.ts`) stays, pointed at `shapeCapabilities(shapes)`.
+- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-def.test.ts`, named `orders-grid-def.test.ts` until 0.3.0) stays, pointed at `shapeCapabilities(shapes)`.
 - **SQL builder:** `server/sql-builder.test.ts` gets its own fixtures in `-postgres`. `model/query-model.test.ts` splits into a shape part (`-postgres`) and an action part (core).
 - **Carried over:** every existing unit, DB and benchmark test is carried over.
 
@@ -229,7 +229,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 ### Demo
 
-- `orders-fields.ts` is the shared React-free module; `orders-server-def.ts` and `orders-grid-def.tsx` build on it. The client def adds a status badge cell.
+- `orders-fields.ts` is the shared React-free module; `orders-server-def.ts` and `orders-grid-def.tsx` build on it. The client def adds a status badge cell. Since 0.3.0 these are two files: `orders-def.ts` (fields, shapes, the server def and the capabilities, no React) and `orders-grid.tsx` (the cells).
 - New routes: `/rtl` and `/components`.
 - `apps/demo/browser/verify.sh` and `shots.sh` are the scripted pass and the screenshots.
 
@@ -337,6 +337,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 - **Demo `typecheck`** is `next typegen && tsc --noEmit`, so the generated `PageProps` exists on a clean checkout.
 - **`error.tsx` and `not-found.tsx`** at the app root; the error page takes this Next version's `{ error, retry }`.
 - **`lib/db.ts`** is `import "server-only"` plus a re-export of `lib/pg-executor.ts`, which holds the pool and `executeSql` and is what the bun DB test imports. `server-only` is a demo dependency.
+- **Two def files (Glen, relayed through the 0.2.0 review session).** `orders-def.ts` holds the fields, the shapes, the base `GridDef`, `ORDERS_SERVER_GRID` and `ORDERS_CAPABILITIES`, with no React; the capabilities can sit there because `shapeCapabilities` is core's. `orders-grid.tsx` holds only the status-badge `cell` and `ORDERS_GRID`. `orders-fields.ts` and `orders-server-def.ts` are gone. The server def's import of `ServerGridDef` is a type, so the client modules that read the capabilities from this file pull in no server code.
 - **Placement.** `core/orders/orders-provider.tsx`, `core/tasks/ui/`, `core/catalog/ui/`, `core/landing/` (`landing-copy.ts` and `ui/landing.tsx`; the page composes five sections).
 - **Title prop.** `OrdersWorkspace` takes `title`; `dir` no longer picks the heading.
 - `verify.sh` gained a `shift` section: the static shell of each grid route holds the brand and a skeleton and no loading text, and the cumulative layout shift of each grid page is read from the browser.

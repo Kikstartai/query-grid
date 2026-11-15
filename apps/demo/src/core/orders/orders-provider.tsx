@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import { createHttpSource } from "@kikstart/query-grid/http";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
 
-import { ORDERS_API } from "./orders-fields";
-import { ORDERS_CAPABILITIES, ORDERS_GRID } from "./orders-grid-def";
+import { ORDERS_API, ORDERS_CAPABILITIES } from "./orders-def";
+import { ORDERS_GRID } from "./orders-grid";
 
 const ORDERS_SOURCE = createHttpSource(
   ORDERS_GRID,

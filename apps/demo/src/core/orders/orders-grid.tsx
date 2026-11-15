@@ -1,14 +1,10 @@
-import { formatValue, shapeCapabilities } from "@kikstart/query-grid";
+import { formatValue } from "@kikstart/query-grid";
 import type {
   ClientFieldDef,
   ClientGridDef,
 } from "@kikstart/query-grid-react/components";
 
-import {
-  ORDERS_BASE,
-  ORDERS_FACET_FIELD,
-  ORDERS_SHAPES,
-} from "./orders-fields";
+import { ORDERS_BASE, ORDERS_FACET_FIELD } from "./orders-def";
 
 function withStatusBadge(field: ClientFieldDef): ClientFieldDef {
   if (field.key !== ORDERS_FACET_FIELD) {
@@ -28,7 +24,3 @@ export const ORDERS_GRID: ClientGridDef = {
   ...ORDERS_BASE,
   fields: ORDERS_BASE.fields.map(withStatusBadge),
 };
-
-export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
-  facetField: ORDERS_FACET_FIELD,
-});

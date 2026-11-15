@@ -1,9 +1,11 @@
-import type {
-  FieldDef,
-  FieldOption,
-  GridDef,
-  QueryShape,
+import {
+  shapeCapabilities,
+  type FieldDef,
+  type FieldOption,
+  type GridDef,
+  type QueryShape,
 } from "@kikstart/query-grid";
+import type { ServerGridDef } from "@kikstart/query-grid-postgres";
 
 import {
   ORDER_CHANNELS,
@@ -168,3 +170,14 @@ export const ORDERS_SHAPES: QueryShape[] = [
   { equals: ["status_code", "channel"], sort: "created_at" },
   { quick: ["customer_name", "order_number"] },
 ];
+
+export const ORDERS_SERVER_GRID: ServerGridDef = {
+  ...ORDERS_BASE,
+  table: "orders",
+  shapes: ORDERS_SHAPES,
+  facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
+};
+
+export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
+  facetField: ORDERS_FACET_FIELD,
+});

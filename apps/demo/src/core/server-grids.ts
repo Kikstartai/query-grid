@@ -1,6 +1,6 @@
 import type { ServerGridDef } from "@kikstart/query-grid-postgres";
 
-import { ORDERS_SERVER_GRID } from "./orders/orders-server-def";
+import { ORDERS_SERVER_GRID } from "./orders/orders-def";
 
 export const SERVER_GRIDS: ServerGridDef[] = [ORDERS_SERVER_GRID];
 

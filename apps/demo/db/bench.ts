@@ -26,7 +26,7 @@ import {
 } from "@kikstart/query-grid-postgres";
 import { Client } from "pg";
 
-import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-server-def";
+import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-def";
 
 const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? 30);
 const PAGE = 200;

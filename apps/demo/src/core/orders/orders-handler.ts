@@ -13,8 +13,11 @@ import {
 
 import { executeSql } from "@/lib/db";
 
-import { ORDERS_API, ORDERS_FACET_FIELD } from "./orders-fields";
-import { ORDERS_SERVER_GRID } from "./orders-server-def";
+import {
+  ORDERS_API,
+  ORDERS_FACET_FIELD,
+  ORDERS_SERVER_GRID,
+} from "./orders-def";
 
 const CUSTOMER_FIELD = "customer_id";
 const OPTION_LIMIT = 20;

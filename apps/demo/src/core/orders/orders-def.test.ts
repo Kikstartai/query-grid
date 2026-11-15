@@ -19,9 +19,9 @@ import {
   ORDERS_BASE,
   ORDERS_FACET_FIELD,
   ORDERS_SHAPES,
-} from "./orders-fields";
+  ORDERS_SERVER_GRID,
+} from "./orders-def";
 import { resolveMigrationFile, SERVER_GRIDS } from "../server-grids";
-import { ORDERS_SERVER_GRID } from "./orders-server-def";
 
 const CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
   facetField: ORDERS_FACET_FIELD,
