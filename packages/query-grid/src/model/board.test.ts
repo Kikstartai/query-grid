@@ -8,13 +8,13 @@ import {
   settle,
   TEST_DEF,
   TEST_QUICK_FIELDS,
-  TEST_SHAPES,
+  TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
 import { defaultQuery } from "./query-actions.ts";
-import { shapeCapabilities } from "./shapes.ts";
+import { indexCapabilities } from "./indexes.ts";
 
-const CAPS = shapeCapabilities(TEST_SHAPES, {
+const CAPS = indexCapabilities(TEST_INDEXES, {
   facetField: "status",
   quickFields: TEST_QUICK_FIELDS,
 });

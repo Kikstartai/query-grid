@@ -4,7 +4,7 @@ import type { QueryRules, QueryState } from "./field-types.ts";
 import {
   TEST_DEF,
   TEST_QUICK_FIELDS,
-  TEST_SHAPES,
+  TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import {
   applyAction,
@@ -13,23 +13,23 @@ import {
   listOffers,
 } from "./query-actions.ts";
 import {
-  isQueryDeclared,
-  matchShape,
-  shapeCapabilities,
-  shapeId,
-  type QueryShape,
-} from "./shapes.ts";
+  isQueryIndexed,
+  getIndex,
+  indexCapabilities,
+  indexId,
+  type IndexDef,
+} from "./indexes.ts";
 
-const SHAPES = TEST_SHAPES;
+const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);
-const CAPS = shapeCapabilities(SHAPES, {
+const CAPS = indexCapabilities(INDEXES, {
   facetField: "status",
   quickFields: TEST_QUICK_FIELDS,
 });
 const CAPPED: QueryRules = { capabilities: CAPS, quickComplete: false };
 const COMPLETE: QueryRules = { capabilities: CAPS, quickComplete: true };
 
-describe("offers from declared shapes", () => {
+describe("offers from declared indexes", () => {
   test("a sort narrows the filters an index answers", () => {
     const byTotal = applyAction(
       TEST_DEF,
@@ -50,7 +50,7 @@ describe("offers from declared shapes", () => {
     ]);
   });
 
-  test("an action with no shape leaves the query alone", () => {
+  test("an action with no index leaves the query alone", () => {
     const byTotal: QueryState = {
       ...BASE,
       sort: { field: "total", direction: "desc" },
@@ -65,7 +65,7 @@ describe("offers from declared shapes", () => {
     ).toBe(byTotal);
   });
 
-  test("clearing a filter falls back to a declared shape", () => {
+  test("clearing a filter falls back to a declared index", () => {
     const filtered: QueryState = {
       ...BASE,
       equals: { status: ["open"] },
@@ -79,7 +79,7 @@ describe("offers from declared shapes", () => {
       CAPPED,
     );
     expect(cleared.equals).toEqual({});
-    expect(matchShape(SHAPES, cleared)).not.toBeNull();
+    expect(getIndex(INDEXES, cleared)).not.toBeNull();
   });
 
   test("a quick filter disables everything until every match is loaded", () => {
@@ -117,14 +117,14 @@ describe("offers from declared shapes", () => {
     ).toBe(filtered);
   });
 
-  test("a shape that opts out offers one value only", () => {
-    const single: QueryShape[] = SHAPES.map((shape) =>
-      "equals" in shape && shape.equals.includes("region")
-        ? { ...shape, multi: false }
-        : shape,
+  test("an index that opts out offers one value only", () => {
+    const single: IndexDef[] = INDEXES.map((index) =>
+      "equals" in index && index.equals.includes("region")
+        ? { ...index, multi: false }
+        : index,
     );
     const rules: QueryRules = {
-      capabilities: shapeCapabilities(single),
+      capabilities: indexCapabilities(single),
       quickComplete: false,
     };
     const offers = listOffers(TEST_DEF, BASE, rules);
@@ -143,17 +143,17 @@ describe("offers from declared shapes", () => {
 });
 
 describe("reachable states", () => {
-  test("every reachable control state is a declared shape and every shape is reached", () => {
+  test("every reachable control state is a declared index and every index is reached", () => {
     for (const rules of [CAPPED, COMPLETE]) {
       const reached = new Set<string>();
       const states = enumerateReachableStates(TEST_DEF, rules);
       for (const state of states) {
-        expect(isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, state)).toBe(true);
+        expect(isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, state)).toBe(true);
         if (state.quick === null) {
-          reached.add(shapeId(matchShape(SHAPES, state)!));
+          reached.add(indexId(getIndex(INDEXES, state)!));
         }
       }
-      expect([...reached].sort()).toEqual(SHAPES.map(shapeId).sort());
+      expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
       expect(
         states.some((state) => (state.equals.status?.length ?? 0) > 1),
       ).toBe(true);

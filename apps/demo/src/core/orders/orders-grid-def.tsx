@@ -1,7 +1,7 @@
 import {
   formatValue,
   type FieldOption,
-  type QueryShape,
+  type IndexDef,
 } from "@kikstart/query-grid";
 import type { PostgresGridDef } from "@kikstart/query-grid-postgres";
 import type { FieldDef, GridDef } from "@kikstart/query-grid-react/components";
@@ -140,7 +140,7 @@ const ORDER_FIELDS: FieldDef[] = [
   },
 ];
 
-const ORDER_SHAPES: QueryShape[] = [
+const ORDER_INDEXES: IndexDef[] = [
   { equals: [], sort: "created_at", range: true },
   { equals: [], sort: "total", range: true },
   { equals: ["status_code"], sort: "created_at", range: true },
@@ -156,7 +156,7 @@ export const ORDERS_GRID_DEF = {
   id: "orders",
   table: "orders",
   fields: ORDER_FIELDS,
-  shapes: ORDER_SHAPES,
+  indexes: ORDER_INDEXES,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
   totals: ["total", "item_count"],

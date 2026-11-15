@@ -248,8 +248,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     sort: (label) => `sort ${label}`,
   },
   errors: {
-    undeclared_shape: () =>
-      "No declared query shape answers this filter and sort.",
+    unindexed_query: () => "No declared index answers this filter and sort.",
     unknown_field: ({ field }) => `Unknown field ${field}.`,
     invalid_value: ({ field }) => `Invalid value for ${field}.`,
     too_many_values: ({ field, max }) =>

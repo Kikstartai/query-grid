@@ -2,12 +2,12 @@
 
 A bun workspace of three published packages and one demo. The README holds the usage, the decisions, the benchmarks and the verification record; `docs/DESIGN.md` holds the current design.
 
-| Path                           | Package                         | Holds                                                                                                                |
-| ------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, shapes and capabilities, stores, feeds, the board, data sources. No React, DOM or `pg` |
-| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css`                  |
-| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: def validation, SQL, DDL, `createGridHandler`. No React or `pg`                                          |
-| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                                                |
+| Path                           | Package                         | Holds                                                                                                                 |
+| ------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, indexes and capabilities, stores, feeds, the board, data sources. No React, DOM or `pg` |
+| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css`                   |
+| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: def validation, SQL, DDL, `createGridHandler`. No React or `pg`                                           |
+| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                                                 |
 
 ## Commands
 
@@ -50,12 +50,12 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 ## Library rules
 
 - The library has no domain names. A host passes its defs in; nothing in `packages/` imports one.
-- What may be filtered comes from the data alone: the shapes on a server grid, every field on a client grid. A field def carries no operators. Which filters show is a layout prop (`fields` on the bound `FilterBar` and `FilterSidebar`), never part of a def.
-- One def per grid; each package reads its slice. The types are layers with unique names: core `BaseGridDef` and `BaseFieldDef`, react `GridDef` and `FieldDef` (plus `cell`), postgres `PostgresGridDef` (plus `table`, `shapes`, `facet.counterTable`). A grid def constant ends in `_GRID_DEF`.
+- What may be filtered comes from the data alone: the indexes on a server grid, every field on a client grid. A field def carries no operators. Which filters show is a layout prop (`fields` on the bound `FilterBar` and `FilterSidebar`), never part of a def.
+- One def per grid; each package reads its slice. The types are layers with unique names: core `BaseGridDef` and `BaseFieldDef`, react `GridDef` and `FieldDef` (plus `cell`), postgres `PostgresGridDef` (plus `table`, `indexes`, `facet.counterTable`). A grid def constant ends in `_GRID_DEF`.
 - There is one query contract, in core. The other two packages import it and never copy it.
 - Core imports no React, no DOM global and no `pg`. The postgres package imports no React and no `pg`.
 - Core and the postgres package emit codes and params, never English. Every sentence a user reads comes from `components/messages.tsx`, through `useMessages()`.
-- A file under `packages/query-grid-react/src/components` takes props and calls back. It imports no provider hook and knows no query, source, shape or URL. The bound wrapper of the same name lives under `src/ui`.
+- A file under `packages/query-grid-react/src/components` takes props and calls back. It imports no provider hook and knows no query, source, index or URL. The bound wrapper of the same name lives under `src/ui`.
 - The React package is built entirely on UI SDK components and behaviours. No hand-written primitives, no native `<select>` or date input, no Tailwind, no table library.
 - Never read a mutable UI SDK object (`virtual.size()`, `virtual.items()`, `handle.state`) directly in render. Read it through `useSyncExternalStore` or a part's `state` / `children` function: the React Compiler caches the read on the stable object.
 - Grid cells render as plain elements under a row part, never one `usePart` per cell.

@@ -232,7 +232,7 @@ describe("the URL codec", () => {
           50,
           signal,
         ),
-      ).rejects.toMatchObject({ code: "undeclared_shape", params: {} });
+      ).rejects.toMatchObject({ code: "unindexed_query", params: {} });
     } finally {
       globalThis.fetch = original;
     }
@@ -245,14 +245,14 @@ describe("refusals", () => {
     return (await response.json()) as ErrorBody;
   }
 
-  test("an undeclared shape is a 400 with a code and no SQL", async () => {
+  test("an unindexed query is a 400 with a code and no SQL", async () => {
     const { handle, seen } = createHandler([]);
     const response = await handle("?f.region=north&sort=total.asc");
     expect(response.status).toBe(400);
     expect(await readError(response)).toEqual({
-      error: "undeclared_shape",
-      message: "undeclared_shape",
-      code: "undeclared_shape",
+      error: "unindexed_query",
+      message: "unindexed_query",
+      code: "unindexed_query",
       params: {},
     });
     expect(seen).toEqual([]);
@@ -281,7 +281,7 @@ describe("refusals", () => {
     const { handle, seen } = createHandler([]);
     const response = await handle("?f.__proto__=x");
     expect(response.status).toBe(400);
-    expect((await readError(response)).error).toBe("undeclared_shape");
+    expect((await readError(response)).error).toBe("unindexed_query");
     expect(seen).toEqual([]);
   });
 

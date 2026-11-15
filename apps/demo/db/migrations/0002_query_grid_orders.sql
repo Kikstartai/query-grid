@@ -1,4 +1,4 @@
--- Generated from the orders grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.
+-- Generated from the orders grid def. One CREATE INDEX per declared index, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.
 -- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.
 -- The quick filter needs trigram indexes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

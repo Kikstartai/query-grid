@@ -5,56 +5,56 @@ import {
   type QueryState,
 } from "./field-types.ts";
 
-export interface QueryShape {
+export interface IndexDef {
   equals: string[];
   sort: string;
   range?: boolean;
   multi?: boolean;
 }
 
-export interface ShapedGridDef extends BaseGridDef {
-  shapes: QueryShape[];
+export interface IndexedGridDef extends BaseGridDef {
+  indexes: IndexDef[];
 }
 
-export interface ShapeCapabilityOptions {
+export interface IndexCapabilityOptions {
   facetField?: string;
   quickFields?: string[];
 }
 
-export function shapeId(shape: QueryShape): string {
-  return `${[...shape.equals].sort().join("+")}|${shape.sort}`;
+export function indexId(index: IndexDef): string {
+  return `${[...index.equals].sort().join("+")}|${index.sort}`;
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value) => b.includes(value));
 }
 
-function listEqualsFields(shapes: QueryShape[]): string[] {
-  return [...new Set(shapes.flatMap((shape) => shape.equals))];
+function listEqualsFields(indexes: IndexDef[]): string[] {
+  return [...new Set(indexes.flatMap((index) => index.equals))];
 }
 
-function listRangeFields(shapes: QueryShape[]): string[] {
+function listRangeFields(indexes: IndexDef[]): string[] {
   return [
     ...new Set(
-      shapes.filter((shape) => shape.range).map((shape) => shape.sort),
+      indexes.filter((index) => index.range).map((index) => index.sort),
     ),
   ];
 }
 
-export function listSortFields(shapes: QueryShape[]): string[] {
-  return [...new Set(shapes.map((shape) => shape.sort))];
+export function listSortFields(indexes: IndexDef[]): string[] {
+  return [...new Set(indexes.map((index) => index.sort))];
 }
 
-export function matchShape(
-  shapes: QueryShape[],
+export function getIndex(
+  indexes: IndexDef[],
   query: QueryState,
-): QueryShape | null {
+): IndexDef | null {
   const equals = Object.keys(query.equals);
   if (query.quick !== null) {
     return null;
   }
-  const ordered = shapes.find(
-    (shape) => shape.sort === query.sort.field && sameSet(shape.equals, equals),
+  const ordered = indexes.find(
+    (index) => index.sort === query.sort.field && sameSet(index.equals, equals),
   );
   if (!ordered) {
     return null;
@@ -68,19 +68,19 @@ export function matchShape(
   return several && ordered.multi === false ? null : ordered;
 }
 
-export function isQueryDeclared(
-  shapes: QueryShape[],
+export function isQueryIndexed(
+  indexes: IndexDef[],
   quickFields: string[],
   query: QueryState,
 ): boolean {
   if (query.quick === null) {
-    return matchShape(shapes, query) !== null;
+    return getIndex(indexes, query) !== null;
   }
   return (
     quickFields.length > 0 &&
     Object.keys(query.equals).length === 0 &&
     query.range === null &&
-    listSortFields(shapes).includes(query.sort.field)
+    listSortFields(indexes).includes(query.sort.field)
   );
 }
 
@@ -96,24 +96,24 @@ export function isFacetOnlyQuery(
   );
 }
 
-export function shapeCapabilities(
-  shapes: QueryShape[],
-  options: ShapeCapabilityOptions = {},
+export function indexCapabilities(
+  indexes: IndexDef[],
+  options: IndexCapabilityOptions = {},
 ): Capabilities {
   const quickFields = options.quickFields ?? [];
   return {
     mode: "server",
-    isAnswerable: (query) => isQueryDeclared(shapes, quickFields, query),
-    equalsFields: listEqualsFields(shapes),
-    rangeFields: listRangeFields(shapes),
-    sortFields: listSortFields(shapes),
+    isAnswerable: (query) => isQueryIndexed(indexes, quickFields, query),
+    equalsFields: listEqualsFields(indexes),
+    rangeFields: listRangeFields(indexes),
+    sortFields: listSortFields(indexes),
     quickFields,
     isFacetCountShown: (query) => isFacetOnlyQuery(options.facetField, query),
   };
 }
 
-export function gridDefCapabilities(def: ShapedGridDef): Capabilities {
-  return shapeCapabilities(def.shapes, {
+export function gridDefCapabilities(def: IndexedGridDef): Capabilities {
+  return indexCapabilities(def.indexes, {
     facetField: def.facet?.field,
     quickFields: listQuickFields(def),
   });

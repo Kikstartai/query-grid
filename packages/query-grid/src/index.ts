@@ -110,15 +110,15 @@ export {
 export {
   gridDefCapabilities,
   isFacetOnlyQuery,
-  isQueryDeclared,
+  isQueryIndexed,
   listSortFields,
-  matchShape,
-  shapeCapabilities,
-  shapeId,
-  type QueryShape,
-  type ShapeCapabilityOptions,
-  type ShapedGridDef,
-} from "./model/shapes.ts";
+  getIndex,
+  indexCapabilities,
+  indexId,
+  type IndexDef,
+  type IndexCapabilityOptions,
+  type IndexedGridDef,
+} from "./model/indexes.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export { createStore, type Store } from "./model/store.ts";
 export {

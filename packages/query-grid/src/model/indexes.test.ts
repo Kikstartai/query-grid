@@ -4,12 +4,12 @@ import type { QueryState } from "./field-types.ts";
 import {
   TEST_DEF,
   TEST_QUICK_FIELDS,
-  TEST_SHAPES,
+  TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
-import { isQueryDeclared, matchShape, shapeCapabilities } from "./shapes.ts";
+import { isQueryIndexed, getIndex, indexCapabilities } from "./indexes.ts";
 
-const SHAPES = TEST_SHAPES;
+const INDEXES = TEST_INDEXES;
 const BASE: QueryState = {
   equals: {},
   range: null,
@@ -18,25 +18,25 @@ const BASE: QueryState = {
   cursor: null,
 };
 
-describe("matchShape", () => {
+describe("getIndex", () => {
   test("the equality set must match exactly", () => {
-    expect(matchShape(SHAPES, BASE)).toEqual(SHAPES[0]);
+    expect(getIndex(INDEXES, BASE)).toEqual(INDEXES[0]);
     expect(
-      matchShape(SHAPES, {
+      getIndex(INDEXES, {
         ...BASE,
         equals: { status: ["open"], region: ["north"] },
       }),
     ).toBeNull();
   });
 
-  test("a range sits on the sort column of a shape that allows it", () => {
+  test("a range sits on the sort column of an index that allows it", () => {
     const range = { field: "created_at", min: "2026-01-01", max: null };
-    expect(matchShape(SHAPES, { ...BASE, range })).not.toBeNull();
+    expect(getIndex(INDEXES, { ...BASE, range })).not.toBeNull();
     expect(
-      matchShape(SHAPES, { ...BASE, equals: { status: ["open"] }, range }),
+      getIndex(INDEXES, { ...BASE, equals: { status: ["open"] }, range }),
     ).toBeNull();
     expect(
-      matchShape(SHAPES, {
+      getIndex(INDEXES, {
         ...BASE,
         sort: { field: "total", direction: "asc" },
         range,
@@ -44,27 +44,27 @@ describe("matchShape", () => {
     ).toBeNull();
   });
 
-  test("several values of one field match the same shape unless it opts out", () => {
+  test("several values of one field match the same index unless it opts out", () => {
     const several = { ...BASE, equals: { status: ["open", "done"] } };
-    expect(matchShape(SHAPES, several)).toEqual(SHAPES[2]);
-    const single = SHAPES.map((shape) =>
-      "equals" in shape && shape.equals.includes("status")
-        ? { ...shape, multi: false }
-        : shape,
+    expect(getIndex(INDEXES, several)).toEqual(INDEXES[2]);
+    const single = INDEXES.map((index) =>
+      "equals" in index && index.equals.includes("status")
+        ? { ...index, multi: false }
+        : index,
     );
-    expect(matchShape(single, several)).toBeNull();
+    expect(getIndex(single, several)).toBeNull();
     expect(
-      matchShape(single, { ...BASE, equals: { status: ["open"] } }),
+      getIndex(single, { ...BASE, equals: { status: ["open"] } }),
     ).not.toBeNull();
-    expect(shapeCapabilities(single).isAnswerable(several)).toBe(false);
+    expect(indexCapabilities(single).isAnswerable(several)).toBe(false);
   });
 
   test("a quick filter combines with no other filter", () => {
     const quick = { ...BASE, quick: "abc" };
-    expect(isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, quick)).toBe(true);
-    expect(isQueryDeclared(SHAPES, [], quick)).toBe(false);
+    expect(isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, quick)).toBe(true);
+    expect(isQueryIndexed(INDEXES, [], quick)).toBe(false);
     expect(
-      isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, {
+      isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, {
         ...quick,
         equals: { status: ["open"] },
       }),
@@ -73,8 +73,11 @@ describe("matchShape", () => {
 });
 
 describe("the HTTP source", () => {
-  test("it builds its capabilities from the def's own shapes and facet", () => {
-    const source = createHttpSource({ ...TEST_DEF, shapes: SHAPES }, "/things");
+  test("it builds its capabilities from the def's own indexes and facet", () => {
+    const source = createHttpSource(
+      { ...TEST_DEF, indexes: INDEXES },
+      "/things",
+    );
     expect(source.capabilities.mode).toBe("server");
     expect(source.capabilities.sortFields).toEqual(["created_at", "total"]);
     expect(source.capabilities.isFacetCountShown(BASE)).toBe(true);
@@ -88,13 +91,13 @@ describe("the HTTP source", () => {
   });
 });
 
-describe("shapeCapabilities", () => {
-  const caps = shapeCapabilities(SHAPES, {
+describe("indexCapabilities", () => {
+  const caps = indexCapabilities(INDEXES, {
     facetField: "status",
     quickFields: TEST_QUICK_FIELDS,
   });
 
-  test("they are the shapes, read once", () => {
+  test("they are the indexes, read once", () => {
     expect(caps.mode).toBe("server");
     expect(caps.equalsFields).toEqual(["status", "region"]);
     expect(caps.rangeFields).toEqual(["created_at", "total"]);
@@ -102,7 +105,7 @@ describe("shapeCapabilities", () => {
     expect(caps.quickFields).toEqual(["name", "number"]);
   });
 
-  test("a query is answerable exactly when a shape matches it", () => {
+  test("a query is answerable exactly when an index matches it", () => {
     const undeclared: QueryState = {
       ...BASE,
       equals: { region: ["north"] },
@@ -110,7 +113,7 @@ describe("shapeCapabilities", () => {
     };
     expect(caps.isAnswerable(BASE)).toBe(true);
     expect(caps.isAnswerable(undeclared)).toBe(false);
-    expect(matchShape(SHAPES, undeclared)).toBeNull();
+    expect(getIndex(INDEXES, undeclared)).toBeNull();
   });
 
   test("facet counts show only while the facet is the only filter", () => {
@@ -121,6 +124,6 @@ describe("shapeCapabilities", () => {
     expect(
       caps.isFacetCountShown({ ...BASE, equals: { region: ["north"] } }),
     ).toBe(false);
-    expect(shapeCapabilities(SHAPES).isFacetCountShown(BASE)).toBe(false);
+    expect(indexCapabilities(INDEXES).isFacetCountShown(BASE)).toBe(false);
   });
 });

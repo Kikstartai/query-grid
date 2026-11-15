@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEST_DEF } from "./grid-def.fixture.ts";
-import { validateGridDef } from "./shapes.ts";
+import { validateGridDef } from "./indexes.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
 describe("validateGridDef", () => {
@@ -9,7 +9,7 @@ describe("validateGridDef", () => {
     expect(validateGridDef(TEST_DEF)).toEqual([]);
   });
 
-  test("bad shapes are named", () => {
+  test("bad indexes are named", () => {
     const broken: PostgresGridDef = {
       ...TEST_DEF,
       totals: ["name", "total", "total"],
@@ -17,7 +17,7 @@ describe("validateGridDef", () => {
         field.key === "total" ? { ...field, currency: "rand" } : field,
       ),
       quick: ["created_at", "missing"],
-      shapes: [
+      indexes: [
         { equals: [], sort: "note" },
         { equals: ["missing"], sort: "total" },
         { equals: [], sort: "name", range: true },
@@ -37,9 +37,12 @@ describe("validateGridDef", () => {
     expect(problems).toContain("total: rand is not a currency code");
   });
 
-  test("the default sort must be a shape", () => {
+  test("the default sort must be an index", () => {
     expect(
-      validateGridDef({ ...TEST_DEF, shapes: [{ equals: [], sort: "total" }] }),
-    ).toContain("the default sort with no filter is not a declared shape");
+      validateGridDef({
+        ...TEST_DEF,
+        indexes: [{ equals: [], sort: "total" }],
+      }),
+    ).toContain("the default sort with no filter is not a declared index");
   });
 });

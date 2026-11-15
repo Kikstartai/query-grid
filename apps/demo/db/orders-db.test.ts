@@ -71,7 +71,7 @@ async function listPage(query: QueryState, limit: number) {
 }
 
 describe("generated schema", () => {
-  test("every declared shape has its index in pg_indexes", async () => {
+  test("every declared index is in pg_indexes", async () => {
     const { rows } = await client.query<PgIndexRow>(
       "SELECT p.indexname, p.indexdef, i.indisvalid AS valid FROM pg_indexes p JOIN pg_class c ON c.relname = p.indexname JOIN pg_index i ON i.indexrelid = c.oid WHERE p.schemaname = 'public' AND p.tablename = $1",
       [ORDERS_GRID_DEF.table],
@@ -105,11 +105,11 @@ describe("generated schema", () => {
 });
 
 describe("keyset paging", () => {
-  test("three keyset pages equal one page three times the size, for every ordered shape", async () => {
-    for (const shape of ORDERS_GRID_DEF.shapes) {
-      const sample = shape.equals.length
+  test("three keyset pages equal one page three times the size, for every ordered index", async () => {
+    for (const index of ORDERS_GRID_DEF.indexes) {
+      const sample = index.equals.length
         ? await client.query<Record<string, string>>(
-            `SELECT ${shape.equals.join(", ")} FROM orders LIMIT 1`,
+            `SELECT ${index.equals.join(", ")} FROM orders LIMIT 1`,
           )
         : { rows: [{}] };
       for (const direction of ["asc", "desc"] as const) {
@@ -121,7 +121,7 @@ describe("keyset paging", () => {
               [value],
             ]),
           ),
-          sort: { field: shape.sort, direction },
+          sort: { field: index.sort, direction },
         };
         const whole = await listPage(query, 150);
         const paged: string[] = [];
@@ -140,7 +140,7 @@ describe("keyset paging", () => {
     }
   }, 60_000);
 
-  test("an undeclared shape never reaches the database", () => {
+  test("an unindexed query never reaches the database", () => {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID_DEF),
       equals: { channel: ["web"] },

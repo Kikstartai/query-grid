@@ -27,8 +27,8 @@ export function LandingHero() {
       <h1>A filter and data grid that only offers what an index answers</h1>
       <p className="landing-lead">
         A composable filter and data grid for very large Postgres tables, built
-        on UI SDK. You declare the query shapes your indexes serve; the controls
-        offer exactly those, and the server refuses everything else.
+        on UI SDK. You declare your indexes; the controls offer exactly the
+        queries they answer, and the server refuses everything else.
       </p>
       <pre className="landing-install" data-install>
         <code>{INSTALL_LINE}</code>

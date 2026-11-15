@@ -3,9 +3,9 @@ import {
   isCurrencyCode,
   isRangeType,
   KEY_FIELD,
-  shapeId,
+  indexId,
   type BaseFieldDef,
-  type QueryShape,
+  type IndexDef,
 } from "@kikstart/query-grid";
 
 import type { PostgresGridDef } from "./storage.ts";
@@ -22,12 +22,12 @@ export function describeQuick(columns: string[]): string {
   return `quick filter over ${columns.join(", ")}`;
 }
 
-export function describeShape(shape: QueryShape): string {
-  const filters = shape.equals.length
-    ? shape.equals.map((key) => `${key} =`).join(", ")
+export function describeIndex(index: IndexDef): string {
+  const filters = index.equals.length
+    ? index.equals.map((key) => `${key} =`).join(", ")
     : "no filter";
-  const range = shape.range ? ` (range on ${shape.sort})` : "";
-  return `${filters}, sort ${shape.sort}${range}`;
+  const range = index.range ? ` (range on ${index.sort})` : "";
+  return `${filters}, sort ${index.sort}${range}`;
 }
 
 function validateQuick(def: PostgresGridDef, columns: string[]): string[] {
@@ -50,37 +50,34 @@ function validateQuick(def: PostgresGridDef, columns: string[]): string[] {
   return problems;
 }
 
-function validateOrderedShape(
-  def: PostgresGridDef,
-  shape: QueryShape,
-): string[] {
-  if (!Array.isArray(shape.equals)) {
+function validateOrderedIndex(def: PostgresGridDef, index: IndexDef): string[] {
+  if (!Array.isArray(index.equals)) {
     return [
-      "a shape needs `equals` and `sort`; the quick columns are `quick` on the def",
+      "an index needs `equals` and `sort`; the quick columns are `quick` on the def",
     ];
   }
-  const id = shapeId(shape);
-  const sort = getField(def, shape.sort);
+  const id = indexId(index);
+  const sort = getField(def, index.sort);
   if (!sort) {
-    return [`shape ${id}: unknown sort field ${shape.sort}`];
+    return [`index ${id}: unknown sort field ${index.sort}`];
   }
   const problems: string[] = [];
   if (sort.nullable) {
-    problems.push(`shape ${id}: a nullable field cannot be a keyset sort`);
+    problems.push(`index ${id}: a nullable field cannot be a keyset sort`);
   }
-  if (shape.range && !isRangeType(sort.type)) {
+  if (index.range && !isRangeType(sort.type)) {
     problems.push(
-      `shape ${id}: ${shape.sort} is a ${sort.type}, which has no range filter`,
+      `index ${id}: ${index.sort} is a ${sort.type}, which has no range filter`,
     );
   }
-  if (shape.equals.includes(shape.sort)) {
+  if (index.equals.includes(index.sort)) {
     problems.push(
-      `shape ${id}: ${shape.sort} is both an equality and the sort`,
+      `index ${id}: ${index.sort} is both an equality and the sort`,
     );
   }
-  for (const key of shape.equals) {
+  for (const key of index.equals) {
     if (!getField(def, key)) {
-      problems.push(`shape ${id}: unknown equality field ${key}`);
+      problems.push(`index ${id}: unknown equality field ${key}`);
     }
   }
   return problems;
@@ -115,24 +112,24 @@ export function validateGridDef(def: PostgresGridDef): string[] {
   if (def.quick) {
     problems.push(...validateQuick(def, def.quick));
   }
-  for (const shape of def.shapes) {
-    if (!Array.isArray(shape.equals)) {
-      problems.push(...validateOrderedShape(def, shape));
+  for (const index of def.indexes) {
+    if (!Array.isArray(index.equals)) {
+      problems.push(...validateOrderedIndex(def, index));
       continue;
     }
-    const id = shapeId(shape);
+    const id = indexId(index);
     if (seen.has(id)) {
-      problems.push(`shape ${id} is declared twice`);
+      problems.push(`index ${id} is declared twice`);
     }
     seen.add(id);
-    problems.push(...validateOrderedShape(def, shape));
+    problems.push(...validateOrderedIndex(def, index));
   }
-  const base = def.shapes.some(
-    (shape) =>
-      shape.equals.length === 0 && shape.sort === def.defaultSort.field,
+  const base = def.indexes.some(
+    (index) =>
+      index.equals.length === 0 && index.sort === def.defaultSort.field,
   );
   if (!base) {
-    problems.push("the default sort with no filter is not a declared shape");
+    problems.push("the default sort with no filter is not a declared index");
   }
   problems.push(...validateTotals(def));
   for (const field of def.fields) {

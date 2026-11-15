@@ -1,7 +1,7 @@
 {
   "name": "@kikstart/query-grid-postgres",
   "version": "0.3.0",
-  "description": "The Postgres server half of @kikstart/query-grid: declared query shapes, the SQL builder, keyset paging, index and counter DDL, and one fetch-standard request handler.",
+  "description": "The Postgres server half of @kikstart/query-grid: declared indexes, the SQL builder, keyset paging, index and counter DDL, and one fetch-standard request handler.",
   "keywords": [
     "postgres",
     "keyset-pagination",

@@ -1,10 +1,10 @@
 import {
   KEY_FIELD,
   listQuickFields,
-  type QueryShape,
+  type IndexDef,
 } from "@kikstart/query-grid";
 
-import { describeQuick, describeShape, validateGridDef } from "./shapes.ts";
+import { describeQuick, describeIndex, validateGridDef } from "./indexes.ts";
 import {
   identifier,
   quickExpression,
@@ -13,7 +13,7 @@ import {
 } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
-export interface ShapeIndex {
+export interface IndexDdl {
   note: string;
   name: string;
   method: "btree" | "gin";
@@ -65,7 +65,7 @@ function quickIndex(
   def: PostgresGridDef,
   quick: string[],
   concurrently: boolean,
-): ShapeIndex {
+): IndexDdl {
   const table = identifier(def.table);
   const name = shortenIdentifier(`${table}_qs_quick`);
   return {
@@ -77,21 +77,21 @@ function quickIndex(
   };
 }
 
-function shapeIndex(
+function indexDdl(
   def: PostgresGridDef,
-  shape: QueryShape,
+  index: IndexDef,
   concurrently: boolean,
-): ShapeIndex {
+): IndexDdl {
   const table = identifier(def.table);
   const create = createIndex(concurrently);
-  const columns = [...shape.equals, shape.sort, KEY_FIELD]
+  const columns = [...index.equals, index.sort, KEY_FIELD]
     .map(identifier)
     .filter((column, index, all) => all.indexOf(column) === index);
   const name = shortenIdentifier(
-    `${table}_qs_${[...shape.equals, shape.sort].join("__")}`,
+    `${table}_qs_${[...index.equals, index.sort].join("__")}`,
   );
   return {
-    note: describeShape(shape),
+    note: describeIndex(index),
     name,
     method: "btree",
     columns,
@@ -99,13 +99,13 @@ function shapeIndex(
   };
 }
 
-export function listShapeIndexes(
+export function listIndexDdl(
   def: PostgresGridDef,
   options: MigrationOptions = {},
-): ShapeIndex[] {
+): IndexDdl[] {
   const concurrently = options.concurrently ?? true;
-  const ordered = def.shapes.map((shape) =>
-    shapeIndex(def, shape, concurrently),
+  const ordered = def.indexes.map((index) =>
+    indexDdl(def, index, concurrently),
   );
   const quick = listQuickFields(def);
   return quick.length > 0
@@ -277,7 +277,7 @@ function indexSteps(
   def: PostgresGridDef,
   options: MigrationOptions,
 ): MigrationStep[] {
-  const indexes = listShapeIndexes(def, options);
+  const indexes = listIndexDdl(def, options);
   const extension: MigrationStep[] = indexes.some(
     (index) => index.method === "gin",
   )
@@ -308,7 +308,7 @@ export function listGridMigrationSteps(
 
 function renderMigration(table: string, steps: MigrationStep[]): string {
   const lines = [
-    `-- Generated from the ${table} grid def. One index per declared query shape, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.`,
+    `-- Generated from the ${table} grid def. One CREATE INDEX per declared index, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.`,
     "-- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.",
     ...steps.flatMap((step) => [`-- ${step.note}`, step.sql]),
   ];
@@ -370,7 +370,7 @@ export function validateGridDefs(defs: PostgresGridDef[]): string[] {
     ...listConflicts(
       "index",
       defs.flatMap((def) =>
-        listShapeIndexes(def).map((index) => ({
+        listIndexDdl(def).map((index) => ({
           owner: def.id,
           name: index.name,
           definition: index.ddl,
@@ -408,7 +408,7 @@ function parseIndexDef(indexdef: string): ParsedIndex | null {
   return match ? { method: match[1], body: match[2] } : null;
 }
 
-function answers(index: ShapeIndex, row: PgIndexRow): boolean {
+function answers(index: IndexDdl, row: PgIndexRow): boolean {
   const parsed = parseIndexDef(row.indexdef);
   if (!parsed || parsed.method !== index.method || row.valid === false) {
     return false;
@@ -432,8 +432,8 @@ function answers(index: ShapeIndex, row: PgIndexRow): boolean {
 export function listMissingIndexes(
   def: PostgresGridDef,
   rows: PgIndexRow[],
-): ShapeIndex[] {
-  return listShapeIndexes(def).filter(
+): IndexDdl[] {
+  return listIndexDdl(def).filter(
     (index) => !rows.some((row) => answers(index, row)),
   );
 }

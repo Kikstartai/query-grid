@@ -5,12 +5,12 @@ query-grid is a filter and data grid for very large tables. This document says h
 ## Model
 
 - **The UI reflects what the data layer can do.** A filter, a sort or a combination is offered only when the data can answer it fast, and the server refuses any other.
-- **Allowed comes from the data alone.** On a server grid the declared query shapes say what can be filtered and sorted. On a client grid every field can be, in any combination. A field def says nothing about filtering.
+- **Allowed comes from the data alone.** On a server grid the declared indexes say what can be filtered and sorted. On a client grid every field can be, in any combination. A field def says nothing about filtering.
 - **Which filters show is a layout choice.** A filter bar or sidebar names the fields it shows. The def never does, so one grid can show three filters in its bar and eight in its sidebar.
 - **An allowed filter the current query cannot use is disabled with its reason, never hidden.**
 - **Composition, not a monolith.** The filter bar, sidebar, chips, facets, count, totals, grid, card list and board are separate parts around one query state. None owns it.
 - **One def per grid.** An app declares each grid once, in one object, and each package reads its own slice of it.
-- **Server and client.** A server grid reads its rows over HTTP and is limited by its shapes. A client grid holds its rows in memory and is not limited.
+- **Server and client.** A server grid reads its rows over HTTP and is limited by its indexes. A client grid holds its rows in memory and is not limited.
 - **Very large data sets are never a constraint.** Every request is bounded by a page size, a cap or a time budget.
 
 ## Packages
@@ -30,11 +30,11 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid`
 
-| Export     | Holds                                                                                                                                                                                                                                                                                                                                                           |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`        | field and grid def types, `QueryState`, `Capabilities`, query shapes and `shapeCapabilities`, the URL codec, value validation, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet and label stores, the board model, chips, formatting, the `DataSource` contract, the wire result types and limits, problems as codes |
-| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                         |
-| `./memory` | `createMemorySource`, `memoryCapabilities`, `filterRows`                                                                                                                                                                                                                                                                                                        |
+| Export     | Holds                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`        | field and grid def types, `QueryState`, `Capabilities`, indexes and `indexCapabilities`, the URL codec, value validation, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet and label stores, the board model, chips, formatting, the `DataSource` contract, the wire result types and limits, problems as codes |
+| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                    |
+| `./memory` | `createMemorySource`, `memoryCapabilities`, `filterRows`                                                                                                                                                                                                                                                                                                   |
 
 - The stores are plain objects with `subscribe` and a getter, built on one emitter. There is no store library.
 - The count, totals and facet counts are one kind of resource: it follows the query store, starts on its first subscriber and aborts the request it replaces.
@@ -48,7 +48,7 @@ Three npm packages in one repo, released together at one version.
 | `./ui`         | one bound wrapper per base component, under the same name                                                                           |
 | `./styles.css` | the package's own styles                                                                                                            |
 
-- A base component takes props and calls back. It imports no provider hook and knows no query, source, shape or URL. An option or a control may carry `disabled` and a `reason`.
+- A base component takes props and calls back. It imports no provider hook and knows no query, source, index or URL. An option or a control may carry `disabled` and a `reason`.
 - A bound wrapper reads the provider and renders the base component of the same name.
 - Everything is built on UI SDK components and behaviours. There are no hand-written primitives, no native `<select>` or date input and no table library.
 - `DataGrid` is a compound: `Root`, `Toolbar`, `Status`, `ColumnsMenu` and `Body`, with `<DataGrid />` as the default composition. It takes a row window: `rows`, `hasNext`, `onEndReached` and `loading`.
@@ -61,14 +61,14 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid-postgres`
 
-| Part                | Holds                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| storage             | `PostgresGridDef`: the def plus `table` and `facet.counterTable`                                                   |
-| validation          | `validateGridDef`, `validateGridDefs`, `describeShape`                                                             |
-| SQL builder         | the page, row, count, total and facet statements; `assertDeclared` and `QueryRejected`                             |
-| runner              | `listGridPage`, `walkGridPages`, `getGridCount`, `listGridTotals`, `listFacetCounts`                               |
-| DDL                 | `generateGridMigration`, `listGridMigrationSteps`, `listTableMigrations`, `listShapeIndexes`, `listMissingIndexes` |
-| `createGridHandler` | a fetch-standard `Request` in, a `Response` out                                                                    |
+| Part                | Holds                                                                                                          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- |
+| storage             | `PostgresGridDef`: the def plus `table` and `facet.counterTable`                                               |
+| validation          | `validateGridDef`, `validateGridDefs`, `describeIndex`                                                         |
+| SQL builder         | the page, row, count, total and facet statements; `assertDeclared` and `QueryRejected`                         |
+| runner              | `listGridPage`, `walkGridPages`, `getGridCount`, `listGridTotals`, `listFacetCounts`                           |
+| DDL                 | `generateGridMigration`, `listGridMigrationSteps`, `listTableMigrations`, `listIndexDdl`, `listMissingIndexes` |
+| `createGridHandler` | a fetch-standard `Request` in, a `Response` out                                                                |
 
 ## The grid def
 
@@ -77,20 +77,20 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 | Type              | Package  | Adds                                             |
 | ----------------- | -------- | ------------------------------------------------ |
 | `BaseGridDef`     | core     | `id`, `fields`, `defaultSort`, `facet`, `totals` |
-| `ShapedGridDef`   | core     | `shapes`                                         |
+| `IndexedGridDef`  | core     | `indexes`                                        |
 | `GridDef`         | React    | a `cell` on any field                            |
 | `PostgresGridDef` | Postgres | `table` and `facet.counterTable`                 |
 
 - A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `money`, `datetime`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
-- The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores shapes and storage.
+- The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores indexes and storage.
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
-- A shape is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each shape is one index; the quick filter's columns are `quick` on the def, with one index of their own.
-- A shape's equality fields take several values each unless it sets `multi: false`.
+- An index is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each is one `CREATE INDEX`; the quick filter's columns are `quick` on the def, with one index of their own.
+- An index's equality fields take several values each unless it sets `multi: false`.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
 ## Capability contract
 
-Capabilities are what a data source can answer. Every control reads them; nothing reads shapes or indexes directly.
+Capabilities are what a data source can answer. Every control reads them; nothing reads indexes or indexes directly.
 
 ```ts
 interface Capabilities {
@@ -104,7 +104,7 @@ interface Capabilities {
 }
 ```
 
-- `shapeCapabilities(shapes, { facetField, quickFields })` builds them for a server grid: every field in a shape's `equals`, the sort of every shape with `range`, every shape's sort, and `quickFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `indexCapabilities(indexes, { facetField, quickFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `quickFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
 - `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
 - `isAnswerable` is the answer for one query. The field lists are what could ever be asked.
 - `QueryRules` is the capabilities plus whether a quick-filter result is complete.
@@ -154,18 +154,18 @@ interface QueryState {
 - A total is unavailable per field, as `over_cap` with the cap.
 - Every read runs under `request.signal`, which is the third argument of the host's `execute` and of the hooks.
 - The demo's executor starts each statement with a per-call marker, `/* qg:<uuid> */`, and cancels an aborted one through `pg_stat_activity` by that marker, from a one-connection pool of its own, and retries while the statement has not started. It never names a backend pid, so the cancel is correct behind any transaction pooler. Its 5 s statement budget is a `SET LOCAL` inside each statement's transaction, so a pooler that drops startup parameters still applies it.
-- The server refuses before any SQL exists: `assertDeclared` rejects an undeclared shape, an unknown field, a value outside its type, more values than a field's cap and an undecodable cursor.
+- The server refuses before any SQL exists: `assertDeclared` rejects an unindexed query, an unknown field, a value outside its type, more values than a field's cap and an undecodable cursor.
 
 ## Storage
 
-- **One shape, one index.** An ordered shape is a btree over its equality columns, its sort and the key. The def's `quick` is one trigram index over the concatenated columns.
+- **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key. The def's `quick` is one trigram index over the concatenated columns.
 - **Paging is keyset**, on the sort and the key, in both directions.
 - **One value is `= $n`; several are `= ANY($n)`** with one array parameter. SQL is never built from a value.
 - **The counter table** holds one row per facet value: `row_count` and one `<field>_sum` column per total field. Three row triggers keep it current, on insert, delete and update of the facet field or of a total field.
 - **Counts.** A query that filters on the facet alone reads the counter table. Any other is counted up to the cap, and the exact count is a separate request.
-- **Totals.** A query that filters on the facet alone reads the counter table. Any other is summed live in one statement for every total field, over the shape's index scan, and only when at most 10,000 rows match.
+- **Totals.** A query that filters on the facet alone reads the counter table. Any other is summed live in one statement for every total field, over the index scan, and only when at most 10,000 rows match.
 - **The quick filter** runs under a 120 ms statement budget and answers `too_broad` past it.
-- **The migration** is generated from the defs: one `CREATE INDEX CONCURRENTLY` per shape, then three counter steps. The first installs the triggers, which keep the counter table current and log each change. The second counts the table from one snapshot, with no table lock. The third replaces the counters with the count plus the changes logged since. A run that stops anywhere leaves the counters following every write, and resumes from the top or from the step that failed.
+- **The migration** is generated from the defs: one `CREATE INDEX CONCURRENTLY` per index, then three counter steps. The first installs the triggers, which keep the counter table current and log each change. The second counts the table from one snapshot, with no table lock. The third replaces the counters with the count plus the changes logged since. A run that stops anywhere leaves the counters following every write, and resumes from the top or from the step that failed.
 - **A total added to a def** is a new counter column. The migration is run again, and the new sum is exact once its third step has run.
 
 ## Localization
@@ -176,7 +176,7 @@ interface QueryState {
 - **Core and the Postgres package emit codes and params, never English.** A refusal reason, a `QueryRejected`, a failed request and an unavailable total are codes; a chip is data. The React package turns each into a sentence.
 - **Plurals** go through `Intl.PluralRules` and lists through `Intl.ListFormat`.
 - **Right to left works.** The stylesheet uses logical properties only, inline layout uses `insetInlineStart`, column resize and drag follow the direction, and every message, count and formatted value sits inside `<bdi>`.
-- **English that stays** is text no user reads: `validateGridDef` problems, `describeShape` and comments in generated SQL.
+- **English that stays** is text no user reads: `validateGridDef` problems, `describeIndex` and comments in generated SQL.
 
 ## Theming
 
@@ -188,10 +188,10 @@ interface QueryState {
 
 - **Nothing grows with a tenant count.** This is library code. Capabilities are computed once per def.
 - **Request path.** One interaction is one indexed page read, one capped count and one statement for every total. Each is bounded by the page size, the cap or a time budget.
-- **Storage per shape.** Every shape is an index on every table that has a grid. Shapes are declared deliberately, per grid, and never generated per column.
-- **Write amplification.** Each insert writes every shape index. Write cost is proportional to the shape count.
+- **Storage per index.** Every declared index is a real index on its table. Indexes are declared deliberately, per grid, and never generated per column.
+- **Write amplification.** Each insert writes every index. Write cost is proportional to the index count.
 - **Counters.** A write costs one counter-row upsert per insert or delete, and two per change of the facet field or of a total field. Each extra total adds one counter-column update to that same upsert, not another statement. The counter row is a hot row under concurrent writes to one facet value.
-- **Several values per field.** `= ANY` has no single index order to read, so the cost grows with the table. A shape whose page misses the budget is declared `multi: false`.
+- **Several values per field.** `= ANY` has no single index order to read, so the cost grows with the table. An index whose page misses the budget is declared `multi: false`.
 - **The quick filter** is bounded by its time budget, not by the index, and its threshold falls as the table grows.
 - **Rollout.** Indexes are built `CONCURRENTLY` and never block writes. The counter backfill is one snapshot read of the table with two brief table locks around it.
 
@@ -201,7 +201,7 @@ interface QueryState {
 - The Postgres package imports no React or `pg`, depends on core alone and defines no contract symbol of its own.
 - No base component imports a provider hook or holds an English literal.
 - A query encoded by core is decoded by the handler into the same SQL parameters.
-- Every state reachable through the demo's offers matches a declared shape.
+- Every state reachable through the demo's offers matches a declared index.
 
 ## Deferred
 

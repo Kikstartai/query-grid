@@ -27,7 +27,7 @@ const PROBE: PostgresGridDef = {
     { key: "units", label: "Units", type: "integer" },
     { key: "created_at", label: "Created", type: "datetime" },
   ],
-  shapes: [
+  indexes: [
     { equals: [], sort: "created_at" },
     { equals: ["kind"], sort: "created_at" },
   ],

@@ -15,7 +15,7 @@ import {
   listCounterObjects,
   listGridMigrationSteps,
   listMissingIndexes,
-  listShapeIndexes,
+  listIndexDdl,
   listTableMigrations,
   validateGridDefs,
 } from "./schema-ddl.ts";
@@ -89,7 +89,7 @@ describe("buildPageSql", () => {
     const page = buildPageSql(
       {
         ...TEST_DEF,
-        shapes: [{ equals: ["status", "region"], sort: "created_at" }],
+        indexes: [{ equals: ["status", "region"], sort: "created_at" }],
       },
       query,
       10,
@@ -133,10 +133,10 @@ describe("buildPageSql", () => {
     });
   });
 
-  test("a shape that opts out of several values refuses them", () => {
+  test("an index that opts out of several values refuses them", () => {
     const single = {
       ...TEST_DEF,
-      shapes: [{ equals: ["status"], sort: "created_at", multi: false }],
+      indexes: [{ equals: ["status"], sort: "created_at", multi: false }],
     };
     expect(() =>
       buildPageSql(
@@ -180,7 +180,7 @@ describe("buildPageSql", () => {
     );
   });
 
-  test("an undeclared shape is rejected", () => {
+  test("an unindexed query is rejected", () => {
     const query: QueryState = {
       ...BASE,
       equals: { region: ["north"] },
@@ -399,8 +399,8 @@ describe("toPageResult", () => {
 });
 
 describe("generated DDL", () => {
-  test("each shape maps to one index, built without blocking writes", () => {
-    expect(listShapeIndexes(TEST_DEF).map((index) => index.ddl)).toEqual([
+  test("each index def is one CREATE INDEX, built without blocking writes", () => {
+    expect(listIndexDdl(TEST_DEF).map((index) => index.ddl)).toEqual([
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_total ON things USING btree (total, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__created_at ON things USING btree (status, created_at, id);",
@@ -408,7 +408,7 @@ describe("generated DDL", () => {
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_region__created_at ON things USING btree (region, created_at, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_quick ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
     ]);
-    expect(listShapeIndexes(TEST_DEF, { concurrently: false })[0].ddl).toBe(
+    expect(listIndexDdl(TEST_DEF, { concurrently: false })[0].ddl).toBe(
       "CREATE INDEX IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
     );
   });
@@ -511,13 +511,13 @@ describe("generated DDL", () => {
       table: long,
       facet: undefined,
       quick: undefined,
-      shapes: [
+      indexes: [
         { equals: [], sort: "created_at" },
         { equals: ["status", "region"], sort: "created_at" },
         { equals: ["status", "region"], sort: "total" },
       ],
     };
-    const names = listShapeIndexes(wide).map((index) => index.name);
+    const names = listIndexDdl(wide).map((index) => index.name);
     expect(names[0]).toBe(`${long}_qs_created_at`);
     for (const name of names) {
       expect(name.length).toBeLessThanOrEqual(IDENTIFIER_MAX_LENGTH);
@@ -536,7 +536,7 @@ describe("generated DDL", () => {
       ...TEST_DEF,
       id: "things-by-region",
       facet: undefined,
-      shapes: [
+      indexes: [
         { equals: [], sort: "created_at", range: true },
         { equals: ["region"], sort: "total" },
       ],
@@ -575,13 +575,15 @@ describe("generated DDL", () => {
       "things-untotalled: counter table thing_status_counts is declared with two definitions",
     ]);
     expect(
-      validateGridDefs([{ ...other, shapes: [{ equals: [], sort: "total" }] }]),
+      validateGridDefs([
+        { ...other, indexes: [{ equals: [], sort: "total" }] },
+      ]),
     ).toEqual([
-      "things-by-region: the default sort with no filter is not a declared shape",
+      "things-by-region: the default sort with no filter is not a declared index",
     ]);
   });
 
-  test("a shape with no matching index is reported", () => {
+  test("an index missing from pg_indexes is reported", () => {
     const rows = [
       "CREATE INDEX a ON public.things USING btree (created_at, id)",
       "CREATE INDEX b ON public.things USING btree (total, id)",

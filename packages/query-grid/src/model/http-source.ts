@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { encodeQuery } from "./query-url.ts";
-import { gridDefCapabilities, type ShapedGridDef } from "./shapes.ts";
+import { gridDefCapabilities, type IndexedGridDef } from "./indexes.ts";
 import type {
   CountResult,
   FacetCount,
@@ -49,7 +49,7 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
 }
 
 export function createHttpSource(
-  def: ShapedGridDef,
+  def: IndexedGridDef,
   basePath: string,
 ): DataSource {
   const capabilities = gridDefCapabilities(def);

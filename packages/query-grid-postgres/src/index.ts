@@ -22,17 +22,17 @@ export {
   listCounterObjects,
   listGridMigrationSteps,
   listMissingIndexes,
-  listShapeIndexes,
+  listIndexDdl,
   listTableMigrations,
   validateGridDefs,
   type CounterObjects,
   type MigrationOptions,
   type MigrationStep,
   type PgIndexRow,
-  type ShapeIndex,
+  type IndexDdl,
   type TableMigration,
 } from "./schema-ddl.ts";
-export { describeQuick, describeShape, validateGridDef } from "./shapes.ts";
+export { describeQuick, describeIndex, validateGridDef } from "./indexes.ts";
 export {
   assertDeclared,
   buildCappedCountSql,

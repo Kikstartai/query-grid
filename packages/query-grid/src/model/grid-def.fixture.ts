@@ -1,10 +1,10 @@
 import type { DataSource } from "./data-source.ts";
 import type { Capabilities, BaseGridDef } from "./field-types.ts";
-import type { QueryShape } from "./shapes.ts";
+import type { IndexDef } from "./indexes.ts";
 
 export const TEST_QUICK_FIELDS = ["name", "number"];
 
-export const TEST_SHAPES: QueryShape[] = [
+export const TEST_INDEXES: IndexDef[] = [
   { equals: [], sort: "created_at", range: true },
   { equals: [], sort: "total", range: true },
   { equals: ["status"], sort: "created_at" },

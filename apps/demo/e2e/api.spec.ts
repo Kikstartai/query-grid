@@ -8,7 +8,7 @@ interface ErrorBody {
 }
 
 const REFUSALS: [string, number, string, Record<string, unknown>][] = [
-  ["/api/orders?f.channel=web&sort=total.desc", 400, "undeclared_shape", {}],
+  ["/api/orders?f.channel=web&sort=total.desc", 400, "unindexed_query", {}],
   [
     "/api/orders?f.status_code=nope",
     400,

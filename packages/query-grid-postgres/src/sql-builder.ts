@@ -4,7 +4,7 @@ import {
   getField,
   isValidFieldValue,
   KEY_FIELD,
-  isQueryDeclared,
+  isQueryIndexed,
   listQuickFields,
   PAGE_LIMIT_MAX,
   QUICK_LIMIT,
@@ -30,7 +30,7 @@ export interface SqlQuery {
 }
 
 export type RejectionCode =
-  | "undeclared_shape"
+  | "unindexed_query"
   | "invalid_value"
   | "invalid_cursor"
   | "invalid_limit"
@@ -123,7 +123,7 @@ function selectExpression(field: BaseFieldDef): string {
 function requireField(def: PostgresGridDef, key: string): BaseFieldDef {
   const field = getField(def, key);
   if (!field) {
-    throw new QueryRejected("undeclared_shape", "unknown_field", {
+    throw new QueryRejected("unindexed_query", "unknown_field", {
       field: key,
     });
   }
@@ -144,8 +144,8 @@ export function quickExpression(def: PostgresGridDef, prefix = ""): string {
 }
 
 export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
-  if (!isQueryDeclared(def.shapes, listQuickFields(def), query)) {
-    throw new QueryRejected("undeclared_shape");
+  if (!isQueryIndexed(def.indexes, listQuickFields(def), query)) {
+    throw new QueryRejected("unindexed_query");
   }
   const problem = validateQueryValues(def, query);
   if (problem) {

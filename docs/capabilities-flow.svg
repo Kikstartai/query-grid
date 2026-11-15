@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="630" viewBox="0 0 680 630" role="img">
   <title>query-grid capability flow</title>
-  <desc>Host defs feed the memory source or postgres capabilities, which produce one Capabilities object; the provider passes it to the offers, which enable components, and the server checks each request against shapes again.</desc>
+  <desc>Host defs feed the memory source or postgres capabilities, which produce one Capabilities object; the provider passes it to the offers, which enable components, and the server checks each request against indexes again.</desc>
   <style>
     text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .th { font-size: 14px; font-weight: 500; }
@@ -33,7 +33,7 @@
     <text class="ts" x="210" y="174" text-anchor="middle" dominant-baseline="central">From field operators</text></g>
   <g class="pg"><rect x="360" y="136" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="470" y="154" text-anchor="middle" dominant-baseline="central">Postgres</text>
-    <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">capabilities(shapes)</text></g>
+    <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">capabilities(indexes)</text></g>
   <g class="core"><rect x="230" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="340" y="250" text-anchor="middle" dominant-baseline="central">Capabilities</text>
     <text class="ts" x="340" y="270" text-anchor="middle" dominant-baseline="central">isAnswerable, sort, quick</text></g>
@@ -48,7 +48,7 @@
     <text class="ts" x="340" y="558" text-anchor="middle" dominant-baseline="central">Enable, disable, reason</text></g>
   <g class="pg"><rect x="474" y="520" width="166" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="557" y="538" text-anchor="middle" dominant-baseline="central">Server check</text>
-    <text class="ts" x="557" y="558" text-anchor="middle" dominant-baseline="central">Shape match or 400</text></g>
+    <text class="ts" x="557" y="558" text-anchor="middle" dominant-baseline="central">Index match or 400</text></g>
 
   <path class="arr" d="M290 96 V116 H210 V134" marker-end="url(#arrow)"/>
   <path class="arr" d="M390 96 V116 H470 V134" marker-end="url(#arrow)"/>

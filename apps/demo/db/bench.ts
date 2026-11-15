@@ -6,7 +6,7 @@ import {
   getField,
   resolveMaxValues,
   type GridRow,
-  type QueryShape,
+  type IndexDef,
   type QueryState,
 } from "@kikstart/query-grid";
 import {
@@ -16,7 +16,7 @@ import {
   buildPageSql,
   buildRowSql,
   describeQuick,
-  describeShape,
+  describeIndex,
   encodeCursor,
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
@@ -60,7 +60,7 @@ interface Explain {
 type ResultKind = "single" | "several" | "counter";
 
 interface Result {
-  shape: string;
+  index: string;
   kind: ResultKind;
   variant: string;
   p50: number;
@@ -81,13 +81,13 @@ function percentile(sorted: number[], fraction: number): number {
 
 async function measure(
   client: Client,
-  shape: QueryShape | string,
+  index: IndexDef | string,
   variant: string,
   sql: SqlQuery,
   settings: string[] | null,
   kind: ResultKind = "single",
 ): Promise<Result> {
-  const label = typeof shape === "string" ? shape : describeShape(shape);
+  const label = typeof index === "string" ? index : describeIndex(index);
   const times: number[] = [];
   let plan: PlanNode[] = [];
   let refused = 0;
@@ -122,7 +122,7 @@ async function measure(
   }
   if (times.length === 0) {
     return {
-      shape: label,
+      index: label,
       kind,
       variant,
       p50: Number.NaN,
@@ -136,7 +136,7 @@ async function measure(
   const p95 = percentile(times, 0.95);
   const scansByIndex = plan.some((node) => node["Index Name"] !== undefined);
   return {
-    shape: label,
+    index: label,
     kind,
     variant,
     p50: percentile(times, 0.5),
@@ -160,12 +160,12 @@ async function measure(
 
 async function pickEqualsValues(
   client: Client,
-  shape: QueryShape,
+  index: IndexDef,
 ): Promise<Record<string, string[]>> {
-  if (shape.equals.length === 0) {
+  if (index.equals.length === 0) {
     return {};
   }
-  const columns = shape.equals.join(", ");
+  const columns = index.equals.join(", ");
   const { rows } = await client.query<Record<string, string>>(
     `SELECT ${columns} FROM (SELECT ${columns} FROM orders LIMIT 200000) sample
      GROUP BY ${columns} ORDER BY count(*) DESC LIMIT 1`,
@@ -179,13 +179,13 @@ type Frequency = "common" | "rare";
 
 async function pickSeveralValues(
   client: Client,
-  shape: QueryShape,
+  index: IndexDef,
   size: number,
   frequency: Frequency,
 ): Promise<Record<string, string[]>> {
   const equals: Record<string, string[]> = {};
   const order = frequency === "common" ? "DESC" : "ASC";
-  for (const column of shape.equals) {
+  for (const column of index.equals) {
     const { rows } = await client.query<{ value: string }>(
       `SELECT ${column} AS value FROM (SELECT ${column} FROM orders LIMIT 200000) sample
        GROUP BY ${column} ORDER BY count(*) ${order}, ${column} LIMIT ${size}`,
@@ -195,8 +195,8 @@ async function pickSeveralValues(
   return equals;
 }
 
-function listMultiSizes(shape: QueryShape): number[] {
-  const caps = shape.equals.map((key) => {
+function listMultiSizes(index: IndexDef): number[] {
+  const caps = index.equals.map((key) => {
     const field = getField(ORDERS_GRID_DEF, key);
     return field ? resolveMaxValues(field) : 1;
   });
@@ -205,13 +205,13 @@ function listMultiSizes(shape: QueryShape): number[] {
 
 async function benchSeveral(
   client: Client,
-  shape: QueryShape,
+  index: IndexDef,
 ): Promise<Result[]> {
   const results: Result[] = [];
   const seen = new Set<string>();
   for (const frequency of ["common", "rare"] as const) {
-    for (const size of listMultiSizes(shape)) {
-      const equals = await pickSeveralValues(client, shape, size, frequency);
+    for (const size of listMultiSizes(index)) {
+      const equals = await pickSeveralValues(client, index, size, frequency);
       const key = JSON.stringify(equals);
       if (seen.has(key)) {
         continue;
@@ -223,12 +223,12 @@ async function benchSeveral(
       const query: QueryState = {
         ...defaultQuery(ORDERS_GRID_DEF),
         equals,
-        sort: { field: shape.sort, direction: "desc" },
+        sort: { field: index.sort, direction: "desc" },
       };
       results.push(
         await measure(
           client,
-          shape,
+          index,
           `${label}: first page desc`,
           buildPageSql(ORDERS_GRID_DEF, query, PAGE),
           null,
@@ -236,7 +236,7 @@ async function benchSeveral(
         ),
         await measure(
           client,
-          shape,
+          index,
           `${label}: capped count`,
           buildCappedCountSql(ORDERS_GRID_DEF, query),
           null,
@@ -277,28 +277,28 @@ async function pickDeepCursor(
 
 async function benchOrdered(
   client: Client,
-  shape: QueryShape,
+  index: IndexDef,
 ): Promise<Result[]> {
-  const equals = await pickEqualsValues(client, shape);
+  const equals = await pickEqualsValues(client, index);
   const results: Result[] = [];
   for (const direction of ["desc", "asc"] as const) {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID_DEF),
       equals,
-      sort: { field: shape.sort, direction },
+      sort: { field: index.sort, direction },
     };
     const cursor = await pickDeepCursor(client, query);
     results.push(
       await measure(
         client,
-        shape,
+        index,
         `first page ${direction}`,
         buildPageSql(ORDERS_GRID_DEF, query, PAGE),
         null,
       ),
       await measure(
         client,
-        shape,
+        index,
         `deep keyset page ${direction}`,
         buildPageSql(ORDERS_GRID_DEF, { ...query, cursor }, PAGE),
         null,
@@ -308,52 +308,52 @@ async function benchOrdered(
   const base: QueryState = {
     ...defaultQuery(ORDERS_GRID_DEF),
     equals,
-    sort: { field: shape.sort, direction: "desc" },
+    sort: { field: index.sort, direction: "desc" },
   };
   results.push(
     await measure(
       client,
-      shape,
+      index,
       "capped count",
       buildCappedCountSql(ORDERS_GRID_DEF, base),
       null,
     ),
     await measure(
       client,
-      shape,
+      index,
       "capped total",
       buildCappedTotalSql(ORDERS_GRID_DEF, base),
       TOTAL_SETTINGS,
     ),
   );
-  if (shape.range) {
+  if (index.range) {
     const range =
-      shape.sort === "total"
+      index.sort === "total"
         ? { field: "total", min: "20000", max: "60000" }
         : {
-            field: shape.sort,
+            field: index.sort,
             min: new Date(Date.now() - 200 * 86_400_000).toISOString(),
             max: new Date(Date.now() - 100 * 86_400_000).toISOString(),
           };
     results.push(
       await measure(
         client,
-        shape,
+        index,
         "range, first page desc",
         buildPageSql(ORDERS_GRID_DEF, { ...base, range }, PAGE),
         null,
       ),
       await measure(
         client,
-        shape,
+        index,
         "range, capped count",
         buildCappedCountSql(ORDERS_GRID_DEF, { ...base, range }),
         null,
       ),
     );
   }
-  if (shape.equals.length > 0 && shape.multi !== false) {
-    results.push(...(await benchSeveral(client, shape)));
+  if (index.equals.length > 0 && index.multi !== false) {
+    results.push(...(await benchSeveral(client, index)));
   }
   return results;
 }
@@ -402,11 +402,11 @@ function formatMs(value: number): string {
 
 function toTable(results: Result[]): string[] {
   return [
-    "| Shape | Query | p50 | p95 | Plan | Pass |",
+    "| Index | Query | p50 | p95 | Plan | Pass |",
     "| --- | --- | ---: | ---: | --- | --- |",
     ...results.map(
       (result) =>
-        `| ${result.shape} | ${result.variant} | ${formatMs(result.p50)} | ${formatMs(result.p95)} | ${result.nodes} | ${result.ok ? "yes" : "**no**"} |`,
+        `| ${result.index} | ${result.variant} | ${formatMs(result.p50)} | ${formatMs(result.p95)} | ${result.nodes} | ${result.ok ? "yes" : "**no**"} |`,
     ),
   ];
 }
@@ -420,9 +420,9 @@ function toMarkdown(results: Result[], total: number): string {
   const single = results.filter((result) => result.kind === "single");
   const several = results.filter((result) => result.kind === "several");
   const counters = results.filter((result) => result.kind === "counter");
-  const optedOut = ORDERS_GRID_DEF.shapes
-    .filter((shape) => shape.multi === false)
-    .map(describeShape);
+  const optedOut = ORDERS_GRID_DEF.indexes
+    .filter((index) => index.multi === false)
+    .map(describeIndex);
   const lines = [
     `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after 3 warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
     "",
@@ -432,7 +432,7 @@ function toMarkdown(results: Result[], total: number): string {
     "",
     `## Several values per field: ${summarize(several)}`,
     "",
-    "Each ordered shape with an equality field, with 2, 5 and the field's cap of values, taken from the most common and then from the rarest. The bar is the same p95 budget and no Seq Scan; a Sort is allowed here and shows in the plan, because `= ANY` over several values has no single index order to read.",
+    "Each ordered index with an equality field, with 2, 5 and the field's cap of values, taken from the most common and then from the rarest. The bar is the same p95 budget and no Seq Scan; a Sort is allowed here and shows in the plan, because `= ANY` over several values has no single index order to read.",
     "",
     ...toTable(several),
     "",
@@ -443,8 +443,8 @@ function toMarkdown(results: Result[], total: number): string {
     ...toTable(counters),
     "",
     optedOut.length > 0
-      ? `Shapes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
-      : "No shape is declared `multi: false`.",
+      ? `Indexes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
+      : "No index is declared `multi: false`.",
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -458,10 +458,10 @@ async function main(): Promise<void> {
     "SELECT sum(row_count) AS count FROM order_status_counts",
   );
   const results: Result[] = [];
-  for (const shape of ORDERS_GRID_DEF.shapes) {
-    const batch = await benchOrdered(client, shape);
+  for (const index of ORDERS_GRID_DEF.indexes) {
+    const batch = await benchOrdered(client, index);
     results.push(...batch);
-    console.log(`${describeShape(shape)}: ${batch.length} queries`);
+    console.log(`${describeIndex(index)}: ${batch.length} queries`);
   }
   const quick = await benchQuick(client, ORDERS_GRID_DEF.quick);
   results.push(...quick);
