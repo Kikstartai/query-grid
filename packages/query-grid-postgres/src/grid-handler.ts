@@ -31,7 +31,7 @@ import type { PostgresGridDef } from "./storage.ts";
 type Route = "page" | SubRoute;
 
 function isAbortError(error: unknown, signal: AbortSignal): boolean {
-  const { name, code } = error as { name?: string; code?: string };
+  const { name, code } = (error ?? {}) as { name?: string; code?: string };
   return (
     error === signal.reason || name === "AbortError" || code === QUERY_CANCELED
   );

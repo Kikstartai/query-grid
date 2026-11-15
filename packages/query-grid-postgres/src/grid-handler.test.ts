@@ -424,6 +424,27 @@ describe("refusals", () => {
     expect(reported).toHaveLength(1);
   });
 
+  test("an executor that rejects with nothing after the client has gone is reported", async () => {
+    for (const rejection of [null, undefined]) {
+      const reported: unknown[] = [];
+      const controller = new AbortController();
+      const empty: SqlExecutor = () => {
+        controller.abort();
+        return Promise.reject(rejection);
+      };
+      const handler = createGridHandler({
+        def: TEST_DEF,
+        execute: empty,
+        onError: (error) => reported.push(error),
+      });
+      const response = await handler(
+        new Request(`${ORIGIN}${BASE_PATH}`, { signal: controller.signal }),
+      );
+      expect(response.status).toBe(499);
+      expect(reported).toEqual([rejection]);
+    }
+  });
+
   test("an omitted hook is a 404, and so is an unknown route", async () => {
     const { handle } = createHandler([]);
     for (const path of ["/options?field=region", "/transitions", "/nope"]) {
