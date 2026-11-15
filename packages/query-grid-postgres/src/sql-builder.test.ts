@@ -1,32 +1,33 @@
 import { describe, expect, test } from "bun:test";
 
-import type { GridRow, QueryState } from "@kikstart/query-grid";
+import type { GridRow, QueryState, TotalResult } from "@kikstart/query-grid";
 
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import { decodeCursor, encodeCursor } from "./cursor.ts";
 import {
   getGridCount,
-  getGridTotal,
+  listGridTotals,
   walkGridPages,
   type SqlExecutor,
 } from "./query-runner.ts";
 import {
   generateGridMigration,
-  IDENTIFIER_MAX_LENGTH,
   listCounterObjects,
   listGridMigrationSteps,
   listMissingIndexes,
   listShapeIndexes,
   listTableMigrations,
-  shortenIdentifier,
   validateGridDefs,
 } from "./schema-ddl.ts";
 import {
   buildCappedCountSql,
   buildCappedTotalSql,
   buildExactCountSql,
+  buildFacetSql,
   buildPageSql,
+  IDENTIFIER_MAX_LENGTH,
   QueryRejected,
+  shortenIdentifier,
   toPageResult,
   type SqlQuery,
 } from "./sql-builder.ts";
@@ -231,17 +232,36 @@ describe("counts and totals", () => {
     );
   });
 
-  test("the live total sums inside the same cap", () => {
+  test("the live totals sum every total field inside the same cap", () => {
     const query: QueryState = { ...BASE, equals: { region: ["north"] } };
     expect(buildCappedTotalSql(TEST_DEF, query)).toEqual({
-      text: "SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT t.total AS amount FROM things t WHERE t.region = $1::text ORDER BY t.created_at, t.id LIMIT 10001) capped",
+      text: "SELECT count(*)::int AS count, coalesce(sum(capped.total), 0)::float8 AS total_sum, coalesce(sum(capped.number), 0)::float8 AS number_sum FROM (SELECT t.total, t.number FROM things t WHERE t.region = $1::text ORDER BY t.created_at, t.id LIMIT 10001) capped",
       values: ["north"],
     });
+    expect(() =>
+      buildCappedTotalSql({ ...TEST_DEF, totals: undefined }, query),
+    ).toThrow("no totals");
   });
 
   const counters = [
-    { value: "open", count: 30, sum: 9000 },
-    { value: "done", count: 10, sum: 1000 },
+    { value: "open", count: 30, total_sum: 9000, number_sum: 30300 },
+    { value: "done", count: 10, total_sum: 1000, number_sum: 10100 },
+  ];
+  const fromCounters: TotalResult[] = [
+    {
+      field: "total",
+      available: true,
+      sum: 10000,
+      rows: 40,
+      source: "counter",
+    },
+    {
+      field: "number",
+      available: true,
+      sum: 40400,
+      rows: 40,
+      source: "counter",
+    },
   ];
 
   function recordingExecutor(rows: object[]): {
@@ -262,7 +282,7 @@ describe("counts and totals", () => {
     return { execute, seen, settings };
   }
 
-  test("a status grouping reads its count and total from the counter table", async () => {
+  test("a status grouping reads its count and totals from the counter table", async () => {
     const { execute, seen } = recordingExecutor(counters);
     const query: QueryState = { ...BASE, equals: { status: ["open"] } };
     expect(await getGridCount(TEST_DEF, execute, query, false)).toEqual({
@@ -270,14 +290,28 @@ describe("counts and totals", () => {
       capped: false,
       source: "counter",
     });
-    expect(await getGridTotal(TEST_DEF, execute, BASE)).toEqual({
-      available: true,
-      sum: 10000,
-      rows: 40,
-      source: "counter",
-    });
+    expect(await listGridTotals(TEST_DEF, execute, BASE)).toEqual(fromCounters);
+    expect(await listGridTotals(TEST_DEF, execute, query)).toEqual([
+      {
+        field: "total",
+        available: true,
+        sum: 9000,
+        rows: 30,
+        source: "counter",
+      },
+      {
+        field: "number",
+        available: true,
+        sum: 30300,
+        rows: 30,
+        source: "counter",
+      },
+    ]);
     expect(seen[0].text).toBe(
-      "SELECT status AS value, row_count::float8 AS count, total_sum::float8 AS sum FROM thing_status_counts",
+      "SELECT status AS value, row_count::float8 AS count, total_sum::float8 AS total_sum, number_sum::float8 AS number_sum FROM thing_status_counts",
+    );
+    expect(buildFacetSql({ ...TEST_DEF, totals: undefined })?.text).toBe(
+      "SELECT status AS value, row_count::float8 AS count FROM thing_status_counts",
     );
   });
 
@@ -289,40 +323,42 @@ describe("counts and totals", () => {
       capped: false,
       source: "counter",
     });
-    expect(await getGridTotal(TEST_DEF, execute, query)).toEqual({
-      available: true,
-      sum: 10000,
-      rows: 40,
-      source: "counter",
-    });
+    expect(await listGridTotals(TEST_DEF, execute, query)).toEqual(
+      fromCounters,
+    );
   });
 
   test("another filter totals live under the cap and is refused above it", async () => {
     const query: QueryState = { ...BASE, equals: { region: ["north"] } };
-    const under = recordingExecutor([{ count: 812, sum: 55500 }]);
-    expect(await getGridTotal(TEST_DEF, under.execute, query)).toEqual({
-      available: true,
-      sum: 55500,
-      rows: 812,
-      source: "live",
-    });
+    const under = recordingExecutor([
+      { count: 812, total_sum: 55500, number_sum: 900 },
+    ]);
+    expect(await listGridTotals(TEST_DEF, under.execute, query)).toEqual([
+      {
+        field: "total",
+        available: true,
+        sum: 55500,
+        rows: 812,
+        source: "live",
+      },
+      { field: "number", available: true, sum: 900, rows: 812, source: "live" },
+    ]);
     expect(under.settings).toEqual([["enable_sort = off"]]);
-    const over = recordingExecutor([{ count: 10001, sum: 1 }]);
-    expect(await getGridTotal(TEST_DEF, over.execute, query)).toEqual({
-      available: false,
-      code: "over_cap",
-      params: { cap: 10000 },
-    });
+    const over = recordingExecutor([
+      { count: 10001, total_sum: 1, number_sum: 1 },
+    ]);
+    const refused = { code: "over_cap", params: { cap: 10000 } };
+    expect(await listGridTotals(TEST_DEF, over.execute, query)).toEqual([
+      { field: "total", available: false, ...refused },
+      { field: "number", available: false, ...refused },
+    ]);
   });
 
-  test("a grid without a total says so", async () => {
-    const { execute } = recordingExecutor([]);
-    const bare = { ...TEST_DEF, total: undefined };
-    expect(await getGridTotal(bare, execute, BASE)).toEqual({
-      available: false,
-      code: "no_total",
-      params: {},
-    });
+  test("a grid without totals answers none and reads nothing", async () => {
+    const { execute, seen } = recordingExecutor([]);
+    const bare = { ...TEST_DEF, totals: undefined };
+    expect(await listGridTotals(bare, execute, BASE)).toEqual([]);
+    expect(seen).toEqual([]);
   });
 });
 
@@ -397,32 +433,51 @@ describe("generated DDL", () => {
     expect(install).toContain(
       "CREATE TABLE IF NOT EXISTS thing_status_counts (status text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);",
     );
+    for (const table of [
+      "thing_status_counts",
+      "thing_status_counts_pending",
+    ]) {
+      for (const column of ["total_sum", "number_sum"]) {
+        expect(install).toContain(
+          `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} bigint NOT NULL DEFAULT 0;`,
+        );
+      }
+    }
+    expect(install).toContain(
+      "COMMENT ON TABLE thing_status_counts_pending IS NULL;",
+    );
+    expect(install).toContain(
+      "thing_status_counts_bump(p_value text, p_rows bigint, p_sums bigint[])",
+    );
     const bumpCounter =
-      "ON CONFLICT (status) DO UPDATE SET row_count = thing_status_counts.row_count + EXCLUDED.row_count, total_sum = thing_status_counts.total_sum + EXCLUDED.total_sum;";
+      "INSERT INTO thing_status_counts (status, row_count, total_sum, number_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2])\n  ON CONFLICT (status) DO UPDATE SET row_count = thing_status_counts.row_count + EXCLUDED.row_count, total_sum = thing_status_counts.total_sum + EXCLUDED.total_sum, number_sum = thing_status_counts.number_sum + EXCLUDED.number_sum;";
     expect(install).toContain(
-      `${bumpCounter}\n  INSERT INTO thing_status_counts_pending (status, row_count, total_sum) VALUES (p_value, p_rows, p_sum);\n$$;`,
+      `${bumpCounter}\n  INSERT INTO thing_status_counts_pending (status, row_count, total_sum, number_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2]);\n$$;`,
     );
     expect(install).toContain(
-      "PERFORM thing_status_counts_bump(OLD.status, -1, -OLD.total);",
+      "PERFORM thing_status_counts_bump(OLD.status, -1, ARRAY[-OLD.total, -OLD.number]::bigint[]);",
     );
     expect(install).toContain(
-      "CREATE TRIGGER thing_status_counts_on_update AFTER UPDATE OF status, total ON things FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status OR OLD.total IS DISTINCT FROM NEW.total) EXECUTE FUNCTION thing_status_counts_on_update();",
+      "PERFORM thing_status_counts_bump(NEW.status, 1, ARRAY[NEW.total, NEW.number]::bigint[]);",
+    );
+    expect(install).toContain(
+      "CREATE TRIGGER thing_status_counts_on_update AFTER UPDATE OF status, total, number ON things FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status OR OLD.total IS DISTINCT FROM NEW.total OR OLD.number IS DISTINCT FROM NEW.number) EXECUTE FUNCTION thing_status_counts_on_update();",
     );
     expect(backfill).toStartWith("BEGIN ISOLATION LEVEL REPEATABLE READ;");
     expect(backfill).not.toContain("LOCK TABLE");
     expect(backfill).toContain(
-      "SELECT status, count(*), coalesce(sum(total), 0) FROM things GROUP BY status",
+      "SELECT status, count(*), coalesce(sum(total), 0), coalesce(sum(number), 0) FROM things GROUP BY status",
     );
     expect(backfill).toContain("DELETE FROM thing_status_counts_pending;");
     expect(backfill).toContain(
-      "INSERT INTO thing_status_counts_pending (status, row_count, total_sum)\n    SELECT status, count(*)",
+      "INSERT INTO thing_status_counts_pending (status, row_count, total_sum, number_sum)\n    SELECT status, count(*)",
     );
     expect(backfill).not.toContain("UPDATE thing_status_counts ");
     expect(switchOver).toContain(
-      "SELECT status, sum(row_count), sum(total_sum) FROM thing_status_counts_pending GROUP BY status",
+      "SELECT status, sum(row_count), sum(total_sum), sum(number_sum) FROM thing_status_counts_pending GROUP BY status",
     );
     expect(switchOver).toContain(
-      "ON CONFLICT (status) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;",
+      "ON CONFLICT (status) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum, number_sum = EXCLUDED.number_sum;",
     );
     expect(switchOver).toContain(`${bumpCounter}\n$bump$;`);
     expect(switchOver).toContain("DROP TABLE thing_status_counts_pending;");
@@ -439,7 +494,7 @@ describe("generated DDL", () => {
     expect(listCounterObjects(TEST_DEF)).toEqual({
       table: "thing_status_counts",
       pending: "thing_status_counts_pending",
-      columns: ["status", "row_count", "total_sum"],
+      columns: ["status", "row_count", "total_sum", "number_sum"],
       functions: ["thing_status_counts_bump"],
       triggers: [
         "thing_status_counts_on_insert",
@@ -513,7 +568,7 @@ describe("generated DDL", () => {
     expect(
       validateGridDefs([
         TEST_DEF,
-        { ...TEST_DEF, id: "things-untotalled", total: undefined },
+        { ...TEST_DEF, id: "things-untotalled", totals: undefined },
       ]),
     ).toEqual([
       "things-untotalled: counter table thing_status_counts is declared with two definitions",

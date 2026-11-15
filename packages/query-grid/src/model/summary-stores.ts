@@ -12,7 +12,7 @@ import { createStore } from "./store.ts";
 import type { CountResult, FacetCount, TotalResult } from "./wire-types.ts";
 
 export type CountState = ResourceState<CountResult | null>;
-export type TotalState = ResourceState<TotalResult | null>;
+export type TotalState = ResourceState<TotalResult[]>;
 export type FacetState = ResourceState<FacetCount[]>;
 
 type ResourceStore<R> = Pick<
@@ -24,7 +24,7 @@ export interface CountStore extends ResourceStore<CountResult | null> {
   requestExact: () => void;
 }
 
-export type TotalStore = ResourceStore<TotalResult | null>;
+export type TotalStore = ResourceStore<TotalResult[]>;
 export type FacetStore = ResourceStore<FacetCount[]>;
 
 export function createCountStore(
@@ -51,10 +51,10 @@ export function createTotalStore(
   store: QueryStore,
   source: DataSource,
 ): TotalStore {
-  return createQueryResource<TotalResult | null>(
+  return createQueryResource<TotalResult[]>(
     store,
-    (query, signal) => source.fetchTotal(query, signal),
-    { initial: null },
+    (query, signal) => source.fetchTotals(query, signal),
+    { initial: [] },
   );
 }
 

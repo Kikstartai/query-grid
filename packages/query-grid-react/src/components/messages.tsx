@@ -266,7 +266,6 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
       "That quick filter matches too much to answer fast. Add more characters.",
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
     unknown_row: () => "That row no longer exists.",
-    no_total: () => "This grid declares no total.",
     over_cap: ({ cap }) =>
       `More than ${cap} rows match and no counter totals this filter.`,
     not_found: () => "The server does not answer this request.",

@@ -12,7 +12,7 @@ describe("validateGridDef", () => {
   test("bad shapes are named", () => {
     const broken: PostgresGridDef = {
       ...TEST_DEF,
-      total: { field: "name" },
+      totals: ["name", "total", "total"],
       shapes: [
         { equals: [], sort: "note" },
         { equals: ["missing"], sort: "total" },
@@ -30,6 +30,7 @@ describe("validateGridDef", () => {
     expect(problems).toContain("created_at is a datetime");
     expect(problems).toContain("unknown field missing");
     expect(problems).toContain("total: name is not a non-null money");
+    expect(problems).toContain("total: total is declared twice");
   });
 
   test("the default sort must be a shape", () => {

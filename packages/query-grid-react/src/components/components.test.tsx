@@ -30,6 +30,7 @@ import { ViewSwitch } from "./view-switch.tsx";
 const noop = () => undefined;
 const STATUS = TEST_FIELDS.find((field) => field.key === "status")!;
 const TOTAL = TEST_FIELDS.find((field) => field.key === "total")!;
+const NUMBER = TEST_FIELDS.find((field) => field.key === "number")!;
 const CREATED = TEST_FIELDS.find((field) => field.key === "created_at")!;
 const NAME = { ...TEST_FIELDS[6] };
 const ROW_WINDOW = {
@@ -404,16 +405,39 @@ describe("each base component mounts alone, with plain props and no provider", (
     const live = render(
       <TotalFooter
         status="idle"
-        label="Total"
-        value={{ sum: 123456, rows: 2, source: "live" }}
+        totals={[
+          { field: TOTAL, value: { sum: 123456, rows: 2, source: "live" } },
+          { field: NUMBER, value: { sum: 2001, rows: 2, source: "live" } },
+        ]}
       />,
     );
+    expect(live).toContain('data-total-field="total"');
     expect(live).toContain("Total sum");
     expect(live).toContain("$1,234.56");
-    expect(live).toContain("summed live over 2 rows");
+    expect(live).toContain('data-total-field="number"');
+    expect(live).toContain("Number sum");
+    expect(live).toContain("2,001");
+    expect(live.match(/summed live over 2 rows/g)).toHaveLength(1);
+    const refused = render(
+      <TotalFooter
+        status="idle"
+        totals={[
+          { field: TOTAL, value: null, reason: "Too many" },
+          { field: NUMBER, value: null, reason: "Too many" },
+        ]}
+      />,
+    );
+    expect(refused.match(/Too many/g)).toHaveLength(1);
+    expect(refused).toContain('data-total="unavailable"');
     expect(
-      render(<TotalFooter status="idle" value={null} reason="Too many" />),
-    ).toContain("Too many");
+      render(
+        <TotalFooter
+          status="loading"
+          totals={[{ field: TOTAL, value: null }]}
+        />,
+      ),
+    ).toContain("Totalling…");
+    expect(render(<TotalFooter status="idle" totals={[]} />)).toBe("");
   });
 });
 

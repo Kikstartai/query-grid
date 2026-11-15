@@ -3,6 +3,7 @@ import {
   getFacetField,
   getField,
   isRangeType,
+  listTotalFields,
   type Capabilities,
   type BaseFieldDef,
   type FieldOption,
@@ -14,7 +15,6 @@ import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
-import type { FacetCount } from "./wire-types.ts";
 
 const OPTION_LIMIT = 50;
 
@@ -121,6 +121,15 @@ function listAllTransitions(def: BaseGridDef): [string, string][] {
   );
 }
 
+function sumRows(fields: string[], rows: GridRow[]): Record<string, number> {
+  return Object.fromEntries(
+    fields.map((field) => [
+      field,
+      rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0),
+    ]),
+  );
+}
+
 interface Selection {
   source: GridRow[];
   query: QueryState;
@@ -135,6 +144,7 @@ export function createMemorySource(
   let rows = initialRows;
   let selected: Selection | null = null;
   const quickFields = options.quick ?? [];
+  const totals = listTotalFields(def).map((field) => field.key);
   const matching = (query: QueryState) =>
     filterRows(def, rows, query, quickFields);
   const select = (query: QueryState) => {
@@ -170,37 +180,32 @@ export function createMemorySource(
       capped: false,
       source: "exact",
     }),
-    fetchTotal: async (query) => {
-      const key = def.total?.field;
-      if (!key) {
-        return { available: false, code: "no_total", params: {} };
-      }
+    fetchTotals: async (query) => {
       const found = matching(query);
-      return {
+      return Object.entries(sumRows(totals, found)).map(([field, sum]) => ({
+        field,
         available: true,
-        sum: found.reduce((sum, row) => sum + Number(row[key] ?? 0), 0),
+        sum,
         rows: found.length,
         source: "live",
-      };
+      }));
     },
     fetchFacets: async (query) => {
       const key = def.facet?.field;
       if (!key) {
         return [];
       }
-      const totalKey = def.total?.field;
       const others = withoutKey(query.equals, key);
-      const counts = new Map<string, FacetCount>();
+      const groups = new Map<string, GridRow[]>();
       for (const row of matching({ ...query, equals: others })) {
         const value = String(row[key] ?? "");
-        const current = counts.get(value) ?? { value, count: 0, sum: 0 };
-        counts.set(value, {
-          value,
-          count: current.count + 1,
-          sum: (current.sum ?? 0) + (totalKey ? Number(row[totalKey] ?? 0) : 0),
-        });
+        groups.set(value, [...(groups.get(value) ?? []), row]);
       }
-      return [...counts.values()];
+      return [...groups].map(([value, group]) => ({
+        value,
+        count: group.length,
+        sums: sumRows(totals, group),
+      }));
     },
     fetchOptions: async (key, search) => {
       const field = getField(def, key);

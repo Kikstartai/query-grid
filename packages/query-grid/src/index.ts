@@ -27,6 +27,7 @@ export {
   isRangeType,
   KEY_FIELD,
   listFilterFields,
+  listTotalFields,
   resolveFilterKind,
   resolveMaxValues,
   type Capabilities,
@@ -45,13 +46,13 @@ export {
   type RangeState,
   type SortDirection,
   type SortState,
-  type TotalDef,
 } from "./model/field-types.ts";
 export {
   DEFAULT_CURRENCY,
   DEFAULT_LOCALE,
   formatCount,
   formatMoney,
+  formatSum,
   formatValue,
   labelKey,
 } from "./model/format.ts";

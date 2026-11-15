@@ -54,7 +54,7 @@ import "@kikstart/query-grid-react/styles.css";
 
 ## Quick start
 
-Write one def per grid: its fields (with a `cell` on any field that needs one), its shapes, its sort, facet and total, and its storage. Each package reads its own slice of it, so the keys and types cannot drift. The library has no domain names of its own; a host passes its defs in.
+Write one def per grid: its fields (with a `cell` on any field that needs one), its shapes, its sort, facet and totals, and its storage. Each package reads its own slice of it, so the keys and types cannot drift. The library has no domain names of its own; a host passes its defs in.
 
 ```tsx
 // orders-grid-def.tsx
@@ -66,7 +66,7 @@ export const ORDERS_GRID_DEF = {
   table: "orders",
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status_code", counterTable: "order_status_counts" },
-  total: { field: "total" },
+  totals: ["total", "item_count"],
   fields: [
     { key: "id", label: "ID", type: "id", hidden: true },
     {
@@ -89,6 +89,7 @@ export const ORDERS_GRID_DEF = {
     },
     { key: "customer_name", label: "Customer", type: "text" },
     { key: "total", label: "Total", type: "money" },
+    { key: "item_count", label: "Items", type: "integer" },
   ],
   shapes: [
     { equals: [], sort: "created_at", range: true },
@@ -99,7 +100,7 @@ export const ORDERS_GRID_DEF = {
 } satisfies GridDef & PostgresGridDef;
 ```
 
-- The React package reads the fields, their cells, the sort, the facet and the total, and ignores `table` and `counterTable`.
+- The React package reads the fields, their cells, the sort, the facet and the totals, and ignores `table` and `counterTable`.
 - The Postgres package reads the fields, the shapes and the storage, and ignores `cell`.
 - The in-memory source reads the fields and ignores shapes and storage.
 - The types are layers, each with its own name: core's `BaseGridDef` and `BaseFieldDef`, the React package's `GridDef` and `FieldDef` (the base plus `cell`), the Postgres package's `PostgresGridDef` (the base plus `table`, `shapes` and `facet.counterTable`). A `BaseGridDef` passes wherever a `GridDef` is expected.
@@ -144,15 +145,15 @@ export const POST = (request: Request) => handle(request);
 
 `createGridHandler` takes a fetch-standard `Request` and returns a `Response`, so it runs under Next.js, Hono, Bun or a Worker. It answers the routes `createHttpSource` calls:
 
-| Route              | Answers                                                                    | From                         |
-| ------------------ | -------------------------------------------------------------------------- | ---------------------------- |
-| `GET /`            | a keyset page: `{ rows, nextCursor, hasNext }`; `limit` sets the page size | built in                     |
-| `GET /count`       | `{ count, capped, source }`; `exact=1` asks for the exact count            | built in                     |
-| `GET /total`       | `{ available, sum, rows, source }` or `{ available: false, code, params }` | built in                     |
-| `GET /facets`      | `[{ value, count, sum }]` from the counter table; it ignores the query     | built in                     |
-| `GET /options`     | `[{ value, label }]` for a lookup field (`field`, `query`, `value`)        | the `options` hook           |
-| `GET /transitions` | `[[from, to]]`, for the board                                              | the `moves.transitions` hook |
-| `POST /status`     | `{ id, to }` moves one row and returns it, for the board                   | the `moves.change` hook      |
+| Route              | Answers                                                                                                              | From                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `GET /`            | a keyset page: `{ rows, nextCursor, hasNext }`; `limit` sets the page size                                           | built in                     |
+| `GET /count`       | `{ count, capped, source }`; `exact=1` asks for the exact count                                                      | built in                     |
+| `GET /total`       | one result per total field: `{ field, available, sum, rows, source }` or `{ field, available: false, code, params }` | built in                     |
+| `GET /facets`      | `[{ value, count, sums }]` from the counter table, `sums` keyed by total field; it ignores the query                 | built in                     |
+| `GET /options`     | `[{ value, label }]` for a lookup field (`field`, `query`, `value`)                                                  | the `options` hook           |
+| `GET /transitions` | `[[from, to]]`, for the board                                                                                        | the `moves.transitions` hook |
+| `POST /status`     | `{ id, to }` moves one row and returns it, for the board                                                             | the `moves.change` hook      |
 
 - A refusal is a 400, a refused transition a 409, an omitted hook or an unknown route a 404, the wrong method a 405 and anything else a 500 that carries no detail.
 - Every error body is `{ error, message, code, params }`. `code` and `params` are what the client renders through its messages; `message` is the code and its params as one log line. No English crosses the wire.
@@ -253,7 +254,7 @@ interface Capabilities {
 ## The two patterns
 
 - **The SQL executor is a Strategy.** `SqlExecutor` is one function, `(sql, settings?, signal?) => Promise<rows>`. The runner decides what to run and under which statement budget, and hands every read the `signal` of its request, so an executor can cancel the statement of a request the client dropped (the demo's does, with `pg_cancel_backend` on the backend pid it asked for; behind a transaction pooler, where a pid can name another session's query, it cancels nothing and leaves the statement to its time budget); such a request is answered 499 and is not reported; the host decides how: `pg`, a serverless driver, a tenant router, a read replica. A value in `sql.values` is a string or, for several values of one field, an array of strings. The client's `DataSource` is the same pattern one layer up: `createHttpSource` and `createMemorySource` are two strategies behind the same parts.
-- **The defs are models the engine reads.** Fields, shapes, the facet and the total are plain data. The offers, the SQL, the DDL, the chips and the controls are all derived from them, so the design is metadata-driven and a host can build its defs from its own database or configuration at runtime. The library accepts a def as input and never imports one.
+- **The defs are models the engine reads.** Fields, shapes, the facet and the totals are plain data. The offers, the SQL, the DDL, the chips and the controls are all derived from them, so the design is metadata-driven and a host can build its defs from its own database or configuration at runtime. The library accepts a def as input and never imports one.
 
 ## Base components
 
@@ -348,7 +349,7 @@ Filters are AND-combined, and there is no OR across fields. Within one field, eq
 - A field takes at most `maxValues` values, 20 unless the field says otherwise. Core validates it, `applyAction` refuses to pass it, and the server refuses it with `too_many_values` and the cap in `params`.
 - A shape accepts several values on its equality fields unless it sets `multi: false`. Capabilities then offer one value only for it, and `Offers.multi` lists the fields that take several right now.
 - An equality control is a UI SDK Select in `multiple` mode, or a Combobox with chips for a lookup field. `FilterChips` shows one chip per field, listing its values, each with its own remove button.
-- Several values of the facet field read the sum of their counters, for the count, the total and the facet panel. The board shows one lane per selected value.
+- Several values of the facet field read the sum of their counters, for the count, the totals and the facet panel. The board shows one lane per selected value.
 - The in-memory source matches any of the values.
 
 ## Styling
@@ -572,12 +573,12 @@ The quick filter is `(<columns joined with spaces>) ILIKE '%term%'` through the 
 
 ### Totals
 
-The footer totals the def's `total` field, and only in the two cases an index or a counter answers:
+`totals` lists the money or integer fields the footer sums, one cell per field. `/total` answers one result per field, and only in the two cases an index or a counter answers:
 
-- **From the counter table.** The filter is a declared grouping (nothing, or one or more statuses): the counter table's `total_sum` is a read of one row per status.
-- **Live, under the cap.** The filtered result has at most 10,000 rows: one query sums `total` over the shape's index scan, which stops at row 10,001.
+- **From the counter table.** The filter is a declared grouping (nothing, or one or more statuses): the counter table holds one `<field>_sum` column per total field, and the totals are a read of one row per status.
+- **Live, under the cap.** The filtered result has at most 10,000 rows: one query sums every total field over the shape's index scan, which stops at row 10,001.
 
-Any other filter shows `No total for this filter` with the reason, which the server sends as `over_cap` and the cap. The counter table is maintained by three row triggers, on insert, delete and update of the status or the total.
+Any other filter shows `No total for this filter` with the reason, which the server sends per field as `over_cap` and the cap. The counter table is maintained by three row triggers, on insert, delete and update of the status or of a total field. A total added to a def is a new counter column: run the generated migration again, and the new sum is exact once its switch step has run.
 
 ### Parts
 
@@ -650,11 +651,11 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 
 - **Storage per shape.** At 10M orders the heap is 1.7 GB and nine ordered shape indexes are about 510 MB each; the trigram index was 237 MB over one column. Indexes scale with the table: at 620,000 rows the same ratio holds, 108 MB of heap under 336 MB of indexes: 24 MB for a two-column shape index, 39 MB for a four-column one and 32 MB for the quick-filter trigram index over two columns. Roughly three times the heap for nine ordered shapes is why shapes are declared deliberately, per grid, and never generated per column.
 - **Write amplification.** Each insert maintains every shape index plus the primary key, eleven index writes here, and each status change rewrites the indexes that carry `status_code`. Write cost is proportional to the shape count.
-- **Counters.** One counter-row upsert per insert or delete, two per change of status or total. The counter row is a hot row under concurrent writes to one status, and two concurrent status moves in opposite directions take their row locks in opposite order.
+- **Counters.** One counter-row upsert per insert or delete, two per change of status or of a total field. Each total field is one more column in that same upsert, not another statement. The counter row is a hot row under concurrent writes to one status, and two concurrent status moves in opposite directions take their row locks in opposite order.
 - **Rollout.** Indexes ship as migrations, built `CONCURRENTLY`, so a build takes roughly twice as long as a plain one and never blocks writes; a build that fails leaves an invalid index to drop before the next run. The counter backfill is one snapshot read of the table, with two brief table locks around it. The 10M build took 117 s for all ten indexes, built plainly.
 - **Many tables.** Every shape is an index and every facet is three row triggers, on every table that has a grid. That is the price of principle 1, not a defect: two hundred tables with ten shapes each are two thousand indexes to build, store and write through. The tooling takes all the defs at once and gives one migration per table, but nothing makes the indexes cheaper. Declare a shape because a screen needs it.
 - **Several values per field.** `= ANY` has no single index order to read. The planner either walks the sort index and filters, which is fast when the values are common, or collects the matches from the equality index and sorts them, which is fast when they are few. Between the two the cost grows with about the square root of the table. At 620,000 rows every case is a few milliseconds; a shape whose page misses the budget on your data is declared `multi: false`.
-- **Request path.** One interaction is one indexed page read, one capped count and one total, each bounded by the page size or the cap.
+- **Request path.** One interaction is one indexed page read, one capped count and one statement for every total, each bounded by the page size or the cap.
 - **The weak point.** The quick filter is bounded by a timeout, not by the index, and its threshold falls as the table grows. On a wide table at scale, search a narrow table and feed the result into an equality shape, as the demo's customer picker does.
 
 ## Benchmarks

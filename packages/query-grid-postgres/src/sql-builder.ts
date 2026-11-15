@@ -57,6 +57,10 @@ export class QueryRejected extends Error {
 
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 
+export const IDENTIFIER_MAX_LENGTH = 63;
+
+const HASH_LENGTH = 8;
+
 const SQL_CASTS: Record<FieldType, string> = {
   id: "uuid",
   text: "text",
@@ -73,6 +77,27 @@ export function identifier(name: string): string {
     throw new Error(`"${name}" is not a plain SQL identifier`);
   }
   return name;
+}
+
+function hashName(name: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < name.length; index++) {
+    hash ^= name.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(HASH_LENGTH, "0");
+}
+
+export function shortenIdentifier(name: string): string {
+  if (name.length <= IDENTIFIER_MAX_LENGTH) {
+    return name;
+  }
+  const kept = IDENTIFIER_MAX_LENGTH - HASH_LENGTH - 1;
+  return `${name.slice(0, kept)}_${hashName(name)}`;
+}
+
+export function sumColumn(field: string): string {
+  return shortenIdentifier(`${identifier(field)}_sum`);
 }
 
 function column(name: string): string {
@@ -281,17 +306,22 @@ export function buildCappedTotalSql(
   query: QueryState,
   cap: number = COUNT_CAP,
 ): SqlQuery {
-  if (!def.total) {
-    throw new Error("the grid declares no total");
+  const totals = def.totals ?? [];
+  if (totals.length === 0) {
+    throw new Error("the grid declares no totals");
   }
   const { params, clauses } = filter(def, query);
-  const total = column(requireField(def, def.total.field).key);
+  const amounts = totals.map((key) => column(requireField(def, key).key));
+  const sums = totals.map(
+    (key) =>
+      `coalesce(sum(capped.${identifier(key)}), 0)::float8 AS ${sumColumn(key)}`,
+  );
   const order =
     query.quick === null
       ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
       : "";
   return {
-    text: `SELECT count(*)::int AS count, coalesce(sum(capped.amount), 0)::float8 AS sum FROM (SELECT ${total} AS amount FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
+    text: `SELECT count(*)::int AS count, ${sums.join(", ")} FROM (SELECT ${amounts.join(", ")} FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
     values: params.values,
   };
 }
@@ -300,9 +330,11 @@ export function buildFacetSql(def: PostgresGridDef): SqlQuery | null {
   if (!def.facet) {
     return null;
   }
-  const sum = def.total ? ", total_sum::float8 AS sum" : "";
+  const sums = (def.totals ?? [])
+    .map(sumColumn)
+    .map((name) => `, ${name}::float8 AS ${name}`);
   return {
-    text: `SELECT ${identifier(def.facet.field)} AS value, row_count::float8 AS count${sum} FROM ${identifier(def.facet.counterTable)}`,
+    text: `SELECT ${identifier(def.facet.field)} AS value, row_count::float8 AS count${sums.join("")} FROM ${identifier(def.facet.counterTable)}`,
     values: [],
   };
 }

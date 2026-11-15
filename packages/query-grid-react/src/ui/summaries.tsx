@@ -1,10 +1,11 @@
 "use client";
 
-import { getFacetField, getField } from "@kikstart/query-grid";
+import { getFacetField, listTotalFields } from "@kikstart/query-grid";
 
 import {
   CountDisplay as BaseCountDisplay,
   TotalFooter as BaseTotalFooter,
+  type TotalCell,
 } from "../components/count-display.tsx";
 import { FacetPanel as BaseFacetPanel } from "../components/facet-panel.tsx";
 import { formatProblemMessage, useMessages } from "../components/messages.tsx";
@@ -43,17 +44,22 @@ export function TotalFooter() {
   const { def } = useQueryGrid();
   const messages = useMessages();
   const state = useTotalState();
-  const problem =
-    state.error ??
-    (state.result && !state.result.available ? state.result : null);
+  const totals = listTotalFields(def).map((field): TotalCell => {
+    const result = state.result.find((item) => item.field === field.key);
+    const refused = result && !result.available ? result : null;
+    const problem = state.error ?? refused;
+    return {
+      field,
+      value: result?.available ? result : null,
+      reason: problem
+        ? formatProblemMessage(messages, problem, def.format)
+        : null,
+    };
+  });
   return (
     <BaseTotalFooter
       status={state.status}
-      value={state.result?.available ? state.result : null}
-      label={getField(def, def.total?.field ?? "")?.label}
-      reason={
-        problem ? formatProblemMessage(messages, problem, def.format) : null
-      }
+      totals={totals}
       format={def.format}
     />
   );

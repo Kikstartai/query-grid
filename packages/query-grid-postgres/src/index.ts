@@ -7,9 +7,9 @@ export {
 } from "./grid-handler.ts";
 export {
   getGridCount,
-  getGridTotal,
   listFacetCounts,
   listGridPage,
+  listGridTotals,
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
   QUICK_SETTINGS,
@@ -19,13 +19,11 @@ export {
 } from "./query-runner.ts";
 export {
   generateGridMigration,
-  IDENTIFIER_MAX_LENGTH,
   listCounterObjects,
   listGridMigrationSteps,
   listMissingIndexes,
   listShapeIndexes,
   listTableMigrations,
-  shortenIdentifier,
   validateGridDefs,
   type CounterObjects,
   type MigrationOptions,
@@ -45,8 +43,11 @@ export {
   buildRowSql,
   DEFAULT_PAGE_LIMIT,
   escapeLike,
+  IDENTIFIER_MAX_LENGTH,
   QueryRejected,
   quickExpression,
+  shortenIdentifier,
+  sumColumn,
   toPageResult,
   type RejectionCode,
   type SqlQuery,

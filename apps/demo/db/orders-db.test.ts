@@ -6,12 +6,13 @@ import {
   isQuickShape,
   type GridRow,
   type QueryState,
+  type TotalResult,
 } from "@kikstart/query-grid";
 import {
   buildPageSql,
   getGridCount,
-  getGridTotal,
   listCounterObjects,
+  listGridTotals,
   listMissingIndexes,
   QueryRejected,
   toPageResult,
@@ -25,6 +26,7 @@ import { ORDERS_GRID_DEF } from "../src/core/orders/orders-grid-def";
 interface Counter {
   rows: number;
   sum: number;
+  items: number;
 }
 
 const client = new Client({
@@ -41,19 +43,19 @@ afterAll(() => client.end());
 
 async function readCounters(): Promise<Record<string, Counter>> {
   const { rows } = await client.query<Counter & { status_code: string }>(
-    "SELECT status_code, row_count::float8 AS rows, total_sum::float8 AS sum FROM order_status_counts",
+    "SELECT status_code, row_count::float8 AS rows, total_sum::float8 AS sum, item_count_sum::float8 AS items FROM order_status_counts",
   );
   return Object.fromEntries(
-    rows.map((row) => [row.status_code, { rows: row.rows, sum: row.sum }]),
+    rows.map(({ status_code, ...counter }) => [status_code, counter]),
   );
 }
 
 async function readGrouped(): Promise<Record<string, Counter>> {
   const { rows } = await client.query<Counter & { status_code: string }>(
-    "SELECT status_code, count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders GROUP BY status_code",
+    "SELECT status_code, count(*)::float8 AS rows, sum(total)::float8 AS sum, sum(item_count)::float8 AS items FROM orders GROUP BY status_code",
   );
   return Object.fromEntries(
-    rows.map((row) => [row.status_code, { rows: row.rows, sum: row.sum }]),
+    rows.map(({ status_code, ...counter }) => [status_code, counter]),
   );
 }
 
@@ -189,7 +191,7 @@ describe("status counters", () => {
       );
       const inserted = await client.query<{ id: string }>(
         `INSERT INTO orders (order_number, status_code, customer_id, customer_name, region, channel, total, item_count)
-         SELECT -g, 'pending', $1, $2, 'gauteng', 'web', 1000 * g, 1 FROM generate_series(1, 5) g
+         SELECT -g, 'pending', $1, $2, 'gauteng', 'web', 1000 * g, g FROM generate_series(1, 5) g
          RETURNING id`,
         [customer.rows[0].id, customer.rows[0].name],
       );
@@ -198,6 +200,7 @@ describe("status counters", () => {
       expect(afterInsert.pending).toEqual({
         rows: before.pending.rows + 5,
         sum: before.pending.sum + 15_000,
+        items: before.pending.items + 15,
       });
 
       await client.query(
@@ -207,10 +210,12 @@ describe("status counters", () => {
       expect(afterMove.pending).toEqual({
         rows: before.pending.rows + 3,
         sum: before.pending.sum + 12_000,
+        items: before.pending.items + 12,
       });
       expect(afterMove.paid).toEqual({
         rows: before.paid.rows + 2,
         sum: before.paid.sum + 3000,
+        items: before.paid.items + 3,
       });
 
       await client.query(
@@ -220,6 +225,17 @@ describe("status counters", () => {
       expect(afterAmount.pending).toEqual({
         rows: before.pending.rows + 3,
         sum: before.pending.sum + 12_500,
+        items: before.pending.items + 12,
+      });
+
+      await client.query(
+        "UPDATE orders SET item_count = item_count + 7 WHERE order_number = -3",
+      );
+      const afterItems = await readCounters();
+      expect(afterItems.pending).toEqual({
+        rows: before.pending.rows + 3,
+        sum: before.pending.sum + 12_500,
+        items: before.pending.items + 19,
       });
 
       await client.query(
@@ -227,9 +243,11 @@ describe("status counters", () => {
       );
       const afterBoth = await readCounters();
       expect(afterBoth.pending.sum).toBe(before.pending.sum + 8500);
+      expect(afterBoth.pending.items).toBe(before.pending.items + 15);
       expect(afterBoth.cancelled).toEqual({
         rows: before.cancelled.rows + 1,
         sum: before.cancelled.sum + 1,
+        items: before.cancelled.items + 4,
       });
 
       await client.query(
@@ -249,56 +267,68 @@ describe("status counters", () => {
   }, 120_000);
 });
 
+const SUMS =
+  "count(*)::float8 AS rows, sum(total)::float8 AS sum, sum(item_count)::float8 AS items";
+
+function totalsOf(counter: Counter, source: "counter" | "live"): TotalResult[] {
+  return [
+    {
+      field: "total",
+      available: true,
+      sum: counter.sum,
+      rows: counter.rows,
+      source,
+    },
+    {
+      field: "item_count",
+      available: true,
+      sum: counter.items,
+      rows: counter.rows,
+      source,
+    },
+  ];
+}
+
 describe("totals", () => {
   const base = defaultQuery(ORDERS_GRID_DEF);
 
-  test("a status grouping is a one-row read of the counter table", async () => {
-    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
+  test("a status grouping is a one-row read of the counter table, for every total", async () => {
+    const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { status_code: ["failed"] },
     });
     const real = await client.query<Counter>(
-      "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE status_code = 'failed'",
+      `SELECT ${SUMS} FROM orders WHERE status_code = 'failed'`,
     );
-    expect(total).toEqual({
-      available: true,
-      sum: real.rows[0].sum,
-      rows: real.rows[0].rows,
-      source: "counter",
-    });
+    expect(totals).toEqual(totalsOf(real.rows[0], "counter"));
   }, 60_000);
 
-  test("a result under the cap is summed live", async () => {
+  test("a result under the cap is summed live, every total in one statement", async () => {
     const customer = await client.query<{ customer_id: string }>(
       "SELECT customer_id FROM orders ORDER BY created_at LIMIT 1",
     );
     const id = customer.rows[0].customer_id;
-    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
+    const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { customer_id: [id] },
     });
     const real = await client.query<Counter>(
-      "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE customer_id = $1",
+      `SELECT ${SUMS} FROM orders WHERE customer_id = $1`,
       [id],
     );
-    expect(total).toEqual({
-      available: true,
-      sum: real.rows[0].sum,
-      rows: real.rows[0].rows,
-      source: "live",
-    });
+    expect(totals).toEqual(totalsOf(real.rows[0], "live"));
   }, 60_000);
 
-  test("a result over the cap has no total, with the reason", async () => {
-    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
+  test("a result over the cap has no total for any field, each with the reason", async () => {
+    const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { channel: ["web"] },
     });
-    expect(total).toEqual({
-      available: false,
-      code: "over_cap",
-      params: { cap: 10000 },
-    });
+    const refused = { code: "over_cap", params: { cap: 10000 } };
+    expect(totals).toEqual([
+      { field: "total", available: false, ...refused },
+      { field: "item_count", available: false, ...refused },
+    ]);
   }, 60_000);
 });
 
@@ -328,19 +358,16 @@ describe("several values of one field", () => {
       equals: { status_code: ["failed", "refunded"] },
     };
     const real = await client.query<Counter>(
-      "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE status_code IN ('failed', 'refunded')",
+      `SELECT ${SUMS} FROM orders WHERE status_code IN ('failed', 'refunded')`,
     );
     expect(await getGridCount(ORDERS_GRID_DEF, execute, query, false)).toEqual({
       count: real.rows[0].rows,
       capped: false,
       source: "counter",
     });
-    expect(await getGridTotal(ORDERS_GRID_DEF, execute, query)).toEqual({
-      available: true,
-      sum: real.rows[0].sum,
-      rows: real.rows[0].rows,
-      source: "counter",
-    });
+    expect(await listGridTotals(ORDERS_GRID_DEF, execute, query)).toEqual(
+      totalsOf(real.rows[0], "counter"),
+    );
   }, 60_000);
 
   test("several lookup values are one array parameter", async () => {

@@ -39,10 +39,6 @@ export interface FacetDef {
   field: string;
 }
 
-export interface TotalDef {
-  field: string;
-}
-
 export interface SortState {
   field: string;
   direction: SortDirection;
@@ -58,7 +54,7 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   fields: F[];
   defaultSort: SortState;
   facet?: FacetDef;
-  total?: TotalDef;
+  totals?: string[];
   format?: GridFormat;
 }
 
@@ -105,6 +101,12 @@ export function getFacetField<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
 ): F | null {
   return def.facet ? getField(def, def.facet.field) : null;
+}
+
+export function listTotalFields<F extends BaseFieldDef>(
+  def: BaseGridDef<F>,
+): F[] {
+  return (def.totals ?? []).flatMap((key) => getField(def, key) ?? []);
 }
 
 const RANGE_TYPES: FieldType[] = ["integer", "money", "datetime"];

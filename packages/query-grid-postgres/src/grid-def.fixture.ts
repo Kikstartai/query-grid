@@ -5,7 +5,7 @@ export const TEST_DEF: PostgresGridDef = {
   table: "things",
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status", counterTable: "thing_status_counts" },
-  total: { field: "total" },
+  totals: ["total", "number"],
   fields: [
     { key: "id", label: "ID", type: "id" },
     { key: "number", label: "Number", type: "integer" },

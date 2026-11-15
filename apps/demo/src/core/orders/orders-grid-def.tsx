@@ -159,6 +159,6 @@ export const ORDERS_GRID_DEF = {
   shapes: ORDER_SHAPES,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
-  total: { field: "total" },
+  totals: ["total", "item_count"],
   format: { locale: "en-ZA", currency: "ZAR" },
 } satisfies GridDef & PostgresGridDef;

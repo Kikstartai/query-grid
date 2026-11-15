@@ -14,6 +14,7 @@ import {
 import {
   buildCappedCountSql,
   buildCappedTotalSql,
+  buildFacetSql,
   buildPageSql,
   buildRowSql,
   describeShape,
@@ -57,9 +58,11 @@ interface Explain {
   "Execution Time": number;
 }
 
+type ResultKind = "single" | "several" | "counter";
+
 interface Result {
   shape: string;
-  multi: boolean;
+  kind: ResultKind;
   variant: string;
   p50: number;
   p95: number;
@@ -79,13 +82,13 @@ function percentile(sorted: number[], fraction: number): number {
 
 async function measure(
   client: Client,
-  shape: QueryShape,
+  shape: QueryShape | string,
   variant: string,
   sql: SqlQuery,
   settings: string[] | null,
-  multi = false,
+  kind: ResultKind = "single",
 ): Promise<Result> {
-  const sortAllowed = multi;
+  const label = typeof shape === "string" ? shape : describeShape(shape);
   const times: number[] = [];
   let plan: PlanNode[] = [];
   let refused = 0;
@@ -120,8 +123,8 @@ async function measure(
   }
   if (times.length === 0) {
     return {
-      shape: describeShape(shape),
-      multi,
+      shape: label,
+      kind,
       variant,
       p50: Number.NaN,
       p95: Number.NaN,
@@ -134,8 +137,8 @@ async function measure(
   const p95 = percentile(times, 0.95);
   const scansByIndex = plan.some((node) => node["Index Name"] !== undefined);
   return {
-    shape: describeShape(shape),
-    multi,
+    shape: label,
+    kind,
     variant,
     p50: percentile(times, 0.5),
     p95,
@@ -149,9 +152,10 @@ async function measure(
         .join(" → ") + (refused > 0 ? `; refused in ${refused} runs` : ""),
     ok:
       p95 < BUDGET_MS &&
-      scansByIndex &&
-      !types.includes("Seq Scan") &&
-      (sortAllowed || !types.includes("Sort")),
+      (kind === "counter" ||
+        (scansByIndex &&
+          !types.includes("Seq Scan") &&
+          (kind === "several" || !types.includes("Sort")))),
   };
 }
 
@@ -229,7 +233,7 @@ async function benchSeveral(
           `${label}: first page desc`,
           buildPageSql(ORDERS_GRID_DEF, query, PAGE),
           null,
-          true,
+          "several",
         ),
         await measure(
           client,
@@ -237,7 +241,7 @@ async function benchSeveral(
           `${label}: capped count`,
           buildCappedCountSql(ORDERS_GRID_DEF, query),
           null,
-          true,
+          "several",
         ),
       );
     }
@@ -378,6 +382,24 @@ async function benchQuick(
   return results;
 }
 
+async function benchCounters(client: Client): Promise<Result[]> {
+  const sql = buildFacetSql(ORDERS_GRID_DEF);
+  if (!sql) {
+    return [];
+  }
+  const totals = ORDERS_GRID_DEF.totals.join(", ");
+  return [
+    await measure(
+      client,
+      `${ORDERS_GRID_DEF.facet.field} counters`,
+      `every count and the sums of ${totals}`,
+      sql,
+      null,
+      "counter",
+    ),
+  ];
+}
+
 function formatMs(value: number): string {
   return Number.isNaN(value) ? "–" : value.toFixed(2);
 }
@@ -399,8 +421,9 @@ function summarize(results: Result[]): string {
 }
 
 function toMarkdown(results: Result[], total: number): string {
-  const single = results.filter((result) => !result.multi);
-  const several = results.filter((result) => result.multi);
+  const single = results.filter((result) => result.kind === "single");
+  const several = results.filter((result) => result.kind === "several");
+  const counters = results.filter((result) => result.kind === "counter");
   const optedOut = ORDERS_GRID_DEF.shapes
     .filter((shape) => !isQuickShape(shape) && shape.multi === false)
     .map(describeShape);
@@ -416,6 +439,12 @@ function toMarkdown(results: Result[], total: number): string {
     "Each ordered shape with an equality field, with 2, 5 and the field's cap of values, taken from the most common and then from the rarest. The bar is the same p95 budget and no Seq Scan; a Sort is allowed here and shows in the plan, because `= ANY` over several values has no single index order to read.",
     "",
     ...toTable(several),
+    "",
+    `## Counts and totals from the counter table: ${summarize(counters)}`,
+    "",
+    "One read answers the facet counts, the count and every total of a query that filters on the facet alone. The table holds one row per facet value, so the bar is the p95 budget alone.",
+    "",
+    ...toTable(counters),
     "",
     optedOut.length > 0
       ? `Shapes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
@@ -440,6 +469,9 @@ async function main(): Promise<void> {
     results.push(...batch);
     console.log(`${describeShape(shape)}: ${batch.length} queries`);
   }
+  const counters = await benchCounters(client);
+  results.push(...counters);
+  console.log(`counter table: ${counters.length} queries`);
   await client.end();
   const markdown = toMarkdown(results, Number(count.rows[0].count));
   writeFileSync(join(import.meta.dir, "bench-results.md"), markdown);

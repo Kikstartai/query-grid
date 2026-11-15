@@ -22,32 +22,36 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__region__created_a
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
 -- quick filter over customer_name, order_number
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_quick ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
--- Counter table for status_code and the sum of total: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is held only for the trigger swap.
+-- Counter table for status_code and the sum of total and the sum of item_count: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is held only for the trigger swap. A count taken before this step no longer stands: the switch waits for a new one.
 BEGIN;
 CREATE TABLE IF NOT EXISTS order_status_counts (status_code text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL);
 ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
-CREATE TABLE IF NOT EXISTS order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL);
-CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql AS $$
-  INSERT INTO order_status_counts (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
-  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum;
-  INSERT INTO order_status_counts_pending (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum);
+ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
+ALTER TABLE order_status_counts_pending ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
+ALTER TABLE order_status_counts_pending ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
+COMMENT ON TABLE order_status_counts_pending IS NULL;
+CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sums bigint[]) RETURNS void LANGUAGE sql AS $$
+  INSERT INTO order_status_counts (status_code, row_count, total_sum, item_count_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2])
+  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum, item_count_sum = order_status_counts.item_count_sum + EXCLUDED.item_count_sum;
+  INSERT INTO order_status_counts_pending (status_code, row_count, total_sum, item_count_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2]);
 $$;
 CREATE OR REPLACE FUNCTION order_status_counts_on_insert() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM order_status_counts_bump(NEW.status_code, 1, NEW.total);
+  PERFORM order_status_counts_bump(NEW.status_code, 1, ARRAY[NEW.total, NEW.item_count]::bigint[]);
   RETURN NULL;
 END;
 $$;
 CREATE OR REPLACE FUNCTION order_status_counts_on_delete() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM order_status_counts_bump(OLD.status_code, -1, -OLD.total);
+  PERFORM order_status_counts_bump(OLD.status_code, -1, ARRAY[-OLD.total, -OLD.item_count]::bigint[]);
   RETURN NULL;
 END;
 $$;
 CREATE OR REPLACE FUNCTION order_status_counts_on_update() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM order_status_counts_bump(OLD.status_code, -1, -OLD.total);
-  PERFORM order_status_counts_bump(NEW.status_code, 1, NEW.total);
+  PERFORM order_status_counts_bump(OLD.status_code, -1, ARRAY[-OLD.total, -OLD.item_count]::bigint[]);
+  PERFORM order_status_counts_bump(NEW.status_code, 1, ARRAY[NEW.total, NEW.item_count]::bigint[]);
   RETURN NULL;
 END;
 $$;
@@ -57,7 +61,7 @@ DROP TRIGGER IF EXISTS order_status_counts_on_delete ON orders;
 DROP TRIGGER IF EXISTS order_status_counts_on_update ON orders;
 CREATE TRIGGER order_status_counts_on_insert AFTER INSERT ON orders FOR EACH ROW EXECUTE FUNCTION order_status_counts_on_insert();
 CREATE TRIGGER order_status_counts_on_delete AFTER DELETE ON orders FOR EACH ROW EXECUTE FUNCTION order_status_counts_on_delete();
-CREATE TRIGGER order_status_counts_on_update AFTER UPDATE OF status_code, total ON orders FOR EACH ROW WHEN (OLD.status_code IS DISTINCT FROM NEW.status_code OR OLD.total IS DISTINCT FROM NEW.total) EXECUTE FUNCTION order_status_counts_on_update();
+CREATE TRIGGER order_status_counts_on_update AFTER UPDATE OF status_code, total, item_count ON orders FOR EACH ROW WHEN (OLD.status_code IS DISTINCT FROM NEW.status_code OR OLD.total IS DISTINCT FROM NEW.total OR OLD.item_count IS DISTINCT FROM NEW.item_count) EXECUTE FUNCTION order_status_counts_on_update();
 COMMIT;
 -- Count orders from one snapshot into order_status_counts_pending, with no table lock. Changes logged before the snapshot are in the count and are discarded; later ones stay beside it. Does nothing once order_status_counts_pending is gone.
 BEGIN ISOLATION LEVEL REPEATABLE READ;
@@ -67,8 +71,8 @@ BEGIN
     RETURN;
   END IF;
   DELETE FROM order_status_counts_pending;
-  INSERT INTO order_status_counts_pending (status_code, row_count, total_sum)
-    SELECT status_code, count(*), coalesce(sum(total), 0) FROM orders GROUP BY status_code;
+  INSERT INTO order_status_counts_pending (status_code, row_count, total_sum, item_count_sum)
+    SELECT status_code, count(*), coalesce(sum(total), 0), coalesce(sum(item_count), 0) FROM orders GROUP BY status_code;
   COMMENT ON TABLE order_status_counts_pending IS 'backfilled';
 END
 $backfill$;
@@ -83,13 +87,13 @@ BEGIN
     RAISE EXCEPTION 'order_status_counts_pending holds no backfill: run the backfill step first';
   END IF;
   LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
-  UPDATE order_status_counts SET row_count = 0, total_sum = 0;
-  INSERT INTO order_status_counts (status_code, row_count, total_sum)
-    SELECT status_code, sum(row_count), sum(total_sum) FROM order_status_counts_pending GROUP BY status_code
-    ON CONFLICT (status_code) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;
-  CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql AS $bump$
-  INSERT INTO order_status_counts (status_code, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
-  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum;
+  UPDATE order_status_counts SET row_count = 0, total_sum = 0, item_count_sum = 0;
+  INSERT INTO order_status_counts (status_code, row_count, total_sum, item_count_sum)
+    SELECT status_code, sum(row_count), sum(total_sum), sum(item_count_sum) FROM order_status_counts_pending GROUP BY status_code
+    ON CONFLICT (status_code) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum, item_count_sum = EXCLUDED.item_count_sum;
+  CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sums bigint[]) RETURNS void LANGUAGE sql AS $bump$
+  INSERT INTO order_status_counts (status_code, row_count, total_sum, item_count_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2])
+  ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum, item_count_sum = order_status_counts.item_count_sum + EXCLUDED.item_count_sum;
 $bump$;
   DROP TABLE order_status_counts_pending;
 END

@@ -47,7 +47,7 @@ export const POST = (request: Request) => handle(request);
 - **Capabilities** are core's: `createHttpSource(def, basePath)` builds them from the def's shapes, so the client offers what this server accepts.
 - **One def per grid.** `PostgresGridDef` is core's `BaseGridDef` plus `table`, `shapes` and `facet.counterTable`. A host's grid def can also carry React `cell`s for the React package; this package ignores them.
 - **Several values of one field** are one array parameter under `= ANY`, capped per field by `maxValues`. A shape opts out with `multi: false`.
-- **The runner** (`listGridPage`, `getGridCount`, `getGridTotal`, `listFacetCounts`, `walkGridPages`) and the SQL builder are exported for a host that wants its own routes.
+- **The runner** (`listGridPage`, `getGridCount`, `listGridTotals`, `listFacetCounts`, `walkGridPages`) and the SQL builder are exported for a host that wants its own routes.
 
 The full documentation, the design, the benchmarks and the verification record are in the [repository README](https://github.com/Kikstartai/query-grid#readme). The three packages, `@kikstart/query-grid`, `@kikstart/query-grid-react` and `@kikstart/query-grid-postgres`, are released together at the same version.
 

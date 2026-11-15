@@ -84,7 +84,7 @@ export function SkeletonGrid() {
 }
 
 function SkeletonTotal({ def }: SkeletonProps) {
-  if (!def.total) {
+  if (!def.totals?.length) {
     return null;
   }
   return (

@@ -38,6 +38,16 @@ export function formatMoney(cents: number, format?: GridFormat): string {
   return resolveFormatters(format).money.format(cents / 100);
 }
 
+export function formatSum(
+  field: BaseFieldDef,
+  sum: number,
+  format?: GridFormat,
+): string {
+  return field.type === "money"
+    ? formatMoney(sum, format)
+    : formatCount(sum, format);
+}
+
 export function formatValue(
   field: BaseFieldDef,
   value: string | number | null,

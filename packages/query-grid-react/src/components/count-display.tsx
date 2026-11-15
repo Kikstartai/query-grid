@@ -3,7 +3,8 @@
 import { Button } from "@ui-sdk/react/button";
 
 import {
-  formatMoney,
+  formatSum,
+  type BaseFieldDef,
   type CountResult,
   type GridFormat,
   type TotalAvailable,
@@ -91,11 +92,15 @@ export function CountDisplay({
 
 export type TotalValue = Pick<TotalAvailable, "sum" | "rows" | "source">;
 
+export interface TotalCell {
+  field: BaseFieldDef;
+  value: TotalValue | null;
+  reason?: string | null;
+}
+
 export interface TotalFooterProps {
   status: LoadStatus;
-  value: TotalValue | null;
-  label?: string;
-  reason?: string | null;
+  totals: TotalCell[];
   format?: GridFormat;
 }
 
@@ -111,35 +116,80 @@ function TotalUnavailable({ reason }: { reason: string }) {
   );
 }
 
-export function TotalFooter({
-  status,
-  value,
-  label,
-  reason,
-  format,
-}: TotalFooterProps) {
+interface TotalCellViewProps {
+  cell: TotalCell;
+  format?: GridFormat;
+}
+
+function TotalCellView({ cell, format }: TotalCellViewProps) {
   const messages = useMessages();
+  const { field, value, reason } = cell;
+  const label = messages.totalSum({ label: field.label });
   if (reason) {
-    return <TotalUnavailable reason={reason} />;
+    return (
+      <div
+        className="qg-total-cell"
+        data-total-field={field.key}
+        data-total="unavailable"
+      >
+        <bdi className="qg-total-label">{label}</bdi>
+        <bdi className="qg-muted" data-total-reason>
+          {reason}
+        </bdi>
+      </div>
+    );
   }
   if (!value) {
+    return (
+      <div
+        className="qg-total-cell"
+        data-total-field={field.key}
+        data-total="loading"
+      >
+        <bdi className="qg-total-label">{label}</bdi>
+        <bdi className="qg-muted">{messages.totalling}</bdi>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="qg-total-cell"
+      data-total-field={field.key}
+      data-total={value.source}
+    >
+      <bdi className="qg-total-label">{label}</bdi>
+      <bdi className="qg-total-value" data-total-sum={value.sum}>
+        {formatSum(field, value.sum, format)}
+      </bdi>
+    </div>
+  );
+}
+
+export function TotalFooter({ status, totals, format }: TotalFooterProps) {
+  const messages = useMessages();
+  if (totals.length === 0) {
+    return null;
+  }
+  const reasons = totals.flatMap((cell) => cell.reason || []);
+  if (reasons.length === totals.length) {
+    return <TotalUnavailable reason={reasons[0]} />;
+  }
+  const first = totals.find((cell) => cell.value)?.value;
+  if (!first) {
     return (
       <div className="qg-total qg-muted" data-part="total" data-total="loading">
         {status === "error" ? messages.noTotal : messages.totalling}
       </div>
     );
   }
-  const rows = formatRows(messages, value.rows, format);
+  const rows = formatRows(messages, first.rows, format);
   return (
-    <div className="qg-total" data-part="total" data-total={value.source}>
-      <bdi className="qg-total-label">
-        {messages.totalSum({ label: label ?? messages.total })}
-      </bdi>
-      <bdi className="qg-total-value" data-total-sum={value.sum}>
-        {formatMoney(value.sum, format)}
-      </bdi>
+    <div className="qg-total" data-part="total" data-total={first.source}>
+      {totals.map((cell) => (
+        <TotalCellView key={cell.field.key} cell={cell} format={format} />
+      ))}
       <bdi className="qg-muted">
-        {value.source === "counter"
+        {first.source === "counter"
           ? messages.totalFromCounter({ rows })
           : messages.totalLive({ rows })}
       </bdi>

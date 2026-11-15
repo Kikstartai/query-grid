@@ -302,6 +302,17 @@
   border-top: 1px solid var(--ui-border);
 }
 
+:where(.qg-total-cell) {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ui-spacing) * 2);
+}
+
+:where(.qg-total-cell + .qg-total-cell) {
+  padding-inline-start: calc(var(--ui-spacing) * 2);
+  border-inline-start: 1px solid var(--ui-border);
+}
+
 :where(.qg-total-label) {
   font-weight: 500;
 }

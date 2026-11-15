@@ -18,10 +18,11 @@ export interface CountResult {
 export interface FacetCount {
   value: string;
   count: number;
-  sum?: number;
+  sums?: Record<string, number>;
 }
 
 export interface TotalAvailable {
+  field: string;
   available: true;
   sum: number;
   rows: number;
@@ -29,6 +30,7 @@ export interface TotalAvailable {
 }
 
 export interface TotalUnavailable extends Problem {
+  field: string;
   available: false;
 }
 

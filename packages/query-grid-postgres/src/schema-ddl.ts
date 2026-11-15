@@ -1,12 +1,13 @@
 import { isQuickShape, KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
 
 import { describeShape, validateGridDef } from "./shapes.ts";
-import { identifier, quickExpression } from "./sql-builder.ts";
+import {
+  identifier,
+  quickExpression,
+  shortenIdentifier,
+  sumColumn,
+} from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
-
-export const IDENTIFIER_MAX_LENGTH = 63;
-
-const HASH_LENGTH = 8;
 
 export interface ShapeIndex {
   shape: QueryShape;
@@ -48,23 +49,7 @@ export interface TableMigration {
 
 const TRGM_OPS = "gin_trgm_ops";
 const BACKFILLED = "backfilled";
-
-function hashName(name: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < name.length; index++) {
-    hash ^= name.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(HASH_LENGTH, "0");
-}
-
-export function shortenIdentifier(name: string): string {
-  if (name.length <= IDENTIFIER_MAX_LENGTH) {
-    return name;
-  }
-  const kept = IDENTIFIER_MAX_LENGTH - HASH_LENGTH - 1;
-  return `${name.slice(0, kept)}_${hashName(name)}`;
-}
+const ROW_COUNT = "row_count";
 
 function createIndex(concurrently: boolean): string {
   return concurrently
@@ -122,7 +107,11 @@ export function listCounterObjects(
   return {
     table,
     pending: shortenIdentifier(`${table}_pending`),
-    columns: [identifier(def.facet.field), "row_count", "total_sum"],
+    columns: [
+      identifier(def.facet.field),
+      ROW_COUNT,
+      ...(def.totals ?? []).map(sumColumn),
+    ],
     functions: [shortenIdentifier(`${table}_bump`)],
     triggers: [
       shortenIdentifier(`${table}_on_insert`),
@@ -139,49 +128,62 @@ function counterSteps(def: PostgresGridDef): MigrationStep[] {
   }
   const table = identifier(def.table);
   const facet = identifier(def.facet.field);
-  const total = def.total ? identifier(def.total.field) : null;
+  const totals = (def.totals ?? []).map(identifier);
+  const sums = totals.map(sumColumn);
+  const counted = [ROW_COUNT, ...sums];
   const ct = counter.table;
   const pending = counter.pending;
   const [bump] = counter.functions;
   const [onInsert, onDelete, onUpdate] = counter.triggers;
-  const amount = (row: string, sign: string) =>
-    total ? `${sign}${row}.${total}` : "0";
-  const watched = total ? `${facet}, ${total}` : facet;
-  const changed = [facet, ...(total ? [total] : [])]
+  const columns = [facet, ...counted].join(", ");
+  const amounts = (row: string, sign: string) =>
+    `ARRAY[${totals.map((total) => `${sign}${row}.${total}`).join(", ")}]::bigint[]`;
+  const changed = [facet, ...totals]
     .map((name) => `OLD.${name} IS DISTINCT FROM NEW.${name}`)
     .join(" OR ");
-  const signature = `${bump}(p_value text, p_rows bigint, p_sum bigint) RETURNS void LANGUAGE sql`;
+  const bumped = [
+    "p_value",
+    "p_rows",
+    ...sums.map((_, at) => `p_sums[${at + 1}]`),
+  ].join(", ");
+  const signature = `${bump}(p_value text, p_rows bigint, p_sums bigint[]) RETURNS void LANGUAGE sql`;
   const lock = `LOCK TABLE ${table} IN SHARE ROW EXCLUSIVE MODE;`;
-  const bumpCounter = `INSERT INTO ${ct} (${facet}, row_count, total_sum) VALUES (p_value, p_rows, p_sum)
-  ON CONFLICT (${facet}) DO UPDATE SET row_count = ${ct}.row_count + EXCLUDED.row_count, total_sum = ${ct}.total_sum + EXCLUDED.total_sum;`;
+  const bumpCounter = `INSERT INTO ${ct} (${columns}) VALUES (${bumped})
+  ON CONFLICT (${facet}) DO UPDATE SET ${counted.map((name) => `${name} = ${ct}.${name} + EXCLUDED.${name}`).join(", ")};`;
   const skipWithoutPending = `IF to_regclass('${pending}') IS NULL THEN
     RETURN;
   END IF;`;
   const install = [
     "BEGIN;",
-    `CREATE TABLE IF NOT EXISTS ${ct} (${facet} text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);`,
-    `ALTER TABLE ${ct} ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;`,
-    `CREATE TABLE IF NOT EXISTS ${pending} (${facet} text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL);`,
+    `CREATE TABLE IF NOT EXISTS ${ct} (${facet} text PRIMARY KEY, ${ROW_COUNT} bigint NOT NULL DEFAULT 0);`,
+    `CREATE TABLE IF NOT EXISTS ${pending} (${facet} text NOT NULL, ${ROW_COUNT} bigint NOT NULL);`,
+    ...[ct, pending].flatMap((name) =>
+      sums.map(
+        (sum) =>
+          `ALTER TABLE ${name} ADD COLUMN IF NOT EXISTS ${sum} bigint NOT NULL DEFAULT 0;`,
+      ),
+    ),
+    `COMMENT ON TABLE ${pending} IS NULL;`,
     `CREATE OR REPLACE FUNCTION ${signature} AS $$
   ${bumpCounter}
-  INSERT INTO ${pending} (${facet}, row_count, total_sum) VALUES (p_value, p_rows, p_sum);
+  INSERT INTO ${pending} (${columns}) VALUES (${bumped});
 $$;`,
     `CREATE OR REPLACE FUNCTION ${onInsert}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM ${bump}(NEW.${facet}, 1, ${amount("NEW", "")});
+  PERFORM ${bump}(NEW.${facet}, 1, ${amounts("NEW", "")});
   RETURN NULL;
 END;
 $$;`,
     `CREATE OR REPLACE FUNCTION ${onDelete}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM ${bump}(OLD.${facet}, -1, ${amount("OLD", "-")});
+  PERFORM ${bump}(OLD.${facet}, -1, ${amounts("OLD", "-")});
   RETURN NULL;
 END;
 $$;`,
     `CREATE OR REPLACE FUNCTION ${onUpdate}() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM ${bump}(OLD.${facet}, -1, ${amount("OLD", "-")});
-  PERFORM ${bump}(NEW.${facet}, 1, ${amount("NEW", "")});
+  PERFORM ${bump}(OLD.${facet}, -1, ${amounts("OLD", "-")});
+  PERFORM ${bump}(NEW.${facet}, 1, ${amounts("NEW", "")});
   RETURN NULL;
 END;
 $$;`,
@@ -191,17 +193,22 @@ $$;`,
     `DROP TRIGGER IF EXISTS ${onUpdate} ON ${table};`,
     `CREATE TRIGGER ${onInsert} AFTER INSERT ON ${table} FOR EACH ROW EXECUTE FUNCTION ${onInsert}();`,
     `CREATE TRIGGER ${onDelete} AFTER DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION ${onDelete}();`,
-    `CREATE TRIGGER ${onUpdate} AFTER UPDATE OF ${watched} ON ${table} FOR EACH ROW WHEN (${changed}) EXECUTE FUNCTION ${onUpdate}();`,
+    `CREATE TRIGGER ${onUpdate} AFTER UPDATE OF ${[facet, ...totals].join(", ")} ON ${table} FOR EACH ROW WHEN (${changed}) EXECUTE FUNCTION ${onUpdate}();`,
     "COMMIT;",
   ];
+  const snapshot = [
+    facet,
+    "count(*)",
+    ...totals.map((total) => `coalesce(sum(${total}), 0)`),
+  ].join(", ");
   const backfill = [
     "BEGIN ISOLATION LEVEL REPEATABLE READ;",
     `DO $backfill$
 BEGIN
   ${skipWithoutPending}
   DELETE FROM ${pending};
-  INSERT INTO ${pending} (${facet}, row_count, total_sum)
-    SELECT ${facet}, count(*), ${total ? `coalesce(sum(${total}), 0)` : "0"} FROM ${table} GROUP BY ${facet};
+  INSERT INTO ${pending} (${columns})
+    SELECT ${snapshot} FROM ${table} GROUP BY ${facet};
   COMMENT ON TABLE ${pending} IS '${BACKFILLED}';
 END
 $backfill$;`,
@@ -214,20 +221,22 @@ BEGIN
     RAISE EXCEPTION '${pending} holds no backfill: run the backfill step first';
   END IF;
   ${lock}
-  UPDATE ${ct} SET row_count = 0, total_sum = 0;
-  INSERT INTO ${ct} (${facet}, row_count, total_sum)
-    SELECT ${facet}, sum(row_count), sum(total_sum) FROM ${pending} GROUP BY ${facet}
-    ON CONFLICT (${facet}) DO UPDATE SET row_count = EXCLUDED.row_count, total_sum = EXCLUDED.total_sum;
+  UPDATE ${ct} SET ${counted.map((name) => `${name} = 0`).join(", ")};
+  INSERT INTO ${ct} (${columns})
+    SELECT ${[facet, ...counted.map((name) => `sum(${name})`)].join(", ")} FROM ${pending} GROUP BY ${facet}
+    ON CONFLICT (${facet}) DO UPDATE SET ${counted.map((name) => `${name} = EXCLUDED.${name}`).join(", ")};
   CREATE OR REPLACE FUNCTION ${signature} AS $bump$
   ${bumpCounter}
 $bump$;
   DROP TABLE ${pending};
 END
 $switch$;`;
-  const subject = `${facet}${total ? ` and the sum of ${total}` : ""}`;
+  const subject = [facet, ...totals.map((total) => `the sum of ${total}`)].join(
+    " and ",
+  );
   return [
     {
-      note: `Counter table for ${subject}: install the triggers. They keep ${ct} current and also log each change to ${pending}. The table lock is held only for the trigger swap.`,
+      note: `Counter table for ${subject}: install the triggers. They keep ${ct} current and also log each change to ${pending}. The table lock is held only for the trigger swap. A count taken before this step no longer stands: the switch waits for a new one.`,
       sql: install.join("\n"),
       transaction: true,
     },

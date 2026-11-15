@@ -256,9 +256,9 @@ describe("the actions", () => {
         calls.push("count");
         return source.fetchCount(query, exact, signal);
       },
-      fetchTotal: (query, signal) => {
+      fetchTotals: (query, signal) => {
         calls.push("total");
-        return source.fetchTotal(query, signal);
+        return source.fetchTotals(query, signal);
       },
       changeFacetValue: async (id, to) => {
         calls.push(`move ${id} ${to}`);

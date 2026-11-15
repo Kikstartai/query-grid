@@ -23,6 +23,7 @@ export {
   TotalFooter,
   type CountDisplayProps,
   type CountValue,
+  type TotalCell,
   type TotalFooterProps,
   type TotalValue,
 } from "./count-display.tsx";

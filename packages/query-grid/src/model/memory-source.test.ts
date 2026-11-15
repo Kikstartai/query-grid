@@ -77,20 +77,28 @@ describe("the in-memory source", () => {
     expect(across.count).toBe(1);
   });
 
-  test("the total is the sum of the filtered rows", async () => {
-    const total = await source.fetchTotal(
+  test("each total is the sum of the filtered rows", async () => {
+    const totals = await source.fetchTotals(
       { ...BASE, equals: { status: ["done"] } },
       signal,
     );
-    expect(total).toEqual({
-      available: true,
-      sum: [0, 4, 8, 12, 16, 20, 24, 28, 32, 36].reduce(
-        (sum, index) => sum + (index + 1) * 100,
-        0,
-      ),
-      rows: 10,
-      source: "live",
-    });
+    const done = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36];
+    expect(totals).toEqual([
+      {
+        field: "total",
+        available: true,
+        sum: done.reduce((sum, index) => sum + (index + 1) * 100, 0),
+        rows: 10,
+        source: "live",
+      },
+      {
+        field: "number",
+        available: true,
+        sum: done.reduce((sum, index) => sum + 1000 + index, 0),
+        rows: 10,
+        source: "live",
+      },
+    ]);
   });
 
   test("facet counts follow the other filters, not the facet itself", async () => {
@@ -101,6 +109,14 @@ describe("the in-memory source", () => {
     expect(
       Object.fromEntries(facets.map((facet) => [facet.value, facet.count])),
     ).toEqual({ done: 10, open: 10 });
+    const done = facets.find((facet) => facet.value === "done");
+    const rows = ROWS.filter(
+      (row) => row.status === "done" && row.region === "north",
+    );
+    expect(done?.sums).toEqual({
+      total: rows.reduce((sum, row) => sum + Number(row.total), 0),
+      number: rows.reduce((sum, row) => sum + Number(row.number), 0),
+    });
   });
 
   test("several values of one field match any of them", async () => {
@@ -117,13 +133,9 @@ describe("the in-memory source", () => {
     expect(facets.reduce((sum, facet) => sum + facet.count, 0)).toBe(40);
   });
 
-  test("a grid without a total answers a code", async () => {
-    const bare = createMemorySource({ ...TEST_DEF, total: undefined }, ROWS);
-    expect(await bare.fetchTotal(BASE, signal)).toEqual({
-      available: false,
-      code: "no_total",
-      params: {},
-    });
+  test("a grid without totals answers none", async () => {
+    const bare = createMemorySource({ ...TEST_DEF, totals: undefined }, ROWS);
+    expect(await bare.fetchTotals(BASE, signal)).toEqual([]);
   });
 
   test("a status change is kept", async () => {

@@ -24,7 +24,10 @@ export interface DataSource {
     exact: boolean,
     signal: AbortSignal,
   ) => Promise<CountResult>;
-  fetchTotal: (query: QueryState, signal: AbortSignal) => Promise<TotalResult>;
+  fetchTotals: (
+    query: QueryState,
+    signal: AbortSignal,
+  ) => Promise<TotalResult[]>;
   fetchFacets: (
     query: QueryState,
     signal: AbortSignal,

@@ -19,9 +19,9 @@ import {
 
 import {
   getGridCount,
-  getGridTotal,
   listFacetCounts,
   listGridPage,
+  listGridTotals,
   QUERY_CANCELED,
   type SqlExecutor,
 } from "./query-runner.ts";
@@ -164,7 +164,7 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
           signal,
         );
       case "total":
-        return getGridTotal(def, execute, decodeQuery(def, params), signal);
+        return listGridTotals(def, execute, decodeQuery(def, params), signal);
       case "facets":
         return listFacetCounts(def, execute, signal);
       case "options":

@@ -70,8 +70,8 @@ export function createHttpSource(
       }
       return readJson<CountResult>(`${route("count")}?${params}`, { signal });
     },
-    fetchTotal: (query, signal) =>
-      readJson<TotalResult>(`${route("total")}?${filterParams(query)}`, {
+    fetchTotals: (query, signal) =>
+      readJson<TotalResult[]>(`${route("total")}?${filterParams(query)}`, {
         signal,
       }),
     fetchFacets: (_query, signal) =>

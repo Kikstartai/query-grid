@@ -18,6 +18,7 @@ import {
   buildFacetSql,
   buildPageSql,
   QueryRejected,
+  sumColumn,
   toPageResult,
   type SqlQuery,
 } from "./sql-builder.ts";
@@ -104,13 +105,29 @@ export async function* walkGridPages(
   } while (cursor !== null);
 }
 
+type CounterRow = Record<string, string | number> & {
+  value: string;
+  count: number;
+};
+
 export async function listFacetCounts(
   def: PostgresGridDef,
   execute: SqlExecutor,
   signal?: AbortSignal,
 ): Promise<FacetCount[]> {
   const sql = buildFacetSql(def);
-  return sql ? execute<FacetCount>(sql, undefined, signal) : [];
+  if (!sql) {
+    return [];
+  }
+  const totals = def.totals ?? [];
+  const rows = await execute<CounterRow>(sql, undefined, signal);
+  return rows.map((row) => ({
+    value: row.value,
+    count: row.count,
+    sums: Object.fromEntries(
+      totals.map((field) => [field, Number(row[sumColumn(field)])]),
+    ),
+  }));
 }
 
 async function listSelectedCounters(
@@ -167,27 +184,30 @@ export async function getGridCount(
   };
 }
 
-export async function getGridTotal(
+export async function listGridTotals(
   def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   signal?: AbortSignal,
-): Promise<TotalResult> {
+): Promise<TotalResult[]> {
   assertDeclared(def, query);
-  if (!def.total) {
-    return { available: false, code: "no_total", params: {} };
+  const totals = def.totals ?? [];
+  if (totals.length === 0) {
+    return [];
   }
   if (isFacetOnlyQuery(def.facet?.field, query)) {
     const counters = await listSelectedCounters(def, execute, query, signal);
-    return {
+    const rows = counters.reduce((sum, facet) => sum + facet.count, 0);
+    return totals.map((field) => ({
+      field,
       available: true,
-      sum: counters.reduce((sum, facet) => sum + (facet.sum ?? 0), 0),
-      rows: counters.reduce((sum, facet) => sum + facet.count, 0),
+      sum: counters.reduce((sum, facet) => sum + (facet.sums?.[field] ?? 0), 0),
+      rows,
       source: "counter",
-    };
+    }));
   }
   const cap = resolveCap(query);
-  const [row] = await runFiltered<{ count: number; sum: number }>(
+  const [row] = await runFiltered<Record<string, number>>(
     execute,
     query,
     buildCappedTotalSql(def, query, cap),
@@ -195,7 +215,18 @@ export async function getGridTotal(
     signal,
   );
   if (row.count > cap) {
-    return { available: false, code: "over_cap", params: { cap } };
+    return totals.map((field) => ({
+      field,
+      available: false,
+      code: "over_cap",
+      params: { cap },
+    }));
   }
-  return { available: true, sum: row.sum, rows: row.count, source: "live" };
+  return totals.map((field) => ({
+    field,
+    available: true,
+    sum: row[sumColumn(field)],
+    rows: row.count,
+    source: "live",
+  }));
 }

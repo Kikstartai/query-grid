@@ -87,14 +87,17 @@ function validateTotals(def: PostgresGridDef): string[] {
   if (def.facet && !getField(def, def.facet.field)?.options) {
     problems.push(`facet: ${def.facet.field} is not a field with options`);
   }
-  if (def.total) {
-    const field = getField(def, def.total.field);
+  const totals = def.totals ?? [];
+  for (const key of totals) {
+    const field = getField(def, key);
     const summable = field?.type === "money" || field?.type === "integer";
     if (!summable || field?.nullable) {
-      problems.push(
-        `total: ${def.total.field} is not a non-null money or integer field`,
-      );
+      problems.push(`total: ${key} is not a non-null money or integer field`);
     }
+  }
+  const repeated = totals.filter((key, at) => totals.indexOf(key) !== at);
+  for (const key of new Set(repeated)) {
+    problems.push(`total: ${key} is declared twice`);
   }
   return problems;
 }

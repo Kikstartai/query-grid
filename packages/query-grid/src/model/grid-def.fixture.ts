@@ -17,7 +17,7 @@ export const TEST_DEF: BaseGridDef = {
   id: "things",
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status" },
-  total: { field: "total" },
+  totals: ["total", "number"],
   fields: [
     { key: "id", label: "ID", type: "id" },
     { key: "number", label: "Number", type: "integer" },
@@ -64,11 +64,7 @@ export function createTestSource(
     capabilities,
     fetchPage: async () => ({ rows: [], nextCursor: null, hasNext: false }),
     fetchCount: async () => ({ count: 0, capped: false, source: "exact" }),
-    fetchTotal: async () => ({
-      available: false,
-      code: "no_total",
-      params: {},
-    }),
+    fetchTotals: none,
     fetchFacets: none,
     fetchOptions: none,
     fetchTransitions: none,

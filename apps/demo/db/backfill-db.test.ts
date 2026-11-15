@@ -14,7 +14,7 @@ const PROBE: PostgresGridDef = {
   table: TABLE,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "kind", counterTable: `${TABLE}_counts` },
-  total: { field: "amount" },
+  totals: ["amount", "units"],
   fields: [
     { key: "id", label: "ID", type: "id" },
     {
@@ -24,6 +24,7 @@ const PROBE: PostgresGridDef = {
       options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })),
     },
     { key: "amount", label: "Amount", type: "money" },
+    { key: "units", label: "Units", type: "integer" },
     { key: "created_at", label: "Created", type: "datetime" },
   ],
   shapes: [
@@ -36,6 +37,7 @@ interface Counter {
   kind: string;
   rows: number;
   sum: number;
+  units: number;
 }
 
 const counter = listCounterObjects(PROBE)!;
@@ -57,7 +59,7 @@ async function dropProbe(): Promise<void> {
     await migrator.query(`DROP FUNCTION IF EXISTS ${name}()`);
   }
   await migrator.query(
-    `DROP FUNCTION IF EXISTS ${counter.functions[0]}(text, bigint, bigint)`,
+    `DROP FUNCTION IF EXISTS ${counter.functions[0]}(text, bigint, bigint[])`,
   );
 }
 
@@ -67,7 +69,7 @@ async function insertRows(
   kind: string,
 ): Promise<void> {
   await client.query(
-    `INSERT INTO ${TABLE} (kind, amount) SELECT $1, 100 + n FROM generate_series(1, $2::int) n`,
+    `INSERT INTO ${TABLE} (kind, amount, units) SELECT $1, 100 + n, 1 + n % 4 FROM generate_series(1, $2::int) n`,
     [kind, count],
   );
 }
@@ -84,18 +86,21 @@ async function churn(client: Client): Promise<void> {
   await client.query(
     `UPDATE ${TABLE} SET amount = amount + 5 WHERE id IN (SELECT id FROM ${TABLE} WHERE kind = 'c' LIMIT 9)`,
   );
+  await client.query(
+    `UPDATE ${TABLE} SET units = units + 2 WHERE id IN (SELECT id FROM ${TABLE} WHERE kind = 'a' LIMIT 6)`,
+  );
 }
 
 async function readCounters(): Promise<Counter[]> {
   const { rows } = await migrator.query<Counter>(
-    `SELECT kind, row_count::float8 AS rows, total_sum::float8 AS sum FROM ${counter.table} WHERE row_count <> 0 ORDER BY kind`,
+    `SELECT kind, row_count::float8 AS rows, amount_sum::float8 AS sum, units_sum::float8 AS units FROM ${counter.table} WHERE row_count <> 0 ORDER BY kind`,
   );
   return rows;
 }
 
 async function readGrouped(): Promise<Counter[]> {
   const { rows } = await migrator.query<Counter>(
-    `SELECT kind, count(*)::float8 AS rows, sum(amount)::float8 AS sum FROM ${TABLE} GROUP BY kind ORDER BY kind`,
+    `SELECT kind, count(*)::float8 AS rows, sum(amount)::float8 AS sum, sum(units)::float8 AS units FROM ${TABLE} GROUP BY kind ORDER BY kind`,
   );
   return rows;
 }
@@ -135,7 +140,7 @@ beforeAll(async () => {
   ]);
   await dropProbe();
   await migrator.query(
-    `CREATE TABLE ${TABLE} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), kind text NOT NULL, amount bigint NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
+    `CREATE TABLE ${TABLE} (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), kind text NOT NULL, amount bigint NOT NULL, units integer NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`,
   );
   await insertRows(writer, 300, "a");
   await insertRows(writer, 200, "b");
@@ -200,6 +205,39 @@ describe("the counter backfill", () => {
     await migrator.query(BACKFILL);
     await migrator.query(SWITCH_OVER);
     expect(await readCounters()).toEqual(await readGrouped());
+  }, 120_000);
+
+  test("a total added later is exact after the next run, and the switch waits for its count", async () => {
+    const WIDER: PostgresGridDef = {
+      ...PROBE,
+      totals: [...(PROBE.totals ?? []), "weight"],
+      fields: [
+        ...PROBE.fields,
+        { key: "weight", label: "Weight", type: "integer" },
+      ],
+    };
+    const [install, backfill, switchOver] = listGridMigrationSteps(WIDER)
+      .filter((step) => step.transaction)
+      .map((step) => step.sql);
+    await migrator.query(
+      `ALTER TABLE ${TABLE} ADD COLUMN weight integer NOT NULL DEFAULT 3`,
+    );
+    await migrator.query(BACKFILL);
+    await migrator.query(install);
+    await churn(writer);
+    await expect(migrator.query(switchOver)).rejects.toThrow(/backfill/);
+    await migrator.query(backfill);
+    await churn(writer);
+    await migrator.query(switchOver);
+    const counters = await migrator.query<{ rows: number; weight: number }>(
+      `SELECT sum(row_count)::float8 AS rows, sum(weight_sum)::float8 AS weight FROM ${counter.table}`,
+    );
+    const real = await migrator.query<{ rows: number; weight: number }>(
+      `SELECT count(*)::float8 AS rows, sum(weight)::float8 AS weight FROM ${TABLE}`,
+    );
+    expect(counters.rows).toEqual(real.rows);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(false);
   }, 120_000);
 
   test("a finished step run again does nothing", async () => {

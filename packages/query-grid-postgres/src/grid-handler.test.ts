@@ -118,28 +118,36 @@ describe("the routes", () => {
     expect(seen[1].text).not.toContain("LIMIT");
   });
 
-  test("/total answers a sum, or a code when no total is available", async () => {
-    const live = createHandler([{ count: 3, sum: 900 }]);
-    expect(await (await live.handle("/total?f.region=north")).json()).toEqual({
-      available: true,
-      sum: 900,
-      rows: 3,
-      source: "live",
-    });
-    const over = createHandler([{ count: 10001, sum: 1 }]);
-    expect(await (await over.handle("/total?f.region=north")).json()).toEqual({
+  test("/total answers one sum per total field, or a code each when none is available", async () => {
+    const live = createHandler([
+      { count: 3, total_sum: 900, number_sum: 3003 },
+    ]);
+    expect(await (await live.handle("/total?f.region=north")).json()).toEqual([
+      { field: "total", available: true, sum: 900, rows: 3, source: "live" },
+      { field: "number", available: true, sum: 3003, rows: 3, source: "live" },
+    ]);
+    const over = createHandler([{ count: 10001, total_sum: 1, number_sum: 1 }]);
+    const refused = {
       available: false,
       code: "over_cap",
       params: { cap: 10000 },
-    });
+    };
+    expect(await (await over.handle("/total?f.region=north")).json()).toEqual([
+      { field: "total", ...refused },
+      { field: "number", ...refused },
+    ]);
   });
 
   test("/facets reads the counter table and ignores the query", async () => {
-    const counters = [{ value: "open", count: 30, sum: 9000 }];
+    const counters = [
+      { value: "open", count: 30, total_sum: 9000, number_sum: 30030 },
+    ];
     const { handle, seen } = createHandler(counters);
     const response = await handle("/facets?f.region=north&sort=nope.asc");
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(counters);
+    expect(await response.json()).toEqual([
+      { value: "open", count: 30, sums: { total: 9000, number: 30030 } },
+    ]);
     expect(seen[0].values).toEqual([]);
   });
 
@@ -317,7 +325,7 @@ describe("refusals", () => {
       signal?: AbortSignal,
     ) => {
       signals.push(signal);
-      return [{ count: 1, sum: 1 }] as T[];
+      return [{ value: "open", count: 1, total_sum: 1, number_sum: 1 }] as T[];
     };
     const handler = createGridHandler({
       def: TEST_DEF,
