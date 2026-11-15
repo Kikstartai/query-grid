@@ -14,25 +14,26 @@ Live demo: https://query-grid.vercel.app
 
 Three packages, released together at the same version.
 
-| Package                         | Depends on                | Holds                                                                                                                                 |
-| ------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid`          | nothing                   | the core: the query contract, URL codec, validation, offers, feeds, the data source contract. No React, no DOM, no `pg`               |
-| `@kikstart/query-grid-react`    | core, React, UI SDK, nuqs | controlled base components, the provider and hooks, and the same components bound to the query state                                  |
-| `@kikstart/query-grid-postgres` | core                      | the server: declared shapes, the SQL builder, keyset paging, index and counter DDL, and one request handler. No React, no `pg` either |
+| Package                         | Depends on                | Holds                                                                                                                                                             |
+| ------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid`          | nothing                   | the core: the query contract, query shapes and capabilities, URL codec, validation, offers, feeds, the board, the data source contract. No React, no DOM, no `pg` |
+| `@kikstart/query-grid-react`    | core, React, UI SDK, nuqs | controlled base components, the provider and hooks, and the same components bound to the query state                                                              |
+| `@kikstart/query-grid-postgres` | core                      | the server: def validation, the SQL builder over the declared shapes, keyset paging, index and counter DDL, and one request handler. No React, no `pg` either     |
 
 There is one query contract, in core. The React package encodes a query with core's `encodeQuery`, the Postgres package decodes it with core's `decodeQuery`, and both validate with core's `validateQueryValues`.
 
-| Entry point                                  | Holds                                                                                                                                           |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid`                       | field and query types, `Capabilities`, URL codec, validation, actions and offers, the stores and feeds, chips, formatting, problem codes        |
-| `@kikstart/query-grid/http`                  | `createHttpSource`, the wire types, the route names and the error body it shares with `createGridHandler`                                       |
-| `@kikstart/query-grid/memory`                | `createMemorySource` and `memoryCapabilities`                                                                                                   |
-| `@kikstart/query-grid-react`                 | `QueryGridProvider`, the hooks, `useOfferState`, `ClientFieldDef`                                                                               |
-| `@kikstart/query-grid-react/components`      | the controlled base components, `QueryGridMessagesProvider`, `useMessages`                                                                      |
-| `@kikstart/query-grid-react/ui`              | the same components, by the same names, bound to the provider                                                                                   |
-| `@kikstart/query-grid-react/styles.css`      | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                     |
-| `@kikstart/query-grid-postgres`              | `createGridHandler`, shapes and `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes` |
-| `@kikstart/query-grid-postgres/capabilities` | `capabilities(shapes)` alone, safe to import in the browser                                                                                     |
+| Entry point                             | Holds                                                                                                                                                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid`                  | field and query types, `Capabilities`, query shapes and `shapeCapabilities`, URL codec, validation, actions and offers, the stores, feeds and `createBoard`, chips, formatting, problem codes, the wire result types |
+| `@kikstart/query-grid/http`             | `createHttpSource`, and the protocol it shares with `createGridHandler`: route names, query parameters, the error and move bodies                                                                                    |
+| `@kikstart/query-grid/memory`           | `createMemorySource` and `memoryCapabilities`                                                                                                                                                                        |
+| `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState`, `useQueryGridActions`                                                                                                               |
+| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, the column-state API, `ClientFieldDef` and `ClientGridDef`                                                                               |
+| `@kikstart/query-grid-react/ui`         | the same components, by the same names, bound to the provider                                                                                                                                                        |
+| `@kikstart/query-grid-react/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                          |
+| `@kikstart/query-grid-postgres`         | `createGridHandler`, `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes`                                                                                 |
+
+Every symbol has one home: nothing is exported from two entry points.
 
 ## Install
 
@@ -57,8 +58,7 @@ Declare the fields once, in a module with no React in it. Both the server and th
 
 ```ts
 // orders-fields.ts
-import type { GridDef } from "@kikstart/query-grid";
-import type { QueryShape } from "@kikstart/query-grid-postgres";
+import type { GridDef, QueryShape } from "@kikstart/query-grid";
 
 export const ORDERS_BASE: GridDef = {
   id: "orders",
@@ -173,25 +173,44 @@ The client def is the same fields plus cells, and the capabilities derived from 
 
 ```tsx
 // orders-grid-def.tsx
-import { capabilities } from "@kikstart/query-grid-postgres/capabilities";
-import type { ClientGridDef } from "@kikstart/query-grid-react";
+import { shapeCapabilities } from "@kikstart/query-grid";
+import type { ClientGridDef } from "@kikstart/query-grid-react/components";
 
 export const ORDERS_GRID: ClientGridDef = {
   ...ORDERS_BASE,
   fields: ORDERS_BASE.fields.map(addCells),
 };
 
-export const ORDERS_CAPABILITIES = capabilities(ORDERS_SHAPES, {
+export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
   facetField: "status_code",
 });
 ```
 
-Mount the parts. Each one reads and writes the same query state; mount as many or as few as you need.
+Give the provider a source, then mount the parts. Each one reads and writes the same query state; mount as many or as few as you need.
 
 ```tsx
+// orders-provider.tsx
 "use client";
 
+import { createHttpSource } from "@kikstart/query-grid/http";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
+
+const ORDERS_SOURCE = createHttpSource(
+  ORDERS_GRID,
+  "/api/orders",
+  ORDERS_CAPABILITIES,
+);
+
+export function OrdersQueryProvider({ children }: { children: ReactNode }) {
+  return (
+    <QueryGridProvider def={ORDERS_GRID} source={ORDERS_SOURCE}>
+      {children}
+    </QueryGridProvider>
+  );
+}
+```
+
+```tsx
 import {
   CountDisplay,
   DataGrid,
@@ -204,11 +223,7 @@ import {
 
 export function Orders() {
   return (
-    <QueryGridProvider
-      def={ORDERS_GRID}
-      basePath="/api/orders"
-      capabilities={ORDERS_CAPABILITIES}
-    >
+    <OrdersQueryProvider>
       <CountDisplay />
       <FilterBar />
       <FilterSidebar />
@@ -216,12 +231,14 @@ export function Orders() {
       <FacetPanel />
       <DataGrid />
       <TotalFooter />
-    </QueryGridProvider>
+    </OrdersQueryProvider>
   );
 }
 ```
 
-`def.id` names the grid: it keys the column state the provider keeps in `localStorage`.
+- The provider always takes a `source`. An HTTP source holds no rows, so it can sit at module scope, as above. A memory source holds its rows, so create it once per mount (`useState(() => createMemorySource(…))`).
+- A def carries `cell` functions and a source is functions, so neither crosses from a server component to a client one: the provider module is the client boundary, and a server component composes the parts inside it.
+- `def.id` names the grid: it keys the column state the provider keeps in `localStorage`. Pass `columnPersistence` to keep it elsewhere, or `NO_PERSISTENCE` to keep it nowhere.
 
 The provider keeps the query in the URL through [nuqs](https://nuqs.dev), so mount a nuqs adapter once, above it: the one for your framework, or the plain React one where there is no router.
 
@@ -237,7 +254,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 - **Back, Forward and a `<Link>` to the same route flow back into the grid.** The provider decodes what nuqs reports with core's `decodeQuery`. A URL no shape answers becomes the default query and is rewritten in place; a parameter the def does not own is left alone.
 - **One URL format.** The parser map is built from the def at runtime, on the keys core's `listQueryKeys` names (`f.<field>`, repeated per value; `r.<field>=min..max`; `q`; `sort`; `cursor`; `view`), and states go in and out through core's `encodeQuery` and `decodeQuery`. The server reads the same parameters with the same function.
 - nuqs stays inside the provider: no hook of the package returns it, and the base components never see it. Column layout stays out of the URL.
-- `syncUrl={false}` leaves the URL alone and needs no adapter. The provider then starts from its `search` prop and follows it when it changes.
+- `StaticQueryGridProvider` leaves the URL alone and needs no adapter. It takes the same props plus a required `search` string, starts from it and follows it when it changes.
 - Two grids on one page each take a `urlPrefix`: `urlPrefix="a"` writes `a.f.status`, `a.q`, `a.sort` and `a.view`, so neither grid reads or overwrites the other's keys. Without a prefix they would share `q`, `sort`, `cursor` and `view`.
 
 ## Capabilities
@@ -254,7 +271,7 @@ interface Capabilities {
 }
 ```
 
-- `capabilities(shapes, { facetField })` builds it from the same shapes the server enforces, so the controls offer exactly what the handler accepts. It is computed once per def.
+- Core's `shapeCapabilities(shapes, { facetField })` builds it from the same shapes the server enforces, so the controls offer exactly what the handler accepts. It is computed once per def. The shape types and `matchShape` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
 - `memoryCapabilities(def, quickFields)` builds it from the field operators for the in-memory source.
 - Everything in the client that used to read shapes reads this instead: the provider's URL guard, `applyAction`, `listOffers`, the sort control, the quick filter, the facet panel and the board.
 
@@ -288,19 +305,24 @@ import { DataGrid, FacetPanel } from "@kikstart/query-grid-react/components";
 
 | Component                                                  | Takes                                                                                                                                 |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `DataGrid`                                                 | `fields`, `rows`, `hasNext`, `onEndReached`, `loading`; optionally `error`, `sort` and `onSortChange`, header `filters`, column state |
+| `DataGrid`, or `DataGrid.Root` around its parts            | `fields`, `rows`, `hasNext`, `onEndReached`, `loading`; optionally `error`, `sort` and `onSortChange`, header `filters`, column state |
 | `CardList`                                                 | the same row window, plus `titleField` and `badgeField`                                                                               |
 | `StatusBoard`                                              | generic `lanes`, `onMove(id, to, { from, index })` and `canMove(from, to)`                                                            |
 | `FilterBar`, `FilterSidebar`                               | children; the sidebar also takes `side: "start" \| "end"`, `activeCount` and `onReset`                                                |
-| `FieldFilter`                                              | a `field`, with `values` and `onValuesChange` or `range` and `onRangeChange`; `multiple`; `loadOptions` for a lookup                  |
+| `EqualsSelect`                                             | a `field` with `options`, `values` and `onValuesChange`; `multiple`                                                                   |
+| `LookupFilter`                                             | the same, plus a required `loadOptions`, and `valueLabels` and `onOptionPick` for the chosen values' labels                           |
+| `RangeFilter`                                              | a `field`, `range` and `onRangeChange`: a date range for a `datetime` field, two number inputs otherwise                              |
 | `SortControl`, `QuickFilter`                               | options or a value, and one change callback                                                                                           |
 | `FilterChips`                                              | `chips`, `onRemove(chipId, valueId?)`, `onReset`                                                                                      |
 | `FacetPanel`                                               | `options` with counts, `values`, `onValuesChange`, `multiple`                                                                         |
 | `ViewSwitch`, `ColumnsMenu`, `CountDisplay`, `TotalFooter` | a value and, where it changes, a callback                                                                                             |
 
-- **Column state** (order, width, visibility, pin) is internal to `DataGrid` by default. Pass `columns` and `onColumnsChange` to control it, or `columnPersistence` (`load` and `save`, sync or async) to keep the internal state somewhere.
+- **`DataGrid` is a compound.** `<DataGrid />` is the default composition: `DataGrid.Root` holding a `DataGrid.Toolbar` with `DataGrid.Status` and `DataGrid.ColumnsMenu`, then `DataGrid.Body`. Compose the parts yourself to drop the toolbar, move the status under the grid or put your own controls beside it; the parts share the grid's handle through `DataGrid.Root`, and a part outside one throws. The select column is part of the body.
+- **Column state** (order, width, visibility, pin) is internal to `DataGrid` by default and kept nowhere. Pass `columns` and `onColumnsChange` to control it, or a `columnPersistence` (`load` and `save`, sync or async; `createLocalStoragePersistence(key)` is one) to keep the internal state somewhere.
+- **The three filter controls are explicit variants**, each with its own props, so a lookup without `loadOptions` is a type error. The def-driven `FieldFilter`, which picks one from a field's operators and options, exists only in `./ui`.
+- **A control's `reason` is its `title`.** Inside a `FilterSidebar` it is also shown as text: the sidebar sets `ReasonDisplayContext`, which a host's own container can set too.
 - **`StatusBoard`** moves a card at once and calls `onMove`. If `onMove` returns a promise that rejects, the board puts the card back.
-- **`./ui` holds one bound wrapper per base component, under the same name.** A wrapper reads the provider and renders the base component; none of the base component files imports a provider hook.
+- **`./ui` holds one bound wrapper per base component, under the same name.** A wrapper reads the provider and renders the base component; none of the base component files imports a provider hook. The bound `DataGrid` has the same parts, and the bound `FilterBar` and `FilterSidebar` fill themselves with every control unless they are given `children`.
 
 The demo's [`/components`](https://query-grid.vercel.app/components) route is these components over sixty rows in a constant and two `useState` calls.
 
@@ -415,20 +437,19 @@ The hooks in `@kikstart/query-grid-react` are complete without `./ui`. Build you
 "use client";
 
 import {
-  QueryGridProvider,
   useFeedState,
   useOffers,
-  useQueryDispatch,
-  useQueryGrid,
+  useQueryGridActions,
   useQueryState,
 } from "@kikstart/query-grid-react";
 
 function StatusButtons() {
-  const { def } = useQueryGrid();
   const query = useQueryState();
   const offers = useOffers();
-  const dispatch = useQueryDispatch();
-  const status = def.fields.find((field) => field.key === "status_code");
+  const { dispatch } = useQueryGridActions();
+  const status = ORDERS_GRID.fields.find(
+    (field) => field.key === "status_code",
+  );
   return (
     <div>
       {status?.options?.map((option) => (
@@ -452,7 +473,7 @@ function StatusButtons() {
 }
 
 function Rows() {
-  const { feed } = useQueryGrid();
+  const { loadMore } = useQueryGridActions();
   const { rows, hasNext } = useFeedState();
   return (
     <ul>
@@ -460,7 +481,7 @@ function Rows() {
         <li key={row.id}>{row.order_number}</li>
       ))}
       <li>
-        <button disabled={!hasNext} onClick={feed.loadMore}>
+        <button disabled={!hasNext} onClick={loadMore}>
           More
         </button>
       </li>
@@ -469,16 +490,19 @@ function Rows() {
 }
 ```
 
-| Hook                                              | Gives                                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `useQueryState`, `useQueryDispatch`               | the query and the one way to change it                                                        |
-| `useOffers`, `useQueryRules`                      | which filters, ranges, sorts and quick filter are answered now, and which take several values |
-| `useOfferState`                                   | whether one control is offered, and the sentence that says why not                            |
-| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped                              |
-| `useCountState`, `useTotalState`, `useFacetState` | count, total and facet counts, each fetched only once something reads it                      |
-| `useFilterChips`                                  | one entry per active filter and the sort: the chip as data, and its labelled item             |
-| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns                        |
-| `useGridView`, `useQueryGrid`                     | the current view and the stores themselves                                                    |
+| Hook                                              | Gives                                                                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `useQueryState`, `useQueryDispatch`               | the query and the one way to change it                                                                     |
+| `useOffers`, `useQueryRules`                      | which filters, ranges, sorts and quick filter are answered now, and which take several values              |
+| `useOfferState`                                   | whether one control is offered, and the sentence that says why not                                         |
+| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped                                           |
+| `useCountState`, `useTotalState`, `useFacetState` | count, total and facet counts, each fetched only once something reads it                                   |
+| `useFilterChips`                                  | one entry per active filter and the sort: the chip as data, and its labelled item                          |
+| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns                                     |
+| `useGridView`                                     | the current view                                                                                           |
+| `useQueryGridActions`                             | every change: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions`, `moveRow` |
+
+The hooks read; `useQueryGridActions()` changes. The stores behind them are not part of the public surface.
 
 Without React at all, core is the whole model: `createQueryStore`, `createFeed`, `createCountStore`, `listOffers` and `applyAction` are plain functions over an emitter, and `explainUnavailable(query, target, rules)` returns the reason a control is unavailable as a code and the fields that block it. For a host's own export, `useQueryState()` is the query, `useColumns().layout` the visible columns in order, and `walkGridPages(def, execute, query)` on the server yields every page of the result by keyset.
 
@@ -497,7 +521,7 @@ const source = createMemorySource(TASKS_GRID, rows, {
 <QueryGridProvider def={TASKS_GRID} source={source}>
 ```
 
-A source carries its own capabilities, so the provider needs no `capabilities` prop here. It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's [`/memory`](https://query-grid.vercel.app/memory) route) and still under a frame at 5,000. Past that, give the table shapes and an index.
+A source carries its own capabilities. Create it once per mount, because it holds its rows. It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's [`/memory`](https://query-grid.vercel.app/memory) route) and still under a frame at 5,000. Past that, give the table shapes and an index.
 
 ## Design as built
 
@@ -535,7 +559,7 @@ The demo's orders grid declares ten:
 - **A name past Postgres's 63 characters is shortened**, to its first 54 characters and an eight-character hash of the whole name. Postgres would otherwise truncate it silently, two long names could collide, and the second `IF NOT EXISTS` would do nothing. `validateGridDefs(defs)` checks every def and that no index name is declared with two definitions.
 - `listMissingIndexes` compares the def with `pg_indexes` by method and column order, not by name; a partial index does not count, and neither does one a failed concurrent build left invalid, when the caller passes `valid`. `listCounterObjects` names the counter table's columns, functions and triggers for the same check.
 - `matchShape` decides whether a query is declared. The set of equality fields must match exactly, a range must sit on the sort column of a shape that allows it, several values need a shape that has not opted out, and the quick filter combines with no other filter.
-- `capabilities(shapes)` wraps the same function for the client, so the two cannot disagree.
+- `shapeCapabilities(shapes)` wraps the same function for the client, so the two cannot disagree. Both are core's; `validateGridDef` and `describeShape` stay in the Postgres package, because their rules and their words are Postgres's.
 
 ### The UI offers only declared shapes
 
@@ -604,7 +628,7 @@ Every control is a UI SDK component: Select, in `multiple` mode where a field ta
 
 - UI SDK supplies the behaviour: `createVirtualizer` (measured variable heights, `onEnd` loads the next keyset page), `createGridFocus` and `createCellRange` (arrows, Home/End, Page keys, Shift ranges, copy as TSV across unmounted rows), `createSelection` (row checkboxes, Shift extends, select all loaded), `createReorder` (column headers, pointer and keyboard) and `bindDrag` (column resize).
 - One part per row; cells are plain elements bound to the focus registry from the row's `bind`.
-- Column state is one small array, `{ key, width, visible, pinned }[]`. The base grid holds it itself unless it is given `columns` and `onColumnsChange`; under the provider it lives in one store, so the grid and a `ColumnsMenu` mounted elsewhere share it. It persists through a host-supplied `ColumnPersistence` (`load` and `save`, sync or async); under the provider `localStorage` is the default, keyed by `def.id`. It is restored after mount, so the server render and the first client render agree.
+- Column state is one small array, `{ key, width, visible, pinned }[]`. The base grid holds it itself unless it is given `columns` and `onColumnsChange`; under the provider it lives in one store, so the grid and a `ColumnsMenu` mounted elsewhere share it. It persists through a host-supplied `ColumnPersistence` (`load` and `save`, sync or async); under the provider `localStorage` is the default, keyed by `def.id`, and `NO_PERSISTENCE` turns it off. It is restored after mount, so the server render and the first client render agree.
 - Pinned columns and the select column are `position: sticky` on `inset-inline-start`; the header row is sticky to the top. The Columns menu shows, hides and pins.
 - Every mutable UI SDK object is read through `useSyncExternalStore` or a part's `state` / `children` function.
 
@@ -614,7 +638,7 @@ The handle on a header's inline-end edge is a focusable `separator`. `bindDrag` 
 
 ### Status board
 
-The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The bound one is one lane per status over the `status_code =` shapes, so it stays inside the declared shapes: a region or channel filter narrows every lane, a status filter leaves the selected lanes, and a quick filter, range or customer filter makes the board unavailable. Each lane is its own query store and keyset feed of 50, built in the wrapper, behind its own virtualiser. `createTransfer` moves a card by pointer or keyboard; `accepts` reads the transitions, so a column a status cannot move to is skipped, and a drop outside the column the card is shown in puts it back. A drop posts to the host, which updates the row only where its transitions allow it and answers 409 otherwise; the counter triggers then move the two counts and sums.
+The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The bound one is one lane per status over the `status_code =` shapes, so it stays inside the declared shapes: a region or channel filter narrows every lane, a status filter leaves the selected lanes, and a quick filter, range or customer filter makes the board unavailable. Each lane is its own query store and keyset feed of 50, behind its own virtualiser. Core's `createBoard(def, source, laneQueries)` owns the lane feeds, loads the transitions once per source and moves a row between two lanes; `useQueryGridActions().moveRow(board, move)` runs the move, patches the grid's own feed and reloads the count, the total and the facet counts. The wrapper only renders. `createTransfer` moves a card by pointer or keyboard; `accepts` reads the transitions, so a column a status cannot move to is skipped, and a drop outside the column the card is shown in puts it back. A drop posts to the host, which updates the row only where its transitions allow it and answers 409 otherwise; the counter triggers then move the two counts and sums.
 
 ## Decisions
 
@@ -852,7 +876,7 @@ The demo needs `apps/demo/.env.local` holding `QUERY_GRID_DATABASE_URL`, a direc
 | `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact, several values per field        |
 | `db:bench`                         | p50 and p95 of every shape with `EXPLAIN (ANALYZE)`, with one value and with several, written to `db/bench-results.md` |
 
-`bun run test` also runs each package's own tests: core's actions, URL codec, validation and in-memory source; the postgres package's shapes, SQL builder, handler and its offers over core; and the React package's column rules, a standalone mount of every base component, and the messages.
+`bun run test` also runs each package's own tests: core's actions, URL codec, validation, shapes, the offers over them, the board and the in-memory source; the postgres package's def validation, SQL builder and handler; and the React package's column rules, a standalone mount of every base component, and the messages.
 
 ## Releasing
 

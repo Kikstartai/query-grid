@@ -1,6 +1,6 @@
 {
   "name": "@kikstart/query-grid-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React components for query-grid on UI SDK: controlled base components, and a filter and data grid bound to a query state that only offers what an index answers.",
   "keywords": [
     "react",
@@ -54,7 +54,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kikstart/query-grid": "0.2.0"
+    "@kikstart/query-grid": "0.3.0"
   },
   "peerDependencies": {
     "@ui-sdk/core": ">=0.1.0-beta.1",

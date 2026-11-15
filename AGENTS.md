@@ -2,12 +2,12 @@
 
 A bun workspace of three published packages and one demo. The README holds the design, the decisions and the verification record; `docs/RESTRUCTURE.md` holds the 0.2.0 spec and its record.
 
-| Path                           | Package                         | Holds                                                                                               |
-| ------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, stores, feeds, data sources. No React, DOM or `pg`                    |
-| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css` |
-| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: shapes, SQL, DDL, `createGridHandler`. No React or `pg`                                 |
-| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                               |
+| Path                           | Package                         | Holds                                                                                                                |
+| ------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, shapes and capabilities, stores, feeds, the board, data sources. No React, DOM or `pg` |
+| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css`                  |
+| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: def validation, SQL, DDL, `createGridHandler`. No React or `pg`                                          |
+| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                                                |
 
 ## Commands
 
@@ -63,7 +63,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 - Zero comments by default. Only a single-sentence comment where the why is a non-obvious trap. No JSDoc restating signatures.
 - The React Compiler is on: no `useMemo`, `useCallback` or `React.memo`.
 - Read-function naming: `list*` returns a collection, never null; `get*` returns one item or null. `resolve*` picks one answer from several by a fixed order; `normalize*` guards and shapes one input.
-- Never call `.then` or `.catch` on a promise during render.
+- Never call `.then` or `.catch` on a promise during render. The one exception is a page mapping its `params` promise to a feature component (`params.then(({ part }) => …)`), so the feature takes an id and not a route prop.
 
 ## Commits
 

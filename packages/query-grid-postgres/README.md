@@ -6,7 +6,7 @@ The Postgres server half of [query-grid](https://github.com/Kikstartai/query-gri
 npm install @kikstart/query-grid @kikstart/query-grid-postgres
 ```
 
-It depends on `@kikstart/query-grid` for the query contract and on nothing else: no React, and no `pg`. You pass it one function that runs SQL.
+It depends on `@kikstart/query-grid` for the query contract and the shape types, and on nothing else: no React, and no `pg`. You pass it one function that runs SQL.
 
 ```ts
 import {
@@ -41,8 +41,8 @@ export const POST = (request: Request) => handle(request);
 ```
 
 - **`createGridHandler({ def, execute, basePath?, options?, moves?, onError? })`** turns a fetch-standard `Request` into a `Response`. It answers the page, `/count`, `/total` and `/facets` itself, and `/options`, `/transitions` and `POST /status` through the `options` and `moves` hooks; an omitted hook is a 404. A refusal is a 400, a refused transition a 409, anything else a 500. Every read gets `request.signal` as the third argument of `execute` and of the `options` and `transitions` hooks, so the host can cancel the statement of a dropped request; an aborted request is a 499 and is not passed to `onError`. Error bodies are `{ error, message, code, params }`: codes, never sentences.
-- **Shapes.** A shape is one index: a set of equality fields, a sort, optionally a range on the sort, or the quick-filter columns. `validateGridDef` checks a def, `matchShape` decides whether a query is declared, and `generateGridMigration` writes one index per shape plus the counter table and its triggers. `listMissingIndexes` compares the def with `pg_indexes`.
-- **`capabilities(shapes, { facetField })`**, also at `@kikstart/query-grid-postgres/capabilities` for the browser, tells the client what the server accepts, from the same shapes.
+- **Shapes.** A shape is one index: a set of equality fields, a sort, optionally a range on the sort, or the quick-filter columns. The `QueryShape` type, `matchShape` and the other shape helpers come from core; here `validateGridDef` checks a def against Postgres's rules, and `generateGridMigration` writes one index per shape plus the counter table and its triggers. `listMissingIndexes` compares the def with `pg_indexes`.
+- **Capabilities** are core's: `shapeCapabilities(shapes, { facetField })` from `@kikstart/query-grid` tells the client what this server accepts, from the same shapes.
 - **Several values of one field** are one array parameter under `= ANY`, capped per field by `maxValues`. A shape opts out with `multi: false`.
 - **The runner** (`listGridPage`, `getGridCount`, `getGridTotal`, `listFacetCounts`, `walkGridPages`) and the SQL builder are exported for a host that wants its own routes.
 

@@ -1,6 +1,6 @@
 {
   "name": "@kikstart/query-grid",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "The React-free core of query-grid: the query contract, URL codec, validation, offers, feeds and data sources for a filter and data grid that only offers what an index answers.",
   "keywords": [
     "data-grid",

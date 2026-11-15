@@ -6,11 +6,11 @@ The core of [query-grid](https://github.com/Kikstartai/query-grid): a composable
 npm install @kikstart/query-grid
 ```
 
-| Entry point                   | Holds                                                                                                                                               |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid`        | Field and query types, `Capabilities`, the URL codec, validation, actions and offers, the stores and the row feed, chips, formatting, problem codes |
-| `@kikstart/query-grid/http`   | `createHttpSource`, the wire types, the route names and the error body shared with `createGridHandler`                                              |
-| `@kikstart/query-grid/memory` | `createMemorySource` and `memoryCapabilities`, for rows already in the browser                                                                      |
+| Entry point                   | Holds                                                                                                                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid`        | Field and query types, `Capabilities`, query shapes and `shapeCapabilities`, the URL codec, validation, actions and offers, the stores, the row feed and the board, chips, formatting, problem codes, the wire result types |
+| `@kikstart/query-grid/http`   | `createHttpSource`, and the protocol it shares with `createGridHandler`: the route names, the query parameters and the error and move bodies                                                                                |
+| `@kikstart/query-grid/memory` | `createMemorySource` and `memoryCapabilities`, for rows already in the browser                                                                                                                                              |
 
 Declare the fields once, then hold a query and follow its rows:
 
@@ -19,7 +19,9 @@ import {
   createFeed,
   createQueryStore,
   defaultQuery,
+  shapeCapabilities,
   type GridDef,
+  type QueryShape,
 } from "@kikstart/query-grid";
 import { createHttpSource } from "@kikstart/query-grid/http";
 
@@ -44,7 +46,16 @@ const ORDERS: GridDef = {
   ],
 };
 
-const source = createHttpSource(ORDERS, "/api/orders", ORDERS_CAPABILITIES);
+const SHAPES: QueryShape[] = [
+  { equals: [], sort: "created_at", range: true },
+  { equals: ["status"], sort: "created_at" },
+];
+
+const source = createHttpSource(
+  ORDERS,
+  "/api/orders",
+  shapeCapabilities(SHAPES),
+);
 const store = createQueryStore(
   ORDERS,
   source.capabilities,
@@ -60,8 +71,9 @@ store.dispatch({
 ```
 
 - **One query contract.** `encodeQuery` and `decodeQuery` are the only codec: the page URL, the request to the server and the server's parser all use them, and `validateQueryValues` checks a query on both sides.
+- **Shapes.** A `QueryShape` is the unit a data layer answers: a set of equality fields and a sort, or the quick-filter columns. `matchShape` decides whether a query is declared, and `shapeCapabilities(shapes, { facetField })` turns the same shapes into the `Capabilities` the client reads, so the controls and the server cannot disagree.
 - **Offers.** `listOffers(def, query, rules)` says which filters, sorts and combinations the data source can answer from here, and `explainUnavailable` gives the reason code for one it cannot. A store applies an action only when the result is a query the source can answer.
-- **Stores.** `createQueryStore`, `createFeed` and the count, total, facet and label stores are plain objects with `subscribe` and a getter, ready for `useSyncExternalStore` or any other reader.
+- **Stores.** `createQueryStore`, `createFeed` and the count, total, facet and label stores are plain objects with `subscribe` and a getter, ready for `useSyncExternalStore` or any other reader. `createBoard(def, source, getLaneQueries(…))` is the status board's model: one feed per lane, the transitions loaded once per source, and `move`.
 - **Data sources.** `DataSource` is the contract; `createHttpSource` talks to a server that runs [`@kikstart/query-grid-postgres`](https://www.npmjs.com/package/@kikstart/query-grid-postgres), and `createMemorySource` answers from an array.
 - **Codes, never sentences.** Problems and reasons are codes with params; the words are the UI's, in [`@kikstart/query-grid-react`](https://www.npmjs.com/package/@kikstart/query-grid-react).
 

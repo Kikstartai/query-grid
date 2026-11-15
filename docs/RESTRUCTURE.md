@@ -43,9 +43,9 @@ There is **one query contract**, in core. `-react` and `-postgres` both import i
 
 ### `@kikstart/query-grid-postgres`
 
-- **Imports core** for the contract, validation, `decodeQuery`, `formatCount`, and the wire types and route paths from `@kikstart/query-grid/http`. It holds no copy of any of them.
-- **Storage:** storage config (table, shapes, counterTable), `validateGridDef`, the shape helpers (`matchShape`, `shapeId`, `describeShape`, `listOrderedShapes`, the `OrderedShape`/`QuickShape`/`QueryShape` types), shapes → capabilities, refusal (`assertDeclared`, `QueryRejected` with code + params), the SQL builder, the runner, the keyset cursor and the migration/index generator.
-- **`capabilities(shapes)`:** a browser-safe export the host passes to the provider.
+- **Imports core** for the contract, validation, `decodeQuery`, `formatCount`, the shape types and helpers, the wire types (core's root) and the route paths (`@kikstart/query-grid/http`). It holds no copy of any of them.
+- **Storage:** storage config (table, shapes, counterTable), `validateGridDef`, `describeShape`, refusal (`assertDeclared`, `QueryRejected` with code + params), the SQL builder, the runner, the keyset cursor and the migration/index generator. Since 0.3.0 the shape types and the pure shape helpers (`matchShape`, `shapeId`, `listOrderedShapes`, …) live in core.
+- **Capabilities:** since 0.3.0 core's `shapeCapabilities(shapes)` builds them; `-postgres` has no `capabilities` export and no `./capabilities` subpath.
 - **`createGridHandler({ def, execute, options?, moves? })`** turns a fetch-standard Request into a Response. It implements the server half of the `/http` protocol:
   - **Routes:** `GET {base}?…&limit`, `/count[?exact=1]`, `/total`, `/facets`, `/options`, `/transitions` and `POST /status`.
   - **Built in:** page, count, total, facets.
@@ -131,7 +131,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 
 - **Core stays React-free:** core has no React, DOM or pg import, which a grep and its `package.json` confirm. `-postgres` has no React or pg import.
 - **Round trip:** `encodeQuery` → `decodeQuery` across `-react`'s use and `-postgres`'s use, both on core's one codec.
-- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-grid-def.test.ts`) stays, pointed at `capabilities(shapes)`.
+- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-grid-def.test.ts`) stays, pointed at `shapeCapabilities(shapes)`.
 - **SQL builder:** `server/sql-builder.test.ts` gets its own fixtures in `-postgres`. `model/query-model.test.ts` splits into a shape part (`-postgres`) and an action part (core).
 - **Carried over:** every existing unit, DB and benchmark test is carried over.
 
@@ -147,6 +147,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 - a separate components npm package
 - a migration CLI (the demo keeps `db/generate-migration.ts`)
 - generic status moves on the server beyond the `moves` hook
+- `createGridHandler` in core: its page, count, total and facet routes call the Postgres runner directly, so moving it needs an executor interface between the handler and a backend
 - a separate memory adapter package (it is the `./memory` subpath)
 - several totals per grid: `GridDef.total` is one field today, and a host may need to sum more than one (a `total_sum` counter column, a footer cell and a `/total` result per field)
 - format split by owner: the locale is the app's and the currency is the data's, yet both sit on `GridDef.format` today. The provider reads its locale from `def.format`, not from `QueryGridMessagesProvider`, so messages and number formatting can disagree, and two money fields cannot carry different currencies. Proposed: the locale comes from the messages provider, `currency` moves onto the money `FieldDef` (or the row), and `GridDef.format` becomes an optional override or goes away
@@ -172,17 +173,17 @@ This is library code with nothing that grows with a tenant count. Each request i
 - The server def is `ServerGridDef extends GridDef`: it adds `table`, `shapes` and `facet.counterTable`, and keeps `id`.
 - `QueryMode` is `"server" | "memory"`; the old `"indexed"` is gone.
 - `QueryRules` is `{ capabilities, quickComplete }`. `applyAction`, `listOffers`, `listControlActions` and `enumerateReachableStates` take it as a required argument; `explainUnavailable(query, target, rules)` no longer takes a def.
-- `DataSource.mode` is replaced by `DataSource.capabilities`. The provider takes `capabilities` for the HTTP source and throws if it has neither a source nor capabilities.
+- `DataSource.mode` is replaced by `DataSource.capabilities`. Since 0.3.0 the provider always takes a `source`; the host calls `createHttpSource(def, basePath, capabilities)` for the HTTP one, so no provider can be mounted without a source.
 
 ### Capabilities
 
-- `capabilities(shapes, { facetField })` takes the facet field as an option, because `isFacetCountShown` needs it and shapes do not name it.
-- It is exported from the `-postgres` root and alone from `@kikstart/query-grid-postgres/capabilities`, which a browser bundle imports without the SQL builder.
+- `shapeCapabilities(shapes, { facetField })` takes the facet field as an option, because `isFacetCountShown` needs it and shapes do not name it.
+- Since 0.3.0 it is exported from core's root. Core is browser-safe, so the `-postgres` `./capabilities` subpath, whose only reason was to keep the SQL builder out of a browser bundle, is gone.
 - `memoryCapabilities(def, quickFields)` is exported from `@kikstart/query-grid/memory`; `createMemorySource` takes the quick fields as `options.quick`.
 
 ### Wire
 
-- The result types live in core's root, because `DataSource` names them, and are re-exported from `./http` beside `SUB_ROUTES`, `LIMIT_PARAM`, `EXACT_PARAM`, `ErrorBody` and `MoveBody`.
+- The result types live in core's root, because `DataSource` names them. Since 0.3.0 `./http` no longer re-exports them: it holds `createHttpSource` and the protocol (`SUB_ROUTES`, `LIMIT_PARAM`, `EXACT_PARAM`, `ErrorBody`, `MoveBody`, `SubRoute`).
 - An error body is `{ error, message, code, params }`. `error` is the category it always was (`undeclared_shape`, `invalid_value`, `invalid_cursor`, `invalid_limit`, `too_broad`, `transition_refused`, `not_found`, `method_not_allowed`, `internal`). `code` is the specific reason (`unknown_field`, `too_many_values`, `quick_length`, a host's own). `message` is the code followed by its params as `key=value`, for logs.
 - `TotalUnavailable` is `{ available: false, code, params }` with `no_total` or `over_cap` and the cap.
 - `formatCount` stays in core; `-postgres` does not call it, because the cap now travels as a number in `params` and the client formats it.
@@ -208,7 +209,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 - The base `DataGrid` takes a row window (`rows`, `hasNext`, `onEndReached`, `loading`, optional `error`, `pages`, `capped`), `resetKey` to clear the selection and scroll to the top, a header `filters` map of field key to node, and `sort` with `onSortChange`.
 - `StatusBoard.onMove` is `(id, to, { from, index })`. A rejected promise puts the card back.
-- `FilterBar` and `FilterSidebar` are containers that take children; the bound ones fill them.
+- `FilterBar` and `FilterSidebar` are containers that take children. The bound ones fill them with every control by default and, since 0.3.0, take `children` to render a subset.
 - Column state is `createColumnStore` in `components/column-state.ts`: the base grid holds one in a hook when it is uncontrolled, and the provider holds one for the bound grid and the columns menu.
 - `useFilterChips()` returns each chip as data plus its labelled item.
 
@@ -243,9 +244,9 @@ This is library code with nothing that grows with a tenant count. Each request i
 - `dispatch` applies the action in the store at once and the provider writes the result through nuqs; when nuqs reports anything else, the store follows it. A report that only echoes one of the provider's own writes from the last second is skipped, so two quick changes do not bounce the store back to the first.
 - A filter, range, sort, view or reset pushes. `setQuick` and `clearQuick` replace, throttled to 250 ms. The quick filter still applies on Enter, so "typing" is each applied term; live search per keystroke was not built, because each term is a trigram query under a 120 ms budget.
 - A URL nothing answers is rewritten in place to the default; a parameter the def does not own is left alone.
-- `syncUrl={false}` renders a provider that calls no nuqs hook and needs no adapter; it starts from `search` and follows it. Under nuqs the `search` prop is unused.
+- Since 0.3.0 the provider without nuqs is its own export, `StaticQueryGridProvider`: it calls no nuqs hook and needs no adapter, takes a required `search`, starts from it and follows it. `QueryGridProvider` has no `search` or `syncUrl` prop.
 - `urlPrefix` namespaces a provider's URL keys (`a.f.status`), for two grids on one page. The prefix exists only in the page URL: the store, the sync and the wire to the server keep core's keys.
-- The demo mounts `NuqsAdapter` from `nuqs/adapters/next/app` in the root layout. Its pages no longer pass `searchParams`; an `AtRequest` server component awaits `connection()` inside the Suspense boundary, so a deep link is still server-rendered with its state.
+- The demo mounts `NuqsAdapter` from `nuqs/adapters/next/app` in the root layout. Its pages no longer pass `searchParams`; an `AtRequest` server component awaits `connection()` inside the Suspense boundary, so a deep link is still server-rendered with its state. Since 0.3.0 that boundary wraps the grid parts only, not the page.
 - Column layout stays out of the URL.
 - The store subscription, the echo guard and the follow step are one plain object, `createUrlSync(store, search, write)` in `react/url-sync.ts`, tested without React; the provider only hands it the nuqs setter. The provider without nuqs uses the same object with a writer that does nothing.
 
@@ -283,7 +284,68 @@ This is library code with nothing that grows with a tenant count. Each request i
 - Core has its own short README; no tarball carries the root one (`cfb1f12`).
 - Live per-keystroke quick search stays unbuilt: applying on Enter is the design.
 
-## Definition of done
+## 0.3.0: shapes to core and the composition fixes (2026-11-15)
+
+0.3.0 follows a proposal (`query-grid-0-3-proposal.md`), an independent review of it against the code (`query-grid-0-3-proposal-review.md`) and a report of 0.2.0 against three composition skills (`query-grid-skills-review.md`). Glen accepted every change in the review; where it and the proposal differ, the review won. Breaking changes were free, because nothing is published. Where a line above describes 0.2.0 and 0.3.0 changed it, the line says "since 0.3.0".
+
+### Decided before the work
+
+- **Shapes describe what can be answered, so they live in core.** `-postgres` keeps only what talks to Postgres. `describeShape` and all of `validateGridDef` stay there: they emit English, and their rules (a quick column needs an immutable text form, a nullable field cannot be a keyset sort) are Postgres's.
+- **One home per symbol.** Nothing is exported from two entry points, and `-postgres` re-exports nothing core owns.
+- **`createGridHandler` stays in `-postgres`** (see Deferred).
+- **0.3.0 for all three packages.** The 0.2.0 record above describes the 0.2.0 API; shipping a different 0.2.0 would make it false.
+
+### As built: core
+
+- `model/shapes.ts` holds `OrderedShape`, `QuickShape`, `QueryShape`, `isQuickShape`, `listQuickFields`, `shapeId`, `listOrderedShapes`, `listSortFields`, `matchShape`, `isFacetOnlyQuery`, and `shapeCapabilities(shapes, options)` with `ShapeCapabilityOptions`. It imports `field-types.ts` only. The name is `shapeCapabilities` because core already exports the `Capabilities` type and `memoryCapabilities`.
+- `-postgres` `shapes.ts` now holds `describeShape` and `validateGridDef` alone; `capabilities.ts` and the `./capabilities` subpath are gone; `ServerGridDef` names core's `QueryShape`.
+- `assertDeclared` needed no change: it already called core's `validateQueryValues`.
+- `./http` exports `createHttpSource` and the protocol (`SUB_ROUTES`, `SubRoute`, `LIMIT_PARAM`, `EXACT_PARAM`, `ErrorBody`, `MoveBody`). The wire result types, `COUNT_CAP`, `PAGE_LIMIT_MAX`, `QUICK_LIMIT` and `OptionSearch` come from the root only.
+- `createHttpSource(def, basePath, capabilities)` stays positional.
+- `model/board.ts` is the status board's model:
+  - `getLaneQueries(def, query, capabilities)` moved from the bound board unchanged.
+  - `createBoard(def, source, laneQueries)` owns one query store and one feed of `LANE_PAGE_SIZE` (50) per lane and exposes `getState()` (`{ lanes, transitions }`), `subscribe`, `loadMore(lane)`, `canMove(from, to)` and `move({ id, from, to, index })`.
+  - `move` asks the source first and patches the two lanes with the returned row; a refused move throws and touches nothing.
+  - Transitions are loaded on the first subscriber and kept per source in a `WeakMap`, because a filter change builds a new board for the new lane queries and must not fetch them again or show the loading notice again. A failed load is forgotten, so the next board retries.
+- Tests: `shapes.test.ts` (the `matchShape` and capabilities cases) and `offers.test.ts` moved to core, on a `TEST_SHAPES` fixture; `board.test.ts` is new (lane queries, lanes loaded, transitions once per source, a move patches both lanes, a refused move leaves them alone). The `validateGridDef` cases stay in `-postgres`, whose purity test now also forbids a copy of `matchShape` or `QueryShape`.
+
+### As built: the React package
+
+- **Barrels.** The column-state API (`createColumnStore`, `ColumnStore`, `ColumnPersistence`, `createLocalStoragePersistence`, `NO_PERSISTENCE`, the layout helpers) and `ClientFieldDef`/`ClientGridDef` are exported from `./components` only. The resize internals (`beginResize`, `cancelResize`, `stepWidth`, `resizeWidth`, the two step constants, `ResizeSession`) are private to `grid-header`. `useStoreValue` stays at the root.
+- **Two providers.** `QueryGridProvider` (nuqs) takes `def`, `source`, `pageSize`, `urlPrefix`, `columnPersistence`. `StaticQueryGridProvider` takes the same plus a required `search`. `basePath`, `capabilities`, `syncUrl` and the runtime throw for a missing source are gone; the host calls `createHttpSource`. A memory source is created once per mount, because it holds its rows; an HTTP source can sit at module scope.
+- **`columnPersistence`** is a `ColumnPersistence` and never `null`. `NO_PERSISTENCE` is the explicit "keep it nowhere". Omitted, the provider uses `createLocalStoragePersistence("query-grid:<def.id>:columns")` and the base `DataGrid` uses `NO_PERSISTENCE`, as before. `createColumnStore` takes a persistence, not a nullable one.
+- **`useQueryGridActions()`** returns `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions(field, text, signal)` and `moveRow(board, move)`. The object is built once with the context value, so it is stable. `useQueryGrid` and `QueryGridContextValue` are no longer exported; the internal context is the same value plus `actions`, and the `./ui` wrappers still read `def` and the stores from it. `useQueryDispatch` stays as the dispatch alone.
+- **`moveRow(board, move)`** takes the board as an argument, because the board is created by the component that renders it and is rebuilt when the lane queries change. It runs `board.move`, patches the grid's own feed, and reloads the facet counts, the count and the total. The bound `StatusBoard` keeps `useState(() => createBoard(…))`, the error message and the rendering; its `useEffect` fetch is gone.
+- **Filter variants.** `./components` exports `EqualsSelect`, `LookupFilter` (`loadOptions` required) and `RangeFilter`, each with its own props and each inside its own `FieldFrame`, as `SortControl` and `QuickFilter` already were; no `Framed*` twin was added. The base `FieldFilter` is gone. The def-driven `FieldFilter` in `./ui` picks the variant: a lookup field, then an `eq` field with options, then a `range` field.
+- **`showReason` is a context.** `ReasonDisplayContext` in `components/field-frame.tsx` (now a client module) is set by the base `FilterSidebar` and exported for a host's own container. No control takes a `showReason` prop.
+- **Bound `FilterBar` and `FilterSidebar`** take optional `children` and default to the quick filter, every filter field and the sort.
+- **Compound `DataGrid`**, base and bound: `DataGrid.Root`, `.Toolbar`, `.Status`, `.ColumnsMenu`, `.Body`, with `<DataGrid />` as the default composition.
+  - `Root` owns the `usePrimitive` handle, the column state, the layout, the reset-key epoch and both effects, renders the `qg-grid` element and shares them through a context inside `components/data-grid.tsx`. A part outside a `Root` throws.
+  - `Status` still reads the handle through the status part's `children` function; `Body` is the root part.
+  - The parts hang off the component with `Object.assign`, so `DataGrid.Root` is reached from a client component; a server component can render `<DataGrid />` but cannot read a property of a client reference.
+  - The bound `Root` reads the provider; the other four bound parts are the base parts.
+  - The select column stays in `Body` in every composition. It is not a part and has no opt-out: making it one changes every grid screenshot and the browser pass for no user gain.
+- `ui/ui.test.tsx` is new: the bound containers' default and given children, and the bound grid's parts with the columns menu mounted outside it.
+
+### As built: the demo
+
+- **Server workspaces.** `OrdersWorkspace`, `RestyledWorkspace`, `TasksWorkspace`, `CatalogWorkspace` and `OrdersPart` are server components. Brand, title, copy and footer render on the server, outside any boundary. The client modules are the providers (`orders-provider.tsx`, `tasks-provider.tsx`), the view pickers (`orders-view.tsx`, `tasks-view.tsx`), `query-readout.tsx`, `catalog-grid.tsx` (it holds the page's `useState`) and the package's own parts.
+- **The boundary wraps the grid parts only**: `<Suspense fallback={<OrdersSkeleton />}><AtRequest>…provider and parts…</AtRequest></Suspense>` inside the workspace. `AtRequest` is kept and not renamed: it is what server-renders a deep link. The page files only compose.
+- **One provider still covers the count, the view switch and the total**, which sit on the header and footer rows beside server chrome. The workspace is a CSS grid: the server header and the island's tools share row one, the island's total and the server footer share the last row. The pixels match 0.2.0.
+- **Skeletons** are exported beside each workspace (`OrdersSkeleton`, `TasksSkeleton`, `RestyledSkeleton`, `OrdersPartSkeleton`) from pieces in `lib/workspace-skeleton.tsx`: the same tools, filter-row, chips, facet and grid boxes, with no text. `lib/page-loading.tsx` is gone.
+- **`/parts/[part]`** is `params.then(({ part }) => …)` with `generateStaticParams` from `PART_NAMES`, `notFound()` for anything else, and the generated `PageProps<"/parts/[part]">`. `OrdersPart` takes `part`. This is the one place a promise's `.then` is called in render; AGENTS.md names the exception.
+- **Demo `typecheck`** is `next typegen && tsc --noEmit`, so the generated `PageProps` exists on a clean checkout.
+- **`error.tsx` and `not-found.tsx`** at the app root; the error page takes this Next version's `{ error, retry }`.
+- **`lib/db.ts`** is `import "server-only"` plus a re-export of `lib/pg-executor.ts`, which holds the pool and `executeSql` and is what the bun DB test imports. `server-only` is a demo dependency.
+- **Placement.** `core/orders/orders-provider.tsx`, `core/tasks/ui/`, `core/catalog/ui/`, `core/landing/` (`landing-copy.ts` and `ui/landing.tsx`; the page composes five sections).
+- **Title prop.** `OrdersWorkspace` takes `title`; `dir` no longer picks the heading.
+- `verify.sh` gained a `shift` section: the static shell of each grid route holds the brand and a skeleton and no loading text, and the cumulative layout shift of each grid page is read from the browser.
+
+### Not doing
+
+- Renaming `http.ts` and `memory.ts` to `index.ts`: zero-logic barrels, naming only.
+
+## Definition of done (0.2.0)
 
 1. **Package layout:** three packages with rev 2's exports. `./server` is gone and core exports no storage type or function. Core has no React, DOM or `pg` import; `-postgres` has no React or `pg`.
 2. **Base components:** every base component in `./components` renders with no provider and no query concepts, and a test mounts each one standalone with plain props.
@@ -302,7 +364,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 Added by Glen during the work: URL history through nuqs, and the migration generator at scale.
 
-## Verification record
+## Verification record (0.2.0)
 
 Observed 2026-11-14 on the worktree branch, against Neon (620,000 orders). The README's "Verification record" holds the browser pass row by row.
 
