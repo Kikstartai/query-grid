@@ -63,15 +63,15 @@ export interface QueryGridMessages {
   sortBy: string;
   ascending: string;
   descending: string;
-  quickFilter: string;
-  quickPlaceholder: (params: { fields: string }) => string;
-  quickHint: (params: { min: number; max: number }) => string;
-  clearQuickFilter: string;
+  searchFilter: string;
+  searchPlaceholder: (params: { fields: string }) => string;
+  searchHint: (params: { min: number; max: number }) => string;
+  clearSearchFilter: string;
   activeFilters: string;
   removeChip: (params: LabelParams) => string;
   chipEquals: (params: LabelParams) => string;
   chipRange: (params: { label: string; min: string; max: string }) => string;
-  chipQuick: (params: { value: string }) => string;
+  chipSearch: (params: { value: string }) => string;
   chipSort: (params: { label: string; direction: string }) => string;
   openBound: string;
   any: string;
@@ -181,15 +181,15 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   sortBy: "Sort by",
   ascending: "Ascending",
   descending: "Descending",
-  quickFilter: "Quick filter",
-  quickPlaceholder: ({ fields }) => `Quick filter: ${fields}`,
-  quickHint: ({ min, max }) => `${min} to ${max} characters`,
-  clearQuickFilter: "Clear quick filter",
+  searchFilter: "Search",
+  searchPlaceholder: ({ fields }) => `Search: ${fields}`,
+  searchHint: ({ min, max }) => `${min} to ${max} characters`,
+  clearSearchFilter: "Clear search",
   activeFilters: "Active filters and sort",
   removeChip: ({ label }) => `Remove ${label}`,
   chipEquals: ({ label }) => `${label}:`,
   chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
-  chipQuick: ({ value }) => `Quick filter: “${value}”`,
+  chipSearch: ({ value }) => `Search: “${value}”`,
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
   openBound: "…",
   any: "any",
@@ -226,12 +226,11 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     "No index answers the board with these filters. Clear the filters the board cannot combine with a status.",
   moveFailed: "The move failed",
   reasons: {
-    quick_alone: () =>
-      "The quick filter runs alone: clear the other filters first.",
-    quick_unordered: () =>
-      "A quick filter result is unordered until every match is loaded: narrow it under the cap to sort.",
-    quick_no_combine: () =>
-      "No index combines the quick filter with another filter.",
+    search_alone: () => "The search runs alone: clear the other filters first.",
+    search_unordered: () =>
+      "A search result is unordered until every match is loaded: narrow it under the cap to sort.",
+    search_no_combine: () =>
+      "No index combines the search with another filter.",
     no_sort_index: ({ label }) => `No index sorts by ${label}.`,
     range_needs_sort: ({ label }) =>
       `No index answers a ${label} range unless the sort is ${label}.`,
@@ -253,13 +252,13 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     invalid_value: ({ field }) => `Invalid value for ${field}.`,
     too_many_values: ({ field, max }) =>
       `${field} takes at most ${max} values.`,
-    quick_length: ({ min, max }) =>
-      `The quick filter needs ${min} to ${max} characters.`,
+    search_length: ({ min, max }) =>
+      `The search needs ${min} to ${max} characters.`,
     invalid_sort_direction: () => "Invalid sort direction.",
     invalid_cursor: () => "The cursor does not decode.",
     invalid_limit: () => "The page size is not a number.",
     too_broad: () =>
-      "That quick filter matches too much to answer fast. Add more characters.",
+      "That search matches too much to answer fast. Add more characters.",
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
     unknown_row: () => "That row no longer exists.",
     over_cap: ({ cap }) =>

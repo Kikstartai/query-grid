@@ -7,8 +7,8 @@ import {
   getFieldLabel,
   labelKey,
   listFilterFields,
-  QUICK_MAX_LENGTH,
-  QUICK_MIN_LENGTH,
+  SEARCH_MAX_LENGTH,
+  SEARCH_MIN_LENGTH,
   resolveFilterKind,
   type BaseFieldDef,
   type FieldOption,
@@ -22,7 +22,7 @@ import {
 import {
   FilterBar as BaseFilterBar,
   FilterChips as BaseFilterChips,
-  QuickFilter as BaseQuickFilter,
+  SearchFilter as BaseSearchFilter,
   SortControl as BaseSortControl,
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
@@ -166,25 +166,25 @@ export function SortControl() {
   );
 }
 
-export function QuickFilter() {
+export function SearchFilter() {
   const { def } = useQueryGrid();
   const query = useQueryState();
   const rules = useQueryRules();
   const { dispatch } = useQueryGridActions();
-  const offer = useOfferState({ kind: "quick" });
-  const fields = rules.capabilities.quickFields;
+  const offer = useOfferState({ kind: "search" });
+  const fields = rules.capabilities.searchFields;
   if (fields.length === 0) {
     return null;
   }
   return (
-    <BaseQuickFilter
-      value={query.quick ?? ""}
+    <BaseSearchFilter
+      value={query.search ?? ""}
       onValueChange={(value) =>
-        dispatch(value ? { type: "setQuick", value } : { type: "clearQuick" })
+        dispatch(value ? { type: "setSearch", value } : { type: "clearSearch" })
       }
       fieldLabels={fields.map((key) => getFieldLabel(def, key))}
-      minLength={QUICK_MIN_LENGTH}
-      maxLength={QUICK_MAX_LENGTH}
+      minLength={SEARCH_MIN_LENGTH}
+      maxLength={SEARCH_MAX_LENGTH}
       disabled={!offer.offered}
       reason={offer.reason}
     />
@@ -221,7 +221,7 @@ function DefaultFilters({ fields }: DefaultFiltersProps) {
   const { def, source } = useQueryGrid();
   return (
     <>
-      <QuickFilter />
+      <SearchFilter />
       {listFilterFields(def, source.capabilities, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}

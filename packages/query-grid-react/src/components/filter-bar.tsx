@@ -81,7 +81,7 @@ export function SortControl({
   );
 }
 
-export interface QuickFilterProps extends ControlState {
+export interface SearchFilterProps extends ControlState {
   value: string;
   onValueChange: (value: string) => void;
   fieldLabels?: string[];
@@ -89,25 +89,25 @@ export interface QuickFilterProps extends ControlState {
   maxLength?: number;
 }
 
-interface QuickHintProps {
+interface SearchHintProps {
   show: boolean;
   min: number;
   max: number;
 }
 
-function QuickHint({ show, min, max }: QuickHintProps) {
+function SearchHint({ show, min, max }: SearchHintProps) {
   const messages = useMessages();
   if (!show) {
     return null;
   }
   return (
-    <span className="qg-quick-hint" role="status" data-quick-hint>
-      {messages.quickHint({ min, max })}
+    <span className="qg-search-hint" role="status" data-search-hint>
+      {messages.searchHint({ min, max })}
     </span>
   );
 }
 
-function QuickFilterForm({
+function SearchFilterForm({
   value,
   onValueChange,
   fieldLabels = [],
@@ -115,7 +115,7 @@ function QuickFilterForm({
   maxLength = 200,
   disabled,
   reason,
-}: QuickFilterProps) {
+}: SearchFilterProps) {
   const messages = useMessages();
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState(false);
@@ -137,22 +137,22 @@ function QuickFilterForm({
   };
   return (
     <FieldFrame
-      name="quick"
-      kind="quick"
-      label={messages.quickFilter}
+      name="search"
+      kind="search"
+      label={messages.searchFilter}
       disabled={disabled}
       reason={reason}
     >
-      <form className="qg-quick" role="search" onSubmit={submit}>
-        <InputGroup className="qg-quick-group">
+      <form className="qg-search" role="search" onSubmit={submit}>
+        <InputGroup className="qg-search-group">
           <Input
-            className="qg-quick-input"
+            className="qg-search-input"
             type="search"
-            aria-label={messages.quickFilter}
-            placeholder={messages.quickPlaceholder({
+            aria-label={messages.searchFilter}
+            placeholder={messages.searchPlaceholder({
               fields: fieldLabels.join(", "),
             })}
-            data-filter="quick"
+            data-filter="search"
             value={draft}
             disabled={disabled}
             onChange={(event) => {
@@ -162,8 +162,8 @@ function QuickFilterForm({
           />
           <InputClear
             className="qg-clear"
-            aria-label={messages.clearQuickFilter}
-            data-filter-clear="quick"
+            aria-label={messages.clearSearchFilter}
+            data-filter-clear="search"
             onClick={() => {
               setDraft("");
               apply("");
@@ -172,14 +172,14 @@ function QuickFilterForm({
             <XIcon size={12} />
           </InputClear>
         </InputGroup>
-        <QuickHint show={invalid} min={minLength} max={maxLength} />
+        <SearchHint show={invalid} min={minLength} max={maxLength} />
       </form>
     </FieldFrame>
   );
 }
 
-export function QuickFilter(props: QuickFilterProps) {
-  return <QuickFilterForm key={props.value} {...props} />;
+export function SearchFilter(props: SearchFilterProps) {
+  return <SearchFilterForm key={props.value} {...props} />;
 }
 
 export interface ChipValueItem {

@@ -7,7 +7,7 @@ import {
   createTestSource,
   settle,
   TEST_DEF,
-  TEST_QUICK_FIELDS,
+  TEST_SEARCH_FIELDS,
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
@@ -16,7 +16,7 @@ import { indexCapabilities } from "./indexes.ts";
 
 const CAPS = indexCapabilities(TEST_INDEXES, {
   facetField: "status",
-  quickFields: TEST_QUICK_FIELDS,
+  searchFields: TEST_SEARCH_FIELDS,
 });
 const BASE = defaultQuery(TEST_DEF);
 
@@ -94,9 +94,9 @@ describe("lane queries", () => {
     ]);
   });
 
-  test("a quick filter or an unanswerable lane leaves no board", () => {
+  test("a search or an unanswerable lane leaves no board", () => {
     expect(
-      getLaneQueries(TEST_DEF, { ...BASE, quick: "abc" }, CAPS),
+      getLaneQueries(TEST_DEF, { ...BASE, search: "abc" }, CAPS),
     ).toBeNull();
     expect(
       getLaneQueries(

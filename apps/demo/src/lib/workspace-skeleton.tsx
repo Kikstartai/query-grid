@@ -34,7 +34,7 @@ export function SkeletonFilters({
 }: SkeletonFiltersProps) {
   return (
     <div className="skeleton-filters" aria-hidden="true">
-      <span className="skeleton skeleton-control" data-kind="quick" />
+      <span className="skeleton skeleton-control" data-kind="search" />
       {listFilterFields(def, capabilities, fields).map((field) => (
         <span
           key={field.key}

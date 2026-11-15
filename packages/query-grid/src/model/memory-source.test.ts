@@ -54,21 +54,21 @@ describe("the in-memory source", () => {
     ]);
   });
 
-  test("the quick filter matches across its columns", async () => {
+  test("the search matches across its columns", async () => {
     const byName = await source.fetchCount(
-      { ...BASE, quick: "SMITH" },
+      { ...BASE, search: "SMITH" },
       false,
       signal,
     );
     expect(byName).toEqual({ count: 8, capped: false, source: "exact" });
     const byNumber = await source.fetchPage(
-      { ...BASE, quick: "1017" },
+      { ...BASE, search: "1017" },
       10,
       signal,
     );
     expect(byNumber.rows.map((row) => row.id)).toEqual(["row-17"]);
     const across = await source.fetchCount(
-      { ...BASE, quick: "5 1005" },
+      { ...BASE, search: "5 1005" },
       false,
       signal,
     );

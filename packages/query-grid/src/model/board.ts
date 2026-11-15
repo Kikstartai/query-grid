@@ -90,7 +90,7 @@ export function getLaneQueries(
       { ...base, equals: { ...query.equals, [field.key]: [status] } },
     ]),
   );
-  const combinable = memory || (query.quick === null && query.range === null);
+  const combinable = memory || (query.search === null && query.range === null);
   const answerable =
     combinable && [...queries.values()].every(capabilities.isAnswerable);
   return answerable ? queries : null;

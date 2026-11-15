@@ -50,7 +50,7 @@ export function createFeed(
   pageSize: number,
 ): Feed {
   const def = store.def;
-  const sortsQuickLocally = source.capabilities.mode === "server";
+  const sortsSearchLocally = source.capabilities.mode === "server";
   const feed = createStore(initialFeedState(store.getQuery()));
   const begin = createAbortable();
   const insertedIds = new Set<string>();
@@ -60,11 +60,11 @@ export function createFeed(
   const set = (patch: Partial<FeedState>) =>
     feed.set({ ...feed.get(), ...patch });
 
-  const isQuickComplete = () => {
+  const isSearchComplete = () => {
     const state = feed.get();
     return (
-      sortsQuickLocally &&
-      state.query.quick !== null &&
+      sortsSearchLocally &&
+      state.query.search !== null &&
       state.pages > 0 &&
       state.status === "idle" &&
       !state.capped
@@ -87,7 +87,8 @@ export function createFeed(
       nextCursor = page.nextCursor;
       const capped = page.hasNext && page.nextCursor === null;
       const fresh = page.rows.filter((row) => !insertedIds.has(row.id));
-      const sortLocally = sortsQuickLocally && query.quick !== null && !capped;
+      const sortLocally =
+        sortsSearchLocally && query.search !== null && !capped;
       const state = feed.get();
       set({
         rows: sortLocally
@@ -98,7 +99,7 @@ export function createFeed(
         capped,
         pages: state.pages + 1,
       });
-      store.setQuickComplete(isQuickComplete());
+      store.setSearchComplete(isSearchComplete());
     } catch (error) {
       if (!isAbort(error)) {
         set({ status: "error", error: toProblem(error) });
@@ -111,7 +112,7 @@ export function createFeed(
     insertedIds.clear();
     nextCursor = initial.query.cursor;
     void load(initial);
-    store.setQuickComplete(false);
+    store.setSearchComplete(false);
   };
 
   const follow = () => {
@@ -120,7 +121,7 @@ export function createFeed(
     if (next === state.query) {
       return;
     }
-    const resort = isQuickComplete() && sameFilters(next, state.query);
+    const resort = isSearchComplete() && sameFilters(next, state.query);
     if (resort) {
       set({ query: next, rows: sortRows(def, state.rows, next.sort) });
       return;

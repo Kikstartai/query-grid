@@ -183,7 +183,7 @@ describe("the URL codec", () => {
     const query: QueryState = {
       equals: { status: ["open", "done"] },
       range: { field: "total", min: "100", max: null },
-      quick: null,
+      search: null,
       sort: { field: "total", direction: "asc" },
       cursor: null,
     };
@@ -216,7 +216,7 @@ describe("the URL codec", () => {
       const query: QueryState = {
         equals: { region: ["north", "south"] },
         range: null,
-        quick: null,
+        search: null,
         sort: TEST_DEF.defaultSort,
         cursor: null,
       };
@@ -307,7 +307,7 @@ describe("refusals", () => {
     expect(seen).toEqual([]);
   });
 
-  test("a quick filter past its budget is a 400 too_broad", async () => {
+  test("a search past its budget is a 400 too_broad", async () => {
     const canceled: SqlExecutor = async () => {
       throw Object.assign(new Error("canceling statement"), { code: "57014" });
     };

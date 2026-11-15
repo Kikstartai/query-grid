@@ -58,8 +58,8 @@ export async function pick(page: Page, field: string, ...options: string[]) {
   await page.keyboard.press("Escape");
 }
 
-export async function quick(page: Page, text: string) {
-  const input = bar(page).locator("[data-filter=quick]");
+export async function search(page: Page, text: string) {
+  const input = bar(page).locator("[data-filter=search]");
   await input.fill(text);
   await input.press("Enter");
 }

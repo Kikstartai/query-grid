@@ -68,14 +68,14 @@ Measured 2026-11-15 over 620,000 orders, 30 runs per query after 3 warm-ups; tim
 | status_code =, channel =, sort created_at            | deep keyset page asc       |  1.01 |  1.25 | Limit → Index Scan (orders_qs_status_code**channel**created_at)                  | yes  |
 | status_code =, channel =, sort created_at            | capped count               |  2.85 |  3.87 | Aggregate → Limit → Index Only Scan (orders_qs_status_code**channel**created_at) | yes  |
 | status_code =, channel =, sort created_at            | capped total               | 12.78 | 17.10 | Aggregate → Limit → Index Scan (orders_qs_status_code**channel**created_at)      | yes  |
-| quick filter over customer_name, order_number        | “Smith”, capped page       |  2.17 |  2.32 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “Mokoena”, capped page     |  7.39 | 11.52 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “Zanele Dlam”, capped page |  6.44 |  6.74 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “mok”, capped page         |  9.88 | 16.02 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “a M”, capped page         | 15.03 | 19.00 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “12345”, capped page       |  0.46 |  0.51 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “ena 4”, capped page       |  9.42 | 10.06 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_quick)                   | yes  |
-| quick filter over customer_name, order_number        | “---”, capped page         |     – |     – | refused by the server in 33 of 33 runs: over the 120 ms quick filter budget      | yes  |
+| search over customer_name, order_number              | “Smith”, capped page       |  2.17 |  2.32 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “Mokoena”, capped page     |  7.39 | 11.52 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “Zanele Dlam”, capped page |  6.44 |  6.74 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “mok”, capped page         |  9.88 | 16.02 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “a M”, capped page         | 15.03 | 19.00 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “12345”, capped page       |  0.46 |  0.51 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “ena 4”, capped page       |  9.42 | 10.06 | Limit → Bitmap Heap Scan → Bitmap Index Scan (orders_qs_search)                  | yes  |
+| search over customer_name, order_number              | “---”, capped page         |     – |     – | refused by the server in 33 of 33 runs: over the 120 ms search budget            | yes  |
 
 ## Several values per field: 80 of 80 pass
 

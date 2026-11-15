@@ -5,9 +5,9 @@ import {
   isValidFieldValue,
   KEY_FIELD,
   isQueryIndexed,
-  listQuickFields,
+  listSearchFields,
   PAGE_LIMIT_MAX,
-  QUICK_LIMIT,
+  SEARCH_LIMIT,
   validateQueryValues,
   type BaseFieldDef,
   type FieldType,
@@ -130,21 +130,21 @@ function requireField(def: PostgresGridDef, key: string): BaseFieldDef {
   return field;
 }
 
-function quickPart(field: BaseFieldDef, prefix: string): string {
+function searchPart(field: BaseFieldDef, prefix: string): string {
   const name = `${prefix}${identifier(field.key)}`;
   const text =
     field.type === "text" || field.type === "enum" ? name : `${name}::text`;
   return field.nullable ? `coalesce(${text}, '')` : text;
 }
 
-export function quickExpression(def: PostgresGridDef, prefix = ""): string {
-  return listQuickFields(def)
-    .map((key) => quickPart(requireField(def, key), prefix))
+export function searchExpression(def: PostgresGridDef, prefix = ""): string {
+  return listSearchFields(def)
+    .map((key) => searchPart(requireField(def, key), prefix))
     .join(" || ' ' || ");
 }
 
 export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
-  if (!isQueryIndexed(def.indexes, listQuickFields(def), query)) {
+  if (!isQueryIndexed(def.indexes, listSearchFields(def), query)) {
     throw new QueryRejected("unindexed_query");
   }
   const problem = validateQueryValues(def, query);
@@ -210,10 +210,10 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
       );
     }
   }
-  if (query.quick !== null) {
-    const pattern = `%${escapeLike(query.quick.trim())}%`;
+  if (query.search !== null) {
+    const pattern = `%${escapeLike(query.search.trim())}%`;
     clauses.push(
-      `(${quickExpression(def, `${TABLE_ALIAS}.`)}) ILIKE ${params.addText(pattern)}`,
+      `(${searchExpression(def, `${TABLE_ALIAS}.`)}) ILIKE ${params.addText(pattern)}`,
     );
   }
   return { params, clauses };
@@ -238,9 +238,9 @@ export function buildPageSql(
   const { params, clauses } = filter(def, query);
   const select = selectList(def);
   const table = from(def);
-  if (query.quick !== null) {
+  if (query.search !== null) {
     return {
-      text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${QUICK_LIMIT + 1}`,
+      text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${SEARCH_LIMIT + 1}`,
       values: params.values,
     };
   }
@@ -317,7 +317,7 @@ export function buildCappedTotalSql(
       `coalesce(sum(capped.${identifier(key)}), 0)::float8 AS ${sumColumn(key)}`,
   );
   const order =
-    query.quick === null
+    query.search === null
       ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
       : "";
   return {
@@ -345,10 +345,10 @@ export function toPageResult(
   rows: GridRow[],
   limit: number,
 ): PageResult {
-  if (query.quick !== null) {
-    const hasNext = rows.length > QUICK_LIMIT;
+  if (query.search !== null) {
+    const hasNext = rows.length > SEARCH_LIMIT;
     return {
-      rows: hasNext ? rows.slice(0, QUICK_LIMIT) : rows,
+      rows: hasNext ? rows.slice(0, SEARCH_LIMIT) : rows,
       nextCursor: null,
       hasNext,
     };

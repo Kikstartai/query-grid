@@ -1,13 +1,17 @@
 import {
   KEY_FIELD,
-  listQuickFields,
+  listSearchFields,
   type IndexDef,
 } from "@kikstart/query-grid";
 
-import { describeQuick, describeIndex, validateGridDef } from "./index-defs.ts";
+import {
+  describeSearch,
+  describeIndex,
+  validateGridDef,
+} from "./index-defs.ts";
 import {
   identifier,
-  quickExpression,
+  searchExpression,
   shortenIdentifier,
   sumColumn,
 } from "./sql-builder.ts";
@@ -61,19 +65,19 @@ function createIndex(concurrently: boolean): string {
     : "CREATE INDEX IF NOT EXISTS";
 }
 
-function quickIndex(
+function searchIndex(
   def: PostgresGridDef,
-  quick: string[],
+  search: string[],
   concurrently: boolean,
 ): IndexDdl {
   const table = identifier(def.table);
-  const name = shortenIdentifier(`${table}_qs_quick`);
+  const name = shortenIdentifier(`${table}_qs_search`);
   return {
-    note: describeQuick(quick),
+    note: describeSearch(search),
     name,
     method: "gin",
-    columns: quick.map(identifier),
-    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin ((${quickExpression(def)}) ${TRGM_OPS});`,
+    columns: search.map(identifier),
+    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin ((${searchExpression(def)}) ${TRGM_OPS});`,
   };
 }
 
@@ -107,9 +111,9 @@ export function listIndexDdl(
   const ordered = def.indexes.map((index) =>
     indexDdl(def, index, concurrently),
   );
-  const quick = listQuickFields(def);
-  return quick.length > 0
-    ? [...ordered, quickIndex(def, quick, concurrently)]
+  const search = listSearchFields(def);
+  return search.length > 0
+    ? [...ordered, searchIndex(def, search, concurrently)]
     : ordered;
 }
 
@@ -283,7 +287,7 @@ function indexSteps(
   )
     ? [
         {
-          note: "The quick filter needs trigram indexes.",
+          note: "The search needs trigram indexes.",
           sql: "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
           transaction: false,
         },

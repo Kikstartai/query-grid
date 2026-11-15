@@ -14,7 +14,7 @@ import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
   FilterChips,
-  QuickFilter,
+  SearchFilter,
   SortControl,
 } from "./filter-bar.tsx";
 import { FilterSidebar } from "./filter-sidebar.tsx";
@@ -225,10 +225,10 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).toContain("Drag a card");
   });
 
-  test("FilterBar, SortControl and QuickFilter", () => {
+  test("FilterBar, SortControl and SearchFilter", () => {
     const html = render(
       <FilterBar>
-        <QuickFilter value="" onValueChange={noop} fieldLabels={["Name"]} />
+        <SearchFilter value="" onValueChange={noop} fieldLabels={["Name"]} />
         <SortControl
           options={[
             { value: "created_at", label: "Created" },
@@ -241,7 +241,7 @@ describe("each base component mounts alone, with plain props and no provider", (
       </FilterBar>,
     );
     expect(html).toContain('role="toolbar"');
-    expect(html).toContain('placeholder="Quick filter: Name"');
+    expect(html).toContain('placeholder="Search: Name"');
     expect(html).toContain('aria-label="Sort by"');
     expect(html).toContain('aria-label="Descending"');
   });

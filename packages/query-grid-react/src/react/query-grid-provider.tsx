@@ -328,8 +328,8 @@ export function formatReason(
 }
 
 function isOffered(offers: Offers, target: OfferTarget): boolean {
-  if (target.kind === "quick") {
-    return offers.quick;
+  if (target.kind === "search") {
+    return offers.search;
   }
   const fields = {
     equals: offers.equals,
@@ -365,7 +365,7 @@ export function formatChip(
   chip: FilterChip,
 ): ChipItem {
   const label =
-    "field" in chip ? getFieldLabel(def, chip.field) : messages.quickFilter;
+    "field" in chip ? getFieldLabel(def, chip.field) : messages.searchFilter;
   const removable = chip.clear !== null;
   switch (chip.kind) {
     case "equals":
@@ -390,11 +390,11 @@ export function formatChip(
         }),
         removable,
       };
-    case "quick":
+    case "search":
       return {
         id: chip.id,
         kind: chip.kind,
-        label: messages.chipQuick({ value: chip.value }),
+        label: messages.chipSearch({ value: chip.value }),
         removable,
       };
     case "sort":

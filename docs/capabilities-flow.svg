@@ -36,7 +36,7 @@
     <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">capabilities(indexes)</text></g>
   <g class="core"><rect x="230" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="340" y="250" text-anchor="middle" dominant-baseline="central">Capabilities</text>
-    <text class="ts" x="340" y="270" text-anchor="middle" dominant-baseline="central">isAnswerable, sort, quick</text></g>
+    <text class="ts" x="340" y="270" text-anchor="middle" dominant-baseline="central">isAnswerable, sort, search</text></g>
   <g class="react"><rect x="230" y="328" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="340" y="346" text-anchor="middle" dominant-baseline="central">QueryGridProvider</text>
     <text class="ts" x="340" y="366" text-anchor="middle" dominant-baseline="central">Query store and stores</text></g>

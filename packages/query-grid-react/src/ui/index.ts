@@ -10,7 +10,7 @@ export {
   FilterBar,
   FilterChips,
   FilterSidebar,
-  QuickFilter,
+  SearchFilter,
   SortControl,
   type FieldFilterProps,
   type FilterBarProps,

@@ -1,7 +1,7 @@
 import {
   COUNT_CAP,
   isFacetOnlyQuery,
-  QUICK_LIMIT,
+  SEARCH_LIMIT,
   type CountResult,
   type FacetCount,
   type GridRow,
@@ -24,10 +24,10 @@ import {
 } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
-export const QUICK_BUDGET_MS = 120;
-export const QUICK_SETTINGS = [
+export const SEARCH_BUDGET_MS = 120;
+export const SEARCH_SETTINGS = [
   "enable_seqscan = off",
-  `statement_timeout = ${QUICK_BUDGET_MS}`,
+  `statement_timeout = ${SEARCH_BUDGET_MS}`,
 ];
 export const TOTAL_SETTINGS = ["enable_sort = off"];
 export const QUERY_CANCELED = "57014";
@@ -42,7 +42,7 @@ export type SqlExecutor = <T extends object>(
 ) => Promise<T[]>;
 
 function resolveCap(query: QueryState): number {
-  return query.quick !== null ? QUICK_LIMIT : COUNT_CAP;
+  return query.search !== null ? SEARCH_LIMIT : COUNT_CAP;
 }
 
 async function runFiltered<T extends object>(
@@ -52,11 +52,11 @@ async function runFiltered<T extends object>(
   settings?: string[],
   signal?: AbortSignal,
 ): Promise<T[]> {
-  if (query.quick === null) {
+  if (query.search === null) {
     return execute<T>(sql, settings, signal);
   }
   try {
-    return await execute<T>(sql, QUICK_SETTINGS, signal);
+    return await execute<T>(sql, SEARCH_SETTINGS, signal);
   } catch (error) {
     const canceled = (error as { code?: string }).code === QUERY_CANCELED;
     if (canceled && !signal?.aborted) {

@@ -78,7 +78,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
   defaultSort: { field: "due_at", direction: "asc" },
   facet: { field: "status" },
   totals: ["budget"],
-  quick: ["title", "assignee", "number"],
+  search: ["title", "assignee", "number"],
   fields: [
     {
       key: "number",

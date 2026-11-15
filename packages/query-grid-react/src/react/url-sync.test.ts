@@ -52,9 +52,9 @@ describe("createUrlSync", () => {
     expect(written).toEqual([{ search: "f.status=open", history: "push" }]);
   });
 
-  test("the quick filter is written as a replace", () => {
+  test("the search is written as a replace", () => {
     const { store, written } = createHarness();
-    store.dispatch({ type: "setQuick", value: "acme" });
+    store.dispatch({ type: "setSearch", value: "acme" });
     expect(written.map((item) => item.history)).toEqual(["replace"]);
   });
 

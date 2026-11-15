@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { QueryRules, QueryState } from "./field-types.ts";
 import {
   TEST_DEF,
-  TEST_QUICK_FIELDS,
+  TEST_SEARCH_FIELDS,
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import {
@@ -24,10 +24,10 @@ const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);
 const CAPS = indexCapabilities(INDEXES, {
   facetField: "status",
-  quickFields: TEST_QUICK_FIELDS,
+  searchFields: TEST_SEARCH_FIELDS,
 });
-const CAPPED: QueryRules = { capabilities: CAPS, quickComplete: false };
-const COMPLETE: QueryRules = { capabilities: CAPS, quickComplete: true };
+const CAPPED: QueryRules = { capabilities: CAPS, searchComplete: false };
+const COMPLETE: QueryRules = { capabilities: CAPS, searchComplete: true };
 
 describe("offers from declared indexes", () => {
   test("a sort narrows the filters an index answers", () => {
@@ -42,7 +42,7 @@ describe("offers from declared indexes", () => {
       multi: ["status"],
       sorts: ["created_at", "total"],
       ranges: ["total"],
-      quick: true,
+      search: true,
     });
     expect(listOffers(TEST_DEF, BASE, CAPPED).equals).toEqual([
       "status",
@@ -82,36 +82,36 @@ describe("offers from declared indexes", () => {
     expect(getIndex(INDEXES, cleared)).not.toBeNull();
   });
 
-  test("a quick filter disables everything until every match is loaded", () => {
-    const quick = applyAction(
+  test("a search disables everything until every match is loaded", () => {
+    const search = applyAction(
       TEST_DEF,
       BASE,
-      { type: "setQuick", value: "abc" },
+      { type: "setSearch", value: "abc" },
       CAPPED,
     );
-    expect(quick.quick).toBe("abc");
-    expect(listOffers(TEST_DEF, quick, CAPPED)).toEqual({
+    expect(search.search).toBe("abc");
+    expect(listOffers(TEST_DEF, search, CAPPED)).toEqual({
       equals: [],
       multi: [],
       sorts: [],
       ranges: [],
-      quick: true,
+      search: true,
     });
-    expect(listOffers(TEST_DEF, quick, COMPLETE).sorts).toEqual([
+    expect(listOffers(TEST_DEF, search, COMPLETE).sorts).toEqual([
       "created_at",
       "total",
     ]);
-    expect(listOffers(TEST_DEF, quick, COMPLETE).equals).toEqual([]);
+    expect(listOffers(TEST_DEF, search, COMPLETE).equals).toEqual([]);
   });
 
-  test("a quick filter is not offered beside another filter", () => {
+  test("a search is not offered beside another filter", () => {
     const filtered: QueryState = { ...BASE, equals: { status: ["open"] } };
-    expect(listOffers(TEST_DEF, filtered, CAPPED).quick).toBe(false);
+    expect(listOffers(TEST_DEF, filtered, CAPPED).search).toBe(false);
     expect(
       applyAction(
         TEST_DEF,
         filtered,
-        { type: "setQuick", value: "abc" },
+        { type: "setSearch", value: "abc" },
         CAPPED,
       ),
     ).toBe(filtered);
@@ -123,7 +123,7 @@ describe("offers from declared indexes", () => {
     );
     const rules: QueryRules = {
       capabilities: indexCapabilities(single),
-      quickComplete: false,
+      searchComplete: false,
     };
     const offers = listOffers(TEST_DEF, BASE, rules);
     expect(offers.equals).toEqual(["status", "region"]);
@@ -146,8 +146,8 @@ describe("reachable states", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(TEST_DEF, rules);
       for (const state of states) {
-        expect(isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, state)).toBe(true);
-        if (state.quick === null) {
+        expect(isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, state)).toBe(true);
+        if (state.search === null) {
           reached.add(indexId(getIndex(INDEXES, state)!));
         }
       }

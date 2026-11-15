@@ -10,7 +10,7 @@ import {
 
 import type { PostgresGridDef } from "./storage.ts";
 
-const QUICK_TYPES: BaseFieldDef["type"][] = [
+const SEARCH_TYPES: BaseFieldDef["type"][] = [
   "text",
   "enum",
   "integer",
@@ -18,8 +18,8 @@ const QUICK_TYPES: BaseFieldDef["type"][] = [
   "id",
 ];
 
-export function describeQuick(columns: string[]): string {
-  return `quick filter over ${columns.join(", ")}`;
+export function describeSearch(columns: string[]): string {
+  return `search over ${columns.join(", ")}`;
 }
 
 export function describeIndex(index: IndexDef): string {
@@ -30,20 +30,20 @@ export function describeIndex(index: IndexDef): string {
   return `${filters}, sort ${index.sort}${range}`;
 }
 
-function validateQuick(def: PostgresGridDef, columns: string[]): string[] {
+function validateSearch(def: PostgresGridDef, columns: string[]): string[] {
   const problems: string[] = [];
   if (columns.length === 0) {
-    problems.push("the quick filter lists no columns");
+    problems.push("the search lists no columns");
   }
   for (const key of columns) {
     const field = getField(def, key);
     if (!field) {
-      problems.push(`quick filter: unknown field ${key}`);
+      problems.push(`search: unknown field ${key}`);
       continue;
     }
-    if (!QUICK_TYPES.includes(field.type)) {
+    if (!SEARCH_TYPES.includes(field.type)) {
       problems.push(
-        `quick filter: ${key} is a ${field.type}, which has no immutable text form to index`,
+        `search: ${key} is a ${field.type}, which has no immutable text form to index`,
       );
     }
   }
@@ -53,7 +53,7 @@ function validateQuick(def: PostgresGridDef, columns: string[]): string[] {
 function validateOrderedIndex(def: PostgresGridDef, index: IndexDef): string[] {
   if (!Array.isArray(index.equals)) {
     return [
-      "an index needs `equals` and `sort`; the quick columns are `quick` on the def",
+      "an index needs `equals` and `sort`; the search columns are `search` on the def",
     ];
   }
   const id = indexId(index);
@@ -109,8 +109,8 @@ export function validateGridDef(def: PostgresGridDef): string[] {
   if (!getField(def, KEY_FIELD)) {
     problems.push(`the grid has no "${KEY_FIELD}" field`);
   }
-  if (def.quick) {
-    problems.push(...validateQuick(def, def.quick));
+  if (def.search) {
+    problems.push(...validateSearch(def, def.search));
   }
   for (const index of def.indexes) {
     if (!Array.isArray(index.equals)) {

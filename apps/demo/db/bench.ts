@@ -15,12 +15,12 @@ import {
   buildFacetSql,
   buildPageSql,
   buildRowSql,
-  describeQuick,
+  describeSearch,
   describeIndex,
   encodeCursor,
   QUERY_CANCELED,
-  QUICK_BUDGET_MS,
-  QUICK_SETTINGS,
+  SEARCH_BUDGET_MS,
+  SEARCH_SETTINGS,
   TOTAL_SETTINGS,
   type SqlQuery,
 } from "@kikstart/query-grid-postgres";
@@ -33,7 +33,7 @@ const PAGE = 200;
 const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
 const MULTI_SIZES = [2, 5];
-const QUICK_TERMS = [
+const SEARCH_TERMS = [
   "Smith",
   "Mokoena",
   "Zanele Dlam",
@@ -127,7 +127,7 @@ async function measure(
       variant,
       p50: Number.NaN,
       p95: Number.NaN,
-      nodes: `refused by the server in ${refused} of ${RUNS + 3} runs: over the ${QUICK_BUDGET_MS} ms quick filter budget`,
+      nodes: `refused by the server in ${refused} of ${RUNS + 3} runs: over the ${SEARCH_BUDGET_MS} ms search budget`,
       ok: true,
     };
   }
@@ -358,20 +358,23 @@ async function benchOrdered(
   return results;
 }
 
-async function benchQuick(client: Client, quick: string[]): Promise<Result[]> {
+async function benchSearch(
+  client: Client,
+  search: string[],
+): Promise<Result[]> {
   const results: Result[] = [];
-  for (const value of QUICK_TERMS) {
+  for (const value of SEARCH_TERMS) {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID_DEF),
-      quick: value,
+      search: value,
     };
     results.push(
       await measure(
         client,
-        describeQuick(quick),
+        describeSearch(search),
         `“${value}”, capped page`,
         buildPageSql(ORDERS_GRID_DEF, query, PAGE),
-        QUICK_SETTINGS,
+        SEARCH_SETTINGS,
       ),
     );
   }
@@ -463,10 +466,10 @@ async function main(): Promise<void> {
     results.push(...batch);
     console.log(`${describeIndex(index)}: ${batch.length} queries`);
   }
-  const quick = await benchQuick(client, ORDERS_GRID_DEF.quick);
-  results.push(...quick);
+  const search = await benchSearch(client, ORDERS_GRID_DEF.search);
+  results.push(...search);
   console.log(
-    `${describeQuick(ORDERS_GRID_DEF.quick)}: ${quick.length} queries`,
+    `${describeSearch(ORDERS_GRID_DEF.search)}: ${search.length} queries`,
   );
   const counters = await benchCounters(client);
   results.push(...counters);

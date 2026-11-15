@@ -16,7 +16,7 @@ describe("validateGridDef", () => {
       fields: TEST_DEF.fields.map((field) =>
         field.key === "total" ? { ...field, currency: "rand" } : field,
       ),
-      quick: ["created_at", "missing"],
+      search: ["created_at", "missing"],
       indexes: [
         { equals: [], sort: "note" },
         { equals: ["missing"], sort: "total" },

@@ -55,7 +55,7 @@ Three npm packages in one repo, released together at one version.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
 - The filter controls are `EqualsSelect`, `LookupFilter` and `RangeFilter`. The bound `FieldFilter` picks one from the capabilities, the field's `type` and its `options`.
-- The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the quick filter, the default control of each named field in that order, then the sort. Without it they show every filterable field. `children` replaces everything.
+- The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then the sort. Without it they show every filterable field. `children` replaces everything.
 - `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `search` string and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
 - `styles.css` styles only the package's own elements, reads the `--ui-*` tokens of `@ui-sdk/core/web.css` and defines none.
 
@@ -84,7 +84,7 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 - A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `money`, `datetime`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
 - The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores indexes and storage.
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
-- An index is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each is one `CREATE INDEX`; the quick filter's columns are `quick` on the def, with one index of their own.
+- An index is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each is one `CREATE INDEX`; the search's columns are `search` on the def, with one index of their own.
 - An index's equality fields take several values each unless it sets `multi: false`.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
@@ -99,15 +99,15 @@ interface Capabilities {
   equalsFields: string[];
   rangeFields: string[];
   sortFields: string[];
-  quickFields: string[];
+  searchFields: string[];
   isFacetCountShown: (query: QueryState) => boolean;
 }
 ```
 
-- `indexCapabilities(indexes, { facetField, quickFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `quickFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `indexCapabilities(indexes, { facetField, searchFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `searchFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
 - `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
 - `isAnswerable` is the answer for one query. The field lists are what could ever be asked.
-- `QueryRules` is the capabilities plus whether a quick-filter result is complete.
+- `QueryRules` is the capabilities plus whether a search result is complete.
 - `listOffers(def, query, rules)` says what the next action may be. `applyAction` refuses an action whose result the capabilities do not answer. `explainUnavailable(query, target, rules)` gives the reason as a code.
 - The control for a field follows from the capabilities, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
 - The URL keys a provider owns are the capabilities' fields. Any other parameter is left alone.
@@ -118,7 +118,7 @@ interface Capabilities {
 interface QueryState {
   equals: Record<string, string[]>;
   range: { field: string; min: string | null; max: string | null } | null;
-  quick: string | null;
+  search: string | null;
   sort: { field: string; direction: "asc" | "desc" };
   cursor: string | null;
 }
@@ -126,9 +126,10 @@ interface QueryState {
 
 - Filters combine with AND. Within one field, equality takes several values, up to the field's `maxValues` (default 20). There is no OR across fields.
 - One query holds at most one range, on its sort field for a server grid.
-- The quick filter takes 3 to 80 characters and runs alone on a server grid.
+- The search takes 3 to 80 characters and runs alone on a server grid.
+- The search is an unranked, case-insensitive substring match (`ILIKE '%term%'`) over the def's `search` columns joined with spaces, backed by a `pg_trgm` GIN index. It is not full-text search: no stemming, no ranking, no order.
 - The URL is the source of truth: `f.<field>` repeated per value, `r.<field>=min..max`, `q`, `sort=<field>.<direction>` and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
-- A filter, range, sort, view or reset pushes a history entry. The quick filter replaces. A URL nothing answers is rewritten to the default.
+- A filter, range, sort, view or reset pushes a history entry. The search replaces. A URL nothing answers is rewritten to the default.
 - Column layout stays out of the URL.
 
 ## Wire protocol
@@ -149,7 +150,7 @@ interface QueryState {
 - An error body is `{ error, message, code, params }`. `error` is the category, `code` the specific reason, `message` the code and its params for logs.
 - A refusal is a 400, a refused transition a 409, an unknown route or an omitted hook a 404, a wrong method a 405, an aborted request a 499 and anything else a 500.
 - Every response is `no-store` and carries `server-timing`.
-- `limit` defaults to 200 and is capped at 1,000. A count is capped at 10,000 and a quick-filter result at 500 rows.
+- `limit` defaults to 200 and is capped at 1,000. A count is capped at 10,000 and a search result at 500 rows.
 - `/facets` ignores the query: facet counts are whole-table counts.
 - A total is unavailable per field, as `over_cap` with the cap.
 - Every read runs under `request.signal`, which is the third argument of the host's `execute` and of the hooks.
@@ -158,13 +159,13 @@ interface QueryState {
 
 ## Storage
 
-- **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key. The def's `quick` is one trigram index over the concatenated columns.
+- **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key. The def's `search` is one trigram index over the concatenated columns.
 - **Paging is keyset**, on the sort and the key, in both directions.
 - **One value is `= $n`; several are `= ANY($n)`** with one array parameter. SQL is never built from a value.
 - **The counter table** holds one row per facet value: `row_count` and one `<field>_sum` column per total field. Three row triggers keep it current, on insert, delete and update of the facet field or of a total field.
 - **Counts.** A query that filters on the facet alone reads the counter table. Any other is counted up to the cap, and the exact count is a separate request.
 - **Totals.** A query that filters on the facet alone reads the counter table. Any other is summed live in one statement for every total field, over the index scan, and only when at most 10,000 rows match.
-- **The quick filter** runs under a 120 ms statement budget and answers `too_broad` past it.
+- **The search** runs under a 120 ms statement budget and answers `too_broad` past it.
 - **The migration** is generated from the defs: one `CREATE INDEX CONCURRENTLY` per index, then three counter steps. The first installs the triggers, which keep the counter table current and log each change. The second counts the table from one snapshot, with no table lock. The third replaces the counters with the count plus the changes logged since. A run that stops anywhere leaves the counters following every write, and resumes from the top or from the step that failed.
 - **A total added to a def** is a new counter column. The migration is run again, and the new sum is exact once its third step has run.
 
@@ -192,7 +193,7 @@ interface QueryState {
 - **Write amplification.** Each insert writes every index. Write cost is proportional to the index count.
 - **Counters.** A write costs one counter-row upsert per insert or delete, and two per change of the facet field or of a total field. Each extra total adds one counter-column update to that same upsert, not another statement. The counter row is a hot row under concurrent writes to one facet value.
 - **Several values per field.** `= ANY` has no single index order to read, so the cost grows with the table. An index whose page misses the budget is declared `multi: false`.
-- **The quick filter** is bounded by its time budget, not by the index, and its threshold falls as the table grows.
+- **The search** is bounded by its time budget, not by the index, and its threshold falls as the table grows.
 - **Rollout.** Indexes are built `CONCURRENTLY` and never block writes. The counter backfill is one snapshot read of the table with two brief table locks around it.
 
 ## Invariants the tests hold

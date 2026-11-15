@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { Capabilities, BaseGridDef } from "./field-types.ts";
 import type { IndexDef } from "./indexes.ts";
 
-export const TEST_QUICK_FIELDS = ["name", "number"];
+export const TEST_SEARCH_FIELDS = ["name", "number"];
 
 export const TEST_INDEXES: IndexDef[] = [
   { equals: [], sort: "created_at", range: true },
@@ -17,7 +17,7 @@ export const TEST_DEF: BaseGridDef = {
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status" },
   totals: ["total", "number"],
-  quick: TEST_QUICK_FIELDS,
+  search: TEST_SEARCH_FIELDS,
   fields: [
     { key: "id", label: "ID", type: "id" },
     { key: "number", label: "Number", type: "integer" },

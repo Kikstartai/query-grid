@@ -24,8 +24,8 @@ const INDEXES = ORDERS_GRID_DEF.indexes;
 const CAPABILITIES = createHttpSource(ORDERS_GRID_DEF, ORDERS_API).capabilities;
 
 const RULES: QueryRules[] = [
-  { capabilities: CAPABILITIES, quickComplete: false },
-  { capabilities: CAPABILITIES, quickComplete: true },
+  { capabilities: CAPABILITIES, searchComplete: false },
+  { capabilities: CAPABILITIES, searchComplete: true },
 ];
 
 describe("orders grid def", () => {
@@ -34,7 +34,10 @@ describe("orders grid def", () => {
   });
 
   test("the one def gives the client its capabilities and its cells", () => {
-    expect(CAPABILITIES.quickFields).toEqual(["customer_name", "order_number"]);
+    expect(CAPABILITIES.searchFields).toEqual([
+      "customer_name",
+      "order_number",
+    ]);
     expect(CAPABILITIES.isFacetCountShown(defaultQuery(ORDERS_GRID_DEF))).toBe(
       true,
     );
@@ -48,10 +51,10 @@ describe("orders grid def", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(ORDERS_GRID_DEF, rules);
       for (const state of states) {
-        expect(isQueryIndexed(INDEXES, ORDERS_GRID_DEF.quick, state)).toBe(
+        expect(isQueryIndexed(INDEXES, ORDERS_GRID_DEF.search, state)).toBe(
           true,
         );
-        if (state.quick === null) {
+        if (state.search === null) {
           reached.add(indexId(getIndex(INDEXES, state)!));
         }
       }

@@ -8,7 +8,7 @@ import {
   type QueryRules,
   type QueryState,
 } from "./field-types.ts";
-import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
+import { TEST_DEF, TEST_SEARCH_FIELDS } from "./grid-def.fixture.ts";
 import { memoryCapabilities } from "./memory-source.ts";
 import {
   applyAction,
@@ -31,14 +31,14 @@ const SERVER: Capabilities = {
   equalsFields: ["status", "region"],
   rangeFields: ["created_at", "total"],
   sortFields: ["created_at", "total"],
-  quickFields: TEST_QUICK_FIELDS,
+  searchFields: TEST_SEARCH_FIELDS,
   isFacetCountShown: () => true,
 };
-const CAPPED: QueryRules = { capabilities: SERVER, quickComplete: false };
-const COMPLETE: QueryRules = { capabilities: SERVER, quickComplete: true };
+const CAPPED: QueryRules = { capabilities: SERVER, searchComplete: false };
+const COMPLETE: QueryRules = { capabilities: SERVER, searchComplete: true };
 const MEMORY: QueryRules = {
   capabilities: memoryCapabilities(TEST_DEF),
-  quickComplete: false,
+  searchComplete: false,
 };
 
 describe("filter kinds", () => {
@@ -129,7 +129,7 @@ describe("actions", () => {
     };
     const rules: QueryRules = {
       capabilities: memoryCapabilities(capped),
-      quickComplete: false,
+      searchComplete: false,
     };
     expect(
       applyAction(
@@ -170,12 +170,12 @@ describe("actions", () => {
     });
   });
 
-  test("setting the quick filter returns to the default sort on a server", () => {
+  test("setting the search returns to the default sort on a server", () => {
     const byTotal: QueryState = {
       ...BASE,
       sort: { field: "total", direction: "asc" },
     };
-    const action = { type: "setQuick", value: "abc" } as const;
+    const action = { type: "setSearch", value: "abc" } as const;
     expect(applyAction(TEST_DEF, byTotal, action, CAPPED).sort).toEqual(
       TEST_DEF.defaultSort,
     );
@@ -218,24 +218,24 @@ describe("the reason a control is unavailable", () => {
       range: null,
       sort: "total",
     });
-    expect(explainUnavailable(byTotal, { kind: "quick" }, CAPPED).code).toBe(
-      "quick_alone",
+    expect(explainUnavailable(byTotal, { kind: "search" }, CAPPED).code).toBe(
+      "search_alone",
     );
   });
 
-  test("a quick filter names why the sort is held", () => {
-    const quick: QueryState = { ...BASE, quick: "abc" };
+  test("a search names why the sort is held", () => {
+    const search: QueryState = { ...BASE, search: "abc" };
     const target = { kind: "sort", field: "total" } as const;
-    expect(explainUnavailable(quick, target, CAPPED).code).toBe(
-      "quick_unordered",
+    expect(explainUnavailable(search, target, CAPPED).code).toBe(
+      "search_unordered",
     );
-    expect(explainUnavailable(quick, target, COMPLETE).code).toBe(
+    expect(explainUnavailable(search, target, COMPLETE).code).toBe(
       "no_sort_index",
     );
     expect(
-      explainUnavailable(quick, { kind: "equals", field: "status" }, CAPPED)
+      explainUnavailable(search, { kind: "equals", field: "status" }, CAPPED)
         .code,
-    ).toBe("quick_no_combine");
+    ).toBe("search_no_combine");
   });
 });
 
@@ -245,7 +245,7 @@ describe("memory mode", () => {
       ...BASE,
       equals: { status: ["open", "done"], region: ["north"] },
       range: { field: "total", min: "1", max: null },
-      quick: "abc",
+      search: "abc",
       sort: { field: "name", direction: "asc" },
     };
     expect(MEMORY.capabilities.isAnswerable(busy)).toBe(true);
@@ -253,13 +253,13 @@ describe("memory mode", () => {
     expect(offers.equals).toEqual(["id", "status", "region", "name", "note"]);
     expect(offers.ranges).toEqual(["number", "created_at", "total"]);
     expect(offers.sorts).toEqual(TEST_DEF.fields.map((field) => field.key));
-    expect(offers.quick).toBe(true);
+    expect(offers.search).toBe(true);
   });
 
-  test("no quick fields means no quick filter", () => {
-    const bare = memoryCapabilities({ ...TEST_DEF, quick: undefined });
-    expect(bare.isAnswerable({ ...BASE, quick: "abc" })).toBe(false);
-    expect(bare.quickFields).toEqual([]);
+  test("no search fields means no search", () => {
+    const bare = memoryCapabilities({ ...TEST_DEF, search: undefined });
+    expect(bare.isAnswerable({ ...BASE, search: "abc" })).toBe(false);
+    expect(bare.searchFields).toEqual([]);
   });
 
   test("every reachable state is answerable, with several values included", () => {
@@ -289,11 +289,11 @@ describe("the store and browser history", () => {
     expect(store.getHistoryWrite()).toBe("replace");
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
     expect(store.getHistoryWrite()).toBe("push");
-    store.dispatch({ type: "setQuick", value: "abc" });
+    store.dispatch({ type: "setSearch", value: "abc" });
     expect(store.getHistoryWrite()).toBe("replace");
     store.setView("list");
     expect(store.getHistoryWrite()).toBe("push");
-    store.dispatch({ type: "clearQuick" });
+    store.dispatch({ type: "clearSearch" });
     expect(store.getHistoryWrite()).toBe("replace");
     store.dispatch({ type: "reset" });
     expect(store.getHistoryWrite()).toBe("push");
@@ -357,7 +357,7 @@ describe("the URL", () => {
     const query: QueryState = {
       equals: { status: ["open"] },
       range: { field: "total", min: "100", max: null },
-      quick: null,
+      search: null,
       sort: { field: "total", direction: "asc" },
       cursor: "abc",
     };
@@ -414,8 +414,8 @@ describe("the URL", () => {
     expect(({} as Record<string, unknown>).x).toBeUndefined();
   });
 
-  test("the quick filter and the default sort", () => {
-    const query = { ...BASE, quick: "smi th" };
+  test("the search and the default sort", () => {
+    const query = { ...BASE, search: "smi th" };
     const params = encodeQuery(TEST_DEF, query);
     expect(params.toString()).toBe("q=smi+th");
     expect(decodeQuery(TEST_DEF, params)).toEqual(query);
@@ -430,8 +430,8 @@ describe("values", () => {
     expect(
       validateQueryValues(TEST_DEF, { ...BASE, equals: { missing: ["x"] } }),
     ).toEqual({ code: "unknown_field", params: { field: "missing" } });
-    expect(validateQueryValues(TEST_DEF, { ...BASE, quick: "ab" })).toEqual({
-      code: "quick_length",
+    expect(validateQueryValues(TEST_DEF, { ...BASE, search: "ab" })).toEqual({
+      code: "search_length",
       params: { min: 3, max: 80 },
     });
     expect(validateQueryValues(TEST_DEF, BASE)).toBeNull();
@@ -524,14 +524,14 @@ describe("chips", () => {
   });
 });
 
-describe("the sort under an unordered quick filter", () => {
+describe("the sort under an unordered search", () => {
   const open: Capabilities = { ...SERVER, isAnswerable: () => true };
 
   test("only a return to the default sort is accepted", () => {
-    const rules: QueryRules = { capabilities: open, quickComplete: false };
+    const rules: QueryRules = { capabilities: open, searchComplete: false };
     const stuck: QueryState = {
       ...BASE,
-      quick: "abc",
+      search: "abc",
       sort: { field: "total", direction: "desc" },
     };
     expect(
@@ -552,7 +552,7 @@ describe("the sort under an unordered quick filter", () => {
     ).toEqual(TEST_DEF.defaultSort);
     expect(listOffers(TEST_DEF, stuck, rules).sorts).toEqual([]);
     expect(
-      listOffers(TEST_DEF, stuck, { capabilities: open, quickComplete: true })
+      listOffers(TEST_DEF, stuck, { capabilities: open, searchComplete: true })
         .sorts,
     ).toEqual(["created_at", "total"]);
   });

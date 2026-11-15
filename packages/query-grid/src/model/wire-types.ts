@@ -42,5 +42,5 @@ export interface OptionSearch {
 }
 
 export const PAGE_LIMIT_MAX = 1000;
-export const QUICK_LIMIT = 500;
+export const SEARCH_LIMIT = 500;
 export const COUNT_CAP = 10_000;

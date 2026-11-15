@@ -41,7 +41,7 @@ export const TEST_DEF: PostgresGridDef = {
       nullable: true,
     },
   ],
-  quick: ["name", "number"],
+  search: ["name", "number"],
   indexes: [
     { equals: [], sort: "created_at", range: true },
     { equals: [], sort: "total", range: true },

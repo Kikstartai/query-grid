@@ -64,10 +64,10 @@ test("README screenshots", async ({ page }) => {
   await openGrid(page, "/orders?q=zanele+dlamini");
   await page.locator('[data-header-sort="total"]').click();
   await expect(page).toHaveURL(/sort=total/);
-  await shot(page, "10-quick-filter-answered");
+  await shot(page, "10-search-answered");
   await open(page, "/orders?q=---");
   await expect(page.locator("[data-feed-state=error]")).toBeVisible();
-  await shot(page, "11-quick-filter-refused");
+  await shot(page, "11-search-refused");
 
   await openGrid(page, "/orders");
   await page.locator('[data-header-filter="status_code"] button').click();

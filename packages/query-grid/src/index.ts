@@ -12,7 +12,7 @@ export {
   type ChipValue,
   type EqualsChip,
   type FilterChip,
-  type QuickChip,
+  type SearchChip,
   type RangeChip,
   type SortChip,
 } from "./model/chips.ts";
@@ -21,7 +21,7 @@ export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
   DEFAULT_MAX_VALUES,
   getFacetField,
-  listQuickFields,
+  listSearchFields,
   getField,
   getFieldLabel,
   isDefaultSort,
@@ -95,9 +95,9 @@ export {
 } from "./model/query-url.ts";
 export {
   isValidFieldValue,
-  isValidQuickValue,
-  QUICK_MAX_LENGTH,
-  QUICK_MIN_LENGTH,
+  isValidSearchValue,
+  SEARCH_MAX_LENGTH,
+  SEARCH_MIN_LENGTH,
   validateQueryValues,
 } from "./model/query-validate.ts";
 export { createFeed, type Feed, type FeedState } from "./model/row-feed.ts";
@@ -137,7 +137,7 @@ export {
 export {
   COUNT_CAP,
   PAGE_LIMIT_MAX,
-  QUICK_LIMIT,
+  SEARCH_LIMIT,
   type CountResult,
   type CountSource,
   type FacetCount,

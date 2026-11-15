@@ -148,7 +148,7 @@ describe("the provider under a nuqs adapter", () => {
   test("a parameter the def does not own is left alone", () => {
     expect(renderAt("?utm_source=mail&f.unknown=x&q=name").query).toEqual({
       ...BASE,
-      quick: "name",
+      search: "name",
     });
   });
 
@@ -210,7 +210,7 @@ describe("two grids on one page", () => {
       </NuqsTestingAdapter>,
     );
     expect(first).toEqual({
-      query: { ...BASE, equals: { status: ["open"] }, quick: "acme" },
+      query: { ...BASE, equals: { status: ["open"] }, search: "acme" },
       view: "grid",
     });
     expect(second).toEqual({
@@ -223,7 +223,7 @@ describe("two grids on one page", () => {
     const url: UrlValues = {};
     const first = connectGrid(url, "a");
     const second = connectGrid(url, "b");
-    first.store.dispatch({ type: "setQuick", value: "acme" });
+    first.store.dispatch({ type: "setSearch", value: "acme" });
     first.store.setView("board");
     second.sync.follow(toSearch(CAPS, url, "b"));
     expect(second.store.getQuery()).toEqual(BASE);
@@ -234,7 +234,7 @@ describe("two grids on one page", () => {
       values: ["done"],
     });
     first.sync.follow(toSearch(CAPS, url, "a"));
-    expect(first.store.getQuery()).toEqual({ ...BASE, quick: "acme" });
+    expect(first.store.getQuery()).toEqual({ ...BASE, search: "acme" });
     expect(toSearch(CAPS, url, "a")).toBe("q=acme&view=board");
     expect(toSearch(CAPS, url, "b")).toBe("f.status=done");
     expect(url["a.q"]).toBe("acme");

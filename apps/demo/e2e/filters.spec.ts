@@ -9,7 +9,7 @@ import {
   open,
   openGrid,
   pick,
-  quick,
+  search,
   test,
   texts,
   total,
@@ -171,9 +171,9 @@ test("URL history", async ({ page }) => {
 
   await openGrid(page, "/orders");
   const before = await page.evaluate(() => history.length);
-  await quick(page, "zanele dlamini");
+  await search(page, "zanele dlamini");
   await expect(page).toHaveURL(/q=zanele/);
-  await quick(page, "zanele dlam");
+  await search(page, "zanele dlam");
   await expect(page).toHaveURL(/q=zanele\+dlam$/);
   expect(await page.evaluate(() => history.length)).toBe(before);
 
@@ -188,9 +188,9 @@ test("URL history", async ({ page }) => {
   await expect(page.locator("[data-column]")).toHaveCount(7);
 });
 
-test("quick filter", async ({ page }) => {
+test("search", async ({ page }) => {
   await openGrid(page, "/orders");
-  await quick(page, "zanele dlamini");
+  await search(page, "zanele dlamini");
   await expect(loaded(page)).toHaveAttribute("data-value", "34");
   await expect(countValue(page)).toHaveAttribute("data-count", "34");
   await page.locator('[data-header-sort="total"]').click();
@@ -212,23 +212,23 @@ test("quick filter", async ({ page }) => {
     })
     .toBe(true);
 
-  await quick(page, "123456");
+  await search(page, "123456");
   await expect(countValue(page)).toHaveAttribute("data-count", "1");
   await expect(page.locator(".qg-cell[data-field=order_number]")).toHaveText([
     "123456",
   ]);
 
-  await quick(page, "mok");
+  await search(page, "mok");
   await expect(countValue(page)).toHaveText(/^500\+ rows$/);
   await expect(bar(page).locator("[data-field=sort]")).toHaveAttribute(
     "title",
     /.+/,
   );
 
-  await quick(page, "ab");
-  await expect(page.locator("[data-quick-hint]")).not.toBeEmpty();
+  await search(page, "ab");
+  await expect(page.locator("[data-search-hint]")).not.toBeEmpty();
 
-  await quick(page, "---");
+  await search(page, "---");
   await expect(page.locator("[data-feed-state=error]")).toBeVisible();
   await expect(page.locator("[data-part=count].qg-count-error")).toBeVisible();
   await expect(total(page)).toHaveAttribute("data-total", "unavailable");

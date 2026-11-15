@@ -6,7 +6,7 @@ import {
   createTestSource,
   settle,
   TEST_DEF,
-  TEST_QUICK_FIELDS,
+  TEST_SEARCH_FIELDS,
 } from "./grid-def.fixture.ts";
 import { defaultQuery } from "./query-actions.ts";
 import { createQueryStore } from "./query-store.ts";
@@ -19,7 +19,7 @@ const SERVER: Capabilities = {
   equalsFields: [],
   rangeFields: [],
   sortFields: ["created_at", "total"],
-  quickFields: TEST_QUICK_FIELDS,
+  searchFields: TEST_SEARCH_FIELDS,
   isFacetCountShown: () => true,
 };
 
@@ -48,28 +48,28 @@ function createSource(calls: Calls): DataSource {
 }
 
 describe("the row feed", () => {
-  test("a query change after a finished quick filter fetches one page, not two", async () => {
+  test("a query change after a finished search fetches one page, not two", async () => {
     const calls: Calls = { pages: [], counts: [] };
     const store = createQueryStore(TEST_DEF, SERVER, {
       ...defaultQuery(TEST_DEF),
-      quick: "abc",
+      search: "abc",
     });
     const feed = createFeed(store, createSource(calls), 50);
     feed.subscribe(() => undefined);
     await settle();
     expect(calls.pages).toHaveLength(1);
-    expect(store.getRules().quickComplete).toBe(true);
-    store.dispatch({ type: "clearQuick" });
+    expect(store.getRules().searchComplete).toBe(true);
+    store.dispatch({ type: "clearSearch" });
     await settle();
     expect(calls.pages).toHaveLength(2);
-    expect(feed.getState().query.quick).toBeNull();
+    expect(feed.getState().query.search).toBeNull();
   });
 
-  test("a finished quick filter re-sorts in place without a request", async () => {
+  test("a finished search re-sorts in place without a request", async () => {
     const calls: Calls = { pages: [], counts: [] };
     const store = createQueryStore(TEST_DEF, SERVER, {
       ...defaultQuery(TEST_DEF),
-      quick: "abc",
+      search: "abc",
     });
     const feed = createFeed(store, createSource(calls), 50);
     feed.subscribe(() => undefined);

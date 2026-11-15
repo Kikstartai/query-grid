@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { QueryState } from "./field-types.ts";
 import {
   TEST_DEF,
-  TEST_QUICK_FIELDS,
+  TEST_SEARCH_FIELDS,
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
@@ -13,7 +13,7 @@ const INDEXES = TEST_INDEXES;
 const BASE: QueryState = {
   equals: {},
   range: null,
-  quick: null,
+  search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,
 };
@@ -57,13 +57,13 @@ describe("getIndex", () => {
     expect(indexCapabilities(single).isAnswerable(several)).toBe(false);
   });
 
-  test("a quick filter combines with no other filter", () => {
-    const quick = { ...BASE, quick: "abc" };
-    expect(isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, quick)).toBe(true);
-    expect(isQueryIndexed(INDEXES, [], quick)).toBe(false);
+  test("a search combines with no other filter", () => {
+    const search = { ...BASE, search: "abc" };
+    expect(isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, search)).toBe(true);
+    expect(isQueryIndexed(INDEXES, [], search)).toBe(false);
     expect(
-      isQueryIndexed(INDEXES, TEST_QUICK_FIELDS, {
-        ...quick,
+      isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
+        ...search,
         equals: { status: ["open"] },
       }),
     ).toBe(false);
@@ -92,7 +92,7 @@ describe("the HTTP source", () => {
 describe("indexCapabilities", () => {
   const caps = indexCapabilities(INDEXES, {
     facetField: "status",
-    quickFields: TEST_QUICK_FIELDS,
+    searchFields: TEST_SEARCH_FIELDS,
   });
 
   test("they are the indexes, read once", () => {
@@ -100,7 +100,7 @@ describe("indexCapabilities", () => {
     expect(caps.equalsFields).toEqual(["status", "region"]);
     expect(caps.rangeFields).toEqual(["created_at", "total"]);
     expect(caps.sortFields).toEqual(["created_at", "total"]);
-    expect(caps.quickFields).toEqual(["name", "number"]);
+    expect(caps.searchFields).toEqual(["name", "number"]);
   });
 
   test("a query is answerable exactly when an index matches it", () => {

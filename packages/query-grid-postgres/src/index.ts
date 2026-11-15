@@ -11,8 +11,8 @@ export {
   listGridPage,
   listGridTotals,
   QUERY_CANCELED,
-  QUICK_BUDGET_MS,
-  QUICK_SETTINGS,
+  SEARCH_BUDGET_MS,
+  SEARCH_SETTINGS,
   TOTAL_SETTINGS,
   walkGridPages,
   type SqlExecutor,
@@ -32,7 +32,11 @@ export {
   type IndexDdl,
   type TableMigration,
 } from "./schema-ddl.ts";
-export { describeQuick, describeIndex, validateGridDef } from "./index-defs.ts";
+export {
+  describeSearch,
+  describeIndex,
+  validateGridDef,
+} from "./index-defs.ts";
 export {
   assertDeclared,
   buildCappedCountSql,
@@ -45,7 +49,7 @@ export {
   escapeLike,
   IDENTIFIER_MAX_LENGTH,
   QueryRejected,
-  quickExpression,
+  searchExpression,
   shortenIdentifier,
   toPageResult,
   type RejectionCode,

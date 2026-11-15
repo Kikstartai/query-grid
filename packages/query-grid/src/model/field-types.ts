@@ -51,7 +51,7 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   defaultSort: SortState;
   facet?: FacetDef;
   totals?: string[];
-  quick?: string[];
+  search?: string[];
 }
 
 export interface RangeState {
@@ -63,7 +63,7 @@ export interface RangeState {
 export interface QueryState {
   equals: Record<string, string[]>;
   range: RangeState | null;
-  quick: string | null;
+  search: string | null;
   sort: SortState;
   cursor: string | null;
 }
@@ -74,13 +74,13 @@ export interface Capabilities {
   equalsFields: string[];
   rangeFields: string[];
   sortFields: string[];
-  quickFields: string[];
+  searchFields: string[];
   isFacetCountShown: (query: QueryState) => boolean;
 }
 
 export interface QueryRules {
   capabilities: Capabilities;
-  quickComplete: boolean;
+  searchComplete: boolean;
 }
 
 export const KEY_FIELD = "id";
@@ -99,8 +99,8 @@ export function getFacetField<F extends BaseFieldDef>(
   return def.facet ? getField(def, def.facet.field) : null;
 }
 
-export function listQuickFields(def: BaseGridDef): string[] {
-  return def.quick ?? [];
+export function listSearchFields(def: BaseGridDef): string[] {
+  return def.search ?? [];
 }
 
 export function listTotalFields<F extends BaseFieldDef>(

@@ -303,7 +303,7 @@ pre {
   height: 2rem;
 }
 
-.skeleton-control[data-kind="quick"] {
+.skeleton-control[data-kind="search"] {
   width: 16rem;
 }
 

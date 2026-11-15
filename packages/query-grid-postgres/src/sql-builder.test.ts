@@ -36,7 +36,7 @@ import type { PostgresGridDef } from "./storage.ts";
 const BASE: QueryState = {
   equals: {},
   range: null,
-  quick: null,
+  search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,
 };
@@ -161,8 +161,8 @@ describe("buildPageSql", () => {
     );
   });
 
-  test("the quick filter is an unordered capped ILIKE over the joined columns", () => {
-    const query: QueryState = { ...BASE, quick: " 50%_off " };
+  test("the search is an unordered capped ILIKE over the joined columns", () => {
+    const query: QueryState = { ...BASE, search: " 50%_off " };
     const sql = buildPageSql(TEST_DEF, query, 10);
     expect(sql.text).toEndWith(
       "FROM things t WHERE (t.name || ' ' || t.number::text) ILIKE $1 LIMIT 501",
@@ -406,7 +406,7 @@ describe("generated DDL", () => {
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__created_at ON things USING btree (status, created_at, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__total ON things USING btree (status, total, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_region__created_at ON things USING btree (region, created_at, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_quick ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_search ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
     ]);
     expect(listIndexDdl(TEST_DEF, { concurrently: false })[0].ddl).toBe(
       "CREATE INDEX IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
@@ -510,7 +510,7 @@ describe("generated DDL", () => {
       ...TEST_DEF,
       table: long,
       facet: undefined,
-      quick: undefined,
+      search: undefined,
       indexes: [
         { equals: [], sort: "created_at" },
         { equals: ["status", "region"], sort: "created_at" },
@@ -596,14 +596,14 @@ describe("generated DDL", () => {
     expect(
       listMissingIndexes(TEST_DEF, rows).map((index) => index.name),
     ).toEqual(["things_qs_status__created_at"]);
-    const withoutQuick = rows.slice(0, -1).concat({
+    const withoutSearch = rows.slice(0, -1).concat({
       indexname: "name_only",
       indexdef:
         "CREATE INDEX name_only ON public.things USING gin (name gin_trgm_ops)",
     });
     expect(
-      listMissingIndexes(TEST_DEF, withoutQuick).map((index) => index.name),
-    ).toEqual(["things_qs_status__created_at", "things_qs_quick"]);
+      listMissingIndexes(TEST_DEF, withoutSearch).map((index) => index.name),
+    ).toEqual(["things_qs_status__created_at", "things_qs_search"]);
   });
 
   test("an index left invalid by a failed concurrent build counts as missing", () => {
@@ -626,15 +626,15 @@ describe("generated DDL", () => {
   });
 });
 
-describe("an exact count of a quick filter", () => {
-  test("runs under the quick budget and is refused past it", async () => {
+describe("an exact count of a search", () => {
+  test("runs under the search budget and is refused past it", async () => {
     const applied: (string[] | undefined)[] = [];
     const canceled: SqlExecutor = async (_sql, settings) => {
       applied.push(settings);
       throw Object.assign(new Error("canceling statement"), { code: "57014" });
     };
     await expect(
-      getGridCount(TEST_DEF, canceled, { ...BASE, quick: "---" }, true),
+      getGridCount(TEST_DEF, canceled, { ...BASE, search: "---" }, true),
     ).rejects.toMatchObject({ code: "too_broad" });
     expect(applied).toEqual([
       ["enable_seqscan = off", "statement_timeout = 120"],

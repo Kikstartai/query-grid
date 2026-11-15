@@ -49,5 +49,5 @@ export const TEST_GRID_DEF: BaseGridDef = {
   fields: TEST_FIELDS,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status" },
-  quick: ["name"],
+  search: ["name"],
 };

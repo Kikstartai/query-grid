@@ -9,7 +9,7 @@ import {
 
 const EQUALS_PREFIX = "f.";
 const RANGE_PREFIX = "r.";
-const QUICK_PARAM = "q";
+const SEARCH_PARAM = "q";
 const SORT_PARAM = "sort";
 const CURSOR_PARAM = "cursor";
 const RANGE_SEPARATOR = "..";
@@ -26,7 +26,7 @@ export function listQueryKeys(capabilities: Capabilities): QueryKey[] {
   const ranges = capabilities.rangeFields.map((key) => `${RANGE_PREFIX}${key}`);
   return [
     ...equals.map((name) => ({ name, repeated: true })),
-    ...[...ranges, QUICK_PARAM, SORT_PARAM, CURSOR_PARAM].map((name) => ({
+    ...[...ranges, SEARCH_PARAM, SORT_PARAM, CURSOR_PARAM].map((name) => ({
       name,
       repeated: false,
     })),
@@ -49,8 +49,8 @@ export function encodeQuery(
       `${query.range.min ?? ""}${RANGE_SEPARATOR}${query.range.max ?? ""}`,
     );
   }
-  if (query.quick !== null) {
-    params.set(QUICK_PARAM, query.quick);
+  if (query.search !== null) {
+    params.set(SEARCH_PARAM, query.search);
   }
   if (!isDefaultSort(def, query.sort)) {
     params.set(SORT_PARAM, `${query.sort.field}.${query.sort.direction}`);
@@ -96,7 +96,7 @@ export function decodeQuery(
   return {
     equals: Object.fromEntries(equals),
     range,
-    quick: params.get(QUICK_PARAM),
+    search: params.get(SEARCH_PARAM),
     sort: decodeSort(def, params.get(SORT_PARAM)),
     cursor: params.get(CURSOR_PARAM),
   };

@@ -11,7 +11,7 @@ import {
   open,
   openGrid,
   pick,
-  quick,
+  search,
   test,
   texts,
   total,
@@ -52,7 +52,7 @@ test("the in-memory route filters, sorts and totals with no request", async ({
   await expect(countValue(page)).toHaveAttribute("data-count", "41");
   const facets = await texts(page.locator("[data-facet]"));
   expect(facets.some((facet) => /\d/.test(facet))).toBe(true);
-  await quick(page, "fix");
+  await search(page, "fix");
   await page.locator('[data-header-sort="budget"]').click();
   await expect(page).toHaveURL(/sort=budget/);
   await expect(countValue(page)).toHaveAttribute("data-count", "5");

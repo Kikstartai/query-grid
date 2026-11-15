@@ -15,8 +15,8 @@ export type QueryAction =
   | { type: "setRange"; field?: string; min: string | null; max: string | null }
   | { type: "clearRange" }
   | { type: "setSort"; field: string; direction: SortDirection }
-  | { type: "setQuick"; value: string }
-  | { type: "clearQuick" }
+  | { type: "setSearch"; value: string }
+  | { type: "clearSearch" }
   | { type: "reset" };
 
 export interface Offers {
@@ -24,19 +24,19 @@ export interface Offers {
   multi: string[];
   sorts: string[];
   ranges: string[];
-  quick: boolean;
+  search: boolean;
 }
 
 export type OfferTarget =
   | { kind: "equals"; field: string }
   | { kind: "range"; field: string }
   | { kind: "sort"; field: string }
-  | { kind: "quick" };
+  | { kind: "search" };
 
 export type ReasonCode =
-  | "quick_alone"
-  | "quick_unordered"
-  | "quick_no_combine"
+  | "search_alone"
+  | "search_unordered"
+  | "search_no_combine"
   | "no_sort_index"
   | "range_needs_sort"
   | "no_sort_with"
@@ -57,7 +57,7 @@ export function defaultQuery(def: BaseGridDef): QueryState {
   return {
     equals: {},
     range: null,
-    quick: null,
+    search: null,
     sort: def.defaultSort,
     cursor: null,
   };
@@ -146,7 +146,8 @@ function proposeAction(
     case "clearRange":
       return [{ ...top, range: null }];
     case "setSort": {
-      const unordered = !memory && query.quick !== null && !rules.quickComplete;
+      const unordered =
+        !memory && query.search !== null && !rules.searchComplete;
       if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
@@ -154,13 +155,13 @@ function proposeAction(
         { ...top, sort: { field: action.field, direction: action.direction } },
       ];
     }
-    case "setQuick":
+    case "setSearch":
       if (memory) {
-        return [{ ...top, quick: action.value }];
+        return [{ ...top, search: action.value }];
       }
-      return [{ ...top, quick: action.value, sort: def.defaultSort }];
-    case "clearQuick":
-      return [{ ...top, quick: null }, defaultQuery(def)];
+      return [{ ...top, search: action.value, sort: def.defaultSort }];
+    case "clearSearch":
+      return [{ ...top, search: null }, defaultQuery(def)];
     case "reset":
       return [defaultQuery(def)];
   }
@@ -216,7 +217,7 @@ export function listOffers(
         rules,
       ),
     ),
-    quick: isOffered(def, query, { type: "setQuick", value: "xxx" }, rules),
+    search: isOffered(def, query, { type: "setSearch", value: "xxx" }, rules),
   };
 }
 
@@ -240,18 +241,18 @@ export function explainUnavailable(
   target: OfferTarget,
   rules: QueryRules,
 ): UnavailableReason {
-  if (target.kind === "quick") {
-    return describeQuery(query, "quick_alone", null);
+  if (target.kind === "search") {
+    return describeQuery(query, "search_alone", null);
   }
-  if (query.quick !== null && target.kind === "sort") {
+  if (query.search !== null && target.kind === "sort") {
     return describeQuery(
       query,
-      rules.quickComplete ? "no_sort_index" : "quick_unordered",
+      rules.searchComplete ? "no_sort_index" : "search_unordered",
       target.field,
     );
   }
-  if (query.quick !== null) {
-    return describeQuery(query, "quick_no_combine", target.field);
+  if (query.search !== null) {
+    return describeQuery(query, "search_no_combine", target.field);
   }
   if (target.kind === "range" && query.sort.field !== target.field) {
     return describeQuery(query, "range_needs_sort", target.field);
@@ -276,7 +277,7 @@ function stateKey(query: QueryState): string {
       .sort()
       .join("+"),
     query.range ? `range:${query.range.field}` : "",
-    query.quick !== null ? "quick" : "",
+    query.search !== null ? "search" : "",
     query.sort.field,
   ].join("|");
 }
@@ -308,11 +309,11 @@ export function listControlActions(
   if (query.range) {
     actions.push({ type: "clearRange" });
   }
-  if (offers.quick) {
-    actions.push({ type: "setQuick", value: "xxx" });
+  if (offers.search) {
+    actions.push({ type: "setSearch", value: "xxx" });
   }
-  if (query.quick !== null) {
-    actions.push({ type: "clearQuick" });
+  if (query.search !== null) {
+    actions.push({ type: "clearSearch" });
   }
   return actions;
 }

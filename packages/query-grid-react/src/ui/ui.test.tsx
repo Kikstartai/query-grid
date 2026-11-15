@@ -60,7 +60,7 @@ describe("the bound FacetPanel", () => {
 describe("the bound filter containers", () => {
   test("FilterBar fills itself with every control by default", () => {
     const html = render(<FilterBar />);
-    expect(html).toContain('data-field="quick"');
+    expect(html).toContain('data-field="search"');
     expect(html).toContain('data-field="status"');
     expect(html).toContain('data-field="sort"');
   });
@@ -72,7 +72,7 @@ describe("the bound filter containers", () => {
       </FilterBar>,
     );
     expect(html).toContain('data-field="sort"');
-    expect(html).not.toContain('data-field="quick"');
+    expect(html).not.toContain('data-field="search"');
     expect(html).not.toContain('data-field="status"');
   });
 
@@ -81,7 +81,7 @@ describe("the bound filter containers", () => {
     const shown = [...html.matchAll(/data-field="([a-z_]+)"/g)].map(
       (match) => match[1],
     );
-    expect(shown).toEqual(["quick", "region", "status", "sort"]);
+    expect(shown).toEqual(["search", "region", "status", "sort"]);
   });
 
   test("without fields a client grid shows a filter for every field", () => {

@@ -28,7 +28,7 @@ export interface QueryStore {
   dispatch: (action: QueryAction) => void;
   setView: (view: GridView) => void;
   replace: (query: QueryState, view?: GridView) => void;
-  setQuickComplete: (complete: boolean) => void;
+  setSearchComplete: (complete: boolean) => void;
 }
 
 export function normalizeQuery(
@@ -43,7 +43,7 @@ export function normalizeQuery(
 }
 
 function resolveHistoryWrite(action: QueryAction): HistoryWrite {
-  return action.type === "setQuick" || action.type === "clearQuick"
+  return action.type === "setSearch" || action.type === "clearSearch"
     ? "replace"
     : "push";
 }
@@ -82,7 +82,7 @@ export function createQueryStore(
   const store = createStore<QueryStoreState>({
     query: normalizeQuery(def, capabilities, initial),
     view: initialView,
-    rules: { capabilities, quickComplete: false },
+    rules: { capabilities, searchComplete: false },
     historyWrite: "replace",
   });
   const change = (patch: Partial<QueryStoreState>) =>
@@ -115,10 +115,10 @@ export function createQueryStore(
         view,
         historyWrite: "replace",
       }),
-    setQuickComplete: (quickComplete) => {
+    setSearchComplete: (searchComplete) => {
       const { rules } = store.get();
-      if (quickComplete !== rules.quickComplete) {
-        change({ rules: { ...rules, quickComplete } });
+      if (searchComplete !== rules.searchComplete) {
+        change({ rules: { ...rules, searchComplete } });
       }
     },
   };

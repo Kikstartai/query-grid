@@ -64,13 +64,13 @@ export type {
 export {
   FilterBar,
   FilterChips,
-  QuickFilter,
+  SearchFilter,
   SortControl,
   type ChipItem,
   type ChipValueItem,
   type FilterBarProps,
   type FilterChipsProps,
-  type QuickFilterProps,
+  type SearchFilterProps,
   type SortControlProps,
 } from "./filter-bar.tsx";
 export { FilterSidebar, type FilterSidebarProps } from "./filter-sidebar.tsx";

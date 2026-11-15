@@ -152,10 +152,10 @@ describe("keyset paging", () => {
   });
 });
 
-describe("quick filter", () => {
+describe("search", () => {
   test("it matches a customer name and an order number through one index", async () => {
     const byNumber = await listPage(
-      { ...defaultQuery(ORDERS_GRID_DEF), quick: "123456" },
+      { ...defaultQuery(ORDERS_GRID_DEF), search: "123456" },
       50,
     );
     expect(byNumber.rows.length).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ describe("quick filter", () => {
       expect(`${row.customer_name} ${row.order_number}`).toContain("123456");
     }
     const byName = await listPage(
-      { ...defaultQuery(ORDERS_GRID_DEF), quick: "zanele dlam" },
+      { ...defaultQuery(ORDERS_GRID_DEF), search: "zanele dlam" },
       50,
     );
     expect(byName.rows.length).toBeGreaterThan(0);

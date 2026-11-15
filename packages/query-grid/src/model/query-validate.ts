@@ -7,8 +7,8 @@ import {
 } from "./field-types.ts";
 import type { Problem } from "./problems.ts";
 
-export const QUICK_MIN_LENGTH = 3;
-export const QUICK_MAX_LENGTH = 80;
+export const SEARCH_MIN_LENGTH = 3;
+export const SEARCH_MAX_LENGTH = 80;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INTEGER = /^-?\d{1,15}$/;
@@ -72,9 +72,9 @@ export function isValidFieldValue(
   return checkValue(def, key, value) === null;
 }
 
-export function isValidQuickValue(value: string): boolean {
+export function isValidSearchValue(value: string): boolean {
   const length = value.trim().length;
-  return length >= QUICK_MIN_LENGTH && length <= QUICK_MAX_LENGTH;
+  return length >= SEARCH_MIN_LENGTH && length <= SEARCH_MAX_LENGTH;
 }
 
 export function validateQueryValues(
@@ -96,10 +96,10 @@ export function validateQueryValues(
       }
     }
   }
-  if (query.quick !== null && !isValidQuickValue(query.quick)) {
+  if (query.search !== null && !isValidSearchValue(query.search)) {
     return {
-      code: "quick_length",
-      params: { min: QUICK_MIN_LENGTH, max: QUICK_MAX_LENGTH },
+      code: "search_length",
+      params: { min: SEARCH_MIN_LENGTH, max: SEARCH_MAX_LENGTH },
     };
   }
   if (query.sort.direction !== "asc" && query.sort.direction !== "desc") {

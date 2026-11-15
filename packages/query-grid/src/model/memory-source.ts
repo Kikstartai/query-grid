@@ -3,7 +3,7 @@ import {
   getFacetField,
   getField,
   isRangeType,
-  listQuickFields,
+  listSearchFields,
   listTotalFields,
   type Capabilities,
   type BaseFieldDef,
@@ -20,7 +20,7 @@ import { sortRows, toComparable } from "./sort-rows.ts";
 const OPTION_LIMIT = 50;
 
 export function memoryCapabilities(def: BaseGridDef): Capabilities {
-  const quickFields = listQuickFields(def);
+  const searchFields = listSearchFields(def);
   const ranged = (field: BaseFieldDef) =>
     isRangeType(field.type) && !field.options;
   const rangeFields = def.fields.filter(ranged).map((field) => field.key);
@@ -32,12 +32,12 @@ export function memoryCapabilities(def: BaseGridDef): Capabilities {
     isAnswerable: (query) =>
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       (query.range === null || rangeFields.includes(query.range.field)) &&
-      (query.quick === null || quickFields.length > 0) &&
+      (query.search === null || searchFields.length > 0) &&
       getField(def, query.sort.field) !== null,
     equalsFields,
     rangeFields,
     sortFields: def.fields.map((field) => field.key),
-    quickFields,
+    searchFields,
     isFacetCountShown: () => true,
   };
 }
@@ -60,7 +60,11 @@ function matchesRange(
   return (min === null || value >= min) && (max === null || value <= max);
 }
 
-function matchesQuick(row: GridRow, fields: string[], needle: string): boolean {
+function matchesSearch(
+  row: GridRow,
+  fields: string[],
+  needle: string,
+): boolean {
   return fields
     .map((key) => String(row[key] ?? ""))
     .join(" ")
@@ -72,17 +76,17 @@ export function filterRows(
   def: BaseGridDef,
   rows: GridRow[],
   query: QueryState,
-  quickFields: string[] = [],
+  searchFields: string[] = [],
 ): GridRow[] {
   const equals = Object.entries(query.equals);
-  const needle = query.quick?.trim().toLowerCase() ?? null;
+  const needle = query.search?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
       equals.every(([key, values]) =>
         values.includes(String(row[key] ?? "")),
       ) &&
       (query.range === null || matchesRange(def, row, query.range)) &&
-      (needle === null || matchesQuick(row, quickFields, needle)),
+      (needle === null || matchesSearch(row, searchFields, needle)),
   );
 }
 
@@ -147,10 +151,10 @@ export function createMemorySource(
 ): DataSource {
   let rows = initialRows;
   let selected: Selection | null = null;
-  const quickFields = listQuickFields(def);
+  const searchFields = listSearchFields(def);
   const totals = listTotalFields(def).map((field) => field.key);
   const matching = (query: QueryState) =>
-    filterRows(def, rows, query, quickFields);
+    filterRows(def, rows, query, searchFields);
   const select = (query: QueryState) => {
     const fresh =
       selected !== null &&

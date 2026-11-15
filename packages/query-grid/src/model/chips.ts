@@ -32,9 +32,9 @@ export interface RangeChip {
   clear: QueryAction;
 }
 
-export interface QuickChip {
+export interface SearchChip {
   id: string;
-  kind: "quick";
+  kind: "search";
   value: string;
   clear: QueryAction;
 }
@@ -47,7 +47,7 @@ export interface SortChip {
   clear: QueryAction | null;
 }
 
-export type FilterChip = EqualsChip | RangeChip | QuickChip | SortChip;
+export type FilterChip = EqualsChip | RangeChip | SearchChip | SortChip;
 
 function formatBound(
   def: BaseGridDef,
@@ -110,12 +110,12 @@ export function listFilterChips(
       clear: { type: "clearRange" },
     });
   }
-  if (query.quick !== null) {
+  if (query.search !== null) {
     chips.push({
-      id: "quick",
-      kind: "quick",
-      value: query.quick,
-      clear: { type: "clearQuick" },
+      id: "search",
+      kind: "search",
+      value: query.search,
+      clear: { type: "clearSearch" },
     });
   }
   chips.push({

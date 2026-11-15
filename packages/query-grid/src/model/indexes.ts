@@ -1,5 +1,5 @@
 import {
-  listQuickFields,
+  listSearchFields,
   type BaseGridDef,
   type Capabilities,
   type QueryState,
@@ -18,7 +18,7 @@ export interface IndexedGridDef extends BaseGridDef {
 
 export interface IndexCapabilityOptions {
   facetField?: string;
-  quickFields?: string[];
+  searchFields?: string[];
 }
 
 export function indexId(index: IndexDef): string {
@@ -50,7 +50,7 @@ export function getIndex(
   query: QueryState,
 ): IndexDef | null {
   const equals = Object.keys(query.equals);
-  if (query.quick !== null) {
+  if (query.search !== null) {
     return null;
   }
   const ordered = indexes.find(
@@ -70,14 +70,14 @@ export function getIndex(
 
 export function isQueryIndexed(
   indexes: IndexDef[],
-  quickFields: string[],
+  searchFields: string[],
   query: QueryState,
 ): boolean {
-  if (query.quick === null) {
+  if (query.search === null) {
     return getIndex(indexes, query) !== null;
   }
   return (
-    quickFields.length > 0 &&
+    searchFields.length > 0 &&
     Object.keys(query.equals).length === 0 &&
     query.range === null &&
     listSortFields(indexes).includes(query.sort.field)
@@ -91,7 +91,7 @@ export function isFacetOnlyQuery(
   return (
     facetField !== undefined &&
     query.range === null &&
-    query.quick === null &&
+    query.search === null &&
     Object.keys(query.equals).every((key) => key === facetField)
   );
 }
@@ -100,14 +100,14 @@ export function indexCapabilities(
   indexes: IndexDef[],
   options: IndexCapabilityOptions = {},
 ): Capabilities {
-  const quickFields = options.quickFields ?? [];
+  const searchFields = options.searchFields ?? [];
   return {
     mode: "server",
-    isAnswerable: (query) => isQueryIndexed(indexes, quickFields, query),
+    isAnswerable: (query) => isQueryIndexed(indexes, searchFields, query),
     equalsFields: listEqualsFields(indexes),
     rangeFields: listRangeFields(indexes),
     sortFields: listSortFields(indexes),
-    quickFields,
+    searchFields,
     isFacetCountShown: (query) => isFacetOnlyQuery(options.facetField, query),
   };
 }
@@ -115,6 +115,6 @@ export function indexCapabilities(
 export function gridDefCapabilities(def: IndexedGridDef): Capabilities {
   return indexCapabilities(def.indexes, {
     facetField: def.facet?.field,
-    quickFields: listQuickFields(def),
+    searchFields: listSearchFields(def),
   });
 }
