@@ -148,6 +148,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 - a migration CLI (the demo keeps `db/generate-migration.ts`)
 - generic status moves on the server beyond the `moves` hook
 - a separate memory adapter package (it is the `./memory` subpath)
+- several totals per grid: `GridDef.total` is one field today, and a host may need to sum more than one (a `total_sum` counter column, a footer cell and a `/total` result per field)
 
 ## Scale
 
