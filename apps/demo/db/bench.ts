@@ -168,6 +168,7 @@ async function pickEqualsValues(
   const columns = index.equals.join(", ");
   const { rows } = await client.query<Record<string, string>>(
     `SELECT ${columns} FROM (SELECT ${columns} FROM orders LIMIT 200000) sample
+     WHERE ${index.equals.map((key) => `${key} IS NOT NULL`).join(" AND ")}
      GROUP BY ${columns} ORDER BY count(*) DESC LIMIT 1`,
   );
   return Object.fromEntries(
@@ -188,6 +189,7 @@ async function pickSeveralValues(
   for (const column of index.equals) {
     const { rows } = await client.query<{ value: string }>(
       `SELECT ${column} AS value FROM (SELECT ${column} FROM orders LIMIT 200000) sample
+       WHERE ${column} IS NOT NULL
        GROUP BY ${column} ORDER BY count(*) ${order}, ${column} LIMIT ${size}`,
     );
     equals[column] = rows.map((row) => row.value);

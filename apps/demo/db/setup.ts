@@ -5,6 +5,8 @@ import { listTableMigrations } from "@kikstart/query-grid-postgres";
 import { Client } from "pg";
 
 import {
+  ORDER_ASSIGNED_SHARE,
+  ORDER_ASSIGNEES,
   ORDER_CHANNELS,
   ORDER_PRIORITIES,
   ORDER_REGIONS,
@@ -262,7 +264,7 @@ async function seedOrders(client: Client): Promise<void> {
     await client.query(
       `INSERT INTO orders (
          order_number, created_at, updated_at, status_code, customer_id, customer_name,
-         region, channel, priority, currency, total, item_count, paid_at, shipped_at, note
+         region, channel, priority, currency, total, item_count, paid_at, shipped_at, note, assignee
        )
        SELECT r.g,
               r.created_at,
@@ -280,7 +282,8 @@ async function seedOrders(client: Client): Promise<void> {
                    THEN r.created_at + r.lag_roll * interval '2 days' END,
               CASE WHEN r.status_code IN ('shipped', 'completed')
                    THEN r.created_at + interval '2 days' + r.lag_roll * interval '5 days' END,
-              CASE WHEN r.note_roll < 0.12 THEN ($4::text[])[1 + floor(r.note_pick * $5)::int] END
+              CASE WHEN r.note_roll < 0.12 THEN ($4::text[])[1 + floor(r.note_pick * $5)::int] END,
+              CASE WHEN r.assigned_roll < ${ORDER_ASSIGNED_SHARE} THEN ${weightedCase(ORDER_ASSIGNEES, "r.assignee_roll")} END
        FROM (
          SELECT s.*, ${weightedCase(ORDER_STATUSES, "s.status_roll")} AS status_code
          FROM (
@@ -290,7 +293,7 @@ async function seedOrders(client: Client): Promise<void> {
                   random() AS status_roll, random() AS home_roll, random() AS region_roll,
                   random() AS channel_roll, random() AS priority_roll, random() AS total_roll,
                   random() AS items_roll, random() AS lag_roll, random() AS note_roll,
-                  random() AS note_pick
+                  random() AS note_pick, random() AS assigned_roll, random() AS assignee_roll
            FROM generate_series($1::bigint, $2::bigint) g
          ) s
        ) r
@@ -301,6 +304,26 @@ async function seedOrders(client: Client): Promise<void> {
       `orders ${end.toLocaleString()} / ${ORDER_COUNT.toLocaleString()} (${((Date.now() - started) / 1000).toFixed(1)}s)`,
     );
   }
+}
+
+// A table seeded before the assignee column existed has it empty in every row, so a share of the rows is assigned once.
+async function backfillAssignees(client: Client): Promise<void> {
+  const assigned = await client.query(
+    "SELECT 1 FROM orders WHERE assignee IS NOT NULL LIMIT 1",
+  );
+  if (assigned.rows.length > 0) {
+    return;
+  }
+  const started = Date.now();
+  const roll = "(hashint8(order_number) & 65535) / 65536.0";
+  const pick = "(hashint8(order_number + 7919) & 65535) / 65536.0";
+  const updated = await client.query(
+    `UPDATE orders SET assignee = ${weightedCase(ORDER_ASSIGNEES, pick)}
+     WHERE ${roll} < ${ORDER_ASSIGNED_SHARE}`,
+  );
+  log(
+    `assigned ${(updated.rowCount ?? 0).toLocaleString()} orders in ${((Date.now() - started) / 1000).toFixed(1)}s`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -316,6 +339,7 @@ async function main(): Promise<void> {
     await seedCustomers(client);
     await seedOrders(client);
   }
+  await backfillAssignees(client);
   await applyFile(client, UPGRADE);
   await applyGenerated(client);
   await client.query("VACUUM (ANALYZE) orders");

@@ -492,6 +492,7 @@ describe("chips", () => {
           {
             value: "open",
             text: "Open",
+            reserved: null,
             clear: {
               type: "removeEqualsValue",
               field: "status",
@@ -501,6 +502,7 @@ describe("chips", () => {
           {
             value: "done",
             text: "Done",
+            reserved: null,
             clear: {
               type: "removeEqualsValue",
               field: "status",

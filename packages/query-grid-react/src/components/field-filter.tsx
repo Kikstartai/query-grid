@@ -39,6 +39,7 @@ import {
   Select,
   SelectClear,
   SelectContent,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
@@ -47,17 +48,25 @@ import { useState, type ReactNode } from "react";
 import {
   fromDayBound,
   fromNumberBound,
+  getReservedValue,
+  listReservedValues,
+  normalizeEqualsValues,
+  resolveCurrency,
   toDayBound,
   toNumberBound,
   type BaseFieldDef,
   type FieldOption,
-  resolveCurrency,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
 import type { ControlState } from "./fields.ts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
-import { useLocale, useMessages } from "./messages.tsx";
+import {
+  formatReservedValue,
+  useLocale,
+  useMessages,
+  type QueryGridMessages,
+} from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 
 export interface FieldRange {
@@ -120,6 +129,36 @@ function toValues(value: string | string[] | null): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
+function listReservedOptions(
+  field: BaseFieldDef,
+  messages: QueryGridMessages,
+): FieldOption[] {
+  return listReservedValues(field).flatMap((value) => {
+    const reserved = getReservedValue(field, value);
+    return reserved
+      ? [{ value, label: formatReservedValue(messages, reserved) }]
+      : [];
+  });
+}
+
+function ReservedOptions({ options }: { options: FieldOption[] }) {
+  if (options.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      {options.map((option) => (
+        <SelectOption
+          key={option.value}
+          value={option.value}
+          label={option.label}
+        />
+      ))}
+      <SelectSeparator />
+    </>
+  );
+}
+
 function EqualsSelectParts({
   field,
   multiple,
@@ -147,6 +186,7 @@ function EqualsSelectParts({
         <XIcon size={12} />
       </SelectClear>
       <SelectContent>
+        <ReservedOptions options={listReservedOptions(field, messages)} />
         {(field.options ?? []).map((option) => (
           <SelectOption
             key={option.value}
@@ -162,15 +202,21 @@ function EqualsSelectParts({
 function EqualsControl(props: EqualsSelectProps) {
   const { field, values, disabled, onValuesChange } = props;
   const messages = useMessages();
+  const items = [
+    ...listReservedOptions(field, messages),
+    ...(field.options ?? []),
+  ];
   if (props.multiple) {
     return (
       <Select
         multiple
-        items={field.options ?? []}
+        items={items}
         value={values}
         disabled={disabled}
         placeholder={messages.any}
-        onValueChange={(next: string[]) => onValuesChange(next)}
+        onValueChange={(next: string[]) =>
+          onValuesChange(normalizeEqualsValues(field, values, next))
+        }
       >
         <EqualsSelectParts field={field} multiple />
       </Select>
@@ -178,7 +224,7 @@ function EqualsControl(props: EqualsSelectProps) {
   }
   return (
     <Select
-      items={field.options ?? []}
+      items={items}
       value={values[0] ?? null}
       disabled={disabled}
       placeholder={messages.any}
@@ -190,16 +236,22 @@ function EqualsControl(props: EqualsSelectProps) {
 }
 
 function useLookup({
+  field,
+  values,
+  valueLabels = {},
   loadOptions,
   onOptionPick,
   onValuesChange,
 }: LookupFilterProps) {
+  const messages = useMessages();
+  const [text, setText] = useState("");
   const options = useAsyncOptions<FieldOption>(
-    (text, { signal }) => loadOptions(text, signal),
+    (query, { signal }) => loadOptions(query, signal),
     { debounce: 250, immediate: true },
   );
+  const reserved = listReservedOptions(field, messages);
   const choose = (value: string | string[] | null) => {
-    const next = toValues(value);
+    const next = normalizeEqualsValues(field, values, toValues(value));
     for (const option of options.items) {
       if (next.includes(option.value)) {
         onOptionPick?.(option);
@@ -207,7 +259,21 @@ function useLookup({
     }
     onValuesChange(next);
   };
-  return { options, choose };
+  return {
+    status: options.status,
+    items: text.trim() === "" ? [...reserved, ...options.items] : options.items,
+    labels: {
+      ...valueLabels,
+      ...Object.fromEntries(
+        reserved.map((option) => [option.value, option.label]),
+      ),
+    },
+    setQuery: (query: string) => {
+      setText(query);
+      options.setQuery(query);
+    },
+    choose,
+  };
 }
 
 function LookupItems({ items }: { items: FieldOption[] }) {
@@ -233,22 +299,22 @@ function LookupItems({ items }: { items: FieldOption[] }) {
 }
 
 function LookupSingle(props: LookupFilterProps) {
-  const { field, values, valueLabels = {}, disabled } = props;
+  const { field, values, disabled } = props;
   const messages = useMessages();
-  const { options, choose } = useLookup(props);
+  const lookup = useLookup(props);
   const current = values[0] ?? null;
   const label = { label: field.label };
   return (
     <Combobox<string>
-      key={current ? (valueLabels[current] ?? "") : ""}
-      items={options.items}
+      key={current ? (lookup.labels[current] ?? "") : ""}
+      items={lookup.items}
       filter={false}
-      status={options.status}
+      status={lookup.status}
       value={current}
       disabled={disabled}
-      itemToLabel={(value) => valueLabels[value] ?? value}
-      onQueryChange={(text: string) => options.setQuery(text)}
-      onValueChange={choose}
+      itemToLabel={(value) => lookup.labels[value] ?? value}
+      onQueryChange={lookup.setQuery}
+      onValueChange={lookup.choose}
     >
       <ComboboxInput
         className="qg-combobox-input"
@@ -263,7 +329,7 @@ function LookupSingle(props: LookupFilterProps) {
       >
         <XIcon size={12} />
       </ComboboxClear>
-      <LookupItems items={options.items} />
+      <LookupItems items={lookup.items} />
     </Combobox>
   );
 }
@@ -273,21 +339,21 @@ interface LookupChipState {
 }
 
 function LookupMultiple(props: LookupFilterProps) {
-  const { field, values, valueLabels = {}, disabled } = props;
+  const { field, values, disabled } = props;
   const messages = useMessages();
-  const { options, choose } = useLookup(props);
+  const lookup = useLookup(props);
   const label = { label: field.label };
   return (
     <Combobox<string>
       multiple
-      items={options.items}
+      items={lookup.items}
       filter={false}
-      status={options.status}
+      status={lookup.status}
       value={values}
       disabled={disabled}
-      itemToLabel={(value) => valueLabels[value] ?? value}
-      onQueryChange={(text: string) => options.setQuery(text)}
-      onValueChange={choose}
+      itemToLabel={(value) => lookup.labels[value] ?? value}
+      onQueryChange={lookup.setQuery}
+      onValueChange={lookup.choose}
     >
       <ComboboxChips className="qg-combobox-chips">
         <ComboboxValue>
@@ -298,11 +364,11 @@ function LookupMultiple(props: LookupFilterProps) {
                 value={value}
                 className="qg-combobox-chip"
               >
-                <bdi>{valueLabels[value] ?? value}</bdi>
+                <bdi>{lookup.labels[value] ?? value}</bdi>
                 <ComboboxChipRemove
                   className="qg-chip-remove"
                   aria-label={messages.removeChip({
-                    label: valueLabels[value] ?? value,
+                    label: lookup.labels[value] ?? value,
                   })}
                 >
                   <XIcon size={12} />
@@ -319,7 +385,7 @@ function LookupMultiple(props: LookupFilterProps) {
           data-multiple=""
         />
       </ComboboxChips>
-      <LookupItems items={options.items} />
+      <LookupItems items={lookup.items} />
     </Combobox>
   );
 }

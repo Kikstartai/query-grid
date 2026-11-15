@@ -3,6 +3,8 @@ import { Client } from "pg";
 
 import {
   defaultQuery,
+  EMPTY_VALUE,
+  NOT_EMPTY_VALUE,
   type GridRow,
   type QueryState,
   type TotalResult,
@@ -109,7 +111,7 @@ describe("keyset paging", () => {
     for (const index of ORDERS_GRID_DEF.indexes) {
       const sample = index.equals.length
         ? await client.query<Record<string, string>>(
-            `SELECT ${index.equals.join(", ")} FROM orders LIMIT 1`,
+            `SELECT ${index.equals.join(", ")} FROM orders WHERE ${index.equals.map((key) => `${key} IS NOT NULL`).join(" AND ")} LIMIT 1`,
           )
         : { rows: [{}] };
       for (const direction of ["asc", "desc"] as const) {
@@ -404,5 +406,75 @@ describe("several values of one field", () => {
       code: "too_many_values",
       params: { field: "customer_id", max: 20 },
     });
+  });
+});
+
+describe("empty values", () => {
+  const withAssignee = (...values: string[]): QueryState => ({
+    ...defaultQuery(ORDERS_GRID_DEF),
+    equals: { assignee: values },
+  });
+
+  async function countWhere(where: string): Promise<number> {
+    const { rows } = await client.query<{ rows: number }>(
+      `SELECT count(*)::float8 AS rows FROM orders WHERE ${where}`,
+    );
+    return rows[0].rows;
+  }
+
+  test("empty reads only the rows with no value, in keyset order", async () => {
+    const page = await listPage(withAssignee(EMPTY_VALUE), 50);
+    expect(page.rows).toHaveLength(50);
+    expect(page.rows.every((row) => row.assignee === null)).toBe(true);
+    const next = await listPage(
+      { ...withAssignee(EMPTY_VALUE), cursor: page.nextCursor },
+      50,
+    );
+    expect(
+      String(next.rows[0].created_at) <= String(page.rows[49].created_at),
+    ).toBe(true);
+  });
+
+  test("not empty reads only the rows with a value", async () => {
+    const page = await listPage(withAssignee(NOT_EMPTY_VALUE), 50);
+    expect(page.rows).toHaveLength(50);
+    expect(page.rows.every((row) => row.assignee !== null)).toBe(true);
+  });
+
+  test("empty and not empty count every row between them", async () => {
+    const empty = await getGridCount(
+      ORDERS_GRID_DEF,
+      execute,
+      withAssignee(EMPTY_VALUE),
+      true,
+    );
+    const filled = await getGridCount(
+      ORDERS_GRID_DEF,
+      execute,
+      withAssignee(NOT_EMPTY_VALUE),
+      true,
+    );
+    expect(empty.count).toBe(await countWhere("assignee IS NULL"));
+    expect(empty.count + filled.count).toBe(await countWhere("true"));
+  }, 60_000);
+
+  test("empty beside a real value is the union of the two", async () => {
+    const query = withAssignee(EMPTY_VALUE, "wanjiru");
+    const page = await listPage(query, 200);
+    expect(
+      page.rows.every(
+        (row) => row.assignee === null || row.assignee === "wanjiru",
+      ),
+    ).toBe(true);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, true);
+    expect(count.count).toBe(
+      await countWhere("assignee IS NULL OR assignee = 'wanjiru'"),
+    );
+  }, 60_000);
+
+  test("not empty beside a value never reaches the database", () => {
+    expect(() =>
+      buildPageSql(ORDERS_GRID_DEF, withAssignee(NOT_EMPTY_VALUE, "glen"), 50),
+    ).toThrow(QueryRejected);
   });
 });

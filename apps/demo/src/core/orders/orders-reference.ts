@@ -27,6 +27,17 @@ export const ORDER_STATUS_TRANSITIONS: [string, string][] = [
   ["failed", "pending"],
 ];
 
+export const ORDER_ASSIGNED_SHARE = 0.18;
+
+export const ORDER_ASSIGNEES: WeightedOption[] = [
+  { value: "glen", label: "Glen Kitchen", weight: 0.3 },
+  { value: "lerato", label: "Lerato Mokoena", weight: 0.25 },
+  { value: "pieter", label: "Pieter Botha", weight: 0.2 },
+  { value: "priya", label: "Priya Naidoo", weight: 0.15 },
+  { value: "kwame", label: "Kwame Mensah", weight: 0.07 },
+  { value: "wanjiru", label: "Wanjiru Otieno", weight: 0.03 },
+];
+
 export const ORDER_CHANNELS: WeightedOption[] = [
   { value: "web", label: "Web", weight: 0.55 },
   { value: "mobile", label: "Mobile", weight: 0.3 },

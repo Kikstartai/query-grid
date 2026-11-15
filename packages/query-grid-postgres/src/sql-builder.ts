@@ -2,6 +2,7 @@ import {
   DEFAULT_LIMITS,
   formatProblem,
   getField,
+  getReservedValue,
   isValidFieldValue,
   KEY_FIELD,
   isQueryIndexed,
@@ -188,12 +189,7 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
   const params = new Params();
   const clauses: string[] = [];
   for (const [key, values] of Object.entries(query.equals)) {
-    const field = requireField(def, key);
-    clauses.push(
-      values.length === 1
-        ? `${column(key)} = ${params.add(values[0], field)}`
-        : `${column(key)} = ANY(${params.addList(values, field)})`,
-    );
+    clauses.push(equalsClause(requireField(def, key), values, params));
   }
   if (query.range) {
     const field = requireField(def, query.range.field);
@@ -215,6 +211,30 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
     );
   }
   return { params, clauses };
+}
+
+function equalsClause(
+  field: BaseFieldDef,
+  values: string[],
+  params: Params,
+): string {
+  const name = column(field.key);
+  if (values.some((value) => getReservedValue(field, value) === "not_empty")) {
+    return `${name} IS NOT NULL`;
+  }
+  const real = values.filter(
+    (value) => getReservedValue(field, value) === null,
+  );
+  if (real.length === 0) {
+    return `${name} IS NULL`;
+  }
+  const matches =
+    real.length === 1
+      ? `${name} = ${params.add(real[0], field)}`
+      : `${name} = ANY(${params.addList(real, field)})`;
+  return real.length === values.length
+    ? matches
+    : `(${matches} OR ${name} IS NULL)`;
 }
 
 function whereClause(clauses: string[]): string {

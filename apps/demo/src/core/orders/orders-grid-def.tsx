@@ -7,6 +7,7 @@ import type { PostgresGridDef } from "@kikstart/query-grid-postgres";
 import type { FieldDef, GridDef } from "@kikstart/query-grid-react/components";
 
 import {
+  ORDER_ASSIGNEES,
   ORDER_CHANNELS,
   ORDER_PRIORITIES,
   ORDER_REGIONS,
@@ -96,6 +97,14 @@ const ORDER_FIELDS: FieldDef[] = [
     width: 100,
   },
   {
+    key: "assignee",
+    label: "Assignee",
+    type: "enum",
+    nullable: true,
+    options: toOptions(ORDER_ASSIGNEES),
+    width: 150,
+  },
+  {
     key: "paid_at",
     label: "Paid",
     type: "datetime",
@@ -148,6 +157,7 @@ const ORDER_INDEXES: IndexDef[] = [
   { equals: ["customer_id"], sort: "created_at" },
   { equals: ["region"], sort: "created_at", range: true },
   { equals: ["channel"], sort: "created_at" },
+  { equals: ["assignee"], sort: "created_at" },
   { equals: ["status_code", "region"], sort: "created_at" },
   { equals: ["status_code", "channel"], sort: "created_at" },
 ];

@@ -1,6 +1,7 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import { getField } from "./field-types.ts";
+import { getReservedValue } from "./field-values.ts";
 import { labelKey } from "./format.ts";
 import type { GridLimits } from "./limits.ts";
 import {
@@ -146,7 +147,9 @@ export function createLabelStore(
     for (const [key, values] of Object.entries(store.getQuery().equals)) {
       const field = getField(store.def, key);
       if (field && !field.options) {
-        values.forEach((value) => request(key, value));
+        values
+          .filter((value) => getReservedValue(field, value) === null)
+          .forEach((value) => request(key, value));
       }
     }
   };

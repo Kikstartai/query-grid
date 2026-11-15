@@ -8,6 +8,7 @@ import {
   type Problem,
   type ProblemParams,
   type ReasonCode,
+  type ReservedValue,
 } from "@kikstart/query-grid";
 
 type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & {
@@ -75,6 +76,8 @@ export interface QueryGridMessages {
   chipSort: (params: { label: string; direction: string }) => string;
   openBound: string;
   any: string;
+  emptyValue: string;
+  notEmptyValue: string;
   moreValues: (params: { count: number }) => string;
   fieldFilter: (params: LabelParams) => string;
   clearField: (params: LabelParams) => string;
@@ -193,6 +196,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
   openBound: "…",
   any: "any",
+  emptyValue: "(empty)",
+  notEmptyValue: "(not empty)",
   moreValues: ({ count }) => `${count} more`,
   fieldFilter: ({ label }) => `${label} filter`,
   clearField: ({ label }) => `Clear ${label}`,
@@ -325,6 +330,13 @@ export function useMessages(): QueryGridMessages {
 
 export function useLocale(): string {
   return use(MessagesContext).locale;
+}
+
+export function formatReservedValue(
+  messages: QueryGridMessages,
+  reserved: ReservedValue,
+): string {
+  return reserved === "empty" ? messages.emptyValue : messages.notEmptyValue;
 }
 
 export function countParams(count: number, locale: string): CountParams {

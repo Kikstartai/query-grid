@@ -5,6 +5,7 @@ import {
   type QueryState,
   type SortDirection,
 } from "./field-types.ts";
+import { getReservedValue, type ReservedValue } from "./field-values.ts";
 import { formatValue, labelKey } from "./format.ts";
 import type { QueryAction } from "./query-actions.ts";
 import { fromDayBound } from "./range-bounds.ts";
@@ -12,6 +13,7 @@ import { fromDayBound } from "./range-bounds.ts";
 export interface ChipValue {
   value: string;
   text: string;
+  reserved: ReservedValue | null;
   clear: QueryAction;
 }
 
@@ -80,6 +82,15 @@ function formatEquals(
   return field ? formatValue(field, value, locale) : value;
 }
 
+function getChipReserved(
+  def: BaseGridDef,
+  key: string,
+  value: string,
+): ReservedValue | null {
+  const field = getField(def, key);
+  return field ? getReservedValue(field, value) : null;
+}
+
 export function listFilterChips(
   def: BaseGridDef,
   query: QueryState,
@@ -94,6 +105,7 @@ export function listFilterChips(
       values: values.map((value) => ({
         value,
         text: formatEquals(def, field, value, labels, locale),
+        reserved: getChipReserved(def, field, value),
         clear: { type: "removeEqualsValue", field, value },
       })),
       clear: { type: "clearEquals", field },

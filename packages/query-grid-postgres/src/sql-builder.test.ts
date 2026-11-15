@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import type { GridRow, QueryState, TotalResult } from "@kikstart/query-grid";
+import {
+  EMPTY_VALUE,
+  NOT_EMPTY_VALUE,
+  type GridRow,
+  type QueryState,
+  type TotalResult,
+} from "@kikstart/query-grid";
 
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import { decodeCursor, encodeCursor } from "./cursor.ts";
@@ -653,5 +659,48 @@ describe("an exact count of a search", () => {
     expect(applied).toEqual([
       ["enable_seqscan = off", "statement_timeout = 120"],
     ]);
+  });
+});
+
+describe("empty values", () => {
+  const def: PostgresGridDef = {
+    ...TEST_DEF,
+    indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+  };
+  const withNote = (...values: string[]): QueryState => ({
+    ...BASE,
+    equals: { note: values },
+  });
+
+  test("empty is IS NULL and takes no parameter", () => {
+    const sql = buildPageSql(def, withNote(EMPTY_VALUE), 50);
+    expect(sql.text).toContain("WHERE t.note IS NULL ORDER BY");
+    expect(sql.values).toEqual([]);
+  });
+
+  test("not empty is IS NOT NULL", () => {
+    const sql = buildCappedCountSql(def, withNote(NOT_EMPTY_VALUE));
+    expect(sql.text).toContain("WHERE t.note IS NOT NULL LIMIT");
+    expect(sql.values).toEqual([]);
+  });
+
+  test("empty beside real values is one OR group, so the other filters still AND", () => {
+    const one = buildPageSql(def, withNote(EMPTY_VALUE, "gift"), 50);
+    expect(one.text).toContain("WHERE (t.note = $1::text OR t.note IS NULL)");
+    expect(one.values).toEqual(["gift"]);
+    const two = buildPageSql(def, withNote("gift", EMPTY_VALUE, "fragile"), 50);
+    expect(two.text).toContain(
+      "WHERE (t.note = ANY($1::text[]) OR t.note IS NULL)",
+    );
+    expect(two.values).toEqual([["gift", "fragile"]]);
+  });
+
+  test("not empty beside a value, and the token on a field that is never empty, are refused", () => {
+    expect(() =>
+      buildPageSql(def, withNote(NOT_EMPTY_VALUE, "gift"), 50),
+    ).toThrow(QueryRejected);
+    expect(() =>
+      buildPageSql(def, { ...BASE, equals: { status: [EMPTY_VALUE] } }, 50),
+    ).toThrow(QueryRejected);
   });
 });

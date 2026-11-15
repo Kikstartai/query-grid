@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS orders (
   item_count integer NOT NULL,
   paid_at timestamptz,
   shipped_at timestamptz,
-  note text
+  note text,
+  assignee text
 );
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS assignee text;
 
 CREATE INDEX IF NOT EXISTS customers_name_trgm ON customers USING gin (name gin_trgm_ops);

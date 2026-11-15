@@ -30,6 +30,10 @@ COMMENT ON INDEX auto_orders_region__created_at IS 'Auto-created.';
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_channel__created_at ON orders USING btree (channel, created_at, id);
 -- Mark auto_orders_channel__created_at as auto-created.
 COMMENT ON INDEX auto_orders_channel__created_at IS 'Auto-created.';
+-- assignee =, sort created_at
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_assignee__created_at ON orders USING btree (assignee, created_at, id);
+-- Mark auto_orders_assignee__created_at as auto-created.
+COMMENT ON INDEX auto_orders_assignee__created_at IS 'Auto-created.';
 -- status_code =, region =, sort created_at
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__region__created_at ON orders USING btree (status_code, region, created_at, id);
 -- Mark auto_orders_status_code__region__created_at as auto-created.

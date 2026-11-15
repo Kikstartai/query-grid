@@ -12,6 +12,7 @@ import {
   type GridRow,
   type QueryState,
 } from "./field-types.ts";
+import { matchesEquals } from "./field-values.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withoutKey } from "./query-actions.ts";
@@ -80,12 +81,14 @@ export function filterRows(
   query: QueryState,
   searchFields: string[] = [],
 ): GridRow[] {
-  const equals = Object.entries(query.equals);
+  const equals = Object.entries(query.equals).map(
+    ([key, values]) => [getField(def, key), key, values] as const,
+  );
   const needle = query.search?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
-      equals.every(([key, values]) =>
-        values.includes(String(row[key] ?? "")),
+      equals.every(([field, key, values]) =>
+        matchesEquals(field, values, row[key]),
       ) &&
       (query.range === null || matchesRange(def, row, query.range)) &&
       (needle === null || matchesSearch(row, searchFields, needle)),

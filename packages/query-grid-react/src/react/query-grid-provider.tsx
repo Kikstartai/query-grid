@@ -56,6 +56,7 @@ import type { FieldDef, GridDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
   formatList,
+  formatReservedValue,
   useLocale,
   useMessages,
   type QueryGridMessages,
@@ -386,7 +387,9 @@ export function formatChip(
         label: messages.chipEquals({ label }),
         values: chip.values.map((value) => ({
           id: value.value,
-          label: value.text,
+          label: value.reserved
+            ? formatReservedValue(messages, value.reserved)
+            : value.text,
         })),
         removable,
       };

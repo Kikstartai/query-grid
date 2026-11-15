@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "@kikstart/query-grid";
+
 import { CardList } from "./card-list.tsx";
 import { defaultColumns } from "./column-state.ts";
 import { ColumnsMenu } from "./columns-menu.tsx";
@@ -33,6 +35,14 @@ const TOTAL = TEST_FIELDS.find((field) => field.key === "total")!;
 const NUMBER = TEST_FIELDS.find((field) => field.key === "number")!;
 const CREATED = TEST_FIELDS.find((field) => field.key === "created_at")!;
 const NAME = { ...TEST_FIELDS[6] };
+const NOTE = TEST_FIELDS.find((field) => field.key === "note")!;
+const OWNER = {
+  key: "owner",
+  label: "Owner",
+  type: "enum" as const,
+  nullable: true,
+  options: [{ value: "ann", label: "Ann" }],
+};
 const ROW_WINDOW = {
   rows: TEST_ROWS,
   hasNext: false,
@@ -299,6 +309,40 @@ describe("each base component mounts alone, with plain props and no provider", (
       <RangeFilter field={CREATED} range={null} onRangeChange={noop} />,
     );
     expect(dates).toContain('aria-label="Pick Created dates"');
+  });
+
+  test("a nullable field words its reserved values through the messages", () => {
+    const empty = render(
+      <EqualsSelect
+        field={OWNER}
+        values={[EMPTY_VALUE, "ann"]}
+        onValuesChange={noop}
+        multiple
+      />,
+    );
+    expect(empty).toContain("(empty)");
+    expect(empty).toContain("Ann");
+    const translated = render(
+      <QueryGridMessagesProvider messages={{ notEmptyValue: "(ingevul)" }}>
+        <LookupFilter
+          field={NOTE}
+          values={[NOT_EMPTY_VALUE]}
+          onValuesChange={noop}
+          loadOptions={async () => []}
+          multiple
+        />
+      </QueryGridMessagesProvider>,
+    );
+    expect(translated).toContain("(ingevul)");
+    expect(translated).toContain('aria-label="Remove (ingevul)"');
+    const plain = render(
+      <EqualsSelect
+        field={STATUS}
+        values={[EMPTY_VALUE]}
+        onValuesChange={noop}
+      />,
+    );
+    expect(plain).not.toContain("(empty)");
   });
 
   test("FilterChips with one chip per field and one remove per value", () => {

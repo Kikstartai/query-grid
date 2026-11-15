@@ -5,6 +5,7 @@ import {
   type BaseGridDef,
   type QueryState,
 } from "./field-types.ts";
+import { canCombineValues, getReservedValue } from "./field-values.ts";
 import type { Problem } from "./problems.ts";
 
 export const SEARCH_MIN_LENGTH = 3;
@@ -59,9 +60,13 @@ function checkEquals(
   if (values.length > max) {
     return { code: "too_many_values", params: { field: key, max } };
   }
-  return values.every((value) => isValidValue(field, value))
-    ? null
-    : { code: "invalid_value", params: { field: key } };
+  const valid =
+    canCombineValues(field, values) &&
+    values.every(
+      (value) =>
+        getReservedValue(field, value) !== null || isValidValue(field, value),
+    );
+  return valid ? null : { code: "invalid_value", params: { field: key } };
 }
 
 export function isValidFieldValue(

@@ -47,6 +47,17 @@ export {
   type SortState,
 } from "./model/field-types.ts";
 export {
+  canCombineValues,
+  EMPTY_MIXES,
+  EMPTY_VALUE,
+  getReservedValue,
+  listReservedValues,
+  matchesEquals,
+  normalizeEqualsValues,
+  NOT_EMPTY_VALUE,
+  type ReservedValue,
+} from "./model/field-values.ts";
+export {
   DEFAULT_CURRENCY,
   DEFAULT_LOCALE,
   formatCount,
