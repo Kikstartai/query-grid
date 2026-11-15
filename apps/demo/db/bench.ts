@@ -4,10 +4,8 @@ import { join } from "node:path";
 import {
   defaultQuery,
   getField,
-  isQuickShape,
   resolveMaxValues,
   type GridRow,
-  type OrderedShape,
   type QueryShape,
   type QueryState,
 } from "@kikstart/query-grid";
@@ -17,6 +15,7 @@ import {
   buildFacetSql,
   buildPageSql,
   buildRowSql,
+  describeQuick,
   describeShape,
   encodeCursor,
   QUERY_CANCELED,
@@ -161,7 +160,7 @@ async function measure(
 
 async function pickEqualsValues(
   client: Client,
-  shape: OrderedShape,
+  shape: QueryShape,
 ): Promise<Record<string, string[]>> {
   if (shape.equals.length === 0) {
     return {};
@@ -180,7 +179,7 @@ type Frequency = "common" | "rare";
 
 async function pickSeveralValues(
   client: Client,
-  shape: OrderedShape,
+  shape: QueryShape,
   size: number,
   frequency: Frequency,
 ): Promise<Record<string, string[]>> {
@@ -196,7 +195,7 @@ async function pickSeveralValues(
   return equals;
 }
 
-function listMultiSizes(shape: OrderedShape): number[] {
+function listMultiSizes(shape: QueryShape): number[] {
   const caps = shape.equals.map((key) => {
     const field = getField(ORDERS_GRID_DEF, key);
     return field ? resolveMaxValues(field) : 1;
@@ -206,7 +205,7 @@ function listMultiSizes(shape: OrderedShape): number[] {
 
 async function benchSeveral(
   client: Client,
-  shape: OrderedShape,
+  shape: QueryShape,
 ): Promise<Result[]> {
   const results: Result[] = [];
   const seen = new Set<string>();
@@ -278,7 +277,7 @@ async function pickDeepCursor(
 
 async function benchOrdered(
   client: Client,
-  shape: OrderedShape,
+  shape: QueryShape,
 ): Promise<Result[]> {
   const equals = await pickEqualsValues(client, shape);
   const results: Result[] = [];
@@ -359,10 +358,7 @@ async function benchOrdered(
   return results;
 }
 
-async function benchQuick(
-  client: Client,
-  shape: QueryShape,
-): Promise<Result[]> {
+async function benchQuick(client: Client, quick: string[]): Promise<Result[]> {
   const results: Result[] = [];
   for (const value of QUICK_TERMS) {
     const query: QueryState = {
@@ -372,7 +368,7 @@ async function benchQuick(
     results.push(
       await measure(
         client,
-        shape,
+        describeQuick(quick),
         `“${value}”, capped page`,
         buildPageSql(ORDERS_GRID_DEF, query, PAGE),
         QUICK_SETTINGS,
@@ -425,7 +421,7 @@ function toMarkdown(results: Result[], total: number): string {
   const several = results.filter((result) => result.kind === "several");
   const counters = results.filter((result) => result.kind === "counter");
   const optedOut = ORDERS_GRID_DEF.shapes
-    .filter((shape) => !isQuickShape(shape) && shape.multi === false)
+    .filter((shape) => shape.multi === false)
     .map(describeShape);
   const lines = [
     `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after 3 warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
@@ -463,12 +459,15 @@ async function main(): Promise<void> {
   );
   const results: Result[] = [];
   for (const shape of ORDERS_GRID_DEF.shapes) {
-    const batch = isQuickShape(shape)
-      ? await benchQuick(client, shape)
-      : await benchOrdered(client, shape);
+    const batch = await benchOrdered(client, shape);
     results.push(...batch);
     console.log(`${describeShape(shape)}: ${batch.length} queries`);
   }
+  const quick = await benchQuick(client, ORDERS_GRID_DEF.quick);
+  results.push(...quick);
+  console.log(
+    `${describeQuick(ORDERS_GRID_DEF.quick)}: ${quick.length} queries`,
+  );
   const counters = await benchCounters(client);
   results.push(...counters);
   console.log(`counter table: ${counters.length} queries`);

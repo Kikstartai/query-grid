@@ -31,6 +31,7 @@ import {
 export interface StatusBoardProps {
   titleField: string;
   detailFields: string[];
+  transitions?: [string, string][];
 }
 
 interface BoardLanesProps extends StatusBoardProps {
@@ -43,13 +44,16 @@ function BoardLanes({
   showCounts,
   titleField,
   detailFields,
+  transitions,
 }: BoardLanesProps) {
   const { def, source } = useQueryGrid();
   const { moveRow } = useQueryGridActions();
   const messages = useMessages();
   const locale = useLocale();
   const facetState = useFacetState();
-  const [board] = useState(() => createBoard(def, source, queries));
+  const [board] = useState(() =>
+    createBoard(def, source, queries, transitions ?? null),
+  );
   const state = useStoreValue(board.subscribe, board.getState);
   const [error, setError] = useState<string | null>(null);
   const facetField = getFacetField(def);

@@ -109,16 +109,12 @@ export {
 export {
   gridDefCapabilities,
   isFacetOnlyQuery,
-  isQuickShape,
-  listOrderedShapes,
-  listQuickFields,
+  isQueryDeclared,
   listSortFields,
   matchShape,
   shapeCapabilities,
   shapeId,
-  type OrderedShape,
   type QueryShape,
-  type QuickShape,
   type ShapeCapabilityOptions,
   type ShapedGridDef,
 } from "./model/shapes.ts";

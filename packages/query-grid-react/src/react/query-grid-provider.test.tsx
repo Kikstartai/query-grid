@@ -36,7 +36,7 @@ import { createUrlSync, type UrlSync } from "./url-sync.ts";
 
 const DEF = TEST_GRID_DEF;
 const BASE = defaultQuery(DEF);
-const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
+const source = createMemorySource(DEF, TEST_ROWS);
 const CAPS = source.capabilities;
 
 function Readout() {

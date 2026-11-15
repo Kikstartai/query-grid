@@ -3,7 +3,6 @@ import { Client } from "pg";
 
 import {
   defaultQuery,
-  isQuickShape,
   type GridRow,
   type QueryState,
   type TotalResult,
@@ -108,9 +107,6 @@ describe("generated schema", () => {
 describe("keyset paging", () => {
   test("three keyset pages equal one page three times the size, for every ordered shape", async () => {
     for (const shape of ORDERS_GRID_DEF.shapes) {
-      if (isQuickShape(shape)) {
-        continue;
-      }
       const sample = shape.equals.length
         ? await client.query<Record<string, string>>(
             `SELECT ${shape.equals.join(", ")} FROM orders LIMIT 1`,

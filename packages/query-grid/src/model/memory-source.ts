@@ -18,15 +18,8 @@ import { sortRows, toComparable } from "./sort-rows.ts";
 
 const OPTION_LIMIT = 50;
 
-export interface MemorySourceOptions {
-  quick?: string[];
-  transitions?: [string, string][];
-}
-
-export function memoryCapabilities(
-  def: BaseGridDef,
-  quickFields: string[] = [],
-): Capabilities {
+export function memoryCapabilities(def: BaseGridDef): Capabilities {
+  const quickFields = def.quick ?? [];
   const ranged = (field: BaseFieldDef) =>
     isRangeType(field.type) && !field.options;
   const rangeFields = def.fields.filter(ranged).map((field) => field.key);
@@ -150,11 +143,10 @@ interface Selection {
 export function createMemorySource(
   def: BaseGridDef,
   initialRows: GridRow[],
-  options: MemorySourceOptions = {},
 ): DataSource {
   let rows = initialRows;
   let selected: Selection | null = null;
-  const quickFields = options.quick ?? [];
+  const quickFields = def.quick ?? [];
   const totals = listTotalFields(def).map((field) => field.key);
   const matching = (query: QueryState) =>
     filterRows(def, rows, query, quickFields);
@@ -174,7 +166,7 @@ export function createMemorySource(
     return (selected as Selection).rows;
   };
   return {
-    capabilities: memoryCapabilities(def, quickFields),
+    capabilities: memoryCapabilities(def),
     fetchPage: async (query, limit) => {
       const offset = Number(query.cursor ?? 0) || 0;
       const found = select(query);
@@ -239,8 +231,7 @@ export function createMemorySource(
         .filter((option) => option.label.toLowerCase().includes(needle))
         .slice(0, OPTION_LIMIT);
     },
-    fetchTransitions: async () =>
-      options.transitions ?? listAllTransitions(def),
+    fetchTransitions: async () => listAllTransitions(def),
     changeFacetValue: async (id, to) => {
       const key = def.facet?.field;
       const current = rows.find((row) => row.id === id);

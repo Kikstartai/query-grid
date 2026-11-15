@@ -1,7 +1,6 @@
 import type { FieldOption, BaseGridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
-export const TASK_QUICK_FIELDS = ["title", "assignee", "number"];
 export const TASK_FILTER_FIELDS = [
   "status",
   "team",
@@ -79,6 +78,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
   defaultSort: { field: "due_at", direction: "asc" },
   facet: { field: "status" },
   totals: ["budget"],
+  quick: ["title", "assignee", "number"],
   fields: [
     {
       key: "number",

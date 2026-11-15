@@ -510,6 +510,7 @@ describe("generated DDL", () => {
       ...TEST_DEF,
       table: long,
       facet: undefined,
+      quick: undefined,
       shapes: [
         { equals: [], sort: "created_at" },
         { equals: ["status", "region"], sort: "created_at" },

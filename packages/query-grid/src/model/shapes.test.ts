@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type { QueryState } from "./field-types.ts";
-import { TEST_DEF, TEST_SHAPES } from "./grid-def.fixture.ts";
+import {
+  TEST_DEF,
+  TEST_QUICK_FIELDS,
+  TEST_SHAPES,
+} from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
-import { matchShape, shapeCapabilities } from "./shapes.ts";
+import { isQueryDeclared, matchShape, shapeCapabilities } from "./shapes.ts";
 
 const SHAPES = TEST_SHAPES;
 const BASE: QueryState = {
@@ -56,16 +60,15 @@ describe("matchShape", () => {
   });
 
   test("a quick filter combines with no other filter", () => {
-    expect(matchShape(SHAPES, { ...BASE, quick: "abc" })).toEqual({
-      quick: ["name", "number"],
-    });
+    const quick = { ...BASE, quick: "abc" };
+    expect(isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, quick)).toBe(true);
+    expect(isQueryDeclared(SHAPES, [], quick)).toBe(false);
     expect(
-      matchShape(SHAPES, {
-        ...BASE,
-        quick: "abc",
+      isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, {
+        ...quick,
         equals: { status: ["open"] },
       }),
-    ).toBeNull();
+    ).toBe(false);
   });
 });
 
@@ -86,7 +89,10 @@ describe("the HTTP source", () => {
 });
 
 describe("shapeCapabilities", () => {
-  const caps = shapeCapabilities(SHAPES, { facetField: "status" });
+  const caps = shapeCapabilities(SHAPES, {
+    facetField: "status",
+    quickFields: TEST_QUICK_FIELDS,
+  });
 
   test("they are the shapes, read once", () => {
     expect(caps.mode).toBe("server");

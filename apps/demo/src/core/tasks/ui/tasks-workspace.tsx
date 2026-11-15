@@ -9,7 +9,6 @@ import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 import {
   TASK_COUNT,
   TASK_FILTER_FIELDS,
-  TASK_QUICK_FIELDS,
   TASKS_GRID_DEF,
 } from "../tasks-grid-def";
 import { TasksQueryProvider } from "../tasks-provider";
@@ -31,7 +30,7 @@ export function TasksWorkspace() {
         fallback={
           <WorkspaceSkeleton
             def={TASKS_GRID_DEF}
-            capabilities={memoryCapabilities(TASKS_GRID_DEF, TASK_QUICK_FIELDS)}
+            capabilities={memoryCapabilities(TASKS_GRID_DEF)}
             fields={TASK_FILTER_FIELDS}
           />
         }

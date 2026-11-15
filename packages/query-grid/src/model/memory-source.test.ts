@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { GridRow, QueryState } from "./field-types.ts";
-import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
+import { TEST_DEF } from "./grid-def.fixture.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { defaultQuery } from "./query-actions.ts";
 
@@ -18,9 +18,7 @@ const ROWS: GridRow[] = Array.from({ length: 40 }, (_, index) => ({
 
 const BASE = defaultQuery(TEST_DEF);
 const signal = new AbortController().signal;
-const source = createMemorySource(TEST_DEF, ROWS, {
-  quick: TEST_QUICK_FIELDS,
-});
+const source = createMemorySource(TEST_DEF, ROWS);
 
 describe("the in-memory source", () => {
   test("it filters, sorts and pages", async () => {

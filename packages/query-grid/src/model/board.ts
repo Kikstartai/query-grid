@@ -110,6 +110,7 @@ export function createBoard(
   def: BaseGridDef,
   source: DataSource,
   laneQueries: Map<string, QueryState>,
+  transitions: [string, string][] | null = null,
 ): Board {
   const feeds = new Map<string, Feed>(
     [...laneQueries].map(([lane, query]) => [
@@ -130,7 +131,7 @@ export function createBoard(
     );
   const store = createStore<BoardState>({
     lanes: readLanes(),
-    transitions: transitionLoads.get(source)?.value ?? null,
+    transitions: transitions ?? transitionLoads.get(source)?.value ?? null,
   });
   let started = false;
 
@@ -155,7 +156,9 @@ export function createBoard(
       if (!started) {
         started = true;
         feeds.forEach((feed) => feed.subscribe(followLanes));
-        void followTransitions();
+        if (!transitions) {
+          void followTransitions();
+        }
       }
       return store.subscribe(listener);
     },

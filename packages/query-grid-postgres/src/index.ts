@@ -32,7 +32,7 @@ export {
   type ShapeIndex,
   type TableMigration,
 } from "./schema-ddl.ts";
-export { describeShape, validateGridDef } from "./shapes.ts";
+export { describeQuick, describeShape, validateGridDef } from "./shapes.ts";
 export {
   assertDeclared,
   buildCappedCountSql,

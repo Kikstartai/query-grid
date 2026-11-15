@@ -105,7 +105,7 @@ interface Capabilities {
 ```
 
 - `shapeCapabilities(shapes, { facetField })` builds them for a server grid: every field in a shape's `equals`, the sort of every shape with `range`, every shape's sort, the quick shape's columns. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
-- `memoryCapabilities(def, quickFields)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
+- `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
 - `isAnswerable` is the answer for one query. The field lists are what could ever be asked.
 - `QueryRules` is the capabilities plus whether a quick-filter result is complete.
 - `listOffers(def, query, rules)` says what the next action may be. `applyAction` refuses an action whose result the capabilities do not answer. `explainUnavailable(query, target, rules)` gives the reason as a code.

@@ -37,7 +37,7 @@ const SERVER: Capabilities = {
 const CAPPED: QueryRules = { capabilities: SERVER, quickComplete: false };
 const COMPLETE: QueryRules = { capabilities: SERVER, quickComplete: true };
 const MEMORY: QueryRules = {
-  capabilities: memoryCapabilities(TEST_DEF, TEST_QUICK_FIELDS),
+  capabilities: memoryCapabilities(TEST_DEF),
   quickComplete: false,
 };
 
@@ -257,7 +257,7 @@ describe("memory mode", () => {
   });
 
   test("no quick fields means no quick filter", () => {
-    const bare = memoryCapabilities(TEST_DEF);
+    const bare = memoryCapabilities({ ...TEST_DEF, quick: undefined });
     expect(bare.isAnswerable({ ...BASE, quick: "abc" })).toBe(false);
     expect(bare.quickFields).toEqual([]);
   });

@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultQuery,
   enumerateReachableStates,
+  isQueryDeclared,
   matchShape,
   shapeId,
   type QueryRules,
@@ -47,9 +48,12 @@ describe("orders grid def", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(ORDERS_GRID_DEF, rules);
       for (const state of states) {
-        const shape = matchShape(SHAPES, state);
-        expect(shape).not.toBeNull();
-        reached.add(shapeId(shape!));
+        expect(isQueryDeclared(SHAPES, ORDERS_GRID_DEF.quick, state)).toBe(
+          true,
+        );
+        if (state.quick === null) {
+          reached.add(shapeId(matchShape(SHAPES, state)!));
+        }
       }
       expect([...reached].sort()).toEqual(SHAPES.map(shapeId).sort());
       const several = states.filter((state) =>

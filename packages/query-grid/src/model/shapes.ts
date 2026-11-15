@@ -1,17 +1,11 @@
 import type { BaseGridDef, Capabilities, QueryState } from "./field-types.ts";
 
-export interface OrderedShape {
+export interface QueryShape {
   equals: string[];
   sort: string;
   range?: boolean;
   multi?: boolean;
 }
-
-export interface QuickShape {
-  quick: string[];
-}
-
-export type QueryShape = OrderedShape | QuickShape;
 
 export interface ShapedGridDef extends BaseGridDef {
   shapes: QueryShape[];
@@ -19,20 +13,10 @@ export interface ShapedGridDef extends BaseGridDef {
 
 export interface ShapeCapabilityOptions {
   facetField?: string;
-}
-
-export function isQuickShape(shape: QueryShape): shape is QuickShape {
-  return "quick" in shape;
-}
-
-export function listQuickFields(shapes: QueryShape[]): string[] {
-  return shapes.find(isQuickShape)?.quick ?? [];
+  quickFields?: string[];
 }
 
 export function shapeId(shape: QueryShape): string {
-  if (isQuickShape(shape)) {
-    return `quick:${shape.quick.join("+")}`;
-  }
   return `${[...shape.equals].sort().join("+")}|${shape.sort}`;
 }
 
@@ -40,28 +24,20 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value) => b.includes(value));
 }
 
-export function listOrderedShapes(shapes: QueryShape[]): OrderedShape[] {
-  return shapes.filter((shape): shape is OrderedShape => !isQuickShape(shape));
-}
-
 function listEqualsFields(shapes: QueryShape[]): string[] {
-  return [
-    ...new Set(listOrderedShapes(shapes).flatMap((shape) => shape.equals)),
-  ];
+  return [...new Set(shapes.flatMap((shape) => shape.equals))];
 }
 
 function listRangeFields(shapes: QueryShape[]): string[] {
   return [
     ...new Set(
-      listOrderedShapes(shapes)
-        .filter((shape) => shape.range)
-        .map((shape) => shape.sort),
+      shapes.filter((shape) => shape.range).map((shape) => shape.sort),
     ),
   ];
 }
 
 export function listSortFields(shapes: QueryShape[]): string[] {
-  return [...new Set(listOrderedShapes(shapes).map((shape) => shape.sort))];
+  return [...new Set(shapes.map((shape) => shape.sort))];
 }
 
 export function matchShape(
@@ -70,13 +46,9 @@ export function matchShape(
 ): QueryShape | null {
   const equals = Object.keys(query.equals);
   if (query.quick !== null) {
-    const answerable =
-      equals.length === 0 &&
-      query.range === null &&
-      listSortFields(shapes).includes(query.sort.field);
-    return answerable ? (shapes.find(isQuickShape) ?? null) : null;
+    return null;
   }
-  const ordered = listOrderedShapes(shapes).find(
+  const ordered = shapes.find(
     (shape) => shape.sort === query.sort.field && sameSet(shape.equals, equals),
   );
   if (!ordered) {
@@ -89,6 +61,22 @@ export function matchShape(
     (values) => values.length > 1,
   );
   return several && ordered.multi === false ? null : ordered;
+}
+
+export function isQueryDeclared(
+  shapes: QueryShape[],
+  quickFields: string[],
+  query: QueryState,
+): boolean {
+  if (query.quick === null) {
+    return matchShape(shapes, query) !== null;
+  }
+  return (
+    quickFields.length > 0 &&
+    Object.keys(query.equals).length === 0 &&
+    query.range === null &&
+    listSortFields(shapes).includes(query.sort.field)
+  );
 }
 
 export function isFacetOnlyQuery(
@@ -107,17 +95,21 @@ export function shapeCapabilities(
   shapes: QueryShape[],
   options: ShapeCapabilityOptions = {},
 ): Capabilities {
+  const quickFields = options.quickFields ?? [];
   return {
     mode: "server",
-    isAnswerable: (query) => matchShape(shapes, query) !== null,
+    isAnswerable: (query) => isQueryDeclared(shapes, quickFields, query),
     equalsFields: listEqualsFields(shapes),
     rangeFields: listRangeFields(shapes),
     sortFields: listSortFields(shapes),
-    quickFields: listQuickFields(shapes),
+    quickFields,
     isFacetCountShown: (query) => isFacetOnlyQuery(options.facetField, query),
   };
 }
 
 export function gridDefCapabilities(def: ShapedGridDef): Capabilities {
-  return shapeCapabilities(def.shapes, { facetField: def.facet?.field });
+  return shapeCapabilities(def.shapes, {
+    facetField: def.facet?.field,
+    quickFields: def.quick,
+  });
 }

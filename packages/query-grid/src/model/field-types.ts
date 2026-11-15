@@ -51,6 +51,7 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   defaultSort: SortState;
   facet?: FacetDef;
   totals?: string[];
+  quick?: string[];
 }
 
 export interface RangeState {

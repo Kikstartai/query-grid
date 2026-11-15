@@ -16,13 +16,13 @@ describe("validateGridDef", () => {
       fields: TEST_DEF.fields.map((field) =>
         field.key === "total" ? { ...field, currency: "rand" } : field,
       ),
+      quick: ["created_at", "missing"],
       shapes: [
         { equals: [], sort: "note" },
         { equals: ["missing"], sort: "total" },
         { equals: [], sort: "name", range: true },
         { equals: [], sort: "created_at" },
         { equals: [], sort: "created_at" },
-        { quick: ["created_at", "missing"] },
       ],
     };
     const problems = validateGridDef(broken).join("\n");

@@ -95,14 +95,14 @@ export const ORDERS_GRID_DEF = {
     { equals: [], sort: "created_at", range: true },
     { equals: ["status_code"], sort: "created_at", range: true },
     { equals: ["status_code"], sort: "total", range: true },
-    { quick: ["customer_name", "order_number"] },
   ],
+  quick: ["customer_name", "order_number"],
 } satisfies GridDef & PostgresGridDef;
 ```
 
 - The React package reads the fields, their cells, the sort, the facet and the totals, and ignores `table` and `counterTable`.
-- The Postgres package reads the fields, the shapes and the storage, and ignores `cell`.
-- The in-memory source reads the fields and ignores shapes and storage.
+- The Postgres package reads the fields, the shapes, `quick` and the storage, and ignores `cell`.
+- The in-memory source reads the fields and `quick`, and ignores shapes and storage.
 - The types are layers, each with its own name: core's `BaseGridDef` and `BaseFieldDef`, the React package's `GridDef` and `FieldDef` (the base plus `cell`), the Postgres package's `PostgresGridDef` (the base plus `table`, `shapes` and `facet.counterTable`). A `BaseGridDef` passes wherever a `GridDef` is expected.
 - One object means the table and counter-table names are in the browser bundle, and the def file is a `.tsx` the server imports. A host that wants neither writes the layers as separate objects; the types allow both.
 
@@ -246,7 +246,7 @@ interface Capabilities {
 ```
 
 - Core's `shapeCapabilities(shapes, { facetField })` builds it from the same shapes the server enforces, so the controls offer exactly what the handler accepts. `createHttpSource` calls it with the def's shapes and facet, once per source. The shape types and `matchShape` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
-- `memoryCapabilities(def, quickFields)` builds it for the in-memory source, where every field is a filter: a number or a date takes a range, anything else an equality.
+- `memoryCapabilities(def)` builds it for the in-memory source, where every field is a filter: a number or a date takes a range, anything else an equality.
 - **What may be filtered comes from the data alone.** A field def says nothing about filtering. `equalsFields` and `rangeFields` are the fields a shape names on a server grid and every field on a client grid; `isAnswerable` then says, query by query, which of them can be used now. A filter that cannot be used now stays in place, disabled, with its reason.
 - **Which control a field gets** is `resolveFilterKind(field, capabilities)`: an equality field with `options` is a select, one without is a lookup, a range field is a date range or two numbers by its `type`.
 - Everything in the client that used to read shapes reads this instead: the provider's URL guard, `applyAction`, `listOffers`, the sort control, the quick filter, the facet panel and the board.
@@ -488,15 +488,12 @@ Without React at all, core is the whole model: `createQueryStore`, `createFeed`,
 
 ## The in-memory data source
 
-`createMemorySource(def, rows, { quick, transitions })` from `@kikstart/query-grid/memory` runs the same parts and hooks over rows already loaded in full. It filters, sorts, counts and totals in JavaScript. Shapes do not apply: every field is a filter and a sort, offered in any combination, with several values per field, and the facet counts follow the other filters. `quick` lists the fields the quick filter searches; without it there is no quick filter.
+`createMemorySource(def, rows)` from `@kikstart/query-grid/memory` runs the same parts and hooks over rows already loaded in full. It filters, sorts, counts and totals in JavaScript. Shapes do not apply: every field is a filter and a sort, offered in any combination, with several values per field, and the facet counts follow the other filters. The def's `quick` lists the fields the quick filter searches; without it there is no quick filter, and on a server grid it is also the columns of the trigram index. The source reports every move between facet values as allowed; a host that restricts them passes `transitions` to `StatusBoard`.
 
 ```tsx
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
-const source = createMemorySource(TASKS_GRID_DEF, rows, {
-  quick: ["title", "assignee"],
-  transitions,
-});
+const source = createMemorySource(TASKS_GRID_DEF, rows);
 
 <QueryGridProvider def={TASKS_GRID_DEF} source={source}>
 ```
@@ -512,7 +509,7 @@ One field description drives the grid and the filters. Core's `BaseFieldDef` car
 The def then declares its **query shapes**. A shape is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
 
 - an ordered shape is a set of equality filters, one sort, optionally a range on that sort column, and `multi: false` when its equality fields take one value only
-- the quick-filter shape is a list of columns matched by substring
+- the def's `quick` is a list of columns matched by substring
 
 The demo's orders grid declares ten:
 
@@ -555,7 +552,7 @@ A page is `SELECT … FROM orders t WHERE <filters> AND (t.<sort>, t.id) < ($a, 
 
 ### Quick filter
 
-The quick filter is `(<columns joined with spaces>) ILIKE '%term%'` through the trigram GIN index, with `enable_seqscan = off`. It is the one shape whose cost follows the match count rather than the page size, so:
+The quick filter is `(<columns joined with spaces>) ILIKE '%term%'` through the trigram GIN index, with `enable_seqscan = off`. It is the one filter whose cost follows the match count rather than the page size, so:
 
 - the server gives it a 120 ms statement budget and refuses a term that exceeds it with a 400 `too_broad`
 - it returns at most 500 rows, unordered, with no cursor

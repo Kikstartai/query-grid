@@ -4,8 +4,7 @@ import {
   getField,
   isValidFieldValue,
   KEY_FIELD,
-  listQuickFields,
-  matchShape,
+  isQueryDeclared,
   PAGE_LIMIT_MAX,
   QUICK_LIMIT,
   validateQueryValues,
@@ -138,13 +137,13 @@ function quickPart(field: BaseFieldDef, prefix: string): string {
 }
 
 export function quickExpression(def: PostgresGridDef, prefix = ""): string {
-  return listQuickFields(def.shapes)
+  return (def.quick ?? [])
     .map((key) => quickPart(requireField(def, key), prefix))
     .join(" || ' ' || ");
 }
 
 export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
-  if (!matchShape(def.shapes, query)) {
+  if (!isQueryDeclared(def.shapes, def.quick ?? [], query)) {
     throw new QueryRejected("undeclared_shape");
   }
   const problem = validateQueryValues(def, query);

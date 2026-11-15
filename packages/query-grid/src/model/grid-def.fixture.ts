@@ -10,7 +10,6 @@ export const TEST_SHAPES: QueryShape[] = [
   { equals: ["status"], sort: "created_at" },
   { equals: ["status"], sort: "total", range: true },
   { equals: ["region"], sort: "created_at" },
-  { quick: TEST_QUICK_FIELDS },
 ];
 
 export const TEST_DEF: BaseGridDef = {
@@ -18,6 +17,7 @@ export const TEST_DEF: BaseGridDef = {
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status" },
   totals: ["total", "number"],
+  quick: TEST_QUICK_FIELDS,
   fields: [
     { key: "id", label: "ID", type: "id" },
     { key: "number", label: "Number", type: "integer" },

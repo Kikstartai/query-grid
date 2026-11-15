@@ -41,12 +41,12 @@ export const TEST_DEF: PostgresGridDef = {
       nullable: true,
     },
   ],
+  quick: ["name", "number"],
   shapes: [
     { equals: [], sort: "created_at", range: true },
     { equals: [], sort: "total", range: true },
     { equals: ["status"], sort: "created_at" },
     { equals: ["status"], sort: "total", range: true },
     { equals: ["region"], sort: "created_at" },
-    { quick: ["name", "number"] },
   ],
 };

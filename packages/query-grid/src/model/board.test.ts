@@ -7,13 +7,17 @@ import {
   createTestSource,
   settle,
   TEST_DEF,
+  TEST_QUICK_FIELDS,
   TEST_SHAPES,
 } from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
 import { defaultQuery } from "./query-actions.ts";
 import { shapeCapabilities } from "./shapes.ts";
 
-const CAPS = shapeCapabilities(TEST_SHAPES, { facetField: "status" });
+const CAPS = shapeCapabilities(TEST_SHAPES, {
+  facetField: "status",
+  quickFields: TEST_QUICK_FIELDS,
+});
 const BASE = defaultQuery(TEST_DEF);
 
 const ROWS: GridRow[] = [

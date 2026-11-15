@@ -12,7 +12,7 @@ import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
 import { FacetPanel } from "./summaries.tsx";
 
 const DEF = TEST_GRID_DEF;
-const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
+const source = createMemorySource(DEF, TEST_ROWS);
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(

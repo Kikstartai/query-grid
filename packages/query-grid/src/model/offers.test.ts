@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { QueryRules, QueryState } from "./field-types.ts";
-import { TEST_DEF, TEST_SHAPES } from "./grid-def.fixture.ts";
+import {
+  TEST_DEF,
+  TEST_QUICK_FIELDS,
+  TEST_SHAPES,
+} from "./grid-def.fixture.ts";
 import {
   applyAction,
   defaultQuery,
@@ -9,6 +13,7 @@ import {
   listOffers,
 } from "./query-actions.ts";
 import {
+  isQueryDeclared,
   matchShape,
   shapeCapabilities,
   shapeId,
@@ -17,7 +22,10 @@ import {
 
 const SHAPES = TEST_SHAPES;
 const BASE = defaultQuery(TEST_DEF);
-const CAPS = shapeCapabilities(SHAPES, { facetField: "status" });
+const CAPS = shapeCapabilities(SHAPES, {
+  facetField: "status",
+  quickFields: TEST_QUICK_FIELDS,
+});
 const CAPPED: QueryRules = { capabilities: CAPS, quickComplete: false };
 const COMPLETE: QueryRules = { capabilities: CAPS, quickComplete: true };
 
@@ -140,9 +148,10 @@ describe("reachable states", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(TEST_DEF, rules);
       for (const state of states) {
-        const shape = matchShape(SHAPES, state);
-        expect(shape).not.toBeNull();
-        reached.add(shapeId(shape!));
+        expect(isQueryDeclared(SHAPES, TEST_QUICK_FIELDS, state)).toBe(true);
+        if (state.quick === null) {
+          reached.add(shapeId(matchShape(SHAPES, state)!));
+        }
       }
       expect([...reached].sort()).toEqual(SHAPES.map(shapeId).sort());
       expect(

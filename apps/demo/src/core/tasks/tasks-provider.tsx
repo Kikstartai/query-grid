@@ -6,12 +6,7 @@ import { createMemorySource } from "@kikstart/query-grid/memory";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
 import { QueryGridMessagesProvider } from "@kikstart/query-grid-react/components";
 
-import {
-  listTaskRows,
-  TASK_QUICK_FIELDS,
-  TASK_TRANSITIONS,
-  TASKS_GRID_DEF,
-} from "./tasks-grid-def";
+import { listTaskRows, TASKS_GRID_DEF } from "./tasks-grid-def";
 
 interface TasksQueryProviderProps {
   children: ReactNode;
@@ -19,10 +14,7 @@ interface TasksQueryProviderProps {
 
 export function TasksQueryProvider({ children }: TasksQueryProviderProps) {
   const [source] = useState(() =>
-    createMemorySource(TASKS_GRID_DEF, listTaskRows(), {
-      quick: TASK_QUICK_FIELDS,
-      transitions: TASK_TRANSITIONS,
-    }),
+    createMemorySource(TASKS_GRID_DEF, listTaskRows()),
   );
   return (
     <QueryGridMessagesProvider locale="en-US">

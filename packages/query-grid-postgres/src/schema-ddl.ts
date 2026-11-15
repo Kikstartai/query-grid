@@ -1,6 +1,6 @@
-import { isQuickShape, KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
+import { KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
 
-import { describeShape, validateGridDef } from "./shapes.ts";
+import { describeQuick, describeShape, validateGridDef } from "./shapes.ts";
 import {
   identifier,
   quickExpression,
@@ -10,7 +10,7 @@ import {
 import type { PostgresGridDef } from "./storage.ts";
 
 export interface ShapeIndex {
-  shape: QueryShape;
+  note: string;
   name: string;
   method: "btree" | "gin";
   columns: string[];
@@ -57,6 +57,22 @@ function createIndex(concurrently: boolean): string {
     : "CREATE INDEX IF NOT EXISTS";
 }
 
+function quickIndex(
+  def: PostgresGridDef,
+  quick: string[],
+  concurrently: boolean,
+): ShapeIndex {
+  const table = identifier(def.table);
+  const name = shortenIdentifier(`${table}_qs_quick`);
+  return {
+    note: describeQuick(quick),
+    name,
+    method: "gin",
+    columns: quick.map(identifier),
+    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin ((${quickExpression(def)}) ${TRGM_OPS});`,
+  };
+}
+
 function shapeIndex(
   def: PostgresGridDef,
   shape: QueryShape,
@@ -64,16 +80,6 @@ function shapeIndex(
 ): ShapeIndex {
   const table = identifier(def.table);
   const create = createIndex(concurrently);
-  if (isQuickShape(shape)) {
-    const name = shortenIdentifier(`${table}_qs_quick`);
-    return {
-      shape,
-      name,
-      method: "gin",
-      columns: shape.quick.map(identifier),
-      ddl: `${create} ${name} ON ${table} USING gin ((${quickExpression(def)}) ${TRGM_OPS});`,
-    };
-  }
   const columns = [...shape.equals, shape.sort, KEY_FIELD]
     .map(identifier)
     .filter((column, index, all) => all.indexOf(column) === index);
@@ -81,7 +87,7 @@ function shapeIndex(
     `${table}_qs_${[...shape.equals, shape.sort].join("__")}`,
   );
   return {
-    shape,
+    note: describeShape(shape),
     name,
     method: "btree",
     columns,
@@ -94,7 +100,12 @@ export function listShapeIndexes(
   options: MigrationOptions = {},
 ): ShapeIndex[] {
   const concurrently = options.concurrently ?? true;
-  return def.shapes.map((shape) => shapeIndex(def, shape, concurrently));
+  const ordered = def.shapes.map((shape) =>
+    shapeIndex(def, shape, concurrently),
+  );
+  return def.quick
+    ? [...ordered, quickIndex(def, def.quick, concurrently)]
+    : ordered;
 }
 
 export function listCounterObjects(
@@ -276,7 +287,7 @@ function indexSteps(
   return [
     ...extension,
     ...indexes.map((index) => ({
-      note: describeShape(index.shape),
+      note: index.note,
       sql: index.ddl,
       transaction: false,
     })),

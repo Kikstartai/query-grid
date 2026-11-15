@@ -1,13 +1,10 @@
 import {
   getField,
-  isQuickShape,
   isCurrencyCode,
   isRangeType,
   KEY_FIELD,
-  listOrderedShapes,
   shapeId,
   type BaseFieldDef,
-  type OrderedShape,
   type QueryShape,
 } from "@kikstart/query-grid";
 
@@ -21,10 +18,11 @@ const QUICK_TYPES: BaseFieldDef["type"][] = [
   "id",
 ];
 
+export function describeQuick(columns: string[]): string {
+  return `quick filter over ${columns.join(", ")}`;
+}
+
 export function describeShape(shape: QueryShape): string {
-  if (isQuickShape(shape)) {
-    return `quick filter over ${shape.quick.join(", ")}`;
-  }
   const filters = shape.equals.length
     ? shape.equals.map((key) => `${key} =`).join(", ")
     : "no filter";
@@ -32,10 +30,10 @@ export function describeShape(shape: QueryShape): string {
   return `${filters}, sort ${shape.sort}${range}`;
 }
 
-function validateQuickShape(def: PostgresGridDef, columns: string[]): string[] {
+function validateQuick(def: PostgresGridDef, columns: string[]): string[] {
   const problems: string[] = [];
   if (columns.length === 0) {
-    problems.push("the quick filter shape lists no columns");
+    problems.push("the quick filter lists no columns");
   }
   for (const key of columns) {
     const field = getField(def, key);
@@ -54,7 +52,7 @@ function validateQuickShape(def: PostgresGridDef, columns: string[]): string[] {
 
 function validateOrderedShape(
   def: PostgresGridDef,
-  shape: OrderedShape,
+  shape: QueryShape,
 ): string[] {
   const id = shapeId(shape);
   const sort = getField(def, shape.sort);
@@ -109,8 +107,8 @@ export function validateGridDef(def: PostgresGridDef): string[] {
   if (!getField(def, KEY_FIELD)) {
     problems.push(`the grid has no "${KEY_FIELD}" field`);
   }
-  if (def.shapes.filter(isQuickShape).length > 1) {
-    problems.push("a grid declares at most one quick filter shape");
+  if (def.quick) {
+    problems.push(...validateQuick(def, def.quick));
   }
   for (const shape of def.shapes) {
     const id = shapeId(shape);
@@ -118,13 +116,9 @@ export function validateGridDef(def: PostgresGridDef): string[] {
       problems.push(`shape ${id} is declared twice`);
     }
     seen.add(id);
-    problems.push(
-      ...(isQuickShape(shape)
-        ? validateQuickShape(def, shape.quick)
-        : validateOrderedShape(def, shape)),
-    );
+    problems.push(...validateOrderedShape(def, shape));
   }
-  const base = listOrderedShapes(def.shapes).some(
+  const base = def.shapes.some(
     (shape) =>
       shape.equals.length === 0 && shape.sort === def.defaultSort.field,
   );

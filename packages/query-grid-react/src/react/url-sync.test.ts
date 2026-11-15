@@ -27,7 +27,7 @@ interface Harness {
 }
 
 function createHarness(): Harness {
-  const source = createMemorySource(DEF, [], { quick: ["name"] });
+  const source = createMemorySource(DEF, []);
   const store = createQueryStore(DEF, source.capabilities, defaultQuery(DEF));
   const written: Written[] = [];
   const clock = { now: 0 };
