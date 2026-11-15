@@ -516,18 +516,18 @@ The def then declares its **query shapes**. A shape is the unit the data layer a
 
 The demo's orders grid declares ten:
 
-| Shape                                             | Index                                                                 |
-| ------------------------------------------------- | --------------------------------------------------------------------- |
-| no filter, sort `created_at`, range               | `(created_at, id)`                                                    |
-| no filter, sort `total`, range                    | `(total, id)`                                                         |
-| `status_code =`, sort `created_at`, range         | `(status_code, created_at, id)`                                       |
-| `status_code =`, sort `total`, range              | `(status_code, total, id)`                                            |
-| `customer_id =`, sort `created_at`                | `(customer_id, created_at, id)`                                       |
-| `region =`, sort `created_at`, range              | `(region, created_at, id)`                                            |
-| `channel =`, sort `created_at`                    | `(channel, created_at, id)`                                           |
-| `status_code =`, `region =`, sort `created_at`    | `(status_code, region, created_at, id)`                               |
-| `status_code =`, `channel =`, sort `created_at`   | `(status_code, channel, created_at, id)`                              |
-| quick filter over `customer_name`, `order_number` | GIN `((customer_name \|\| ' ' \|\| order_number::text) gin_trgm_ops)` |
+| Shape                                             | Index                           |
+| ------------------------------------------------- | ------------------------------- | ------------- | ----------- | ------------- | ----------------- |
+| no filter, sort `created_at`, range               | `(created_at, id)`              |
+| no filter, sort `total`, range                    | `(total, id)`                   |
+| `status_code =`, sort `created_at`, range         | `(status_code, created_at, id)` |
+| `status_code =`, sort `total`, range              | `(status_code, total, id)`      |
+| `customer_id =`, sort `created_at`                | first and deep, both directions | 0.92 / 1.04   | 2.74 / 2.91 | 12.41 / 17.86 | Index Scan        |
+| `region =`, sort `created_at`, range              | `(region, created_at, id)`      |
+| `channel =`, sort `created_at`                    | first and deep, both directions | 0.97 / 1.07   | 5.92 / 6.48 | 10.97 / 12.29 | Index Scan        |
+| `status_code =`, `region =`, sort `created_at`    | first and deep, both directions | 0.93 / 1.20   | 2.86 / 3.07 | 12.47 / 14.29 | Index Scan        |
+| `status_code =`, `channel =`, sort `created_at`   | first and deep, both directions | 1.01 / 1.25   | 2.85 / 3.87 | 12.78 / 17.10 | Index Scan        |
+| quick filter over `customer_name`, `order_number` | 8 terms                         | 15.03 / 19.00 | none        | none          | Bitmap Index Scan |
 
 `validateGridDef` rejects a shape that sorts on a nullable field, repeats another shape, puts a range on a field whose type has none, names an equality field the def lacks or puts a timestamp in the quick filter, and requires the default sort with no filter to be a shape.
 
@@ -666,40 +666,41 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 
 ### Neon, 620,000 orders
 
-Postgres 18.7 on a Neon Free-plan compute, 0.25 to 2 CU, measured 2026-11-14. All 72 single-value queries and all 80 multi-value queries pass; [`apps/demo/db/bench-results.md`](apps/demo/db/bench-results.md) holds each one with its plan.
+Postgres 18.7 on a Neon Free-plan compute, 0.25 to 2 CU, measured 2026-11-15. All 72 single-value queries, all 80 multi-value queries and the counter-table read pass; [`apps/demo/db/bench-results.md`](apps/demo/db/bench-results.md) holds each one with its plan.
 
 | Shape                                             | Page variants                          | Worst page p50 / p95 (ms) | Worst capped count p50 / p95 (ms) | Worst live total p50 / p95 (ms) | Plan              |
 | ------------------------------------------------- | -------------------------------------- | ------------------------- | --------------------------------- | ------------------------------- | ----------------- |
-| no filter, sort `created_at`                      | first and deep, both directions, range | 0.91 / 1.02               | 3.15 / 3.40                       | 11.22 / 15.44                   | Index Scan        |
-| no filter, sort `total`                           | first and deep, both directions, range | 0.93 / 1.02               | 2.69 / 2.92                       | 2.60 / 2.76                     | Index Scan        |
-| `status_code =`, sort `created_at`                | first and deep, both directions, range | 0.98 / 1.06               | 4.30 / 5.20                       | 11.57 / 13.23                   | Index Scan        |
-| `status_code =`, sort `total`                     | first and deep, both directions, range | 0.99 / 1.11               | 4.37 / 6.01                       | 4.49 / 4.75                     | Index Scan        |
+| no filter, sort `created_at`                      | first and deep, both directions, range | 0.93 / 1.08               | 3.16 / 3.28                       | 11.79 / 13.88                   | Index Scan        |
+| no filter, sort `total`                           | first and deep, both directions, range | 0.95 / 1.21               | 2.61 / 3.27                       | 12.01 / 14.29                   | Index Scan        |
+| `status_code =`, sort `created_at`                | first and deep, both directions, range | 0.90 / 1.29               | 4.42 / 5.96                       | 11.87 / 13.85                   | Index Scan        |
+| `status_code =`, sort `total`                     | first and deep, both directions, range | 1.01 / 1.20               | 4.56 / 8.61                       | 12.46 / 15.26                   | Index Scan        |
 | `customer_id =`, sort `created_at`                | first and deep, both directions        | 0.95 / 1.20               | 2.72 / 2.96                       | 12.23 / 18.07                   | Index Scan        |
-| `region =`, sort `created_at`                     | first and deep, both directions, range | 0.86 / 1.13               | 2.75 / 2.99                       | 11.78 / 13.36                   | Index Scan        |
+| `region =`, sort `created_at`                     | first and deep, both directions, range | 0.95 / 1.10               | 2.74 / 3.09                       | 12.15 / 14.08                   | Index Scan        |
 | `channel =`, sort `created_at`                    | first and deep, both directions        | 0.95 / 1.05               | 6.03 / 6.58                       | 10.43 / 12.28                   | Index Scan        |
 | `status_code =`, `region =`, sort `created_at`    | first and deep, both directions        | 1.00 / 1.07               | 2.89 / 3.17                       | 11.92 / 13.17                   | Index Scan        |
 | `status_code =`, `channel =`, sort `created_at`   | first and deep, both directions        | 1.01 / 1.22               | 2.82 / 3.05                       | 11.29 / 14.12                   | Index Scan        |
 | quick filter over `customer_name`, `order_number` | 8 terms                                | 14.91 / 19.50             | none                              | none                            | Bitmap Index Scan |
 
 - A deep page starts 200,000 rows into the result, or 20,000 or 1,000 where the filter leaves fewer, and costs the same as the first page.
-- The live total is the capped sum behind the footer: an index scan that stops at row 10,001, run with `enable_sort = off`. Its plan is an Index Scan or Index Only Scan on the shape's own index in every case.
-- Quick filter by term, p95: `12345` 0.5 ms, `Smith` 2.4 ms, `Zanele Dlam` 6.7 ms, `Mokoena` 7.8 ms, `ena 4` 10.1 ms, `mok` 10.6 ms, `a M` 19.5 ms.
+- The live total is the capped sum behind the footer: one index scan that stops at row 10,001 and sums both of the orders grid's total fields, `total` and `item_count`, run with `enable_sort = off`. Its plan is an Index Scan on the shape's own index in every case.
+- The counter-table read that answers the facet counts, the count and every total of a facet-only query is 0.23 / 0.26 ms: one row per status.
+- Quick filter by term, p95: `12345` 0.5 ms, `Smith` 2.3 ms, `Zanele Dlam` 6.7 ms, `ena 4` 10.1 ms, `Mokoena` 11.5 ms, `mok` 16.0 ms, `a M` 19.0 ms.
 - `---` holds no trigram the index can use, so it would recheck every row. The server refused it at the 120 ms budget in all 33 runs. That is the refusal the budget exists for.
 
 Several values per field, on the same data. Each shape with an equality field is run with 2, 5 and the field's cap of values (20, or every value an enum has), taken from the most common values and then from the rarest, as a first page and as a capped count.
 
 | Shape                                           | Queries | Worst page p50 / p95 (ms)      | Worst capped count p50 / p95 (ms) | Page plans                                  |
 | ----------------------------------------------- | ------- | ------------------------------ | --------------------------------- | ------------------------------------------- |
-| `status_code =`, sort `created_at`              | 12      | 6.82 / 8.38 (2 rare)           | 4.33 / 4.79                       | Index Scan on the sort index                |
-| `status_code =`, sort `total`                   | 12      | 7.51 / 8.18 (2 rare)           | 4.29 / 5.38                       | Index Scan on the sort index                |
-| `customer_id =`, sort `created_at`              | 12      | 5.66 / 7.17 (2 common)         | 2.74 / 3.11                       | Index Scan for common values, Sort for rare |
-| `region =`, sort `created_at`                   | 12      | 16.12 / 18.62 (2 rare)         | 4.23 / 6.37                       | Index Scan on the sort index                |
-| `channel =`, sort `created_at`                  | 8       | 4.74 / 5.19 (2 rare)           | 4.19 / 4.76                       | Index Scan on the sort index                |
-| `status_code =`, `region =`, sort `created_at`  | 12      | 24.85 / 27.57 (5 rare of each) | 4.91 / 7.88                       | Index Scan, one Sort                        |
-| `status_code =`, `channel =`, sort `created_at` | 12      | 3.41 / 3.74 (2 rare of each)   | 4.71 / 7.77                       | Index Scan, one Sort                        |
+| `status_code =`, sort `created_at`              | 12      | 7.13 / 7.60 (2 rare)           | 4.44 / 7.16                       | Index Scan on the sort index                |
+| `status_code =`, sort `total`                   | 12      | 7.59 / 8.14 (2 rare)           | 4.37 / 5.90                       | Index Scan on the sort index                |
+| `customer_id =`, sort `created_at`              | 12      | 5.78 / 6.14 (2 common)         | 2.73 / 5.56                       | Index Scan for common values, Sort for rare |
+| `region =`, sort `created_at`                   | 12      | 16.08 / 18.80 (2 rare)         | 3.72 / 5.95                       | Index Scan on the sort index                |
+| `channel =`, sort `created_at`                  | 8       | 4.80 / 5.54 (2 rare)           | 4.15 / 6.25                       | Index Scan on the sort index                |
+| `status_code =`, `region =`, sort `created_at`  | 12      | 25.67 / 29.21 (5 rare of each) | 4.69 / 7.96                       | Index Scan, one Sort                        |
+| `status_code =`, `channel =`, sort `created_at` | 12      | 3.55 / 3.90 (2 rare of each)   | 4.82 / 7.94                       | Index Scan, one Sort                        |
 
 - No shape misses the budget, so none is declared `multi: false`.
-- The planner picks between two plans. With common values it walks the sort index and filters. With rare ones it reads the matches from the equality index and sorts them: 20 rare customers are 2.0 ms. The slow middle is a handful of rare values that match a few thousand rows: five rare statuses in five rare regions take 28 ms.
+- The planner picks between two plans. With common values it walks the sort index and filters. With rare ones it reads the matches from the equality index and sorts them: 20 rare customers are 1.7 ms. The slow middle is a handful of rare values that match a few thousand rows: five rare statuses in five rare regions take 29 ms.
 - That middle grows with about the square root of the table, which is why the cap and `multi: false` exist. See "Cost at scale".
 
 ### Local, 10,000,000 orders
