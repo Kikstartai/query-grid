@@ -401,15 +401,15 @@ describe("toPageResult", () => {
 describe("generated DDL", () => {
   test("each index def is one CREATE INDEX, built without blocking writes", () => {
     expect(listIndexDdl(TEST_DEF).map((index) => index.ddl)).toEqual([
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_total ON things USING btree (total, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__created_at ON things USING btree (status, created_at, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_status__total ON things USING btree (status, total, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_region__created_at ON things USING btree (region, created_at, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_search ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_created_at ON things USING btree (created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_total ON things USING btree (total, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_status__created_at ON things USING btree (status, created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_status__total ON things USING btree (status, total, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_region__created_at ON things USING btree (region, created_at, id);",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_search ON things USING gin ((name || ' ' || number::text) gin_trgm_ops);",
     ]);
     expect(listIndexDdl(TEST_DEF, { concurrently: false })[0].ddl).toBe(
-      "CREATE INDEX IF NOT EXISTS things_qs_created_at ON things USING btree (created_at, id);",
+      "CREATE INDEX IF NOT EXISTS auto_things_created_at ON things USING btree (created_at, id);",
     );
   });
 
@@ -518,7 +518,7 @@ describe("generated DDL", () => {
       ],
     };
     const names = listIndexDdl(wide).map((index) => index.name);
-    expect(names[0]).toBe(`${long}_qs_created_at`);
+    expect(names[0]).toBe(`auto_${long}_created_at`);
     for (const name of names) {
       expect(name.length).toBeLessThanOrEqual(IDENTIFIER_MAX_LENGTH);
     }
@@ -555,10 +555,10 @@ describe("generated DDL", () => {
     const [things] = migrations;
     expect(
       things.sql.match(
-        /CREATE INDEX CONCURRENTLY IF NOT EXISTS things_qs_created_at /g,
+        /CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_things_created_at /g,
       ),
     ).toHaveLength(1);
-    expect(things.sql).toContain("things_qs_region__total");
+    expect(things.sql).toContain("auto_things_region__total");
     expect(things.sql.match(/CREATE EXTENSION/g)).toHaveLength(1);
     expect(things.sql).not.toContain("widget");
     expect(migrations[1].sql).toContain("widget_status_counts_pending");
@@ -595,7 +595,7 @@ describe("generated DDL", () => {
     ].map((indexdef, index) => ({ indexname: `i${index}`, indexdef }));
     expect(
       listMissingIndexes(TEST_DEF, rows).map((index) => index.name),
-    ).toEqual(["things_qs_status__created_at"]);
+    ).toEqual(["auto_things_status__created_at"]);
     const withoutSearch = rows.slice(0, -1).concat({
       indexname: "name_only",
       indexdef:
@@ -603,26 +603,26 @@ describe("generated DDL", () => {
     });
     expect(
       listMissingIndexes(TEST_DEF, withoutSearch).map((index) => index.name),
-    ).toEqual(["things_qs_status__created_at", "things_qs_search"]);
+    ).toEqual(["auto_things_status__created_at", "auto_things_search"]);
   });
 
   test("an index left invalid by a failed concurrent build counts as missing", () => {
     const rows = [
       {
-        indexname: "things_qs_created_at",
+        indexname: "auto_things_created_at",
         indexdef:
-          "CREATE INDEX things_qs_created_at ON public.things USING btree (created_at, id)",
+          "CREATE INDEX auto_things_created_at ON public.things USING btree (created_at, id)",
         valid: false,
       },
     ];
     expect(
       listMissingIndexes(TEST_DEF, rows).map((index) => index.name),
-    ).toContain("things_qs_created_at");
+    ).toContain("auto_things_created_at");
     expect(
       listMissingIndexes(TEST_DEF, [{ ...rows[0], valid: true }]).map(
         (index) => index.name,
       ),
-    ).not.toContain("things_qs_created_at");
+    ).not.toContain("auto_things_created_at");
   });
 });
 

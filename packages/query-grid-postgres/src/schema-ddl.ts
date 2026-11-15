@@ -58,6 +58,7 @@ export interface TableMigration {
 const TRGM_OPS = "gin_trgm_ops";
 const BACKFILLED = "backfilled";
 const ROW_COUNT = "row_count";
+const AUTO_PREFIX = "auto_";
 
 function createIndex(concurrently: boolean): string {
   return concurrently
@@ -71,7 +72,7 @@ function searchIndex(
   concurrently: boolean,
 ): IndexDdl {
   const table = identifier(def.table);
-  const name = shortenIdentifier(`${table}_qs_search`);
+  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_search`);
   return {
     note: describeSearch(search),
     name,
@@ -92,7 +93,7 @@ function indexDdl(
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
   const name = shortenIdentifier(
-    `${table}_qs_${[...index.equals, index.sort].join("__")}`,
+    `${AUTO_PREFIX}${table}_${[...index.equals, index.sort].join("__")}`,
   );
   return {
     note: describeIndex(index),
@@ -295,11 +296,14 @@ function indexSteps(
     : [];
   return [
     ...extension,
-    ...indexes.map((index) => ({
-      note: index.note,
-      sql: index.ddl,
-      transaction: false,
-    })),
+    ...indexes.flatMap((index) => [
+      { note: index.note, sql: index.ddl, transaction: false },
+      {
+        note: `Mark ${index.name} as auto-created.`,
+        sql: `COMMENT ON INDEX ${index.name} IS 'Auto-created.';`,
+        transaction: false,
+      },
+    ]),
   ];
 }
 

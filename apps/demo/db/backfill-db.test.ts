@@ -268,7 +268,7 @@ describe("the counter backfill", () => {
     );
     expect(rows.every((row) => row.valid)).toBe(true);
     expect(rows.map((row) => row.indexname)).toContain(
-      `${TABLE}_qs_kind__created_at`,
+      `auto_${TABLE}_kind__created_at`,
     );
   }, 60_000);
 });

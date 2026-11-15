@@ -3,25 +3,45 @@
 -- The search needs trigram indexes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- no filter, sort created_at (range on created_at)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_created_at ON orders USING btree (created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_created_at ON orders USING btree (created_at, id);
+-- Mark auto_orders_created_at as auto-created.
+COMMENT ON INDEX auto_orders_created_at IS 'Auto-created.';
 -- no filter, sort total (range on total)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_total ON orders USING btree (total, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_total ON orders USING btree (total, id);
+-- Mark auto_orders_total as auto-created.
+COMMENT ON INDEX auto_orders_total IS 'Auto-created.';
 -- status_code =, sort created_at (range on created_at)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__created_at ON orders USING btree (status_code, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__created_at ON orders USING btree (status_code, created_at, id);
+-- Mark auto_orders_status_code__created_at as auto-created.
+COMMENT ON INDEX auto_orders_status_code__created_at IS 'Auto-created.';
 -- status_code =, sort total (range on total)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__total ON orders USING btree (status_code, total, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__total ON orders USING btree (status_code, total, id);
+-- Mark auto_orders_status_code__total as auto-created.
+COMMENT ON INDEX auto_orders_status_code__total IS 'Auto-created.';
 -- customer_id =, sort created_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_customer_id__created_at ON orders USING btree (customer_id, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_customer_id__created_at ON orders USING btree (customer_id, created_at, id);
+-- Mark auto_orders_customer_id__created_at as auto-created.
+COMMENT ON INDEX auto_orders_customer_id__created_at IS 'Auto-created.';
 -- region =, sort created_at (range on created_at)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_region__created_at ON orders USING btree (region, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_region__created_at ON orders USING btree (region, created_at, id);
+-- Mark auto_orders_region__created_at as auto-created.
+COMMENT ON INDEX auto_orders_region__created_at IS 'Auto-created.';
 -- channel =, sort created_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_channel__created_at ON orders USING btree (channel, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_channel__created_at ON orders USING btree (channel, created_at, id);
+-- Mark auto_orders_channel__created_at as auto-created.
+COMMENT ON INDEX auto_orders_channel__created_at IS 'Auto-created.';
 -- status_code =, region =, sort created_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__region__created_at ON orders USING btree (status_code, region, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__region__created_at ON orders USING btree (status_code, region, created_at, id);
+-- Mark auto_orders_status_code__region__created_at as auto-created.
+COMMENT ON INDEX auto_orders_status_code__region__created_at IS 'Auto-created.';
 -- status_code =, channel =, sort created_at
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
+-- Mark auto_orders_status_code__channel__created_at as auto-created.
+COMMENT ON INDEX auto_orders_status_code__channel__created_at IS 'Auto-created.';
 -- search over customer_name, order_number
-CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_search ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_search ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
+-- Mark auto_orders_search as auto-created.
+COMMENT ON INDEX auto_orders_search IS 'Auto-created.';
 -- Counter table for status_code and the sum of total and the sum of item_count: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is taken first, so no write is half way through a trigger while the counter objects change, and is held only for this short step. The pending table starts empty, so a count taken before this step no longer stands: the switch waits for a new one.
 BEGIN;
 LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
