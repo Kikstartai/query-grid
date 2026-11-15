@@ -50,6 +50,7 @@ export {
   buildRowSql,
   escapeLike,
   IDENTIFIER_MAX_LENGTH,
+  isTotalOrdered,
   QueryRejected,
   searchExpression,
   shortenIdentifier,

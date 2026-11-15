@@ -8,6 +8,7 @@ import {
 } from "@kikstart/query-grid";
 import type { ErrorBody } from "@kikstart/query-grid/http";
 
+import { encodeCursor } from "./cursor.ts";
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import { createGridHandler } from "./grid-handler.ts";
 import {
@@ -20,9 +21,11 @@ import {
 import {
   buildCappedCountSql,
   buildPageSql,
+  isTotalOrdered,
   QueryRejected,
   type SqlQuery,
 } from "./sql-builder.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 const BASE = defaultQuery(TEST_DEF);
 const OPEN: QueryState = { ...BASE, equals: { status: ["open"] } };
@@ -88,7 +91,22 @@ describe("the SQL of the expensive operations", () => {
     };
     const sql = buildPageSql(TEST_DEF, either, 50);
     expect(sql.text).toContain(
-      "WHERE (t.status = $1::text OR t.region = ANY($2::text[]) OR (t.total >= $3::bigint AND t.total <= $4::bigint)) ORDER BY",
+      "FROM things t WHERE (t.status = $1::text OR t.region = ANY($2::text[]) OR (t.total >= $3::bigint AND t.total <= $4::bigint)) OFFSET 0) t ORDER BY t.created_at DESC, t.id DESC LIMIT 51",
+    );
+    expect(sql.text).toStartWith("SELECT t.id, ");
+    const next = buildPageSql(
+      TEST_DEF,
+      {
+        ...either,
+        cursor: encodeCursor({
+          sortValue: "2026-01-01T00:00:00.000000Z",
+          id: "018f4b5e-0000-7000-8000-000000000001",
+        }),
+      },
+      50,
+    );
+    expect(next.text).toContain(
+      "OFFSET 0) t WHERE (t.created_at, t.id) < ($5::timestamptz, $6::uuid) ORDER BY",
     );
     const first = buildPageSql(TEST_DEF, either, 1);
     expect(first.text).toEndWith("LIMIT 2");
@@ -209,7 +227,7 @@ describe("the narrowed-set limit on the server", () => {
     expect(calls[0].sql.text).toContain("WHERE t.region = $1::text LIMIT 51");
     expect(calls[1].sql.text).toContain("WHERE t.total >= $1::bigint LIMIT 51");
     expect(calls[2].sql.text).toContain(
-      "WHERE (t.region = $1::text OR t.total >= $2::bigint) ORDER BY",
+      "WHERE (t.region = $1::text OR t.total >= $2::bigint) OFFSET 0) t ORDER BY",
     );
     const over = counting((sql) => (isProbe(sql) ? [{ count: 30 }] : []));
     let refusal: unknown = null;
@@ -237,7 +255,7 @@ describe("the narrowed-set limit on the server", () => {
     await listGridPage(TEST_DEF, execute, either, 20, undefined, LIMITS);
     expect(calls[0].sql.text).toContain("FROM thing_status_counts");
     expect(calls[1].sql.text).toContain(
-      "WHERE (t.region = $1::text OR t.note ILIKE $2) ORDER BY",
+      "WHERE (t.region = $1::text OR t.note ILIKE $2) OFFSET 0) t ORDER BY",
     );
   });
 });
@@ -269,7 +287,7 @@ describe("/narrowed", () => {
     const response = await get("/narrowed?f.region=north");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 12, over: false },
+      all: { rows: 12, over: false, capped: false },
       any: null,
     } satisfies NarrowedResult);
     expect(calls).toHaveLength(1);
@@ -281,8 +299,8 @@ describe("/narrowed", () => {
     const response = await get("/narrowed?f.region=north&r.total=100..");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 30, over: false },
-      any: { rows: 60, over: true },
+      all: { rows: 30, over: false, capped: false },
+      any: { rows: 60, over: true, capped: false },
     });
   });
 
@@ -291,7 +309,7 @@ describe("/narrowed", () => {
     const response = await get("/narrowed");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 400, over: true },
+      all: { rows: 400, over: true, capped: false },
       any: null,
     });
   });
@@ -316,6 +334,25 @@ describe("/narrowed", () => {
 });
 
 describe("getNarrowedSizes", () => {
+  test("a grouped query is sized by its filters alone", async () => {
+    const { calls, execute } = counting(() => [{ count: 10 }]);
+    const sizes = await getNarrowedSizes(
+      TEST_DEF,
+      execute,
+      {
+        ...BASE,
+        group: "region",
+        equals: { region: ["north"] },
+        ranges: [{ field: "total", min: "100", max: null }],
+      },
+      undefined,
+      LIMITS,
+    );
+    expect(sizes.all).toEqual({ rows: 10, over: false, capped: false });
+    expect(sizes.any).toEqual({ rows: 20, over: false, capped: false });
+    expect(calls).toHaveLength(3);
+  });
+
   test("a query that match all cannot run still sizes match any", async () => {
     const { execute } = counting((sql) =>
       isProbe(sql)
@@ -335,8 +372,61 @@ describe("getNarrowedSizes", () => {
     );
     expect(sizes).toEqual({
       limit: 50,
-      all: { rows: 400, over: true },
-      any: { rows: 410, over: true },
+      all: { rows: 400, over: true, capped: false },
+      any: { rows: 410, over: true, capped: false },
     });
+  });
+});
+
+describe("the capped total and the order it is read in", () => {
+  const def: PostgresGridDef = {
+    ...TEST_DEF,
+    indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+  };
+  const settingsOf = async (query: QueryState) => {
+    const { calls, execute } = counting((sql) =>
+      isProbe(sql)
+        ? [{ count: 1 }]
+        : [{ count: 1, total_sum: 1, number_sum: 1 }],
+    );
+    await listGridTotals(def, execute, query, undefined, LIMITS);
+    return calls[calls.length - 1];
+  };
+
+  test("one plain value, or empty alone, is summed over its index in sort order", async () => {
+    const filters: QueryState["equals"][] = [
+      { region: ["north"] },
+      { note: ["_empty"] },
+    ];
+    for (const equals of filters) {
+      const query = { ...BASE, equals };
+      expect(isTotalOrdered(def, query)).toBe(true);
+      const call = await settingsOf(query);
+      expect(call.sql.text).toContain(
+        "ORDER BY t.created_at, t.id LIMIT 10001",
+      );
+      expect(call.settings).toEqual(["enable_sort = off"]);
+    }
+  });
+
+  test("several values, not empty and match any are capped unordered, so no sort index is walked to its end", async () => {
+    const cases: QueryState[] = [
+      { ...BASE, equals: { region: ["north", "south"] } },
+      { ...BASE, equals: { note: ["_not_empty"] } },
+      { ...BASE, equals: { note: ["_empty", "gift"] } },
+      {
+        ...BASE,
+        match: "any",
+        equals: { region: ["north"] },
+        ranges: [{ field: "total", min: "100", max: null }],
+      },
+    ];
+    for (const query of cases) {
+      expect(isTotalOrdered(def, query)).toBe(false);
+      const call = await settingsOf(query);
+      expect(call.sql.text).not.toContain("ORDER BY");
+      expect(call.sql.text).toContain("LIMIT 10001) capped");
+      expect(call.settings ?? []).not.toContain("enable_sort = off");
+    }
   });
 });

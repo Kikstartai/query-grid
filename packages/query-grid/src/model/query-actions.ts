@@ -63,7 +63,8 @@ export type ReasonCode =
   | "no_range_with"
   | "narrow_first"
   | "narrow_counting"
-  | "no_group_with";
+  | "no_group_with"
+  | "no_match_any";
 
 export interface UnavailableReason {
   code: ReasonCode;
@@ -400,11 +401,10 @@ function explainNarrowing(
     return describeQuery(query, "narrow_counting", field);
   }
   const size = target.kind === "match" ? narrowed.any : narrowed.all;
-  const rows = size?.rows ?? narrowed.limit;
   return {
     ...describeQuery(query, "narrow_first", field),
-    rows,
-    capped: rows <= narrowed.limit,
+    rows: size?.rows ?? narrowed.limit,
+    capped: size?.capped ?? true,
     narrowBy:
       target.kind === "match"
         ? []
@@ -431,7 +431,7 @@ export function explainUnavailable(
     return narrowing;
   }
   if (target.kind === "match") {
-    return describeQuery(query, "no_filter_with", null);
+    return describeQuery(query, "no_match_any", null);
   }
   if (target.kind === "group") {
     return describeQuery(

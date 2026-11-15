@@ -6,6 +6,7 @@ import {
   type QueryState,
   type RunnableQueries,
 } from "./field-types.ts";
+import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 
 export interface IndexDef {
   equals: string[];
@@ -149,6 +150,7 @@ function bare(query: QueryState): QueryState {
     ranges: [],
     contains: null,
     match: "all",
+    group: null,
     cursor: null,
   };
 }
@@ -186,7 +188,12 @@ function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
 }
 
 function planAll(indexes: IndexDef[], query: QueryState): QueryPlan | null {
-  const base: QueryState = { ...query, contains: null, match: "all" };
+  const base: QueryState = {
+    ...query,
+    contains: null,
+    match: "all",
+    group: null,
+  };
   const onSort = query.ranges.filter(
     (range) => range.field === query.sort.field,
   );
@@ -300,7 +307,12 @@ export function isFacetOnlyQuery(
     query.ranges.length === 0 &&
     query.search === null &&
     !hasNarrowParts(query) &&
-    Object.keys(query.equals).every((key) => key === facetField)
+    Object.entries(query.equals).every(
+      ([key, values]) =>
+        key === facetField &&
+        !values.includes(EMPTY_VALUE) &&
+        !values.includes(NOT_EMPTY_VALUE),
+    )
   );
 }
 

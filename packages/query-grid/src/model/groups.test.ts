@@ -7,7 +7,7 @@ import type {
   OfferContext,
   QueryState,
 } from "./field-types.ts";
-import { EMPTY_VALUE } from "./field-values.ts";
+import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 import {
   createTestSource,
   settle,
@@ -15,7 +15,12 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createGrouping, getGroupQuery, sortGroups } from "./groups.ts";
-import { indexRunnable, type IndexedGridDef } from "./indexes.ts";
+import {
+  indexRunnable,
+  isFacetOnlyQuery,
+  planQuery,
+  type IndexedGridDef,
+} from "./indexes.ts";
 import { createMemorySource } from "./memory-source.ts";
 import {
   applyAction,
@@ -44,7 +49,7 @@ function header(value: string, count: number): GroupHeader {
 function contextFor(query: QueryState, over: boolean): OfferContext {
   const narrowed: NarrowedState = {
     limit: 1000,
-    all: { rows: over ? 1000 : 40, over },
+    all: { rows: over ? 1000 : 40, over, capped: over },
     any: null,
     allBasis: RUNNABLE.narrowBasis({ ...query, match: "all" }),
     anyBasis: RUNNABLE.narrowBasis({ ...query, match: "any" }),
@@ -143,6 +148,93 @@ describe("what may be grouped", () => {
       applyAction(DEF, grouped, { type: "setGroup", field: null }, context)
         .group,
     ).toBeNull();
+  });
+});
+
+describe("review fixes", () => {
+  test("a client grid never groups under match any, like the server", () => {
+    const memory = createMemorySource(TEST_DEF, []).runnable;
+    const either: QueryState = {
+      ...BASE,
+      match: "any",
+      equals: { status: ["open"], region: ["north"] },
+    };
+    expect(memory.canRun(either)).toBe(true);
+    expect(memory.canRun({ ...either, group: "status" })).toBe(false);
+    expect(memory.canRun({ ...BASE, match: "any", group: "status" })).toBe(
+      true,
+    );
+  });
+
+  test("a missing value is a group only on a nullable field", async () => {
+    const rows: GridRow[] = [
+      { id: "a", status: "open", name: null, note: null },
+      { id: "b", status: "open", name: "B", note: "x" },
+    ];
+    const source = createMemorySource(TEST_DEF, rows);
+    const byName = await source.fetchGroups({ ...BASE, group: "name" }, signal);
+    expect(byName.groups.map((group) => group.value)).toEqual(["B"]);
+    const byNote = await source.fetchGroups({ ...BASE, group: "note" }, signal);
+    expect(byNote.groups.map((group) => group.value).sort()).toEqual([
+      EMPTY_VALUE,
+      "x",
+    ]);
+  });
+
+  test("the core of a plan carries no group, so sizing a grouped query asks for no group index", () => {
+    const plan = planQuery(TEST_INDEXES, {
+      ...BASE,
+      group: "region",
+      contains: { field: "note", value: "gift" },
+    });
+    expect(plan?.core.group).toBeNull();
+    const any = planQuery(TEST_INDEXES, {
+      ...BASE,
+      group: "region",
+      match: "any",
+      equals: { status: ["open"], region: ["north"] },
+    });
+    expect(any?.terms?.every((term) => term.group === null)).toBe(true);
+  });
+
+  test("a reserved value on the counted field is not answered by the counters", () => {
+    expect(
+      isFacetOnlyQuery("status", { ...BASE, equals: { status: ["open"] } }),
+    ).toBe(true);
+    for (const value of [EMPTY_VALUE, NOT_EMPTY_VALUE]) {
+      expect(
+        isFacetOnlyQuery("status", { ...BASE, equals: { status: [value] } }),
+      ).toBe(false);
+    }
+  });
+
+  test("the header load stops with its last reader and starts again for the next", async () => {
+    const signals: AbortSignal[] = [];
+    const source = createTestSource(RUNNABLE, {
+      fetchGroups: (_query, given) => {
+        signals.push(given);
+        return new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                groups: [header("open", 1)],
+                source: "counter",
+                truncated: false,
+              }),
+            5,
+          ),
+        );
+      },
+    });
+    const grouping = createGrouping(DEF, source, { ...BASE, group: "status" });
+    const stop = grouping.subscribe(() => undefined);
+    stop();
+    expect(signals[0].aborted).toBe(true);
+    grouping.subscribe(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(signals).toHaveLength(2);
+    expect(grouping.getState()).toMatchObject({ loaded: true, status: "idle" });
+    expect(grouping.getState().groups).toHaveLength(1);
   });
 });
 

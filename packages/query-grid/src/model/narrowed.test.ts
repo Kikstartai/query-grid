@@ -52,7 +52,7 @@ function narrowedFor(
 ): NarrowedState {
   return {
     limit: 1000,
-    all: { rows: 40, over: false },
+    all: { rows: 40, over: false, capped: false },
     any: null,
     ...result,
     allBasis: RUNNABLE.narrowBasis({ ...query, match: "all" }),
@@ -195,7 +195,9 @@ describe("offers under the narrowed-set limit", () => {
   });
 
   test("over the limit only what the index answers is offered, with the size as the reason", () => {
-    const base = contextFor(BASE, { all: { rows: 1000, over: true } });
+    const base = contextFor(BASE, {
+      all: { rows: 1000, over: true, capped: true },
+    });
     const offers = listOffers(DEF, BASE, base);
     expect(offers.ranges).toEqual(["created_at"]);
     expect(offers.contains).toEqual([]);
@@ -242,13 +244,15 @@ describe("offers under the narrowed-set limit", () => {
       equals: { status: ["open"], region: ["north"] },
     };
     const unpaired: OfferContext = {
-      ...contextFor(two, { any: { rows: 70, over: false } }),
+      ...contextFor(two, { any: { rows: 70, over: false, capped: false } }),
     };
     expect(listOffers(DEF, two, unpaired).matchAny).toBe(true);
     expect(
       applyAction(DEF, two, { type: "setMatch", mode: "any" }, unpaired).match,
     ).toBe("any");
-    const over = contextFor(two, { any: { rows: 4000, over: true } });
+    const over = contextFor(two, {
+      any: { rows: 4000, over: true, capped: false },
+    });
     expect(listOffers(DEF, two, over).matchAny).toBe(false);
     expect(explainUnavailable(two, { kind: "match" }, over)).toMatchObject({
       code: "narrow_first",
@@ -256,6 +260,14 @@ describe("offers under the narrowed-set limit", () => {
       capped: false,
     });
     expect(listOffers(DEF, OPEN, contextFor(OPEN)).matchAny).toBe(true);
+    const capped = contextFor(two, {
+      any: { rows: 1800, over: true, capped: true },
+    });
+    expect(explainUnavailable(two, { kind: "match" }, capped)).toMatchObject({
+      rows: 1800,
+      capped: true,
+      narrowBy: [],
+    });
   });
 
   test("a query already over a narrowed set may change its filters: the server decides", () => {
@@ -346,7 +358,7 @@ describe("the narrowed-size store", () => {
         asked.push(query);
         return {
           limit: 1000,
-          all: { rows: asked.length, over: false },
+          all: { rows: asked.length, over: false, capped: false },
           any: null,
         };
       },
@@ -357,7 +369,7 @@ describe("the narrowed-size store", () => {
     narrowed.subscribe(() => undefined);
     await settle();
     expect(store.getOfferContext().narrowed).toMatchObject({
-      all: { rows: 1, over: false },
+      all: { rows: 1, over: false, capped: false },
       allBasis: RUNNABLE.narrowBasis(BASE),
     });
     expect(listOffers(DEF, BASE, store.getOfferContext()).contains).toEqual([

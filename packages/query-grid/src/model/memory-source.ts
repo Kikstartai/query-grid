@@ -46,7 +46,8 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
     groupFields: listGroupFields(def.fields, equalsFields),
     canRun: (query) =>
       (query.group === null ||
-        listGroupFields(def.fields, equalsFields).includes(query.group)) &&
+        (!isMatchAny(query) &&
+          listGroupFields(def.fields, equalsFields).includes(query.group))) &&
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
       (query.contains === null ||
@@ -286,10 +287,14 @@ export function createMemorySource(
         if (key === null) {
           return { groups: [], source: "live", truncated: false };
         }
-        const labelField = getField(def, key)?.lookup?.labelField;
+        const field = getField(def, key);
+        const labelField = field?.lookup?.labelField;
         const headers = new Map<string, GroupHeader>();
         for (const row of matching(query)) {
-          const value = toGroupValue(row[key]);
+          const value = toGroupValue(field, row[key]);
+          if (value === null) {
+            continue;
+          }
           const header = headers.get(value) ?? {
             value,
             label: labelField ? String(row[labelField] ?? value) : null,

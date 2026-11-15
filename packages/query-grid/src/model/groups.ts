@@ -60,9 +60,13 @@ export function getGroupQuery(query: QueryState, value: string): QueryState {
 }
 
 export function toGroupValue(
+  field: BaseFieldDef | null,
   value: string | number | null | undefined,
-): string {
-  return value === null || value === undefined ? EMPTY_VALUE : String(value);
+): string | null {
+  if (value !== null && value !== undefined) {
+    return String(value);
+  }
+  return field?.nullable ? EMPTY_VALUE : null;
 }
 
 export function sortGroups(
@@ -112,7 +116,8 @@ export function createGrouping(
   });
   const feeds = new Map<string, Feed>();
   const begin = createAbortable();
-  let started = false;
+  let readers = 0;
+  let pending: AbortController | null = null;
 
   const patchGroup = (value: string, patch: Partial<GroupState>) => {
     const state = store.get();
@@ -126,6 +131,7 @@ export function createGrouping(
 
   const load = async () => {
     const controller = begin();
+    pending = controller;
     store.set({ ...store.get(), status: "loading", error: null });
     try {
       const result = await source.fetchGroups(query, controller.signal);
@@ -171,11 +177,18 @@ export function createGrouping(
   return {
     getState: store.get,
     subscribe: (listener) => {
-      if (!started) {
-        started = true;
+      readers += 1;
+      if (readers === 1 && !store.get().loaded) {
         void load();
       }
-      return store.subscribe(listener);
+      const unsubscribe = store.subscribe(listener);
+      return () => {
+        unsubscribe();
+        readers -= 1;
+        if (readers === 0) {
+          pending?.abort();
+        }
+      };
     },
     toggle: (value) => {
       const group = store

@@ -4,9 +4,12 @@ import {
   EMPTY_VALUE,
   getField,
   GROUP_LIMIT,
+  NOT_EMPTY_VALUE,
+  toGroupValue,
   isFacetOnlyQuery,
   isMatchAny,
   planQuery,
+  type BaseFieldDef,
   type CountResult,
   type FacetCount,
   type GridLimits,
@@ -29,6 +32,7 @@ import {
   buildFacetSql,
   buildGroupSql,
   buildPageSql,
+  isTotalOrdered,
   QueryRejected,
   sumColumn,
   toPageResult,
@@ -93,14 +97,15 @@ async function sizeOf(
   if (isFacetOnlyQuery(def.facet?.field, query)) {
     const counters = await listSelectedCounters(def, execute, query, signal);
     const rows = counters.reduce((sum, facet) => sum + facet.count, 0);
-    return { rows, over: rows > limit };
+    return { rows, over: rows > limit, capped: false };
   }
   const [row] = await execute<{ count: number }>(
     buildCappedCountSql(def, query, limit),
     undefined,
     signal,
   );
-  return { rows: Math.min(row.count, limit), over: row.count > limit };
+  const over = row.count > limit;
+  return { rows: Math.min(row.count, limit), over, capped: over };
 }
 
 function wholeTable(def: PostgresGridDef, query: QueryState): QueryState {
@@ -112,6 +117,7 @@ function wholeTable(def: PostgresGridDef, query: QueryState): QueryState {
     match: "all",
     search: null,
     sort: def.defaultSort,
+    group: null,
     cursor: null,
   };
 }
@@ -131,7 +137,11 @@ async function sizeOfAny(
     plan.terms.map((term) => sizeOf(def, execute, term, limit, signal)),
   );
   const rows = sizes.reduce((sum, size) => sum + size.rows, 0);
-  return { rows, over: rows > limit || sizes.some((size) => size.over) };
+  return {
+    rows,
+    over: rows > limit || sizes.some((size) => size.over),
+    capped: sizes.some((size) => size.capped),
+  };
 }
 
 function sizeOfPlan(
@@ -156,7 +166,12 @@ export async function getNarrowedSizes(
 ): Promise<NarrowedResult> {
   assertDeclared(def, query);
   const limit = limits.narrowLimit;
-  const filters: QueryState = { ...query, search: null, cursor: null };
+  const filters: QueryState = {
+    ...query,
+    search: null,
+    group: null,
+    cursor: null,
+  };
   const all = planQuery(def.indexes, { ...filters, match: "all" });
   const any =
     countFilterTerms(filters) > 1
@@ -201,6 +216,20 @@ async function listNarrowSettings(
   return NARROW_SETTINGS;
 }
 
+function listFacetGroupValues(
+  field: BaseFieldDef | null,
+  selected: string[] | undefined,
+): string[] {
+  const options = (field?.options ?? []).map((option) => option.value);
+  if (selected?.includes(NOT_EMPTY_VALUE)) {
+    return options;
+  }
+  if (selected) {
+    return selected;
+  }
+  return field?.nullable ? [...options, EMPTY_VALUE] : options;
+}
+
 async function listFacetGroups(
   def: PostgresGridDef,
   execute: SqlExecutor,
@@ -226,8 +255,7 @@ async function listFacetGroups(
     };
   }
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
-  const options = getField(def, key)?.options ?? [];
-  const values = query.equals[key] ?? options.map((option) => option.value);
+  const values = listFacetGroupValues(getField(def, key), query.equals[key]);
   const cap = limits.countCap;
   const groups = await Promise.all(
     values.map(async (value): Promise<GroupHeader> => {
@@ -278,7 +306,7 @@ export async function listGridGroups(
   const limit = limits.narrowLimit;
   const size = plan
     ? await sizeOfPlan(def, execute, filters, plan, limit, signal)
-    : { rows: limit, over: true };
+    : { rows: limit, over: true, capped: true };
   if (size.over) {
     throw new QueryRejected("narrow_first", "narrow_first", {
       rows: size.rows,
@@ -286,25 +314,35 @@ export async function listGridGroups(
     });
   }
   const rows = await execute<GroupRow>(sql, NARROW_SETTINGS, signal);
-  const columns = (def.totals ?? []).map((field): [string, string] => [
-    field,
-    sumColumn(field),
+  const field = getField(def, key);
+  const columns = (def.totals ?? []).map((total): [string, string] => [
+    total,
+    sumColumn(total),
   ]);
   return {
-    groups: rows.slice(0, GROUP_LIMIT).map((row) => ({
-      value: row.value ?? EMPTY_VALUE,
-      label:
-        row.label === undefined || row.label === null
-          ? null
-          : String(row.label),
-      count: row.count,
-      capped: false,
-      sums: Object.fromEntries(
-        columns.map(([field, column]) => [field, Number(row[column])]),
-      ),
-    })),
+    groups: rows.slice(0, GROUP_LIMIT).flatMap((row) => {
+      const value = toGroupValue(field, row.value);
+      return value === null ? [] : [toGroupHeader(row, value, columns)];
+    }),
     source: "live",
     truncated: rows.length > GROUP_LIMIT,
+  };
+}
+
+function toGroupHeader(
+  row: GroupRow,
+  value: string,
+  columns: [string, string][],
+): GroupHeader {
+  return {
+    value,
+    label:
+      row.label === undefined || row.label === null ? null : String(row.label),
+    count: row.count,
+    capped: false,
+    sums: Object.fromEntries(
+      columns.map(([field, column]) => [field, Number(row[column])]),
+    ),
   };
 }
 
@@ -468,7 +506,7 @@ export async function listGridTotals(
     query,
     buildCappedTotalSql(def, query, cap),
     limits,
-    [...TOTAL_SETTINGS, ...narrow],
+    [...(isTotalOrdered(def, query) ? TOTAL_SETTINGS : []), ...narrow],
     signal,
   );
   if (row.count > cap) {

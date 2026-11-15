@@ -4,6 +4,7 @@ import {
   defaultQuery,
   DEFAULT_LIMITS,
   EMPTY_VALUE,
+  NOT_EMPTY_VALUE,
   type QueryState,
 } from "@kikstart/query-grid";
 
@@ -159,6 +160,12 @@ describe("grouping by the counted field", () => {
 
 describe("grouping by another equality field", () => {
   const byRegion: QueryState = { ...BASE, group: "region" };
+  const NULLABLE_REGION: PostgresGridDef = {
+    ...TEST_DEF,
+    fields: TEST_DEF.fields.map((field) =>
+      field.key === "region" ? { ...field, nullable: true } : field,
+    ),
+  };
 
   test("under the limit it is one live GROUP BY, with no Seq Scan allowed", async () => {
     const { calls, execute } = answering((sql) =>
@@ -170,7 +177,7 @@ describe("grouping by another equality field", () => {
         : [{ value: "open", count: 10, total_sum: 0, number_sum: 0 }],
     );
     const result = await listGridGroups(
-      TEST_DEF,
+      NULLABLE_REGION,
       execute,
       byRegion,
       undefined,
@@ -179,6 +186,14 @@ describe("grouping by another equality field", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0].sql.text).toContain("FROM thing_status_counts");
     expect(calls[1].settings).toEqual(["enable_seqscan = off"]);
+    const strict = await listGridGroups(
+      TEST_DEF,
+      execute,
+      byRegion,
+      undefined,
+      LIMITS,
+    );
+    expect(strict.groups.map((group) => group.value)).toEqual(["north"]);
     expect(result).toEqual({
       source: "live",
       truncated: false,
@@ -257,5 +272,53 @@ describe("/groups", () => {
     );
     expect((await get("/groups")).status).toBe(400);
     expect((await get("/groups?group=name")).status).toBe(400);
+  });
+});
+
+describe("a nullable counted field", () => {
+  const def: PostgresGridDef = {
+    ...TEST_DEF,
+    fields: TEST_DEF.fields.map((field) =>
+      field.key === "status" ? { ...field, nullable: true } : field,
+    ),
+  };
+  const filtered: QueryState = {
+    ...BASE,
+    group: "status",
+    sort: { field: "total", direction: "asc" },
+    ranges: [{ field: "total", min: "100", max: null }],
+  };
+
+  test("its capped headers count the empty rows as a group of their own", async () => {
+    const { calls, execute } = answering(() => [{ count: 3 }]);
+    const result = await listGridGroups(
+      def,
+      execute,
+      filtered,
+      undefined,
+      LIMITS,
+    );
+    expect(result.groups.map((group) => group.value)).toEqual([
+      "open",
+      "done",
+      EMPTY_VALUE,
+    ]);
+    expect(calls[2].sql.text).toContain("WHERE t.status IS NULL AND");
+  });
+
+  test("not empty is every option, never a header of its own, and never read from the counters", async () => {
+    const { calls, execute } = answering(() => [{ count: 3 }]);
+    const result = await listGridGroups(
+      def,
+      execute,
+      { ...BASE, group: "status", equals: { status: [NOT_EMPTY_VALUE] } },
+      undefined,
+      LIMITS,
+    );
+    expect(result.source).toBe("capped");
+    expect(result.groups.map((group) => group.value)).toEqual(["open", "done"]);
+    expect(
+      calls.every((call) => !call.sql.text.includes("thing_status_counts")),
+    ).toBe(true);
   });
 });

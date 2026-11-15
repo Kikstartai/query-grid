@@ -313,6 +313,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
         ? `Narrow by ${narrowBy} first: ${rows}.`
         : `Narrow the filters first: ${rows}.`,
     narrow_counting: () => "Counting the rows these filters leave…",
+    no_match_any: ({ blockers }) =>
+      `No index answers Match any with ${blockers}.`,
     no_group_with: ({ label, blockers }) =>
       `No index reads the rows of one ${label} group with ${blockers}.`,
   },

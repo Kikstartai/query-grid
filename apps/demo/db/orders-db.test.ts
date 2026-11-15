@@ -342,10 +342,19 @@ describe("the narrowed-set tier", () => {
     expect(sizes.all).toEqual({
       rows: await countWhere("status_code = 'failed' AND channel = 'phone'"),
       over: false,
+      capped: false,
     });
-    expect(sizes.any).toEqual({ rows: failedRows + phoneRows, over: false });
+    expect(sizes.any).toEqual({
+      rows: failedRows + phoneRows,
+      over: false,
+      capped: false,
+    });
     const whole = await getNarrowedSizes(ORDERS_GRID_DEF, execute, base);
-    expect(whole.all).toEqual({ rows: await countWhere("true"), over: true });
+    expect(whole.all).toEqual({
+      rows: await countWhere("true"),
+      over: true,
+      capped: false,
+    });
     expect(whole.any).toBeNull();
   }, 60_000);
 

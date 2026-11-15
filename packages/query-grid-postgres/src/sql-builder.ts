@@ -278,9 +278,15 @@ export function buildPageSql(
   limit: number,
   limits: GridLimits = DEFAULT_LIMITS,
 ): SqlQuery {
-  const { params, clauses } = filter(def, query);
+  const filtered = filter(def, query);
+  const { params } = filtered;
+  const any = isMatchAny(query);
   const select = selectList(def);
-  const table = from(def);
+  // An OR across fields has no index that also gives the order, so its rows are read first, behind OFFSET 0, and sorted after: an ordered walk of the sort index would not stop when few rows match.
+  const table = any
+    ? `(SELECT ${def.fields.map((field) => column(field.key)).join(", ")} FROM ${from(def)}${whereClause(filtered.clauses)} OFFSET 0) ${TABLE_ALIAS}`
+    : from(def);
+  const clauses = any ? [] : filtered.clauses;
   if (query.search !== null) {
     return {
       text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${limits.searchLimit + 1}`,
@@ -344,6 +350,22 @@ export function buildExactCountSql(
   };
 }
 
+// Only one plain value per field is read in sort order from its index. Several values, not empty or an OR are capped unordered, like the count: an ordered walk would not stop when few rows match.
+export function isTotalOrdered(
+  def: PostgresGridDef,
+  query: QueryState,
+): boolean {
+  return (
+    query.search === null &&
+    !isMatchAny(query) &&
+    Object.entries(query.equals).every(
+      ([key, values]) =>
+        values.length === 1 &&
+        getReservedValue(requireField(def, key), values[0]) !== "not_empty",
+    )
+  );
+}
+
 export function buildCappedTotalSql(
   def: PostgresGridDef,
   query: QueryState,
@@ -359,10 +381,9 @@ export function buildCappedTotalSql(
     (key) =>
       `coalesce(sum(capped.${identifier(key)}), 0)::float8 AS ${sumColumn(key)}`,
   );
-  const order =
-    query.search === null
-      ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
-      : "";
+  const order = isTotalOrdered(def, query)
+    ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
+    : "";
   return {
     text: `SELECT count(*)::int AS count, ${sums.join(", ")} FROM (SELECT ${amounts.join(", ")} FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
     values: params.values,

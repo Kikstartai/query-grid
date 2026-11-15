@@ -211,6 +211,7 @@ function DataGridRoot({ children }: DataGridRootProps) {
     query.ranges,
     query.contains,
     query.match,
+    query.search,
     query.sort,
   ]);
   return <GroupedRoot key={key}>{children}</GroupedRoot>;

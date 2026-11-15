@@ -98,6 +98,7 @@ export interface RunnableQueries {
 export interface SizeResult {
   rows: number;
   over: boolean;
+  capped: boolean;
 }
 
 export interface NarrowedResult {
