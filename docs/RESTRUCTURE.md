@@ -149,6 +149,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 - generic status moves on the server beyond the `moves` hook
 - a separate memory adapter package (it is the `./memory` subpath)
 - several totals per grid: `GridDef.total` is one field today, and a host may need to sum more than one (a `total_sum` counter column, a footer cell and a `/total` result per field)
+- format split by owner: the locale is the app's and the currency is the data's, yet both sit on `GridDef.format` today. The provider reads its locale from `def.format`, not from `QueryGridMessagesProvider`, so messages and number formatting can disagree, and two money fields cannot carry different currencies. Proposed: the locale comes from the messages provider, `currency` moves onto the money `FieldDef` (or the row), and `GridDef.format` becomes an optional override or goes away
 
 ## Scale
 
