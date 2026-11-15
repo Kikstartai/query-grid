@@ -1,11 +1,10 @@
 import {
-  shapeCapabilities,
-  type BaseFieldDef,
+  formatValue,
   type FieldOption,
-  type BaseGridDef,
   type QueryShape,
 } from "@kikstart/query-grid";
 import type { PostgresGridDef } from "@kikstart/query-grid-postgres";
+import type { FieldDef, GridDef } from "@kikstart/query-grid-react/components";
 
 import {
   ORDER_CHANNELS,
@@ -15,11 +14,28 @@ import {
   type WeightedOption,
 } from "./orders-reference";
 
+export const ORDERS_API = "/api/orders";
+export const ORDERS_FACET_FIELD = "status_code";
+
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
 }
 
-const ORDER_FIELDS: BaseFieldDef[] = [
+const ORDER_STATUS_FIELD: FieldDef = {
+  key: ORDERS_FACET_FIELD,
+  label: "Status",
+  type: "enum",
+  operators: ["eq"],
+  options: toOptions(ORDER_STATUSES),
+  width: 120,
+  cell: (value) => (
+    <span className="order-status" data-value={value ?? ""}>
+      {formatValue(ORDER_STATUS_FIELD, value)}
+    </span>
+  ),
+};
+
+const ORDER_FIELDS: FieldDef[] = [
   {
     key: "order_number",
     label: "Order",
@@ -35,14 +51,7 @@ const ORDER_FIELDS: BaseFieldDef[] = [
     operators: ["range"],
     width: 170,
   },
-  {
-    key: "status_code",
-    label: "Status",
-    type: "enum",
-    operators: ["eq"],
-    options: toOptions(ORDER_STATUSES),
-    width: 120,
-  },
+  ORDER_STATUS_FIELD,
   {
     key: "customer_name",
     label: "Customer",
@@ -146,19 +155,7 @@ const ORDER_FIELDS: BaseFieldDef[] = [
   },
 ];
 
-export const ORDERS_API = "/api/orders";
-export const ORDERS_FACET_FIELD = "status_code";
-
-export const ORDERS_BASE: BaseGridDef = {
-  id: "orders",
-  defaultSort: { field: "created_at", direction: "desc" },
-  facet: { field: ORDERS_FACET_FIELD },
-  total: { field: "total" },
-  format: { locale: "en-ZA", currency: "ZAR" },
-  fields: ORDER_FIELDS,
-};
-
-export const ORDERS_SHAPES: QueryShape[] = [
+const ORDER_SHAPES: QueryShape[] = [
   { equals: [], sort: "created_at", range: true },
   { equals: [], sort: "total", range: true },
   { equals: ["status_code"], sort: "created_at", range: true },
@@ -171,13 +168,13 @@ export const ORDERS_SHAPES: QueryShape[] = [
   { quick: ["customer_name", "order_number"] },
 ];
 
-export const ORDERS_SERVER_GRID: PostgresGridDef = {
-  ...ORDERS_BASE,
+export const ORDERS_GRID_DEF = {
+  id: "orders",
   table: "orders",
-  shapes: ORDERS_SHAPES,
+  fields: ORDER_FIELDS,
+  shapes: ORDER_SHAPES,
+  defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
-};
-
-export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
-  facetField: ORDERS_FACET_FIELD,
-});
+  total: { field: "total" },
+  format: { locale: "en-ZA", currency: "ZAR" },
+} satisfies GridDef & PostgresGridDef;

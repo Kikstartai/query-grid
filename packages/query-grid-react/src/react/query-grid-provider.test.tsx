@@ -16,7 +16,7 @@ import {
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
 import { NO_PERSISTENCE } from "../components/column-state.ts";
-import { TEST_GRID, TEST_ROWS } from "../components/fields.fixture.ts";
+import { TEST_GRID_DEF, TEST_ROWS } from "../components/fields.fixture.ts";
 import {
   QueryGridProvider,
   StaticQueryGridProvider,
@@ -34,7 +34,7 @@ import {
 } from "./url-state.ts";
 import { createUrlSync, type UrlSync } from "./url-sync.ts";
 
-const DEF = TEST_GRID;
+const DEF = TEST_GRID_DEF;
 const BASE = defaultQuery(DEF);
 const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
 

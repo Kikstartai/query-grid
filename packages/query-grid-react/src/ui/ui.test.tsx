@@ -5,12 +5,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
 import { NO_PERSISTENCE } from "../components/column-state.ts";
-import { TEST_GRID, TEST_ROWS } from "../components/fields.fixture.ts";
+import { TEST_GRID_DEF, TEST_ROWS } from "../components/fields.fixture.ts";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
 import { ColumnsMenu, DataGrid } from "./data-grid.tsx";
 import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
 
-const DEF = TEST_GRID;
+const DEF = TEST_GRID_DEF;
 const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
 
 function render(element: ReactElement): string {

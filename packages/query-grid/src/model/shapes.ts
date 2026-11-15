@@ -1,4 +1,4 @@
-import type { Capabilities, QueryState } from "./field-types.ts";
+import type { BaseGridDef, Capabilities, QueryState } from "./field-types.ts";
 
 export interface OrderedShape {
   equals: string[];
@@ -12,6 +12,10 @@ export interface QuickShape {
 }
 
 export type QueryShape = OrderedShape | QuickShape;
+
+export interface ShapedGridDef extends BaseGridDef {
+  shapes: QueryShape[];
+}
 
 export interface ShapeCapabilityOptions {
   facetField?: string;

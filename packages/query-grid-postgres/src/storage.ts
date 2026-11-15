@@ -1,11 +1,10 @@
-import type { FacetDef, BaseGridDef, QueryShape } from "@kikstart/query-grid";
+import type { FacetDef, ShapedGridDef } from "@kikstart/query-grid";
 
 export interface FacetStorage extends FacetDef {
   counterTable: string;
 }
 
-export interface PostgresGridDef extends BaseGridDef {
+export interface PostgresGridDef extends ShapedGridDef {
   table: string;
-  shapes: QueryShape[];
   facet?: FacetStorage;
 }

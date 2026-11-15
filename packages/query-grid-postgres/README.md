@@ -12,13 +12,15 @@ It depends on `@kikstart/query-grid` for the query contract and the shape types,
 import {
   createGridHandler,
   generateGridMigration,
-  type ServerGridDef,
+  type PostgresGridDef,
   type SqlExecutor,
 } from "@kikstart/query-grid-postgres";
 
-const ORDERS: ServerGridDef = {
-  ...ORDERS_BASE,
+const ORDERS: PostgresGridDef = {
+  id: "orders",
   table: "orders",
+  fields: ORDER_FIELDS,
+  defaultSort: { field: "created_at", direction: "desc" },
   shapes: [
     { equals: [], sort: "created_at", range: true },
     { equals: ["status_code"], sort: "created_at", range: true },
@@ -42,7 +44,8 @@ export const POST = (request: Request) => handle(request);
 
 - **`createGridHandler({ def, execute, basePath?, options?, moves?, onError? })`** turns a fetch-standard `Request` into a `Response`. It answers the page, `/count`, `/total` and `/facets` itself, and `/options`, `/transitions` and `POST /status` through the `options` and `moves` hooks; an omitted hook is a 404. A refusal is a 400, a refused transition a 409, anything else a 500. Every read gets `request.signal` as the third argument of `execute` and of the `options` and `transitions` hooks, so the host can cancel the statement of a dropped request; an aborted request is a 499 and is not passed to `onError`. Error bodies are `{ error, message, code, params }`: codes, never sentences.
 - **Shapes.** A shape is one index: a set of equality fields, a sort, optionally a range on the sort, or the quick-filter columns. The `QueryShape` type, `matchShape` and the other shape helpers come from core; here `validateGridDef` checks a def against Postgres's rules, and `generateGridMigration` writes one index per shape plus the counter table and its triggers. `listMissingIndexes` compares the def with `pg_indexes`.
-- **Capabilities** are core's: `shapeCapabilities(shapes, { facetField })` from `@kikstart/query-grid` tells the client what this server accepts, from the same shapes.
+- **Capabilities** are core's: `createHttpSource(def, basePath)` builds them from the def's shapes, so the client offers what this server accepts.
+- **One def per grid.** `PostgresGridDef` is core's `BaseGridDef` plus `table`, `shapes` and `facet.counterTable`. A host's grid def can also carry React `cell`s for the React package; this package ignores them.
 - **Several values of one field** are one array parameter under `= ANY`, capped per field by `maxValues`. A shape opts out with `multi: false`.
 - **The runner** (`listGridPage`, `getGridCount`, `getGridTotal`, `listFacetCounts`, `walkGridPages`) and the SQL builder are exported for a host that wants its own routes.
 

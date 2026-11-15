@@ -28,7 +28,7 @@ There is one query contract, in core. The React package encodes a query with cor
 | `@kikstart/query-grid/http`             | `createHttpSource`, and the protocol it shares with `createGridHandler`: route names, query parameters, the error and move bodies                                                                                    |
 | `@kikstart/query-grid/memory`           | `createMemorySource` and `memoryCapabilities`                                                                                                                                                                        |
 | `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState`, `useQueryGridActions`                                                                                                               |
-| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, the column-state API, `ClientFieldDef` and `ClientGridDef`                                                                               |
+| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, the column-state API, `FieldDef` and `GridDef`                                                                                           |
 | `@kikstart/query-grid-react/ui`         | the same components, by the same names, bound to the provider                                                                                                                                                        |
 | `@kikstart/query-grid-react/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                          |
 | `@kikstart/query-grid-postgres`         | `createGridHandler`, `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes`                                                                                 |
@@ -54,21 +54,18 @@ import "@kikstart/query-grid-react/styles.css";
 
 ## Quick start
 
-Declare the fields once, in a module with no React in it. Both the server and the client import it, so their keys and types cannot drift. The library has no domain names of its own; a host passes its defs in.
+Write one def per grid: its fields (with a `cell` on any field that needs one), its shapes, its sort, facet and total, and its storage. Each package reads its own slice of it, so the keys and types cannot drift. The library has no domain names of its own; a host passes its defs in.
 
-```ts
-// orders-def.ts
-import {
-  shapeCapabilities,
-  type GridDef,
-  type QueryShape,
-} from "@kikstart/query-grid";
-import type { ServerGridDef } from "@kikstart/query-grid-postgres";
+```tsx
+// orders-grid-def.tsx
+import type { PostgresGridDef } from "@kikstart/query-grid-postgres";
+import type { GridDef } from "@kikstart/query-grid-react/components";
 
-export const ORDERS_BASE: GridDef = {
+export const ORDERS_GRID_DEF = {
   id: "orders",
+  table: "orders",
   defaultSort: { field: "created_at", direction: "desc" },
-  facet: { field: "status_code" },
+  facet: { field: "status_code", counterTable: "order_status_counts" },
   total: { field: "total" },
   fields: [
     { key: "id", label: "ID", type: "id", operators: [], hidden: true },
@@ -91,42 +88,32 @@ export const ORDERS_BASE: GridDef = {
       type: "enum",
       operators: ["eq"],
       options: STATUSES,
+      cell: (value) => <StatusBadge value={value} />,
     },
     { key: "customer_name", label: "Customer", type: "text", operators: [] },
     { key: "total", label: "Total", type: "money", operators: ["range"] },
   ],
-};
-
-export const ORDERS_SHAPES: QueryShape[] = [
-  { equals: [], sort: "created_at", range: true },
-  { equals: ["status_code"], sort: "created_at", range: true },
-  { equals: ["status_code"], sort: "total", range: true },
-  { quick: ["customer_name", "order_number"] },
-];
+  shapes: [
+    { equals: [], sort: "created_at", range: true },
+    { equals: ["status_code"], sort: "created_at", range: true },
+    { equals: ["status_code"], sort: "total", range: true },
+    { quick: ["customer_name", "order_number"] },
+  ],
+} satisfies GridDef & PostgresGridDef;
 ```
 
-The server def is those fields plus storage: the table, the shapes and the counter table. The capabilities are what the client needs to know of the same shapes. Both sit in the same React-free file:
+- The React package reads the fields, their cells, the sort, the facet and the total, and ignores `table` and `counterTable`.
+- The Postgres package reads the fields, the shapes and the storage, and ignores `cell`.
+- The in-memory source reads the fields and ignores shapes and storage.
+- The types are layers, each with its own name: core's `BaseGridDef` and `BaseFieldDef`, the React package's `GridDef` and `FieldDef` (the base plus `cell`), the Postgres package's `PostgresGridDef` (the base plus `table`, `shapes` and `facet.counterTable`). A `BaseGridDef` passes wherever a `GridDef` is expected.
+- One object means the table and counter-table names are in the browser bundle, and the def file is a `.tsx` the server imports. A host that wants neither writes the layers as separate objects; the types allow both.
 
-```ts
-// orders-def.ts, continued
-export const ORDERS_SERVER_GRID: ServerGridDef = {
-  ...ORDERS_BASE,
-  table: "orders",
-  shapes: ORDERS_SHAPES,
-  facet: { field: "status_code", counterTable: "order_status_counts" },
-};
-
-export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
-  facetField: "status_code",
-});
-```
-
-Generate the DDL from it: one index per shape, then the counter table and its triggers. `listTableMigrations` takes every server def you have and returns one migration per table.
+Generate the DDL from it: one index per shape, then the counter table and its triggers. `listTableMigrations` takes every grid def you have and returns one migration per table.
 
 ```ts
 import { listTableMigrations } from "@kikstart/query-grid-postgres";
 
-for (const migration of listTableMigrations([ORDERS_SERVER_GRID])) {
+for (const migration of listTableMigrations([ORDERS_GRID_DEF])) {
   writeFileSync(
     `migrations/0002_query_grid_${migration.table}.sql`,
     migration.sql,
@@ -149,7 +136,7 @@ const execute: SqlExecutor = async (sql) =>
   (await pool.query(sql.text, sql.values)).rows;
 
 const handle = createGridHandler({
-  def: ORDERS_SERVER_GRID,
+  def: ORDERS_GRID_DEF,
   execute,
   basePath: "/api/orders",
 });
@@ -176,18 +163,6 @@ export const POST = (request: Request) => handle(request);
 - Responses carry `cache-control: no-store` and `server-timing`.
 - With `basePath` the routing is exact. Without it the last path segment picks the route.
 
-The client def is the same fields plus cells, in the one file that holds React:
-
-```tsx
-// orders-grid.tsx
-import type { ClientGridDef } from "@kikstart/query-grid-react/components";
-
-export const ORDERS_GRID: ClientGridDef = {
-  ...ORDERS_BASE,
-  fields: ORDERS_BASE.fields.map(addCells),
-};
-```
-
 Give the provider a source, then mount the parts. Each one reads and writes the same query state; mount as many or as few as you need.
 
 ```tsx
@@ -197,15 +172,11 @@ Give the provider a source, then mount the parts. Each one reads and writes the 
 import { createHttpSource } from "@kikstart/query-grid/http";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
 
-const ORDERS_SOURCE = createHttpSource(
-  ORDERS_GRID,
-  "/api/orders",
-  ORDERS_CAPABILITIES,
-);
+const ORDERS_SOURCE = createHttpSource(ORDERS_GRID_DEF, "/api/orders");
 
 export function OrdersQueryProvider({ children }: { children: ReactNode }) {
   return (
-    <QueryGridProvider def={ORDERS_GRID} source={ORDERS_SOURCE}>
+    <QueryGridProvider def={ORDERS_GRID_DEF} source={ORDERS_SOURCE}>
       {children}
     </QueryGridProvider>
   );
@@ -238,6 +209,7 @@ export function Orders() {
 }
 ```
 
+- `createHttpSource(def, basePath)` builds its capabilities from the def's own shapes and facet, so the host passes none.
 - The provider always takes a `source`. An HTTP source holds no rows, so it can sit at module scope, as above. A memory source holds its rows, so create it once per mount (`useState(() => createMemorySource(…))`).
 - A def carries `cell` functions and a source is functions, so neither crosses from a server component to a client one: the provider module is the client boundary, and a server component composes the parts inside it.
 - `def.id` names the grid: it keys the column state the provider keeps in `localStorage`. Pass `columnPersistence` to keep it elsewhere, or `NO_PERSISTENCE` to keep it nowhere.
@@ -261,7 +233,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 ## Capabilities
 
-The client def carries no table, no shapes and no counter table. What the client needs to know about the server arrives as one small object:
+The client parts read no table, no shape and no counter table. What they need to know about the server is one small object:
 
 ```ts
 interface Capabilities {
@@ -273,7 +245,7 @@ interface Capabilities {
 }
 ```
 
-- Core's `shapeCapabilities(shapes, { facetField })` builds it from the same shapes the server enforces, so the controls offer exactly what the handler accepts. It is computed once per def. The shape types and `matchShape` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
+- Core's `shapeCapabilities(shapes, { facetField })` builds it from the same shapes the server enforces, so the controls offer exactly what the handler accepts. `createHttpSource` calls it with the def's shapes and facet, once per source. The shape types and `matchShape` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
 - `memoryCapabilities(def, quickFields)` builds it from the field operators for the in-memory source.
 - Everything in the client that used to read shapes reads this instead: the provider's URL guard, `applyAction`, `listOffers`, the sort control, the quick filter, the facet panel and the board.
 
@@ -450,7 +422,7 @@ function StatusButtons() {
   const query = useQueryState();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
-  const status = ORDERS_GRID.fields.find(
+  const status = ORDERS_GRID_DEF.fields.find(
     (field) => field.key === "status_code",
   );
   return (
@@ -516,12 +488,12 @@ Without React at all, core is the whole model: `createQueryStore`, `createFeed`,
 ```tsx
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
-const source = createMemorySource(TASKS_GRID, rows, {
+const source = createMemorySource(TASKS_GRID_DEF, rows, {
   quick: ["title", "assignee"],
   transitions,
 });
 
-<QueryGridProvider def={TASKS_GRID} source={source}>
+<QueryGridProvider def={TASKS_GRID_DEF} source={source}>
 ```
 
 A source carries its own capabilities. Create it once per mount, because it holds its rows. It is meant for small lists: up to a few thousand rows. Every change filters and sorts the whole array, which is instant at 400 rows (the demo's [`/memory`](https://query-grid.vercel.app/memory) route) and still under a frame at 5,000. Past that, give the table shapes and an index.
@@ -530,9 +502,9 @@ A source carries its own capabilities. Create it once per mount, because it hold
 
 ### Field defs and query shapes
 
-One field description drives the grid and the filters. Core's `FieldDef` carries `key`, `label`, `type`, the filter `operators` it supports (`eq`, `range`), `options`, a `lookup` for large option lists, `maxValues`, `nullable` and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `ClientFieldDef` extends it with `cell`, so the server never sees React. A core `GridDef` is an `id`, the fields, the default sort, the facet field, the total field and the format.
+One field description drives the grid and the filters. Core's `BaseFieldDef` carries `key`, `label`, `type`, the filter `operators` it supports (`eq`, `range`), `options`, a `lookup` for large option lists, `maxValues`, `nullable` and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `FieldDef` extends it with `cell`; the Postgres package never reads it. A core `BaseGridDef` is an `id`, the fields, the default sort, the facet field, the total field and the format. A host writes one object per grid that satisfies the layers it uses.
 
-The server def then declares its **query shapes**. A shape is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
+The def then declares its **query shapes**. A shape is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
 
 - an ordered shape is a set of equality filters, one sort, optionally a range on that sort column, and `multi: false` when its equality fields take one value only
 - the quick-filter shape is a list of columns matched by substring

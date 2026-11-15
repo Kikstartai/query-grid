@@ -64,7 +64,7 @@ There is **one query contract**, in core. `-react` and `-postgres` both import i
 - **Persistence key:** the client GridDef gets an explicit `id`, which replaces `def.table` in the column persistence key (`react/query-grid-provider.tsx:112`).
 - **What the client def drops:** the client def carries no `table`, `shapes` or `counterTable`. What the client needs from shapes arrives as **capabilities**.
 - **One field description type** (Q2) drives the grid and the filters: key, label, type, operators, options, lookup, width, pinned, hidden, wrap, nullable. The React-free type lives in core, and `-react` extends it with `cell`.
-  - The host declares its fields once, in a React-free module.
+  - The host declared its fields once, in a React-free module. Since 0.3.0 the rule is one def per grid, and each package reads its slice (see the 0.3.0 section).
   - The server def is those fields plus storage.
   - The client def is those fields plus cells.
 
@@ -131,7 +131,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 
 - **Core stays React-free:** core has no React, DOM or pg import, which a grep and its `package.json` confirm. `-postgres` has no React or pg import.
 - **Round trip:** `encodeQuery` → `decodeQuery` across `-react`'s use and `-postgres`'s use, both on core's one codec.
-- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-def.test.ts`, named `orders-grid-def.test.ts` until 0.3.0) stays, pointed at `shapeCapabilities(shapes)`.
+- **Reachable states:** the demo's reachable-states × `matchShape` invariant test (`apps/demo/src/core/orders/orders-grid-def.test.ts`) stays, pointed at `shapeCapabilities(shapes)`.
 - **SQL builder:** `server/sql-builder.test.ts` gets its own fixtures in `-postgres`. `model/query-model.test.ts` splits into a shape part (`-postgres`) and an action part (core).
 - **Carried over:** every existing unit, DB and benchmark test is carried over.
 
@@ -169,11 +169,11 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 ### Names and types
 
-- Core's field type is `FieldDef`; `-react` adds `ClientFieldDef` (with `cell`) and `ClientGridDef`. Core's `GridDef` is generic over its field type, so one def shape serves both.
-- The server def is `ServerGridDef extends GridDef`: it adds `table`, `shapes` and `facet.counterTable`, and keeps `id`.
+- Core's field type is `FieldDef`; `-react` adds `ClientFieldDef` (with `cell`) and `ClientGridDef`. Core's `GridDef` is generic over its field type, so one def shape serves both. Since 0.3.0 these are `BaseFieldDef` and `BaseGridDef` in core and `FieldDef` and `GridDef` in `-react`.
+- The server def is `ServerGridDef extends GridDef`: it adds `table`, `shapes` and `facet.counterTable`, and keeps `id`. Since 0.3.0 it is `PostgresGridDef`.
 - `QueryMode` is `"server" | "memory"`; the old `"indexed"` is gone.
 - `QueryRules` is `{ capabilities, quickComplete }`. `applyAction`, `listOffers`, `listControlActions` and `enumerateReachableStates` take it as a required argument; `explainUnavailable(query, target, rules)` no longer takes a def.
-- `DataSource.mode` is replaced by `DataSource.capabilities`. Since 0.3.0 the provider always takes a `source`; the host calls `createHttpSource(def, basePath, capabilities)` for the HTTP one, so no provider can be mounted without a source.
+- `DataSource.mode` is replaced by `DataSource.capabilities`. Since 0.3.0 the provider always takes a `source`; the host calls `createHttpSource(def, basePath)` for the HTTP one, so no provider can be mounted without a source.
 
 ### Capabilities
 
@@ -229,7 +229,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 ### Demo
 
-- `orders-fields.ts` is the shared React-free module; `orders-server-def.ts` and `orders-grid-def.tsx` build on it. The client def adds a status badge cell. Since 0.3.0 these are two files: `orders-def.ts` (fields, shapes, the server def and the capabilities, no React) and `orders-grid.tsx` (the cells).
+- `orders-fields.ts` is the shared React-free module; `orders-server-def.ts` and `orders-grid-def.tsx` build on it. The client def adds a status badge cell. Since 0.3.0 the orders grid is one file and one object, `ORDERS_GRID_DEF` in `orders-grid-def.tsx`.
 - New routes: `/rtl` and `/components`.
 - `apps/demo/browser/verify.sh` and `shots.sh` are the scripted pass and the screenshots.
 
@@ -295,13 +295,24 @@ This is library code with nothing that grows with a tenant count. Each request i
 - **`createGridHandler` stays in `-postgres`** (see Deferred).
 - **0.3.0 for all three packages.** The 0.2.0 record above describes the 0.2.0 API; shipping a different 0.2.0 would make it false.
 
+### One def per grid (Glen, during the work)
+
+This replaces the 0.2.0 rule that a host declares its fields once in a React-free module and builds a client def and a server def on it.
+
+- **The host writes one object per grid**: fields (with `cell` where one is needed), shapes, sort, facet, total and storage, checked with `satisfies GridDef & PostgresGridDef`. Each package reads its slice structurally: the React package ignores `table` and `counterTable`, `-postgres` ignores `cell`, the memory source ignores shapes and storage.
+- **The types stay layers, renamed so every name is unique across the packages:** core `GridDef` → `BaseGridDef` and `FieldDef` → `BaseFieldDef`; `-react` `ClientGridDef` → `GridDef` and `ClientFieldDef` → `FieldDef`; `-postgres` `ServerGridDef` → `PostgresGridDef`. Core adds `ShapedGridDef` (the base plus `shapes`), which `PostgresGridDef` extends and `createHttpSource` takes. A `BaseGridDef` passes wherever a `GridDef` is expected.
+- **Capabilities come from the def.** `createHttpSource(def, basePath)` builds them from `def.shapes` and `def.facet`; the host passes none. The memory source keeps `memoryCapabilities`.
+- **Demo.** `orders-grid-def.tsx` holds `ORDERS_GRID_DEF`; `orders-def.ts`, `orders-grid.tsx` and `ORDERS_CAPABILITIES` are gone. `TASKS_GRID` is `TASKS_GRID_DEF`. `SERVER_GRIDS` in `server-grids.ts` is `GRID_DEFS` in `grid-defs.ts`. Every grid def constant ends in `_GRID_DEF`. The library's own test fixtures keep `TEST_DEF`; the new React one is `TEST_GRID_DEF`.
+- **What it costs, accepted:** the table and counter-table names are in the browser bundle, and the def file is a `.tsx` that the API route, the migration generator, the benchmark and the DB tests import. The 0.2.0 line "the client def carries no `table`, `shapes` or `counterTable`" now describes what the client parts read, not what the object holds.
+- It went in as two commits: the type renames, then the capabilities, the demo and the docs. An intermediate two-file split (`orders-def.ts` and `orders-grid.tsx`) existed for a few commits and was replaced.
+
 ### As built: core
 
 - `model/shapes.ts` holds `OrderedShape`, `QuickShape`, `QueryShape`, `isQuickShape`, `listQuickFields`, `shapeId`, `listOrderedShapes`, `listSortFields`, `matchShape`, `isFacetOnlyQuery`, and `shapeCapabilities(shapes, options)` with `ShapeCapabilityOptions`. It imports `field-types.ts` only. The name is `shapeCapabilities` because core already exports the `Capabilities` type and `memoryCapabilities`.
-- `-postgres` `shapes.ts` now holds `describeShape` and `validateGridDef` alone; `capabilities.ts` and the `./capabilities` subpath are gone; `ServerGridDef` names core's `QueryShape`.
+- `-postgres` `shapes.ts` now holds `describeShape` and `validateGridDef` alone; `capabilities.ts` and the `./capabilities` subpath are gone; `PostgresGridDef` extends core's `ShapedGridDef`.
 - `assertDeclared` needed no change: it already called core's `validateQueryValues`.
 - `./http` exports `createHttpSource` and the protocol (`SUB_ROUTES`, `SubRoute`, `LIMIT_PARAM`, `EXACT_PARAM`, `ErrorBody`, `MoveBody`). The wire result types, `COUNT_CAP`, `PAGE_LIMIT_MAX`, `QUICK_LIMIT` and `OptionSearch` come from the root only.
-- `createHttpSource(def, basePath, capabilities)` stays positional.
+- `createHttpSource(def, basePath)` takes a `ShapedGridDef` (a `BaseGridDef` with `shapes`) and builds its capabilities itself, with `shapeCapabilities(def.shapes, { facetField: def.facet?.field })`. No override argument was kept: nothing in the library or the demo needs one, and a host with a backend of its own writes a `DataSource`.
 - `model/board.ts` is the status board's model:
   - `getLaneQueries(def, query, capabilities)` moved from the bound board unchanged.
   - `createBoard(def, source, laneQueries)` owns one query store and one feed of `LANE_PAGE_SIZE` (50) per lane and exposes `getState()` (`{ lanes, transitions }`, a lane being its `rows` and `hasNext`, the two things the board keeps current), `subscribe`, `loadMore(lane)`, `canMove(from, to)` and `move({ id, from, to, index })`.
@@ -311,7 +322,7 @@ This is library code with nothing that grows with a tenant count. Each request i
 
 ### As built: the React package
 
-- **Barrels.** The column-state API (`createColumnStore`, `ColumnStore`, `ColumnPersistence`, `createLocalStoragePersistence`, `NO_PERSISTENCE`, the layout helpers) and `ClientFieldDef`/`ClientGridDef` are exported from `./components` only. The resize internals (`beginResize`, `cancelResize`, `stepWidth`, `resizeWidth`, the two step constants, `ResizeSession`) are private to `grid-header`. `useStoreValue` stays at the root.
+- **Barrels.** The column-state API (`createColumnStore`, `ColumnStore`, `ColumnPersistence`, `createLocalStoragePersistence`, `NO_PERSISTENCE`, the layout helpers) and `FieldDef`/`GridDef` are exported from `./components` only. The resize internals (`beginResize`, `cancelResize`, `stepWidth`, `resizeWidth`, the two step constants, `ResizeSession`) are private to `grid-header`. `useStoreValue` stays at the root.
 - **Two providers.** `QueryGridProvider` (nuqs) takes `def`, `source`, `pageSize`, `urlPrefix`, `columnPersistence`. `StaticQueryGridProvider` takes the same plus a required `search`. `basePath`, `capabilities`, `syncUrl` and the runtime throw for a missing source are gone; the host calls `createHttpSource`. A memory source is created once per mount, because it holds its rows; an HTTP source can sit at module scope.
 - **`columnPersistence`** is a `ColumnPersistence` and never `null`. `NO_PERSISTENCE` is the explicit "keep it nowhere". Omitted, the provider uses `createLocalStoragePersistence("query-grid:<def.id>:columns")` and the base `DataGrid` uses `NO_PERSISTENCE`, as before. `createColumnStore` takes a persistence, not a nullable one.
 - **`useQueryGridActions()`** returns `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions(field, text, signal)` and `moveRow(board, move)`. The object is built once with the context value, so it is stable. `useQueryGrid` and `QueryGridContextValue` are no longer exported; the internal context is the same value plus `actions`, and the `./ui` wrappers still read `def` and the stores from it. `useQueryDispatch` is gone: `dispatch` has one home, the actions.
@@ -339,7 +350,6 @@ This is library code with nothing that grows with a tenant count. Each request i
 - **Demo `typecheck`** is `next typegen && tsc --noEmit`, so the generated `PageProps` exists on a clean checkout.
 - **`error.tsx` and `not-found.tsx`** at the app root; the error page takes this Next version's `{ error, retry }`.
 - **`lib/db.ts`** is `import "server-only"` plus a re-export of `lib/pg-executor.ts`, which holds the pool and `executeSql` and is what the bun DB test imports. `server-only` is a demo dependency.
-- **Two def files (Glen, relayed through the 0.2.0 review session).** `orders-def.ts` holds the fields, the shapes, the base `GridDef`, `ORDERS_SERVER_GRID` and `ORDERS_CAPABILITIES`, with no React; the capabilities can sit there because `shapeCapabilities` is core's. `orders-grid.tsx` holds only the status-badge `cell` and `ORDERS_GRID`. `orders-fields.ts` and `orders-server-def.ts` are gone. The server def's import of `ServerGridDef` is a type, so the client modules that read the capabilities from this file pull in no server code.
 - **Placement.** `core/orders/orders-provider.tsx`, `core/tasks/ui/`, `core/catalog/ui/`, `core/landing/` (`landing-copy.ts` and `ui/landing.tsx`; the page composes five sections).
 - **Title prop.** `OrdersWorkspace` takes `title`; `dir` no longer picks the heading.
 - `verify.sh` gained a `shift` section: the static shell of each grid route holds the brand and a skeleton and no loading text, and the cumulative layout shift of each grid page is read from the browser.

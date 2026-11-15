@@ -5,7 +5,7 @@ import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
-import { TASK_COUNT, TASKS_GRID } from "../tasks-grid-def";
+import { TASK_COUNT, TASKS_GRID_DEF } from "../tasks-grid-def";
 import { TasksQueryProvider } from "../tasks-provider";
 import { TasksView } from "./tasks-view";
 
@@ -21,7 +21,7 @@ export function TasksWorkspace() {
         declared filter and sort is offered in any combination, and filtering,
         sorting, counting and totalling run in JavaScript.
       </p>
-      <Suspense fallback={<WorkspaceSkeleton def={TASKS_GRID} />}>
+      <Suspense fallback={<WorkspaceSkeleton def={TASKS_GRID_DEF} />}>
         <AtRequest>
           <TasksQueryProvider>
             <WorkspaceParts>

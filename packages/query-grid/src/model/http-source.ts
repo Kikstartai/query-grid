@@ -1,13 +1,8 @@
 import type { DataSource } from "./data-source.ts";
-import type {
-  Capabilities,
-  FieldOption,
-  BaseGridDef,
-  GridRow,
-  QueryState,
-} from "./field-types.ts";
+import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { encodeQuery } from "./query-url.ts";
+import { shapeCapabilities, type ShapedGridDef } from "./shapes.ts";
 import type {
   CountResult,
   FacetCount,
@@ -54,10 +49,12 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
 }
 
 export function createHttpSource(
-  def: BaseGridDef,
+  def: ShapedGridDef,
   basePath: string,
-  capabilities: Capabilities,
 ): DataSource {
+  const capabilities = shapeCapabilities(def.shapes, {
+    facetField: def.facet?.field,
+  });
   const filterParams = (query: QueryState) =>
     encodeQuery(def, { ...query, cursor: null });
   const route = (name: SubRoute) => `${basePath}/${name}`;

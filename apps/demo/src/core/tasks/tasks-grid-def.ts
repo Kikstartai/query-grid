@@ -65,7 +65,7 @@ const SUBJECTS = [
   "usage report",
 ];
 
-export const TASKS_GRID: BaseGridDef = {
+export const TASKS_GRID_DEF: BaseGridDef = {
   id: "tasks",
   defaultSort: { field: "due_at", direction: "asc" },
   facet: { field: "status" },

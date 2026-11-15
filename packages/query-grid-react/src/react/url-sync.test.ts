@@ -8,11 +8,11 @@ import {
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
-import { TEST_GRID } from "../components/fields.fixture.ts";
+import { TEST_GRID_DEF } from "../components/fields.fixture.ts";
 import { encodeStore, encodeUrlState, type UrlState } from "./url-state.ts";
 import { createUrlSync } from "./url-sync.ts";
 
-const DEF = TEST_GRID;
+const DEF = TEST_GRID_DEF;
 
 interface Written {
   search: string;

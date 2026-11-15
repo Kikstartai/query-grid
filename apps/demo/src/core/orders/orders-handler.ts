@@ -16,8 +16,8 @@ import { executeSql } from "@/lib/db";
 import {
   ORDERS_API,
   ORDERS_FACET_FIELD,
-  ORDERS_SERVER_GRID,
-} from "./orders-def";
+  ORDERS_GRID_DEF,
+} from "./orders-grid-def";
 
 const CUSTOMER_FIELD = "customer_id";
 const OPTION_LIMIT = 20;
@@ -34,7 +34,7 @@ async function listOrderOptions(
     throw new QueryRejected("invalid_value", "no_option_lookup", { field });
   }
   if (search.value !== undefined) {
-    if (!isValidFieldValue(ORDERS_SERVER_GRID, CUSTOMER_FIELD, search.value)) {
+    if (!isValidFieldValue(ORDERS_GRID_DEF, CUSTOMER_FIELD, search.value)) {
       throw new QueryRejected("invalid_value", "invalid_value", { field });
     }
     return executeSql<FieldOption>(
@@ -96,12 +96,12 @@ async function changeOrderStatus(id: string, to: string): Promise<GridRow> {
   if (updated.length === 0) {
     throw new QueryRejected("transition_refused", "transition_refused", { to });
   }
-  const [row] = await executeSql<GridRow>(buildRowSql(ORDERS_SERVER_GRID, id));
+  const [row] = await executeSql<GridRow>(buildRowSql(ORDERS_GRID_DEF, id));
   return row;
 }
 
 export const handleOrdersRequest = createGridHandler({
-  def: ORDERS_SERVER_GRID,
+  def: ORDERS_GRID_DEF,
   execute: executeSql,
   basePath: ORDERS_API,
   options: listOrderOptions,

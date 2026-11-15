@@ -26,7 +26,7 @@ import {
 } from "@kikstart/query-grid-postgres";
 import { Client } from "pg";
 
-import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-def";
+import { ORDERS_GRID_DEF } from "../src/core/orders/orders-grid-def";
 
 const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? 30);
 const PAGE = 200;
@@ -194,7 +194,7 @@ async function pickSeveralValues(
 
 function listMultiSizes(shape: OrderedShape): number[] {
   const caps = shape.equals.map((key) => {
-    const field = getField(ORDERS_GRID, key);
+    const field = getField(ORDERS_GRID_DEF, key);
     return field ? resolveMaxValues(field) : 1;
   });
   return [...new Set([...MULTI_SIZES, Math.max(...caps)])];
@@ -218,7 +218,7 @@ async function benchSeveral(
         .map(([name, values]) => `${values.length} ${frequency} ${name}`)
         .join(", ");
       const query: QueryState = {
-        ...defaultQuery(ORDERS_GRID),
+        ...defaultQuery(ORDERS_GRID_DEF),
         equals,
         sort: { field: shape.sort, direction: "desc" },
       };
@@ -227,7 +227,7 @@ async function benchSeveral(
           client,
           shape,
           `${label}: first page desc`,
-          buildPageSql(ORDERS_GRID, query, PAGE),
+          buildPageSql(ORDERS_GRID_DEF, query, PAGE),
           null,
           true,
         ),
@@ -235,7 +235,7 @@ async function benchSeveral(
           client,
           shape,
           `${label}: capped count`,
-          buildCappedCountSql(ORDERS_GRID, query),
+          buildCappedCountSql(ORDERS_GRID_DEF, query),
           null,
           true,
         ),
@@ -261,7 +261,7 @@ async function pickDeepCursor(
       Object.values(query.equals),
     );
     if (rows[0]) {
-      const rowSql = buildRowSql(ORDERS_GRID, rows[0].id);
+      const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
       const row = await client.query<GridRow>(rowSql.text, rowSql.values);
       return encodeCursor({
         sortValue: String(row.rows[0][query.sort.field]),
@@ -280,7 +280,7 @@ async function benchOrdered(
   const results: Result[] = [];
   for (const direction of ["desc", "asc"] as const) {
     const query: QueryState = {
-      ...defaultQuery(ORDERS_GRID),
+      ...defaultQuery(ORDERS_GRID_DEF),
       equals,
       sort: { field: shape.sort, direction },
     };
@@ -290,20 +290,20 @@ async function benchOrdered(
         client,
         shape,
         `first page ${direction}`,
-        buildPageSql(ORDERS_GRID, query, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, query, PAGE),
         null,
       ),
       await measure(
         client,
         shape,
         `deep keyset page ${direction}`,
-        buildPageSql(ORDERS_GRID, { ...query, cursor }, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, { ...query, cursor }, PAGE),
         null,
       ),
     );
   }
   const base: QueryState = {
-    ...defaultQuery(ORDERS_GRID),
+    ...defaultQuery(ORDERS_GRID_DEF),
     equals,
     sort: { field: shape.sort, direction: "desc" },
   };
@@ -312,14 +312,14 @@ async function benchOrdered(
       client,
       shape,
       "capped count",
-      buildCappedCountSql(ORDERS_GRID, base),
+      buildCappedCountSql(ORDERS_GRID_DEF, base),
       null,
     ),
     await measure(
       client,
       shape,
       "capped total",
-      buildCappedTotalSql(ORDERS_GRID, base),
+      buildCappedTotalSql(ORDERS_GRID_DEF, base),
       TOTAL_SETTINGS,
     ),
   );
@@ -337,14 +337,14 @@ async function benchOrdered(
         client,
         shape,
         "range, first page desc",
-        buildPageSql(ORDERS_GRID, { ...base, range }, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, { ...base, range }, PAGE),
         null,
       ),
       await measure(
         client,
         shape,
         "range, capped count",
-        buildCappedCountSql(ORDERS_GRID, { ...base, range }),
+        buildCappedCountSql(ORDERS_GRID_DEF, { ...base, range }),
         null,
       ),
     );
@@ -362,7 +362,7 @@ async function benchQuick(
   const results: Result[] = [];
   for (const value of QUICK_TERMS) {
     const query: QueryState = {
-      ...defaultQuery(ORDERS_GRID),
+      ...defaultQuery(ORDERS_GRID_DEF),
       quick: value,
     };
     results.push(
@@ -370,7 +370,7 @@ async function benchQuick(
         client,
         shape,
         `“${value}”, capped page`,
-        buildPageSql(ORDERS_GRID, query, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, query, PAGE),
         QUICK_SETTINGS,
       ),
     );
@@ -401,7 +401,7 @@ function summarize(results: Result[]): string {
 function toMarkdown(results: Result[], total: number): string {
   const single = results.filter((result) => !result.multi);
   const several = results.filter((result) => result.multi);
-  const optedOut = ORDERS_GRID.shapes
+  const optedOut = ORDERS_GRID_DEF.shapes
     .filter((shape) => !isQuickShape(shape) && shape.multi === false)
     .map(describeShape);
   const lines = [
@@ -433,7 +433,7 @@ async function main(): Promise<void> {
     "SELECT sum(row_count) AS count FROM order_status_counts",
   );
   const results: Result[] = [];
-  for (const shape of ORDERS_GRID.shapes) {
+  for (const shape of ORDERS_GRID_DEF.shapes) {
     const batch = isQuickShape(shape)
       ? await benchQuick(client, shape)
       : await benchOrdered(client, shape);

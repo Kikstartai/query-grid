@@ -5,7 +5,7 @@ import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
-import { ORDERS_BASE } from "../orders-def";
+import { ORDERS_GRID_DEF } from "../orders-grid-def";
 import { OrdersQueryProvider } from "../orders-provider";
 import { OrdersView } from "./orders-view";
 
@@ -21,7 +21,7 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
         <SiteBrand />
         <h1>{title}</h1>
       </header>
-      <Suspense fallback={<WorkspaceSkeleton def={ORDERS_BASE} />}>
+      <Suspense fallback={<WorkspaceSkeleton def={ORDERS_GRID_DEF} />}>
         <AtRequest>
           <OrdersQueryProvider>
             <WorkspaceParts>

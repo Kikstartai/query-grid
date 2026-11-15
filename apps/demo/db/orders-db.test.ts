@@ -20,7 +20,7 @@ import {
   type SqlQuery,
 } from "@kikstart/query-grid-postgres";
 
-import { ORDERS_SERVER_GRID as ORDERS_GRID } from "../src/core/orders/orders-def";
+import { ORDERS_GRID_DEF } from "../src/core/orders/orders-grid-def";
 
 interface Counter {
   rows: number;
@@ -64,23 +64,23 @@ function withoutEmpty(counters: Record<string, Counter>) {
 }
 
 async function listPage(query: QueryState, limit: number) {
-  const sql = buildPageSql(ORDERS_GRID, query, limit);
+  const sql = buildPageSql(ORDERS_GRID_DEF, query, limit);
   const { rows } = await client.query<GridRow>(sql.text, sql.values);
-  return toPageResult(ORDERS_GRID, query, rows, limit);
+  return toPageResult(ORDERS_GRID_DEF, query, rows, limit);
 }
 
 describe("generated schema", () => {
   test("every declared shape has its index in pg_indexes", async () => {
     const { rows } = await client.query<PgIndexRow>(
       "SELECT p.indexname, p.indexdef, i.indisvalid AS valid FROM pg_indexes p JOIN pg_class c ON c.relname = p.indexname JOIN pg_index i ON i.indexrelid = c.oid WHERE p.schemaname = 'public' AND p.tablename = $1",
-      [ORDERS_GRID.table],
+      [ORDERS_GRID_DEF.table],
     );
-    const missing = listMissingIndexes(ORDERS_GRID, rows);
+    const missing = listMissingIndexes(ORDERS_GRID_DEF, rows);
     expect(missing.map((index) => index.name)).toEqual([]);
   });
 
   test("the counter table has its columns, the table its three triggers, and no backfill is left half done", async () => {
-    const counter = listCounterObjects(ORDERS_GRID)!;
+    const counter = listCounterObjects(ORDERS_GRID_DEF)!;
     const columns = await client.query<{ column_name: string }>(
       "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1",
       [counter.table],
@@ -90,7 +90,7 @@ describe("generated schema", () => {
     );
     const triggers = await client.query<{ tgname: string }>(
       "SELECT tgname FROM pg_trigger WHERE tgrelid = $1::regclass AND NOT tgisinternal",
-      [ORDERS_GRID.table],
+      [ORDERS_GRID_DEF.table],
     );
     expect(triggers.rows.map((row) => row.tgname).sort()).toEqual(
       [...counter.triggers].sort(),
@@ -105,7 +105,7 @@ describe("generated schema", () => {
 
 describe("keyset paging", () => {
   test("three keyset pages equal one page three times the size, for every ordered shape", async () => {
-    for (const shape of ORDERS_GRID.shapes) {
+    for (const shape of ORDERS_GRID_DEF.shapes) {
       if (isQuickShape(shape)) {
         continue;
       }
@@ -116,7 +116,7 @@ describe("keyset paging", () => {
         : { rows: [{}] };
       for (const direction of ["asc", "desc"] as const) {
         const query: QueryState = {
-          ...defaultQuery(ORDERS_GRID),
+          ...defaultQuery(ORDERS_GRID_DEF),
           equals: Object.fromEntries(
             Object.entries(sample.rows[0]).map(([key, value]) => [
               key,
@@ -144,18 +144,20 @@ describe("keyset paging", () => {
 
   test("an undeclared shape never reaches the database", () => {
     const query: QueryState = {
-      ...defaultQuery(ORDERS_GRID),
+      ...defaultQuery(ORDERS_GRID_DEF),
       equals: { channel: ["web"] },
       sort: { field: "total", direction: "desc" },
     };
-    expect(() => buildPageSql(ORDERS_GRID, query, 50)).toThrow(QueryRejected);
+    expect(() => buildPageSql(ORDERS_GRID_DEF, query, 50)).toThrow(
+      QueryRejected,
+    );
   });
 });
 
 describe("quick filter", () => {
   test("it matches a customer name and an order number through one index", async () => {
     const byNumber = await listPage(
-      { ...defaultQuery(ORDERS_GRID), quick: "123456" },
+      { ...defaultQuery(ORDERS_GRID_DEF), quick: "123456" },
       50,
     );
     expect(byNumber.rows.length).toBeGreaterThan(0);
@@ -163,7 +165,7 @@ describe("quick filter", () => {
       expect(`${row.customer_name} ${row.order_number}`).toContain("123456");
     }
     const byName = await listPage(
-      { ...defaultQuery(ORDERS_GRID), quick: "zanele dlam" },
+      { ...defaultQuery(ORDERS_GRID_DEF), quick: "zanele dlam" },
       50,
     );
     expect(byName.rows.length).toBeGreaterThan(0);
@@ -248,10 +250,10 @@ describe("status counters", () => {
 });
 
 describe("totals", () => {
-  const base = defaultQuery(ORDERS_GRID);
+  const base = defaultQuery(ORDERS_GRID_DEF);
 
   test("a status grouping is a one-row read of the counter table", async () => {
-    const total = await getGridTotal(ORDERS_GRID, execute, {
+    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { status_code: ["failed"] },
     });
@@ -271,7 +273,7 @@ describe("totals", () => {
       "SELECT customer_id FROM orders ORDER BY created_at LIMIT 1",
     );
     const id = customer.rows[0].customer_id;
-    const total = await getGridTotal(ORDERS_GRID, execute, {
+    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { customer_id: [id] },
     });
@@ -288,7 +290,7 @@ describe("totals", () => {
   }, 60_000);
 
   test("a result over the cap has no total, with the reason", async () => {
-    const total = await getGridTotal(ORDERS_GRID, execute, {
+    const total = await getGridTotal(ORDERS_GRID_DEF, execute, {
       ...base,
       equals: { channel: ["web"] },
     });
@@ -301,7 +303,7 @@ describe("totals", () => {
 });
 
 describe("several values of one field", () => {
-  const base = defaultQuery(ORDERS_GRID);
+  const base = defaultQuery(ORDERS_GRID_DEF);
 
   test("a page under ANY holds exactly the rows of those values, in keyset order", async () => {
     const query: QueryState = {
@@ -328,12 +330,12 @@ describe("several values of one field", () => {
     const real = await client.query<Counter>(
       "SELECT count(*)::float8 AS rows, sum(total)::float8 AS sum FROM orders WHERE status_code IN ('failed', 'refunded')",
     );
-    expect(await getGridCount(ORDERS_GRID, execute, query, false)).toEqual({
+    expect(await getGridCount(ORDERS_GRID_DEF, execute, query, false)).toEqual({
       count: real.rows[0].rows,
       capped: false,
       source: "counter",
     });
-    expect(await getGridTotal(ORDERS_GRID, execute, query)).toEqual({
+    expect(await getGridTotal(ORDERS_GRID_DEF, execute, query)).toEqual({
       available: true,
       sum: real.rows[0].sum,
       rows: real.rows[0].rows,
@@ -347,14 +349,14 @@ describe("several values of one field", () => {
     );
     const ids = customers.rows.map((row) => row.customer_id);
     const query: QueryState = { ...base, equals: { customer_id: ids } };
-    const sql = buildPageSql(ORDERS_GRID, query, 50);
+    const sql = buildPageSql(ORDERS_GRID_DEF, query, 50);
     expect(sql.values).toEqual([ids]);
     const page = await listPage(query, 50);
     expect(page.rows.length).toBeGreaterThan(0);
     for (const row of page.rows) {
       expect(ids).toContain(String(row.customer_id));
     }
-    const count = await getGridCount(ORDERS_GRID, execute, query, false);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, false);
     const real = await client.query<{ rows: number }>(
       "SELECT count(*)::float8 AS rows FROM orders WHERE customer_id = ANY($1::uuid[])",
       [ids],
@@ -371,7 +373,7 @@ describe("several values of one field", () => {
     const query: QueryState = { ...base, equals: { customer_id: ids } };
     let refusal: unknown = null;
     try {
-      buildPageSql(ORDERS_GRID, query, 50);
+      buildPageSql(ORDERS_GRID_DEF, query, 50);
     } catch (error) {
       refusal = error;
     }

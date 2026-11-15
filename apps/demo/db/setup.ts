@@ -12,7 +12,7 @@ import {
   ORDER_STATUS_TRANSITIONS,
   type WeightedOption,
 } from "../src/core/orders/orders-reference";
-import { SERVER_GRIDS } from "../src/core/server-grids";
+import { GRID_DEFS } from "../src/core/grid-defs";
 
 const CUSTOMER_COUNT = Number(process.env.QUERY_GRID_CUSTOMER_COUNT ?? 30_000);
 const ORDER_COUNT = Number(process.env.QUERY_GRID_ORDER_COUNT ?? 620_000);
@@ -178,7 +178,7 @@ async function applyFile(client: Client, path: string): Promise<void> {
 }
 
 async function applyGenerated(client: Client): Promise<void> {
-  for (const migration of listTableMigrations(SERVER_GRIDS)) {
+  for (const migration of listTableMigrations(GRID_DEFS)) {
     const started = Date.now();
     for (const step of migration.steps) {
       await client.query(step.sql);

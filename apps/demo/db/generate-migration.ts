@@ -6,9 +6,9 @@ import {
   validateGridDefs,
 } from "@kikstart/query-grid-postgres";
 
-import { resolveMigrationFile, SERVER_GRIDS } from "../src/core/server-grids";
+import { resolveMigrationFile, GRID_DEFS } from "../src/core/grid-defs";
 
-const problems = validateGridDefs(SERVER_GRIDS);
+const problems = validateGridDefs(GRID_DEFS);
 if (problems.length > 0) {
   console.error(problems.join("\n"));
   process.exit(1);
@@ -16,7 +16,7 @@ if (problems.length > 0) {
 
 const check = process.argv.includes("--check");
 let stale = 0;
-for (const migration of listTableMigrations(SERVER_GRIDS)) {
+for (const migration of listTableMigrations(GRID_DEFS)) {
   const name = resolveMigrationFile(migration.table);
   const target = join(import.meta.dir, "migrations", name);
   if (!check) {

@@ -13,12 +13,12 @@ import "@ui-sdk/core/web.css";
 import "@kikstart/query-grid-react/styles.css";
 ```
 
-| Entry point                             | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid-react/components` | Controlled base components: `DataGrid` (and its parts), `FilterBar`, `SortControl`, `QuickFilter`, `EqualsSelect`, `LookupFilter`, `RangeFilter`, `FilterChips`, `FilterSidebar`, `FacetPanel`, `CardList`, `StatusBoard`, `ViewSwitch`, `ColumnsMenu`, `CountDisplay`, `TotalFooter`. Props in, callbacks out; no provider and no query. Also `QueryGridMessagesProvider`, `useMessages`, the column-state API and `ClientFieldDef`, which adds `cell` to core's field type |
-| `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState` and `useQueryGridActions`                                                                                                                                                                                                                                                                                                                                                                    |
-| `@kikstart/query-grid-react/ui`         | One bound wrapper per base component, under the same name, plus the def-driven `FieldFilter`. It reads the provider and renders the base component                                                                                                                                                                                                                                                                                                                           |
-| `@kikstart/query-grid-react/styles.css` | The stylesheet for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Entry point                             | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid-react/components` | Controlled base components: `DataGrid` (and its parts), `FilterBar`, `SortControl`, `QuickFilter`, `EqualsSelect`, `LookupFilter`, `RangeFilter`, `FilterChips`, `FilterSidebar`, `FacetPanel`, `CardList`, `StatusBoard`, `ViewSwitch`, `ColumnsMenu`, `CountDisplay`, `TotalFooter`. Props in, callbacks out; no provider and no query. Also `QueryGridMessagesProvider`, `useMessages`, the column-state API, and `FieldDef` and `GridDef`, which add `cell` to core's `BaseFieldDef` |
+| `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState` and `useQueryGridActions`                                                                                                                                                                                                                                                                                                                                                                                |
+| `@kikstart/query-grid-react/ui`         | One bound wrapper per base component, under the same name, plus the def-driven `FieldFilter`. It reads the provider and renders the base component                                                                                                                                                                                                                                                                                                                                       |
+| `@kikstart/query-grid-react/styles.css` | The stylesheet for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 A base component alone:
 
@@ -37,24 +37,19 @@ import { DataGrid } from "@kikstart/query-grid-react/components";
 The bound grid, over a server that runs [`@kikstart/query-grid-postgres`](https://www.npmjs.com/package/@kikstart/query-grid-postgres):
 
 ```tsx
-import { shapeCapabilities } from "@kikstart/query-grid";
 import { createHttpSource } from "@kikstart/query-grid/http";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
 import { DataGrid, FilterBar } from "@kikstart/query-grid-react/ui";
 
-const source = createHttpSource(
-  ORDERS_GRID,
-  "/api/orders",
-  shapeCapabilities(ORDERS_SHAPES, { facetField: "status_code" }),
-);
+const source = createHttpSource(ORDERS_GRID_DEF, "/api/orders");
 
-<QueryGridProvider def={ORDERS_GRID} source={source}>
+<QueryGridProvider def={ORDERS_GRID_DEF} source={source}>
   <FilterBar />
   <DataGrid />
 </QueryGridProvider>;
 ```
 
-The provider always takes a `source`. It keeps the query in the URL through [nuqs](https://nuqs.dev), so mount its adapter for your framework; `StaticQueryGridProvider` takes a `search` string, leaves the URL alone and needs no adapter. Two grids on one page each take a `urlPrefix`, which puts their keys under `a.f.status` and `b.f.status`.
+The provider always takes a `source`; the HTTP one reads its capabilities from the def's shapes. It keeps the query in the URL through [nuqs](https://nuqs.dev), so mount its adapter for your framework; `StaticQueryGridProvider` takes a `search` string, leaves the URL alone and needs no adapter. Two grids on one page each take a `urlPrefix`, which puts their keys under `a.f.status` and `b.f.status`.
 
 `DataGrid` is a compound on both sides: `<DataGrid />` is the default composition of `DataGrid.Root`, `.Toolbar`, `.Status`, `.ColumnsMenu` and `.Body`, and a host that wants a different toolbar composes the parts itself. `useQueryGridActions()` gives the changes a host's own control makes: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions` and `moveRow`.
 

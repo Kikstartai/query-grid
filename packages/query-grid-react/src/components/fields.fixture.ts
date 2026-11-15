@@ -47,7 +47,7 @@ export const TEST_ROWS: GridRow[] = Array.from({ length: 6 }, (_, index) => ({
   note: null,
 }));
 
-export const TEST_GRID: BaseGridDef = {
+export const TEST_GRID_DEF: BaseGridDef = {
   id: "things",
   fields: TEST_FIELDS,
   defaultSort: { field: "created_at", direction: "desc" },

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { QueryState } from "./field-types.ts";
 import { TEST_DEF, TEST_SHAPES } from "./grid-def.fixture.ts";
+import { createHttpSource } from "./http-source.ts";
 import { matchShape, shapeCapabilities } from "./shapes.ts";
 
 const SHAPES = TEST_SHAPES;
@@ -65,6 +66,22 @@ describe("matchShape", () => {
         equals: { status: ["open"] },
       }),
     ).toBeNull();
+  });
+});
+
+describe("the HTTP source", () => {
+  test("it builds its capabilities from the def's own shapes and facet", () => {
+    const source = createHttpSource({ ...TEST_DEF, shapes: SHAPES }, "/things");
+    expect(source.capabilities.mode).toBe("server");
+    expect(source.capabilities.sortFields).toEqual(["created_at", "total"]);
+    expect(source.capabilities.isFacetCountShown(BASE)).toBe(true);
+    expect(
+      source.capabilities.isAnswerable({
+        ...BASE,
+        equals: { region: ["north"] },
+        sort: { field: "total", direction: "asc" },
+      }),
+    ).toBe(false);
   });
 });
 

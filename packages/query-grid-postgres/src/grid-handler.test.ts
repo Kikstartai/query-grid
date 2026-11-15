@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   decodeQuery,
   encodeQuery,
-  shapeCapabilities,
   type GridRow,
   type QueryState,
 } from "@kikstart/query-grid";
@@ -204,11 +203,7 @@ describe("the URL codec", () => {
       return handle(url.slice(BASE_PATH.length), init);
     }) as typeof fetch;
     try {
-      const source = createHttpSource(
-        TEST_DEF,
-        BASE_PATH,
-        shapeCapabilities(TEST_DEF.shapes),
-      );
+      const source = createHttpSource(TEST_DEF, BASE_PATH);
       const signal = new AbortController().signal;
       const query: QueryState = {
         equals: { region: ["north", "south"] },

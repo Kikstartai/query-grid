@@ -118,6 +118,7 @@ export {
   type QueryShape,
   type QuickShape,
   type ShapeCapabilityOptions,
+  type ShapedGridDef,
 } from "./model/shapes.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export { createStore, type Store } from "./model/store.ts";
