@@ -4,10 +4,11 @@ import { useState, type ReactNode } from "react";
 
 import {
   createGrouping,
-  EMPTY_VALUE,
+  encodeQuery,
   formatSum,
   formatValue,
   getField,
+  getReservedValue,
   listTotalFields,
   resolveFilterKind,
   type BaseFieldDef,
@@ -23,9 +24,10 @@ import {
 } from "../components/data-grid.tsx";
 import type { RowWindow } from "../components/fields.ts";
 import {
-  countParams,
   formatList,
   formatProblemMessage,
+  formatReservedValue,
+  formatRows,
   useLocale,
   useMessages,
   type QueryGridMessages,
@@ -118,22 +120,14 @@ function formatGroupLabel(
   header: GroupHeader,
   locale: string,
 ): string {
-  if (header.value === EMPTY_VALUE) {
-    return messages.emptyValue;
+  const reserved = field ? getReservedValue(field, header.value) : null;
+  if (reserved) {
+    return formatReservedValue(messages, reserved);
   }
   if (header.label !== null) {
     return header.label;
   }
   return field ? formatValue(field, header.value, locale) : header.value;
-}
-
-function formatGroupCount(
-  messages: QueryGridMessages,
-  header: GroupHeader,
-  locale: string,
-): string {
-  const params = countParams(header.count, locale);
-  return header.capped ? messages.rowsCapped(params) : messages.rows(params);
 }
 
 function formatGroupSums(
@@ -182,7 +176,12 @@ function GroupedRoot({ children }: DataGridRootProps) {
       groups={state.groups.map((group) => ({
         key: group.header.value,
         label: formatGroupLabel(messages, field, group.header, locale),
-        count: formatGroupCount(messages, group.header, locale),
+        count: formatRows(
+          messages,
+          group.header.count,
+          locale,
+          group.header.capped,
+        ),
         detail: formatGroupSums(messages, totals, group.header, locale),
         expanded: group.expanded,
         rows: group.rows,
@@ -201,19 +200,12 @@ function GroupedRoot({ children }: DataGridRootProps) {
 }
 
 function DataGridRoot({ children }: DataGridRootProps) {
+  const { def } = useQueryGrid();
   const query = useQueryState();
   if (query.group === null) {
     return <FlatRoot>{children}</FlatRoot>;
   }
-  const key = JSON.stringify([
-    query.group,
-    query.equals,
-    query.ranges,
-    query.contains,
-    query.match,
-    query.search,
-    query.sort,
-  ]);
+  const key = encodeQuery(def, { ...query, cursor: null }).toString();
   return <GroupedRoot key={key}>{children}</GroupedRoot>;
 }
 

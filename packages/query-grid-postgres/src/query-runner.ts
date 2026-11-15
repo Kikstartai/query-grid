@@ -87,6 +87,28 @@ async function runFiltered<T extends object>(
   }
 }
 
+function sumCounts(counters: FacetCount[]): number {
+  return counters.reduce((sum, facet) => sum + facet.count, 0);
+}
+
+function readSums(
+  def: PostgresGridDef,
+  row: Record<string, string | number | null>,
+): Record<string, number> {
+  return Object.fromEntries(
+    (def.totals ?? []).map((field) => [field, Number(row[sumColumn(field)])]),
+  );
+}
+
+function assertUnderLimit(size: SizeResult, limit: number): void {
+  if (size.over) {
+    throw new QueryRejected("narrow_first", "narrow_first", {
+      rows: size.rows,
+      limit,
+    });
+  }
+}
+
 async function sizeOf(
   def: PostgresGridDef,
   execute: SqlExecutor,
@@ -96,7 +118,7 @@ async function sizeOf(
 ): Promise<SizeResult> {
   if (isFacetOnlyQuery(def.facet?.field, query)) {
     const counters = await listSelectedCounters(def, execute, query, signal);
-    const rows = counters.reduce((sum, facet) => sum + facet.count, 0);
+    const rows = sumCounts(counters);
     return { rows, over: rows > limit, capped: false };
   }
   const [row] = await execute<{ count: number }>(
@@ -206,13 +228,10 @@ async function listNarrowSettings(
     return [];
   }
   const limit = limits.narrowLimit;
-  const size = await sizeOfPlan(def, execute, query, plan, limit, signal);
-  if (size.over) {
-    throw new QueryRejected("narrow_first", "narrow_first", {
-      rows: size.rows,
-      limit,
-    });
-  }
+  assertUnderLimit(
+    await sizeOfPlan(def, execute, query, plan, limit, signal),
+    limit,
+  );
   return NARROW_SETTINGS;
 }
 
@@ -296,33 +315,35 @@ export async function listGridGroups(
   signal?: AbortSignal,
   limits: GridLimits = DEFAULT_LIMITS,
 ): Promise<GroupsResult> {
-  const sql = buildGroupSql(def, query);
-  const key = query.group ?? "";
+  assertDeclared(def, query);
+  const key = query.group;
+  if (key === null) {
+    throw new QueryRejected("invalid_value", "invalid_value", {
+      field: "group",
+    });
+  }
   const filters: QueryState = { ...query, group: null, cursor: null };
   if (key === def.facet?.field) {
     return listFacetGroups(def, execute, filters, key, limits, signal);
   }
   const plan = planQuery(def.indexes, filters);
   const limit = limits.narrowLimit;
-  const size = plan
-    ? await sizeOfPlan(def, execute, filters, plan, limit, signal)
-    : { rows: limit, over: true, capped: true };
-  if (size.over) {
-    throw new QueryRejected("narrow_first", "narrow_first", {
-      rows: size.rows,
-      limit,
-    });
-  }
-  const rows = await execute<GroupRow>(sql, NARROW_SETTINGS, signal);
+  assertUnderLimit(
+    plan
+      ? await sizeOfPlan(def, execute, filters, plan, limit, signal)
+      : { rows: limit, over: true, capped: true },
+    limit,
+  );
+  const rows = await execute<GroupRow>(
+    buildGroupSql(def, query),
+    NARROW_SETTINGS,
+    signal,
+  );
   const field = getField(def, key);
-  const columns = (def.totals ?? []).map((total): [string, string] => [
-    total,
-    sumColumn(total),
-  ]);
   return {
     groups: rows.slice(0, GROUP_LIMIT).flatMap((row) => {
       const value = toGroupValue(field, row.value);
-      return value === null ? [] : [toGroupHeader(row, value, columns)];
+      return value === null ? [] : [toGroupHeader(def, row, value)];
     }),
     source: "live",
     truncated: rows.length > GROUP_LIMIT,
@@ -330,9 +351,9 @@ export async function listGridGroups(
 }
 
 function toGroupHeader(
+  def: PostgresGridDef,
   row: GroupRow,
   value: string,
-  columns: [string, string][],
 ): GroupHeader {
   return {
     value,
@@ -340,9 +361,7 @@ function toGroupHeader(
       row.label === undefined || row.label === null ? null : String(row.label),
     count: row.count,
     capped: false,
-    sums: Object.fromEntries(
-      columns.map(([field, column]) => [field, Number(row[column])]),
-    ),
+    sums: readSums(def, row),
   };
 }
 
@@ -404,17 +423,11 @@ export async function listFacetCounts(
   if (!sql) {
     return [];
   }
-  const columns = (def.totals ?? []).map((field): [string, string] => [
-    field,
-    sumColumn(field),
-  ]);
   const rows = await execute<CounterRow>(sql, undefined, signal);
   return rows.map((row) => ({
     value: row.value,
     count: row.count,
-    sums: Object.fromEntries(
-      columns.map(([field, column]) => [field, Number(row[column])]),
-    ),
+    sums: readSums(def, row),
   }));
 }
 
@@ -443,7 +456,7 @@ export async function getGridCount(
   if (isFacetOnlyQuery(def.facet?.field, query)) {
     const counters = await listSelectedCounters(def, execute, query, signal);
     return {
-      count: counters.reduce((sum, facet) => sum + facet.count, 0),
+      count: sumCounts(counters),
       capped: false,
       source: "counter",
     };
@@ -490,7 +503,7 @@ export async function listGridTotals(
   }
   if (isFacetOnlyQuery(def.facet?.field, query)) {
     const counters = await listSelectedCounters(def, execute, query, signal);
-    const rows = counters.reduce((sum, facet) => sum + facet.count, 0);
+    const rows = sumCounts(counters);
     return totals.map((field) => ({
       field,
       available: true,

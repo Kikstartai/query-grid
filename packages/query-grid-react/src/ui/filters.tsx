@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 
 import {
-  CONTAINS_MAX_LENGTH,
   explainUnavailable,
   getField,
   getFieldLabel,
@@ -11,6 +10,7 @@ import {
   getReservedValue,
   isExcluding,
   labelKey,
+  listContainsFilterFields,
   listSelectedValues,
   toExcludeValues,
   listFilterFields,
@@ -271,9 +271,7 @@ export function ContainsFilter({ fields }: ContainsFilterProps) {
   const { def, source } = useQueryGrid();
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
-  const keys = source.runnable.containsFields.filter(
-    (key) => fields === undefined || fields.includes(key),
-  );
+  const keys = listContainsFilterFields(source.runnable, fields);
   const current = query.contains?.field ?? keys[0] ?? "";
   const offer = useOfferState({ kind: "contains", field: current });
   if (keys.length === 0) {
@@ -287,7 +285,6 @@ export function ContainsFilter({ fields }: ContainsFilterProps) {
       }))}
       field={query.contains?.field ?? null}
       value={query.contains?.value ?? ""}
-      maxLength={CONTAINS_MAX_LENGTH}
       onContainsChange={(field, value) =>
         dispatch(
           value

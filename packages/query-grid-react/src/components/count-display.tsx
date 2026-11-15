@@ -10,12 +10,7 @@ import {
 } from "@kikstart/query-grid";
 
 import type { LoadStatus } from "./fields.ts";
-import {
-  countParams,
-  formatRows,
-  useLocale,
-  useMessages,
-} from "./messages.tsx";
+import { formatRows, useLocale, useMessages } from "./messages.tsx";
 
 export type CountValue = CountResult;
 
@@ -77,9 +72,7 @@ export function CountDisplay({
         data-count={count}
         data-count-source={source}
       >
-        {capped
-          ? messages.rowsCapped(countParams(count, locale))
-          : formatRows(messages, count, locale)}
+        {formatRows(messages, count, locale, capped)}
       </bdi>
       <bdi className="qg-muted">
         {messages.countSources[underCap ? "underCap" : source]}

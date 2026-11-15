@@ -63,23 +63,34 @@ export function listNarrowRangeFields(fields: BaseFieldDef[]): string[] {
     .map((field) => field.key);
 }
 
+export function isGroupField(field: BaseFieldDef): boolean {
+  return field.type !== "id" || field.lookup !== undefined;
+}
+
 export function listGroupFields(
   fields: BaseFieldDef[],
   equalsFields: string[],
 ): string[] {
   return fields
-    .filter(
-      (field) =>
-        equalsFields.includes(field.key) &&
-        (field.type !== "id" || field.lookup !== undefined),
-    )
+    .filter((field) => equalsFields.includes(field.key) && isGroupField(field))
     .map((field) => field.key);
 }
 
+export function isContainsField(field: BaseFieldDef): boolean {
+  return field.type === "text" && !field.options;
+}
+
 export function listContainsFields(fields: BaseFieldDef[]): string[] {
-  return fields
-    .filter((field) => field.type === "text" && !field.options)
-    .map((field) => field.key);
+  return fields.filter(isContainsField).map((field) => field.key);
+}
+
+export function listContainsFilterFields(
+  runnable: RunnableQueries,
+  keys?: string[],
+): string[] {
+  return runnable.containsFields.filter(
+    (key) => keys === undefined || keys.includes(key),
+  );
 }
 
 export function countFilterTerms(query: QueryState): number {
@@ -220,11 +231,29 @@ export function planQuery(
   return isMatchAny(query) ? planAny(indexes, query) : planAll(indexes, query);
 }
 
-function isGroupRunnable(
+interface Tier {
+  indexes: IndexDef[];
+  searchFields: string[];
+  rangeFields: string[];
+  containsFields: string[];
+  groupFields: string[];
+}
+
+function createTier(
   indexes: IndexDef[],
+  searchFields: string[],
   fields: BaseFieldDef[],
-  query: QueryState,
-): boolean {
+): Tier {
+  return {
+    indexes,
+    searchFields,
+    rangeFields: listNarrowRangeFields(fields),
+    containsFields: listContainsFields(fields),
+    groupFields: listGroupFields(fields, listEqualsFields(indexes)),
+  };
+}
+
+function isGroupRunnable(tier: Tier, query: QueryState): boolean {
   const { group } = query;
   if (group === null) {
     return true;
@@ -237,38 +266,37 @@ function isGroupRunnable(
   return (
     query.search === null &&
     !isMatchAny(query) &&
-    listGroupFields(fields, listEqualsFields(indexes)).includes(group) &&
-    planQuery(indexes, grouped) !== null
+    tier.groupFields.includes(group) &&
+    planQuery(tier.indexes, grouped) !== null
   );
 }
 
-function isTierRunnable(
-  indexes: IndexDef[],
-  searchFields: string[],
-  fields: BaseFieldDef[],
-  query: QueryState,
-): boolean {
-  if (!isGroupRunnable(indexes, fields, query)) {
+function isTierRunnable(tier: Tier, query: QueryState): boolean {
+  if (!isGroupRunnable(tier, query)) {
     return false;
   }
   if (query.search !== null) {
-    return isQueryIndexed(indexes, searchFields, query);
+    return isQueryIndexed(tier.indexes, tier.searchFields, query);
   }
-  const rangeFields = listNarrowRangeFields(fields);
-  const containsFields = listContainsFields(fields);
   return (
-    query.ranges.every((range) => rangeFields.includes(range.field)) &&
+    query.ranges.every((range) => tier.rangeFields.includes(range.field)) &&
     (query.contains === null ||
-      containsFields.includes(query.contains.field)) &&
-    planQuery(indexes, query) !== null
+      tier.containsFields.includes(query.contains.field)) &&
+    planQuery(tier.indexes, query) !== null
   );
 }
+
+const tiers = new WeakMap<IndexedGridDef, Tier>();
 
 export function isQueryRunnable(
   def: IndexedGridDef,
   query: QueryState,
 ): boolean {
-  return isTierRunnable(def.indexes, listSearchFields(def), def.fields, query);
+  const tier =
+    tiers.get(def) ??
+    createTier(def.indexes, listSearchFields(def), def.fields);
+  tiers.set(def, tier);
+  return isTierRunnable(tier, query);
 }
 
 export function isGroupNarrowed(
@@ -321,30 +349,28 @@ export function indexRunnable(
   options: IndexRunnableOptions = {},
 ): RunnableQueries {
   const searchFields = options.searchFields ?? [];
-  const { fields } = options;
+  const tier = options.fields
+    ? createTier(indexes, searchFields, options.fields)
+    : null;
   return {
     holdsAllRows: false,
     searchIsOrdered: false,
     facetCountsFollowFilters: false,
-    narrowLimited: fields !== undefined,
-    matchAny: fields !== undefined,
+    narrowLimited: tier !== null,
+    matchAny: tier !== null,
     canRun: (query) =>
-      fields
-        ? isTierRunnable(indexes, searchFields, fields, query)
+      tier
+        ? isTierRunnable(tier, query)
         : query.group === null && isQueryIndexed(indexes, searchFields, query),
     isNarrowed: (query) =>
-      fields !== undefined &&
+      tier !== null &&
       (isGroupNarrowed(options.facetField, query) ||
         (planQuery(indexes, query)?.narrowed ?? false)),
     narrowBasis: (query) => describeBasis(indexes, query),
     equalsFields: listEqualsFields(indexes),
-    rangeFields: fields
-      ? listNarrowRangeFields(fields)
-      : listRangeFields(indexes),
-    containsFields: fields ? listContainsFields(fields) : [],
-    groupFields: fields
-      ? listGroupFields(fields, listEqualsFields(indexes))
-      : [],
+    rangeFields: tier?.rangeFields ?? listRangeFields(indexes),
+    containsFields: tier?.containsFields ?? [],
+    groupFields: tier?.groupFields ?? [],
     sortFields: listSortFields(indexes),
     searchFields,
     isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),

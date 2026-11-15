@@ -165,14 +165,21 @@ function ReservedOptions({ options }: { options: FieldOption[] }) {
   );
 }
 
+interface EqualsSelectPartsProps extends Pick<
+  EqualsSelectProps,
+  "field" | "multiple" | "excluded"
+> {
+  reserved: FieldOption[];
+}
+
 function EqualsSelectParts({
   field,
   multiple,
   excluded,
-}: Pick<EqualsSelectProps, "field" | "multiple" | "excluded">) {
+  reserved,
+}: EqualsSelectPartsProps) {
   const messages = useMessages();
   const label = { label: field.label };
-  const reserved = excluded ? [] : listReservedOptions(field, messages);
   return (
     <>
       <SelectTrigger
@@ -239,10 +246,8 @@ function ExcludeToggle({
 function EqualsControl(props: EqualsSelectProps) {
   const { field, values, disabled, onValuesChange, excluded } = props;
   const messages = useMessages();
-  const items = [
-    ...listReservedOptions(field, messages),
-    ...(field.options ?? []),
-  ];
+  const reserved = excluded ? [] : listReservedOptions(field, messages);
+  const items = [...reserved, ...(field.options ?? [])];
   if (props.multiple) {
     return (
       <Select
@@ -255,7 +260,12 @@ function EqualsControl(props: EqualsSelectProps) {
           onValuesChange(normalizeEqualsValues(field, values, next))
         }
       >
-        <EqualsSelectParts field={field} multiple excluded={excluded} />
+        <EqualsSelectParts
+          field={field}
+          multiple
+          excluded={excluded}
+          reserved={reserved}
+        />
       </Select>
     );
   }
@@ -267,7 +277,11 @@ function EqualsControl(props: EqualsSelectProps) {
       placeholder={messages.any}
       onValueChange={(next: string | null) => onValuesChange(toValues(next))}
     >
-      <EqualsSelectParts field={field} excluded={excluded} />
+      <EqualsSelectParts
+        field={field}
+        excluded={excluded}
+        reserved={reserved}
+      />
     </Select>
   );
 }

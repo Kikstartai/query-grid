@@ -366,7 +366,7 @@ describe("the narrowed-size store", () => {
     const store = createQueryStore(DEF, RUNNABLE, BASE);
     const narrowed = createNarrowedStore(store, source);
     expect(store.getOfferContext().narrowed).toBeNull();
-    narrowed.subscribe(() => undefined);
+    narrowed.connect();
     await settle();
     expect(store.getOfferContext().narrowed).toMatchObject({
       all: { rows: 1, over: false, capped: false },

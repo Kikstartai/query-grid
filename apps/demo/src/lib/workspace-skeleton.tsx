@@ -1,4 +1,5 @@
 import {
+  listContainsFilterFields,
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
@@ -46,10 +47,8 @@ export function SkeletonFilters({
   fields,
   contains,
 }: SkeletonFiltersProps) {
-  const listed = contains ?? fields;
-  const searchable = runnable.containsFields.some(
-    (key) => listed === undefined || listed.includes(key),
-  );
+  const searchable =
+    listContainsFilterFields(runnable, contains ?? fields).length > 0;
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />

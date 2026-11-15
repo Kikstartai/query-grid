@@ -14,7 +14,7 @@ import {
 } from "@ui-sdk/react/select";
 import { useState, type FormEvent } from "react";
 
-import type { MatchMode } from "@kikstart/query-grid";
+import { CONTAINS_MAX_LENGTH, type MatchMode } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
 import type { ControlOption, ControlState } from "./fields.ts";
@@ -36,7 +36,7 @@ function ContainsFilterForm({
   field,
   value,
   onContainsChange,
-  maxLength = 80,
+  maxLength = CONTAINS_MAX_LENGTH,
   disabled,
   reason,
 }: ContainsFilterProps) {

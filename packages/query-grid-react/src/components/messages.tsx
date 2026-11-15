@@ -422,8 +422,10 @@ export function formatRows(
   messages: QueryGridMessages,
   count: number,
   locale: string,
+  capped = false,
 ): string {
-  return messages.rows(countParams(count, locale));
+  const params = countParams(count, locale);
+  return capped ? messages.rowsCapped(params) : messages.rows(params);
 }
 
 export function formatLoaded(

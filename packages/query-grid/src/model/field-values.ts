@@ -2,7 +2,6 @@ import { resolveMaxValues, type BaseFieldDef } from "./field-types.ts";
 
 export const EMPTY_VALUE = "_empty";
 export const NOT_EMPTY_VALUE = "_not_empty";
-export const EMPTY_MIXES = true;
 export const EXCLUDE_PREFIX = "!";
 
 export type ReservedValue = "empty" | "not_empty";
@@ -26,7 +25,7 @@ export function listReservedValues(field: BaseFieldDef): string[] {
 
 function standsAlone(field: BaseFieldDef, value: string): boolean {
   const reserved = getReservedValue(field, value);
-  return reserved === "not_empty" || (reserved === "empty" && !EMPTY_MIXES);
+  return reserved === "not_empty";
 }
 
 export function canCombineValues(
@@ -103,7 +102,7 @@ export function expandEquals(field: BaseFieldDef, values: string[]): string[] {
   const kept = (field.options ?? [])
     .map((option) => option.value)
     .filter((value) => !excluded.includes(value));
-  return field.nullable && EMPTY_MIXES ? [...kept, EMPTY_VALUE] : kept;
+  return field.nullable ? [...kept, EMPTY_VALUE] : kept;
 }
 
 export function canExpandEquals(

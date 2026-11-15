@@ -77,7 +77,6 @@ export {
 export {
   canCombineValues,
   canExpandEquals,
-  EMPTY_MIXES,
   EMPTY_VALUE,
   EXCLUDE_PREFIX,
   expandEquals,
@@ -162,12 +161,15 @@ export {
 export {
   countFilterTerms,
   gridDefRunnable,
+  isContainsField,
   isFacetOnlyQuery,
+  isGroupField,
   isGroupNarrowed,
   isMatchAny,
   isQueryIndexed,
   isQueryRunnable,
   listContainsFields,
+  listContainsFilterFields,
   listGroupFields,
   listNarrowRangeFields,
   planQuery,

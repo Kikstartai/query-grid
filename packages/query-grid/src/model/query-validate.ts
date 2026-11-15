@@ -7,6 +7,7 @@ import {
   type QueryState,
 } from "./field-types.ts";
 import { canCombineValues, getReservedValue } from "./field-values.ts";
+import { isContainsField } from "./indexes.ts";
 import type { Problem } from "./problems.ts";
 
 export const SEARCH_MIN_LENGTH = 3;
@@ -115,10 +116,7 @@ export function validateQueryValues(
     }
     const length = value.trim().length;
     const valid =
-      target.type === "text" &&
-      !target.options &&
-      length > 0 &&
-      length <= CONTAINS_MAX_LENGTH;
+      isContainsField(target) && length > 0 && length <= CONTAINS_MAX_LENGTH;
     if (!valid) {
       return { code: "invalid_value", params: { field } };
     }

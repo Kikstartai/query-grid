@@ -43,10 +43,6 @@ export interface Grouping {
   loadMore: (value: string) => void;
 }
 
-export function isGroupField(field: BaseFieldDef): boolean {
-  return field.type !== "id" || field.lookup !== undefined;
-}
-
 export function getGroupQuery(query: QueryState, value: string): QueryState {
   if (query.group === null) {
     return query;

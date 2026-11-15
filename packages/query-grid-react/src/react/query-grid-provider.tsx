@@ -58,7 +58,6 @@ import {
 import type { FieldDef, GridDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
-  countParams,
   formatList,
   formatReservedValue,
   formatRows,
@@ -193,16 +192,12 @@ function createValue(
   };
 }
 
-function ignoreChange(): void {
-  return;
-}
-
 function useNarrowedSizes({ source, narrowed }: QueryGridContextValue): void {
   useEffect(() => {
     if (!source.runnable.narrowLimited) {
       return;
     }
-    return narrowed.subscribe(ignoreChange);
+    return narrowed.connect();
   }, [source, narrowed]);
 }
 
@@ -351,10 +346,7 @@ export function formatReason(
   locale: string,
 ): string {
   const label = reason.field ? getFieldLabel(def, reason.field) : "";
-  const count = formatRows(messages, reason.rows ?? 0, locale);
-  const rows = reason.capped
-    ? messages.rowsCapped(countParams(reason.rows ?? 0, locale))
-    : count;
+  const rows = formatRows(messages, reason.rows ?? 0, locale, reason.capped);
   const narrowBy = formatList(
     locale,
     reason.narrowBy.map((key) => getFieldLabel(def, key)),

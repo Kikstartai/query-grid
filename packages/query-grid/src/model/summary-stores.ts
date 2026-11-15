@@ -81,7 +81,9 @@ export function createFacetStore(
   );
 }
 
-export type NarrowedStore = ResourceStore<NarrowedResult | null>;
+export interface NarrowedStore {
+  connect: () => () => void;
+}
 
 function toNarrowedState(
   runnable: RunnableQueries,
@@ -104,24 +106,13 @@ export function createNarrowedStore(
     (query, signal) => source.fetchNarrowed(query, signal),
     { initial: null, keepResult: true },
   );
-  let started = false;
   const publish = () => {
     const { query, result, status, loaded } = resource.getState();
     if (status === "idle" && loaded && result) {
       store.setNarrowed(toNarrowedState(source.runnable, query, result));
     }
   };
-  return {
-    getState: resource.getState,
-    subscribe: (listener) => {
-      if (!started) {
-        started = true;
-        resource.subscribe(publish);
-      }
-      return resource.subscribe(listener);
-    },
-    reload: resource.reload,
-  };
+  return { connect: () => resource.subscribe(publish) };
 }
 
 export interface LimitsStore {

@@ -268,14 +268,7 @@ function GridRowPart({
         ref: (el: HTMLDivElement | null) =>
           handle.api.virtual.measure(item, el),
         className: "qg-row",
-        style: {
-          position: "absolute" as const,
-          top: 0,
-          insetInlineStart: 0,
-          display: "flex",
-          transform: `translateY(${start}px)`,
-          width: SELECT_COLUMN_WIDTH + layout.totalWidth,
-        },
+        style: rowStyle(start, layout),
         children: (view: RowView) => (
           <GridCells
             handle={handle}
@@ -299,7 +292,7 @@ interface GroupRowProps {
   layout: GridLayout;
 }
 
-function groupRowStyle(start: number, layout: GridLayout) {
+function rowStyle(start: number, layout: GridLayout) {
   return {
     position: "absolute" as const,
     top: 0,
@@ -345,7 +338,7 @@ function GroupHeaderRow({ handle, item, start, group, layout }: GroupRowProps) {
       role="row"
       data-group={group.key}
       data-expanded={group.expanded ? "" : undefined}
-      style={groupRowStyle(start, layout)}
+      style={rowStyle(start, layout)}
     >
       <div
         className="qg-group-cell"
@@ -401,7 +394,7 @@ function GroupMoreRow({ handle, item, start, group, layout }: GroupRowProps) {
       ref={(el) => handle.api.virtual.measure(item, el)}
       className="qg-group-more"
       role="row"
-      style={groupRowStyle(start, layout)}
+      style={rowStyle(start, layout)}
     >
       <div
         className="qg-group-cell"
@@ -461,22 +454,38 @@ function GridEntryRow({ entry, item, start }: GridEntryRowProps) {
   );
 }
 
-function GroupedRows() {
-  const { entries, handle, layout } = useDataGrid();
-  const { items, size } = useVirtualItems(handle.api.virtual);
+interface RowsFrameProps {
+  mounted: number;
+  size: number;
+  grouped?: boolean;
+  children: ReactNode;
+}
+
+function RowsFrame({ mounted, size, grouped, children }: RowsFrameProps) {
+  const { layout } = useDataGrid();
   return (
     <div
       className="qg-rows"
       role="rowgroup"
       data-part="grid-rows"
-      data-grouped=""
-      data-mounted={items.length}
+      data-grouped={grouped ? "" : undefined}
+      data-mounted={mounted}
       style={{
         position: "relative",
         height: size,
         width: SELECT_COLUMN_WIDTH + layout.totalWidth,
       }}
     >
+      {children}
+    </div>
+  );
+}
+
+function GroupedRows() {
+  const { entries, handle, layout } = useDataGrid();
+  const { items, size } = useVirtualItems(handle.api.virtual);
+  return (
+    <RowsFrame mounted={items.length} size={size} grouped>
       {items.flatMap((item) => {
         const entry = entries?.[item.index];
         return entry
@@ -490,7 +499,7 @@ function GroupedRows() {
             ]
           : [];
       })}
-    </div>
+    </RowsFrame>
   );
 }
 
@@ -498,17 +507,7 @@ function GridRows() {
   const { props, handle, layout } = useDataGrid();
   const { items, size } = useVirtualItems(handle.api.virtual);
   return (
-    <div
-      className="qg-rows"
-      role="rowgroup"
-      data-part="grid-rows"
-      data-mounted={items.length}
-      style={{
-        position: "relative",
-        height: size,
-        width: SELECT_COLUMN_WIDTH + layout.totalWidth,
-      }}
-    >
+    <RowsFrame mounted={items.length} size={size}>
       {items.flatMap((item) => {
         const row = props.rows[item.index];
         return row
@@ -525,16 +524,16 @@ function GridRows() {
             ]
           : [];
       })}
-    </div>
+    </RowsFrame>
   );
 }
 
 function GridBody() {
   const { props, entries } = useDataGrid();
+  if (entries && (props.error || entries.length === 0)) {
+    return <FeedNotice {...props} />;
+  }
   if (entries) {
-    if (props.error || entries.length === 0) {
-      return <FeedNotice {...props} />;
-    }
     return <GroupedRows />;
   }
   if (isWindowBlank(props)) {

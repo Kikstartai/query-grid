@@ -2,7 +2,6 @@ import type { DataSource } from "./data-source.ts";
 import {
   getFacetField,
   getField,
-  isRangeType,
   listSearchFields,
   listTotalFields,
   type RunnableQueries,
@@ -15,7 +14,12 @@ import {
 } from "./field-types.ts";
 import { matchesEquals } from "./field-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
-import { isMatchAny, listContainsFields, listGroupFields } from "./indexes.ts";
+import {
+  isMatchAny,
+  listContainsFields,
+  listGroupFields,
+  listNarrowRangeFields,
+} from "./indexes.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
@@ -27,13 +31,12 @@ const OPTION_LIMIT = 50;
 
 export function memoryRunnable(def: BaseGridDef): RunnableQueries {
   const searchFields = listSearchFields(def);
-  const ranged = (field: BaseFieldDef) =>
-    isRangeType(field.type) && !field.options;
-  const rangeFields = def.fields.filter(ranged).map((field) => field.key);
+  const rangeFields = listNarrowRangeFields(def.fields);
   const equalsFields = def.fields
-    .filter((field) => !ranged(field))
-    .map((field) => field.key);
+    .map((field) => field.key)
+    .filter((key) => !rangeFields.includes(key));
   const containsFields = listContainsFields(def.fields);
+  const groupFields = listGroupFields(def.fields, equalsFields);
   return {
     holdsAllRows: true,
     searchIsOrdered: true,
@@ -43,11 +46,10 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
     isNarrowed: () => false,
     narrowBasis: () => "",
     containsFields,
-    groupFields: listGroupFields(def.fields, equalsFields),
+    groupFields,
     canRun: (query) =>
       (query.group === null ||
-        (!isMatchAny(query) &&
-          listGroupFields(def.fields, equalsFields).includes(query.group))) &&
+        (!isMatchAny(query) && groupFields.includes(query.group))) &&
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
       (query.contains === null ||
@@ -295,16 +297,16 @@ export function createMemorySource(
           if (value === null) {
             continue;
           }
-          const header = headers.get(value) ?? {
+          const known = headers.get(value);
+          const sums = known?.sums ?? emptySums(totals);
+          addToSums(sums, totals, row);
+          headers.set(value, {
             value,
             label: labelField ? String(row[labelField] ?? value) : null,
-            count: 0,
+            count: (known?.count ?? 0) + 1,
             capped: false,
-            sums: emptySums(totals),
-          };
-          header.count += 1;
-          addToSums(header.sums ?? {}, totals, row);
-          headers.set(value, header);
+            sums,
+          });
         }
         const groups = sortGroups(def, key, [...headers.values()]);
         return {
