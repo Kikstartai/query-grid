@@ -5,6 +5,7 @@ import {
   KEY_FIELD,
   type FieldOption,
   type GridRow,
+  type OptionSearch,
   type ProblemParams,
 } from "@kikstart/query-grid";
 import {
@@ -13,7 +14,6 @@ import {
   SUB_ROUTES,
   type ErrorBody,
   type MoveBody,
-  type OptionSearch,
   type SubRoute,
 } from "@kikstart/query-grid/http";
 

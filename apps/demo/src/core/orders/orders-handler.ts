@@ -2,8 +2,8 @@ import {
   isValidFieldValue,
   type FieldOption,
   type GridRow,
+  type OptionSearch,
 } from "@kikstart/query-grid";
-import type { OptionSearch } from "@kikstart/query-grid/http";
 import {
   buildRowSql,
   createGridHandler,

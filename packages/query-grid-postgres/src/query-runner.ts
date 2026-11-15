@@ -1,16 +1,14 @@
 import {
-  isFacetOnlyQuery,
-  type GridRow,
-  type QueryState,
-} from "@kikstart/query-grid";
-import {
   COUNT_CAP,
+  isFacetOnlyQuery,
   QUICK_LIMIT,
   type CountResult,
   type FacetCount,
+  type GridRow,
   type PageResult,
+  type QueryState,
   type TotalResult,
-} from "@kikstart/query-grid/http";
+} from "@kikstart/query-grid";
 
 import {
   assertDeclared,
