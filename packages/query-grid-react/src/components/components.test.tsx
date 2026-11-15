@@ -9,6 +9,7 @@ import { CountDisplay, TotalFooter } from "./count-display.tsx";
 import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
 import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
+import { ReasonDisplayContext } from "./field-frame.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -170,7 +171,7 @@ describe("each base component mounts alone, with plain props and no provider", (
   });
 
   test("a disabled control carries its reason", () => {
-    const html = render(
+    const control = (
       <SortControl
         options={[{ value: "total", label: "Total" }]}
         value="total"
@@ -178,11 +179,17 @@ describe("each base component mounts alone, with plain props and no provider", (
         onSortChange={noop}
         disabled
         reason="Not now"
-        showReason
-      />,
+      />
     );
+    const html = render(control);
     expect(html).toContain("data-unavailable");
-    expect(html).toContain("Not now");
+    expect(html).toContain('title="Not now"');
+    expect(html).not.toContain("data-field-reason");
+    expect(
+      render(
+        <ReasonDisplayContext value={true}>{control}</ReasonDisplayContext>,
+      ),
+    ).toContain("data-field-reason");
   });
 
   test("each filter variant", () => {

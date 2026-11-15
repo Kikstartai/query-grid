@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { createContext, use, type ReactNode } from "react";
 
 import type { ControlState } from "./fields.ts";
 
@@ -9,11 +11,11 @@ export interface FieldFrameProps extends ControlState {
   children: ReactNode;
 }
 
-function FieldReason({
-  reason,
-  showReason,
-}: Pick<ControlState, "reason" | "showReason">) {
-  if (!showReason || !reason) {
+export const ReasonDisplayContext = createContext(false);
+
+function FieldReason({ reason }: Pick<ControlState, "reason">) {
+  const shown = use(ReasonDisplayContext);
+  if (!shown || !reason) {
     return null;
   }
   return (
@@ -29,7 +31,6 @@ export function FieldFrame({
   label,
   disabled,
   reason,
-  showReason,
   children,
 }: FieldFrameProps) {
   return (
@@ -42,7 +43,7 @@ export function FieldFrame({
     >
       <span className="qg-field-label">{label}</span>
       <div className="qg-field-control">{children}</div>
-      <FieldReason reason={reason} showReason={showReason} />
+      <FieldReason reason={reason} />
     </div>
   );
 }

@@ -42,7 +42,11 @@ export {
   type LookupFilterProps,
   type RangeFilterProps,
 } from "./field-filter.tsx";
-export { FieldFrame, type FieldFrameProps } from "./field-frame.tsx";
+export {
+  FieldFrame,
+  ReasonDisplayContext,
+  type FieldFrameProps,
+} from "./field-frame.tsx";
 export type {
   ClientFieldDef,
   ClientGridDef,

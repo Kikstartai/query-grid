@@ -11,6 +11,7 @@ import {
 } from "@ui-sdk/react/drawer";
 import type { ReactNode } from "react";
 
+import { ReasonDisplayContext } from "./field-frame.tsx";
 import { SlidersIcon, XIcon } from "./icons.tsx";
 import { useMessages } from "./messages.tsx";
 
@@ -53,7 +54,9 @@ export function FilterSidebar({
         <DrawerDescription>
           <bdi>{messages.filtersDescription}</bdi>
         </DrawerDescription>
-        <div className="qg-drawer-body">{children}</div>
+        <div className="qg-drawer-body">
+          <ReasonDisplayContext value={true}>{children}</ReasonDisplayContext>
+        </div>
         <footer className="qg-drawer-footer">
           <Button
             data-sidebar-reset

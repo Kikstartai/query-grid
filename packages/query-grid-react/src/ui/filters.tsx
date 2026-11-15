@@ -40,11 +40,6 @@ import {
 
 export interface FieldFilterProps {
   field: FieldDef;
-  showReason?: boolean;
-}
-
-interface ControlProps {
-  showReason?: boolean;
 }
 
 function useFieldOffer(field: FieldDef, kind: "equals" | "range") {
@@ -64,18 +59,17 @@ function useEqualsFilter(field: FieldDef) {
   };
 }
 
-function BoundEqualsSelect({ field, showReason }: FieldFilterProps) {
+function BoundEqualsSelect({ field }: FieldFilterProps) {
   return (
     <EqualsSelect
       field={field}
       {...useEqualsFilter(field)}
       {...useFieldOffer(field, "equals")}
-      showReason={showReason}
     />
   );
 }
 
-function BoundLookupFilter({ field, showReason }: FieldFilterProps) {
+function BoundLookupFilter({ field }: FieldFilterProps) {
   const { loadOptions, rememberLabel } = useQueryGridActions();
   const known = useFieldLabels();
   const equals = useEqualsFilter(field);
@@ -94,12 +88,11 @@ function BoundLookupFilter({ field, showReason }: FieldFilterProps) {
       onOptionPick={(option: FieldOption) =>
         rememberLabel(field.key, option.value, option.label)
       }
-      showReason={showReason}
     />
   );
 }
 
-function BoundRangeFilter({ field, showReason }: FieldFilterProps) {
+function BoundRangeFilter({ field }: FieldFilterProps) {
   const { def } = useQueryGrid();
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
@@ -116,7 +109,6 @@ function BoundRangeFilter({ field, showReason }: FieldFilterProps) {
       }
       format={def.format}
       {...useFieldOffer(field, "range")}
-      showReason={showReason}
     />
   );
 }
@@ -135,7 +127,7 @@ export function FieldFilter(props: FieldFilterProps) {
   return null;
 }
 
-export function SortControl({ showReason }: ControlProps) {
+export function SortControl() {
   const { def } = useQueryGrid();
   const messages = useMessages();
   const query = useQueryState();
@@ -169,12 +161,11 @@ export function SortControl({ showReason }: ControlProps) {
               ),
             )
       }
-      showReason={showReason}
     />
   );
 }
 
-export function QuickFilter({ showReason }: ControlProps) {
+export function QuickFilter() {
   const { def } = useQueryGrid();
   const query = useQueryState();
   const rules = useQueryRules();
@@ -195,7 +186,6 @@ export function QuickFilter({ showReason }: ControlProps) {
       maxLength={QUICK_MAX_LENGTH}
       disabled={!offer.offered}
       reason={offer.reason}
-      showReason={showReason}
     />
   );
 }
@@ -251,11 +241,11 @@ export function FilterSidebar({ side, label }: FilterSidebarProps) {
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      <QuickFilter showReason />
+      <QuickFilter />
       {listFilterFields(def).map((field) => (
-        <FieldFilter key={field.key} field={field} showReason />
+        <FieldFilter key={field.key} field={field} />
       ))}
-      <SortControl showReason />
+      <SortControl />
     </BaseFilterSidebar>
   );
 }

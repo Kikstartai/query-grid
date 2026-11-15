@@ -479,7 +479,6 @@ export function EqualsSelect(props: EqualsSelectProps) {
       kind="equals"
       disabled={props.disabled}
       reason={props.reason}
-      showReason={props.showReason}
     >
       <EqualsControl {...props} />
     </FilterFrame>
@@ -493,7 +492,6 @@ export function LookupFilter(props: LookupFilterProps) {
       kind="equals"
       disabled={props.disabled}
       reason={props.reason}
-      showReason={props.showReason}
     >
       <LookupControl {...props} />
     </FilterFrame>
@@ -507,7 +505,6 @@ export function RangeFilter(props: RangeFilterProps) {
       kind="range"
       disabled={props.disabled}
       reason={props.reason}
-      showReason={props.showReason}
     >
       <RangeControl {...props} />
     </FilterFrame>

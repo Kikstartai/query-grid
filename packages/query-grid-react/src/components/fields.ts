@@ -23,7 +23,6 @@ export interface ControlOption {
 export interface ControlState {
   disabled?: boolean;
   reason?: string | null;
-  showReason?: boolean;
 }
 
 export interface RowWindow {

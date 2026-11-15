@@ -32,7 +32,6 @@ export function SortControl({
   onSortChange,
   disabled,
   reason,
-  showReason,
 }: SortControlProps) {
   const messages = useMessages();
   const descending = direction === "desc";
@@ -43,7 +42,6 @@ export function SortControl({
       label={messages.sort}
       disabled={disabled}
       reason={reason}
-      showReason={showReason}
     >
       <Select
         items={options}
@@ -117,7 +115,6 @@ function QuickFilterForm({
   maxLength = 200,
   disabled,
   reason,
-  showReason,
 }: QuickFilterProps) {
   const messages = useMessages();
   const [draft, setDraft] = useState(value);
@@ -145,7 +142,6 @@ function QuickFilterForm({
       label={messages.quickFilter}
       disabled={disabled}
       reason={reason}
-      showReason={showReason}
     >
       <form className="qg-quick" role="search" onSubmit={submit}>
         <InputGroup className="qg-quick-group">
