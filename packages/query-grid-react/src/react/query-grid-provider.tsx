@@ -13,6 +13,8 @@ import {
   getFieldLabel,
   listFilterChips,
   listOffers,
+  type Board,
+  type BoardMove,
   type CountState,
   type CountStore,
   type DataSource,
@@ -23,6 +25,7 @@ import {
   type FieldOption,
   type FilterChip,
   type GridDef,
+  type GridRow,
   type GridView,
   type LabelStore,
   type Offers,
@@ -93,6 +96,7 @@ export interface QueryGridActions {
     text: string,
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
+  moveRow: (board: Board, move: BoardMove) => Promise<GridRow>;
 }
 
 export interface QueryGridProviderProps {
@@ -144,14 +148,16 @@ function createValue(
   const feed = createFeed(store, source, props.pageSize ?? DEFAULT_PAGE_SIZE);
   const counts = createCountStore(store, source);
   const labels = createLabelStore(store, source);
+  const totals = createTotalStore(store, source);
+  const facets = createFacetStore(store, source);
   return {
     def,
     store,
     source,
     feed,
     counts,
-    totals: createTotalStore(store, source),
-    facets: createFacetStore(store, source),
+    totals,
+    facets,
     labels,
     columns: createColumnStore(def.fields, persistence),
     actions: {
@@ -162,6 +168,14 @@ function createValue(
       rememberLabel: labels.remember,
       loadOptions: (field, text, signal) =>
         source.fetchOptions(field, { query: text }, signal),
+      moveRow: async (board, move) => {
+        const updated = await board.move(move);
+        feed.patchRow(move.id, updated);
+        facets.reload();
+        counts.reload();
+        totals.reload();
+        return updated;
+      },
     },
   };
 }

@@ -1,4 +1,12 @@
 export {
+  createBoard,
+  getLaneQueries,
+  LANE_PAGE_SIZE,
+  type Board,
+  type BoardMove,
+  type BoardState,
+} from "./model/board.ts";
+export {
   listFilterChips,
   type ChipValue,
   type EqualsChip,
