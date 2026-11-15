@@ -7,6 +7,7 @@ import type { FieldDef } from "@kikstart/query-grid";
 import {
   createColumnStore,
   defaultColumns,
+  NO_PERSISTENCE,
   normalizeColumns,
   type ColumnPersistence,
   type ColumnState,
@@ -19,7 +20,7 @@ interface ColumnStateOptions {
   fields: FieldDef[];
   columns?: ColumnState[];
   onColumnsChange?: (columns: ColumnState[]) => void;
-  columnPersistence?: ColumnPersistence | null;
+  columnPersistence?: ColumnPersistence;
 }
 
 interface ColumnStateModel {
@@ -31,7 +32,7 @@ export function useColumnState(options: ColumnStateOptions): ColumnStateModel {
   const { fields } = options;
   const controlled = options.columns !== undefined;
   const [store] = useState(() =>
-    createColumnStore(fields, options.columnPersistence ?? null),
+    createColumnStore(fields, options.columnPersistence ?? NO_PERSISTENCE),
   );
   const own = useStoreValue(store.subscribe, store.getColumns);
   const columns =

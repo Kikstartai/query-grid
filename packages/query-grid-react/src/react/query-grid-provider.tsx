@@ -85,7 +85,7 @@ export interface QueryGridProviderProps {
   source: DataSource;
   pageSize?: number;
   urlPrefix?: string;
-  columnPersistence?: ColumnPersistence | null;
+  columnPersistence?: ColumnPersistence;
   children: ReactNode;
 }
 
@@ -124,9 +124,8 @@ function createValue(
     initial.view,
   );
   const persistence =
-    props.columnPersistence === undefined
-      ? createLocalStoragePersistence(`query-grid:${def.id}:columns`)
-      : props.columnPersistence;
+    props.columnPersistence ??
+    createLocalStoragePersistence(`query-grid:${def.id}:columns`);
   return {
     def,
     store,

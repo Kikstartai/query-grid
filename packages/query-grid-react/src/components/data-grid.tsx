@@ -50,7 +50,7 @@ export interface DataGridProps extends RowWindow {
   resetKey?: unknown;
   columns?: ColumnState[];
   onColumnsChange?: (columns: ColumnState[]) => void;
-  columnPersistence?: ColumnPersistence | null;
+  columnPersistence?: ColumnPersistence;
   sort?: SortState | null;
   sortableFields?: string[];
   onSortChange?: (field: string, direction: SortDirection) => void;

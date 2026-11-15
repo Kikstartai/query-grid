@@ -31,6 +31,11 @@ export interface ColumnPersistence {
   save: (columns: ColumnState[]) => void | Promise<void>;
 }
 
+export const NO_PERSISTENCE: ColumnPersistence = {
+  load: () => null,
+  save: () => undefined,
+};
+
 export type ColumnUpdate = (columns: ColumnState[]) => ColumnState[];
 
 export function clampWidth(width: number): number {
@@ -204,14 +209,14 @@ export interface ColumnStore {
 
 export function createColumnStore(
   fields: FieldDef[],
-  persistence: ColumnPersistence | null,
+  persistence: ColumnPersistence,
 ): ColumnStore {
   const store = createStore(defaultColumns(fields));
   let restored = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const set = (next: ColumnState[]) => {
     store.set(next);
-    if (!restored || !persistence) {
+    if (!restored) {
       return;
     }
     if (timer) {
@@ -230,7 +235,7 @@ export function createColumnStore(
       if (restored) {
         return;
       }
-      const stored = normalizeColumns(fields, await persistence?.load());
+      const stored = normalizeColumns(fields, await persistence.load());
       restored = true;
       if (stored) {
         set(stored);

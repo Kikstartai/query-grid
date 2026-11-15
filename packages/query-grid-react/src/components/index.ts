@@ -8,6 +8,7 @@ export {
   createLocalStoragePersistence,
   defaultColumns,
   layoutColumns,
+  NO_PERSISTENCE,
   normalizeColumns,
   patchColumn,
   reorderColumns,

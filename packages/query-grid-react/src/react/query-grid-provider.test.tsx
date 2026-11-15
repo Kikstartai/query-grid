@@ -13,6 +13,7 @@ import {
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
+import { NO_PERSISTENCE } from "../components/column-state.ts";
 import { TEST_FIELDS, TEST_ROWS } from "../components/fields.fixture.ts";
 import {
   QueryGridProvider,
@@ -63,7 +64,11 @@ function read(element: ReactElement): Shown {
 function renderAt(search: string) {
   return read(
     <NuqsTestingAdapter searchParams={search}>
-      <QueryGridProvider def={DEF} source={source} columnPersistence={null}>
+      <QueryGridProvider
+        def={DEF}
+        source={source}
+        columnPersistence={NO_PERSISTENCE}
+      >
         <Readout />
       </QueryGridProvider>
     </NuqsTestingAdapter>,
@@ -148,7 +153,11 @@ describe("the provider under a nuqs adapter", () => {
   test("without an adapter it says so", () => {
     expect(() =>
       renderToStaticMarkup(
-        <QueryGridProvider def={DEF} source={source} columnPersistence={null}>
+        <QueryGridProvider
+          def={DEF}
+          source={source}
+          columnPersistence={NO_PERSISTENCE}
+        >
           <Readout />
         </QueryGridProvider>,
       ),
@@ -184,7 +193,7 @@ describe("two grids on one page", () => {
           def={DEF}
           source={source}
           urlPrefix="a"
-          columnPersistence={null}
+          columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </QueryGridProvider>
@@ -192,7 +201,7 @@ describe("two grids on one page", () => {
           def={DEF}
           source={source}
           urlPrefix="b"
-          columnPersistence={null}
+          columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </QueryGridProvider>
@@ -250,7 +259,7 @@ describe("the static provider", () => {
           source={source}
           urlPrefix="b"
           search="f.region=north&b.f.region=south&b.view=list"
-          columnPersistence={null}
+          columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </StaticQueryGridProvider>,
@@ -268,7 +277,7 @@ describe("the static provider", () => {
           def={DEF}
           source={source}
           search="f.region=south&view=list"
-          columnPersistence={null}
+          columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </StaticQueryGridProvider>,
