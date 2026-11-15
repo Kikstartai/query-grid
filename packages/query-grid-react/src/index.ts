@@ -13,7 +13,6 @@ export {
   useGridView,
   useOffers,
   useOfferState,
-  useQueryDispatch,
   useQueryGridActions,
   useQueryRules,
   useQueryState,

@@ -34,12 +34,13 @@ interface OrdersPartProps {
   part: PartName;
 }
 
-export function OrdersPartSkeleton() {
+function OrdersPartSkeleton() {
   return (
     <>
       <span className="skeleton part-readout" aria-hidden="true" />
       <span
         className="skeleton skeleton-part"
+        data-skeleton="part"
         role="status"
         aria-label="The part is on its way"
       />

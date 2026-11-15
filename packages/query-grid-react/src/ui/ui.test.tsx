@@ -2,21 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { GridDef } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
 import { NO_PERSISTENCE } from "../components/column-state.ts";
-import { TEST_FIELDS, TEST_ROWS } from "../components/fields.fixture.ts";
+import { TEST_GRID, TEST_ROWS } from "../components/fields.fixture.ts";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
 import { ColumnsMenu, DataGrid } from "./data-grid.tsx";
 import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
 
-const DEF: GridDef = {
-  id: "things",
-  fields: TEST_FIELDS,
-  defaultSort: { field: "created_at", direction: "desc" },
-  facet: { field: "status" },
-};
+const DEF = TEST_GRID;
 const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
 
 function render(element: ReactElement): string {

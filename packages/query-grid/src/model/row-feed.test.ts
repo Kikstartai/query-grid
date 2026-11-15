@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { DataSource } from "./data-source.ts";
 import type { Capabilities, GridRow, QueryState } from "./field-types.ts";
-import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
+import {
+  createTestSource,
+  settle,
+  TEST_DEF,
+  TEST_QUICK_FIELDS,
+} from "./grid-def.fixture.ts";
 import { defaultQuery } from "./query-actions.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed } from "./row-feed.ts";
@@ -28,9 +33,7 @@ interface Calls {
 }
 
 function createSource(calls: Calls): DataSource {
-  const unused = async () => [];
-  return {
-    capabilities: SERVER,
+  return createTestSource(SERVER, {
     fetchPage: async (query) => {
       calls.pages.push(query);
       return { rows: ROWS, nextCursor: null, hasNext: false };
@@ -39,19 +42,8 @@ function createSource(calls: Calls): DataSource {
       calls.counts.push(exact);
       return { count: 3, capped: !exact, source: exact ? "exact" : "capped" };
     },
-    fetchTotal: async () => ({
-      available: false,
-      code: "no_total",
-      params: {},
-    }),
-    fetchFacets: unused,
-    fetchOptions: unused,
-    fetchTransitions: unused,
-    changeFacetValue: async () => ROWS[0],
-  };
+  });
 }
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("the row feed", () => {
   test("a query change after a finished quick filter fetches one page, not two", async () => {

@@ -1,52 +1,17 @@
 import { Suspense } from "react";
 
-import {
-  CountDisplay,
-  FacetPanel,
-  FilterBar,
-  FilterChips,
-  FilterSidebar,
-  TotalFooter,
-  ViewSwitch,
-} from "@kikstart/query-grid-react/ui";
-
 import { AtRequest } from "@/lib/at-request";
-import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
+import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
+import { ORDERS_BASE } from "../orders-def";
 import { OrdersQueryProvider } from "../orders-provider";
 import { OrdersView } from "./orders-view";
 
 interface OrdersWorkspaceProps {
   title: string;
   dir?: "rtl";
-}
-
-function OrdersGrid() {
-  return (
-    <OrdersQueryProvider>
-      <div className="workspace-tools">
-        <CountDisplay />
-        <span className="workspace-spacer" />
-        <ViewSwitch views={VIEWS} />
-      </div>
-      <div className="workspace-body">
-        <FilterBar />
-        <div className="workspace-chips">
-          <FilterSidebar />
-          <FilterChips />
-        </div>
-        <div className="workspace-main">
-          <FacetPanel />
-          <OrdersView />
-        </div>
-      </div>
-      <div className="workspace-total">
-        <TotalFooter />
-      </div>
-    </OrdersQueryProvider>
-  );
 }
 
 export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
@@ -56,9 +21,13 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
         <SiteBrand />
         <h1>{title}</h1>
       </header>
-      <Suspense fallback={<WorkspaceSkeleton />}>
+      <Suspense fallback={<WorkspaceSkeleton def={ORDERS_BASE} />}>
         <AtRequest>
-          <OrdersGrid />
+          <OrdersQueryProvider>
+            <WorkspaceParts>
+              <OrdersView />
+            </WorkspaceParts>
+          </OrdersQueryProvider>
         </AtRequest>
       </Suspense>
       <footer className="workspace-foot">

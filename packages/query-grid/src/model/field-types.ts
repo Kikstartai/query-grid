@@ -114,8 +114,23 @@ export function getFieldLabel(def: GridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }
 
+export type FilterKind = "lookup" | "equals" | "range";
+
+export function resolveFilterKind(field: FieldDef): FilterKind | null {
+  if (isLookupField(field)) {
+    return "lookup";
+  }
+  if (field.operators.includes("eq")) {
+    return "equals";
+  }
+  if (field.operators.includes("range")) {
+    return "range";
+  }
+  return null;
+}
+
 export function listFilterFields<F extends FieldDef>(def: GridDef<F>): F[] {
-  return def.fields.filter((field) => field.operators.length > 0);
+  return def.fields.filter((field) => resolveFilterKind(field) !== null);
 }
 
 export function isDefaultSort(def: GridDef, sort: SortState): boolean {

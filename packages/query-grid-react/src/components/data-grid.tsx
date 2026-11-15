@@ -233,14 +233,8 @@ function GridRowPart({
   );
 }
 
-interface GridRowsProps {
-  handle: SheetHandle;
-  layout: GridLayout;
-  rows: GridRow[];
-  format?: GridFormat;
-}
-
-function GridRows({ handle, layout, rows, format }: GridRowsProps) {
+function GridRows() {
+  const { props, handle, layout } = useDataGrid();
   const { items, size } = useVirtualItems(handle.api.virtual);
   return (
     <div
@@ -255,7 +249,7 @@ function GridRows({ handle, layout, rows, format }: GridRowsProps) {
       }}
     >
       {items.flatMap((item) => {
-        const row = rows[item.index];
+        const row = props.rows[item.index];
         return row
           ? [
               <GridRowPart
@@ -265,7 +259,7 @@ function GridRows({ handle, layout, rows, format }: GridRowsProps) {
                 start={item.start}
                 row={row}
                 layout={layout}
-                format={format}
+                format={props.format}
               />,
             ]
           : [];
@@ -274,15 +268,12 @@ function GridRows({ handle, layout, rows, format }: GridRowsProps) {
   );
 }
 
-interface GridBodyProps extends GridRowsProps {
-  rowWindow: RowWindow;
-}
-
-function GridBody({ rowWindow, ...rows }: GridBodyProps) {
-  if (isWindowBlank(rowWindow)) {
-    return <FeedNotice {...rowWindow} />;
+function GridBody() {
+  const { props } = useDataGrid();
+  if (isWindowBlank(props)) {
+    return <FeedNotice {...props} />;
   }
-  return <GridRows {...rows} />;
+  return <GridRows />;
 }
 
 interface SheetStatus {
@@ -292,80 +283,25 @@ interface SheetStatus {
   copied: string;
 }
 
-type ProgressProps = Pick<DataGridProps, "loading" | "capped" | "hasNext">;
-
-function FeedProgress({ loading, capped, hasNext }: ProgressProps) {
+function FeedProgress() {
+  const { props } = useDataGrid();
   const messages = useMessages();
-  if (loading) {
+  if (props.loading) {
     return <bdi data-status="feed">{messages.feedLoading}</bdi>;
   }
-  if (capped) {
+  if (props.capped) {
     return <bdi data-status="feed">{messages.feedCapped}</bdi>;
   }
-  if (!hasNext) {
+  if (!props.hasNext) {
     return <bdi data-status="feed">{messages.feedEnd}</bdi>;
   }
   return <span data-status="feed" />;
 }
 
-interface GridStatusProps extends ProgressProps {
-  handle: SheetHandle;
-  loaded: number;
-  pages?: number;
-  format?: GridFormat;
-}
-
-function GridStatus({
-  handle,
-  loaded,
-  pages,
-  format,
-  ...progress
-}: GridStatusProps) {
+function SelectAll() {
+  const { props, handle } = useDataGrid();
   const messages = useMessages();
-  const none = (value: string) => (value === "none" ? messages.none : value);
-  const loadedText = formatLoaded(messages, loaded, pages, format);
-  return usePart(
-    handle,
-    "status",
-    {},
-    withData(
-      {
-        className: "qg-status",
-        children: (status: SheetStatus) => (
-          <>
-            <bdi data-status="loaded" data-value={loaded}>
-              {loadedText}
-            </bdi>
-            <FeedProgress {...progress} />
-            <bdi data-status="selected" data-value={status.selectedCount}>
-              {messages.selected({ count: status.selectedCount })}
-            </bdi>
-            <bdi data-status="active" data-value={status.active}>
-              {messages.activeCell({ cell: none(status.active) })}
-            </bdi>
-            <bdi data-status="range" data-value={status.range}>
-              {messages.cellRange({ range: none(status.range) })}
-            </bdi>
-            <pre data-status="copied" hidden>
-              {status.copied}
-            </pre>
-          </>
-        ),
-      },
-      { "data-part": "grid-status" },
-    ),
-    "div",
-  );
-}
-
-interface SelectAllProps {
-  handle: SheetHandle;
-  loaded: number;
-}
-
-function SelectAll({ handle, loaded }: SelectAllProps) {
-  const messages = useMessages();
+  const loaded = props.rows.length;
   return usePart(
     handle,
     "status",
@@ -439,16 +375,41 @@ function DataGridToolbar({ children }: DataGridToolbarProps) {
 
 function DataGridStatus() {
   const { props, handle } = useDataGrid();
-  return (
-    <GridStatus
-      handle={handle}
-      loaded={props.rows.length}
-      pages={props.pages}
-      format={props.format}
-      loading={props.loading}
-      capped={props.capped}
-      hasNext={props.hasNext}
-    />
+  const messages = useMessages();
+  const none = (value: string) => (value === "none" ? messages.none : value);
+  const loaded = props.rows.length;
+  const loadedText = formatLoaded(messages, loaded, props.pages, props.format);
+  return usePart(
+    handle,
+    "status",
+    {},
+    withData(
+      {
+        className: "qg-status",
+        children: (status: SheetStatus) => (
+          <>
+            <bdi data-status="loaded" data-value={loaded}>
+              {loadedText}
+            </bdi>
+            <FeedProgress />
+            <bdi data-status="selected" data-value={status.selectedCount}>
+              {messages.selected({ count: status.selectedCount })}
+            </bdi>
+            <bdi data-status="active" data-value={status.active}>
+              {messages.activeCell({ cell: none(status.active) })}
+            </bdi>
+            <bdi data-status="range" data-value={status.range}>
+              {messages.cellRange({ range: none(status.range) })}
+            </bdi>
+            <pre data-status="copied" hidden>
+              {status.copied}
+            </pre>
+          </>
+        ),
+      },
+      { "data-part": "grid-status" },
+    ),
+    "div",
   );
 }
 
@@ -499,17 +460,9 @@ function DataGridBody() {
               columns={layout.columns}
               controls={controls}
               totalWidth={layout.totalWidth}
-              selectAll={
-                <SelectAll handle={handle} loaded={props.rows.length} />
-              }
+              selectAll={<SelectAll />}
             />
-            <GridBody
-              rowWindow={props}
-              handle={handle}
-              layout={layout}
-              rows={props.rows}
-              format={props.format}
-            />
+            <GridBody />
           </>
         ),
       },
@@ -519,14 +472,22 @@ function DataGridBody() {
   );
 }
 
-function DefaultDataGrid(props: DataGridProps) {
+export function DataGridDefaultParts() {
   return (
-    <DataGridRoot {...props}>
+    <>
       <DataGridToolbar>
         <DataGridStatus />
         <DataGridColumnsMenu />
       </DataGridToolbar>
       <DataGridBody />
+    </>
+  );
+}
+
+function DefaultDataGrid(props: DataGridProps) {
+  return (
+    <DataGridRoot {...props}>
+      <DataGridDefaultParts />
     </DataGridRoot>
   );
 }

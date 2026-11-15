@@ -3,21 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   createQueryStore,
   defaultQuery,
-  type GridDef,
   type HistoryWrite,
   type QueryStore,
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
-import { TEST_FIELDS } from "../components/fields.fixture.ts";
+import { TEST_GRID } from "../components/fields.fixture.ts";
 import { encodeStore, encodeUrlState, type UrlState } from "./url-state.ts";
 import { createUrlSync } from "./url-sync.ts";
 
-const DEF: GridDef = {
-  id: "things",
-  fields: TEST_FIELDS,
-  defaultSort: { field: "created_at", direction: "desc" },
-};
+const DEF = TEST_GRID;
 
 interface Written {
   search: string;

@@ -495,7 +495,7 @@ function Rows() {
 
 | Hook                                              | Gives                                                                                                      |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `useQueryState`, `useQueryDispatch`               | the query and the one way to change it                                                                     |
+| `useQueryState`                                   | the query                                                                                                  |
 | `useOffers`, `useQueryRules`                      | which filters, ranges, sorts and quick filter are answered now, and which take several values              |
 | `useOfferState`                                   | whether one control is offered, and the sentence that says why not                                         |
 | `useFeedState`                                    | the loaded rows, paging status and whether the result was capped                                           |

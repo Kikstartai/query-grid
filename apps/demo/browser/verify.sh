@@ -412,15 +412,23 @@ run_history() {
 }
 
 run_shift() {
-  say "Static shell and layout shift"
+  say "Static shell"
+  local probe="let h='';process.stdin.on('data',(d)=>h+=d).on('end',()=>{const cut=h.indexOf('hidden id=\"S:');if(cut<0){console.log('no streamed boundary in the response');return;}const shell=h.slice(0,cut);console.log('brand '+shell.includes('data-brand=\"header\"')+', skeleton '+shell.includes('data-skeleton=')+', grid parts '+shell.includes('data-part=')+', loading text '+shell.includes('Loading…'))})"
   for path in /orders /memory /restyled /rtl /parts/grid; do
-    note "$path shell" "$(curl -s -m 60 "$BASE$path" | node -e "let h='';process.stdin.on('data',(d)=>h+=d).on('end',()=>{const cut=h.indexOf('hidden id=\"S:');const shell=cut<0?h:h.slice(0,cut);console.log('brand '+shell.includes('data-brand=\"header\"')+', skeleton '+/class=\"skeleton/.test(shell)+', loading text '+shell.includes('Loading'))})")"
+    note "$path" "$(curl -s -m 60 "$BASE$path" | node -e "$probe")"
   done
+
+  say "Layout shift"
   local shift="new Promise((resolve) => { let total = 0; new PerformanceObserver((list) => { for (const entry of list.getEntries()) { if (!entry.hadRecentInput) { total += entry.value; } } }).observe({ type: 'layout-shift', buffered: true }); setTimeout(() => resolve(total.toFixed(4)), 300); })"
-  for path in "/orders" "/orders?f.status_code=paid&sort=total.desc" "/orders?view=list" "/orders?view=board" "/memory" "/restyled" "/rtl" "/parts/grid" "/components"; do
-    go "$path" 6
-    note "$path" "cumulative layout shift $(js "$shift")"
+  go "/orders" 4; reset_columns
+  for size in "1500 900" "800 900"; do
+    ab set viewport $size >/dev/null
+    for path in "/orders" "/orders?f.status_code=paid&sort=total.desc" "/orders?view=list" "/orders?view=board" "/memory" "/restyled" "/rtl" "/parts/grid" "/components"; do
+      go "$path" 6
+      note "$size $path" "cumulative layout shift $(js "$shift")"
+    done
   done
+  ab set viewport 1500 900 >/dev/null
 }
 
 run_errors() {

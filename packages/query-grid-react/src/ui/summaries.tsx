@@ -17,15 +17,13 @@ import {
   useCountState,
   useFacetState,
   useGridView,
-  useOffers,
-  useOfferState,
-  useQueryDispatch,
   useQueryGrid,
   useQueryGridActions,
   useQueryRules,
   useQueryState,
   useTotalState,
 } from "../react/query-grid-provider.tsx";
+import { useEqualsFilter, useFieldOffer } from "./filters.tsx";
 
 export function CountDisplay() {
   const { def } = useQueryGrid();
@@ -67,10 +65,9 @@ export function FacetPanel() {
   const query = useQueryState();
   const { capabilities } = useQueryRules();
   const facets = useFacetState();
-  const offers = useOffers();
-  const dispatch = useQueryDispatch();
   const key = def.facet?.field ?? "";
-  const offer = useOfferState({ kind: "equals", field: key });
+  const equals = useEqualsFilter(key);
+  const offer = useFieldOffer(key, "equals");
   const field = getFacetField(def);
   if (!field?.options) {
     return null;
@@ -86,11 +83,7 @@ export function FacetPanel() {
         ...option,
         count: showCounts ? countOf(option.value) : null,
       }))}
-      values={query.equals[field.key] ?? []}
-      onValuesChange={(values) =>
-        dispatch({ type: "setEquals", field: field.key, values })
-      }
-      multiple={offers.multi.includes(field.key)}
+      {...equals}
       total={
         showCounts
           ? facets.result.reduce((sum, facet) => sum + facet.count, 0)
@@ -99,8 +92,7 @@ export function FacetPanel() {
       note={
         messages.facetNotes[capabilities.mode === "memory" ? "memory" : shown]
       }
-      disabled={!offer.offered}
-      reason={offer.reason}
+      {...offer}
       format={def.format}
     />
   );

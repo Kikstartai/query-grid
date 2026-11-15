@@ -5,11 +5,11 @@ import type { ReactNode } from "react";
 import {
   explainUnavailable,
   getFieldLabel,
-  isLookupField,
   labelKey,
   listFilterFields,
   QUICK_MAX_LENGTH,
   QUICK_MIN_LENGTH,
+  resolveFilterKind,
   type FieldDef,
   type FieldOption,
 } from "@kikstart/query-grid";
@@ -33,7 +33,6 @@ import {
   useFilterChips,
   useOffers,
   useOfferState,
-  useQueryDispatch,
   useQueryGrid,
   useQueryGridActions,
   useQueryRules,
@@ -44,20 +43,20 @@ export interface FieldFilterProps {
   field: FieldDef;
 }
 
-function useFieldOffer(field: FieldDef, kind: "equals" | "range") {
-  const offer = useOfferState({ kind, field: field.key });
+export function useFieldOffer(key: string, kind: "equals" | "range") {
+  const offer = useOfferState({ kind, field: key });
   return { disabled: !offer.offered, reason: offer.reason };
 }
 
-function useEqualsFilter(field: FieldDef) {
+export function useEqualsFilter(key: string) {
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   const offers = useOffers();
   return {
-    values: query.equals[field.key] ?? [],
-    multiple: offers.multi.includes(field.key),
+    values: query.equals[key] ?? [],
+    multiple: offers.multi.includes(key),
     onValuesChange: (values: string[]) =>
-      dispatch({ type: "setEquals", field: field.key, values }),
+      dispatch({ type: "setEquals", field: key, values }),
   };
 }
 
@@ -65,8 +64,8 @@ function BoundEqualsSelect({ field }: FieldFilterProps) {
   return (
     <EqualsSelect
       field={field}
-      {...useEqualsFilter(field)}
-      {...useFieldOffer(field, "equals")}
+      {...useEqualsFilter(field.key)}
+      {...useFieldOffer(field.key, "equals")}
     />
   );
 }
@@ -74,12 +73,12 @@ function BoundEqualsSelect({ field }: FieldFilterProps) {
 function BoundLookupFilter({ field }: FieldFilterProps) {
   const { loadOptions, rememberLabel } = useQueryGridActions();
   const known = useFieldLabels();
-  const equals = useEqualsFilter(field);
+  const equals = useEqualsFilter(field.key);
   return (
     <LookupFilter
       field={field}
       {...equals}
-      {...useFieldOffer(field, "equals")}
+      {...useFieldOffer(field.key, "equals")}
       loadOptions={(text, signal) => loadOptions(field.key, text, signal)}
       valueLabels={Object.fromEntries(
         equals.values.flatMap((value) => {
@@ -110,23 +109,22 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
         )
       }
       format={def.format}
-      {...useFieldOffer(field, "range")}
+      {...useFieldOffer(field.key, "range")}
     />
   );
 }
 
 export function FieldFilter(props: FieldFilterProps) {
-  const { field } = props;
-  if (isLookupField(field)) {
-    return <BoundLookupFilter {...props} />;
+  switch (resolveFilterKind(props.field)) {
+    case "lookup":
+      return <BoundLookupFilter {...props} />;
+    case "equals":
+      return <BoundEqualsSelect {...props} />;
+    case "range":
+      return <BoundRangeFilter {...props} />;
+    default:
+      return null;
   }
-  if (field.operators.includes("eq")) {
-    return <BoundEqualsSelect {...props} />;
-  }
-  if (field.operators.includes("range")) {
-    return <BoundRangeFilter {...props} />;
-  }
-  return null;
 }
 
 export function SortControl() {
@@ -135,7 +133,7 @@ export function SortControl() {
   const query = useQueryState();
   const rules = useQueryRules();
   const offers = useOffers();
-  const dispatch = useQueryDispatch();
+  const { dispatch } = useQueryGridActions();
   const offered = offers.sorts.length > 0;
   return (
     <BaseSortControl
@@ -171,7 +169,7 @@ export function QuickFilter() {
   const { def } = useQueryGrid();
   const query = useQueryState();
   const rules = useQueryRules();
-  const dispatch = useQueryDispatch();
+  const { dispatch } = useQueryGridActions();
   const offer = useOfferState({ kind: "quick" });
   const fields = rules.capabilities.quickFields;
   if (fields.length === 0) {
@@ -194,7 +192,7 @@ export function QuickFilter() {
 
 export function FilterChips() {
   const chips = useFilterChips();
-  const dispatch = useQueryDispatch();
+  const { dispatch } = useQueryGridActions();
   return (
     <BaseFilterChips
       chips={chips.map(({ item }) => item)}
@@ -242,7 +240,7 @@ export interface FilterSidebarProps {
 }
 
 export function FilterSidebar({ side, label, children }: FilterSidebarProps) {
-  const dispatch = useQueryDispatch();
+  const { dispatch } = useQueryGridActions();
   const chips = useFilterChips();
   return (
     <BaseFilterSidebar

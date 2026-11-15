@@ -8,7 +8,7 @@ import {
   type QueryState,
 } from "./field-types.ts";
 import { createQueryStore } from "./query-store.ts";
-import { createFeed, type Feed, type FeedState } from "./row-feed.ts";
+import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
 
 export const LANE_PAGE_SIZE = 50;
@@ -20,8 +20,13 @@ export interface BoardMove {
   index: number;
 }
 
+export interface BoardLaneState {
+  rows: GridRow[];
+  hasNext: boolean;
+}
+
 export interface BoardState {
-  lanes: Map<string, FeedState>;
+  lanes: Map<string, BoardLaneState>;
   transitions: [string, string][] | null;
 }
 
@@ -92,8 +97,8 @@ export function getLaneQueries(
 }
 
 function sameLanes(
-  current: Map<string, FeedState>,
-  next: Map<string, FeedState>,
+  current: Map<string, BoardLaneState>,
+  next: Map<string, BoardLaneState>,
 ): boolean {
   return [...next].every(([lane, state]) => {
     const known = current.get(lane);
@@ -117,7 +122,12 @@ export function createBoard(
     ]),
   );
   const readLanes = () =>
-    new Map([...feeds].map(([lane, feed]) => [lane, feed.getState()]));
+    new Map<string, BoardLaneState>(
+      [...feeds].map(([lane, feed]) => {
+        const { rows, hasNext } = feed.getState();
+        return [lane, { rows, hasNext }];
+      }),
+    );
   const store = createStore<BoardState>({
     lanes: readLanes(),
     transitions: transitionLoads.get(source)?.value ?? null,

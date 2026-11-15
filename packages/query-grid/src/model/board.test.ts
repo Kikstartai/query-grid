@@ -3,7 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { createBoard, getLaneQueries, type Board } from "./board.ts";
 import type { DataSource } from "./data-source.ts";
 import type { GridRow, QueryState } from "./field-types.ts";
-import { TEST_DEF, TEST_SHAPES } from "./grid-def.fixture.ts";
+import {
+  createTestSource,
+  settle,
+  TEST_DEF,
+  TEST_SHAPES,
+} from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
 import { defaultQuery } from "./query-actions.ts";
 import { shapeCapabilities } from "./shapes.ts";
@@ -23,9 +28,7 @@ interface Calls {
 }
 
 function createSource(calls: Calls): DataSource {
-  const unused = async () => [];
-  return {
-    capabilities: CAPS,
+  return createTestSource(CAPS, {
     fetchPage: async (query) => ({
       rows: ROWS.filter((row) =>
         query.equals.status?.includes(String(row.status)),
@@ -33,14 +36,6 @@ function createSource(calls: Calls): DataSource {
       nextCursor: null,
       hasNext: false,
     }),
-    fetchCount: async () => ({ count: 0, capped: false, source: "exact" }),
-    fetchTotal: async () => ({
-      available: false,
-      code: "no_total",
-      params: {},
-    }),
-    fetchFacets: unused,
-    fetchOptions: unused,
     fetchTransitions: async () => {
       calls.transitions += 1;
       return [["open", "done"]];
@@ -52,10 +47,8 @@ function createSource(calls: Calls): DataSource {
       }
       return { id, status: to };
     },
-  };
+  });
 }
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function listLaneIds(board: Board): Record<string, string[]> {
   return Object.fromEntries(

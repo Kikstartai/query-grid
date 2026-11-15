@@ -4,14 +4,16 @@ import type { ReactNode } from "react";
 
 import { CardList as BaseCardList } from "../components/card-list.tsx";
 import { ColumnsMenu as BaseColumnsMenu } from "../components/columns-menu.tsx";
-import { DataGrid as BaseDataGrid } from "../components/data-grid.tsx";
+import {
+  DataGrid as BaseDataGrid,
+  DataGridDefaultParts,
+} from "../components/data-grid.tsx";
 import type { RowWindow } from "../components/fields.ts";
 import { formatProblemMessage, useMessages } from "../components/messages.tsx";
 import {
   useColumns,
   useFeedState,
   useOffers,
-  useQueryDispatch,
   useQueryGrid,
   useQueryGridActions,
   useQueryState,
@@ -45,7 +47,7 @@ function DataGridRoot({ children }: DataGridRootProps) {
   const state = useFeedState();
   const query = useQueryState();
   const offers = useOffers();
-  const dispatch = useQueryDispatch();
+  const { dispatch } = useQueryGridActions();
   const { state: columns, store } = useColumns();
   return (
     <BaseDataGrid.Root
@@ -86,11 +88,7 @@ function DataGridRoot({ children }: DataGridRootProps) {
 function DefaultDataGrid() {
   return (
     <DataGridRoot>
-      <BaseDataGrid.Toolbar>
-        <BaseDataGrid.Status />
-        <BaseDataGrid.ColumnsMenu />
-      </BaseDataGrid.Toolbar>
-      <BaseDataGrid.Body />
+      <DataGridDefaultParts />
     </DataGridRoot>
   );
 }

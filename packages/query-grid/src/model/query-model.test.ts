@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
-import type { Capabilities, QueryRules, QueryState } from "./field-types.ts";
+import {
+  listFilterFields,
+  resolveFilterKind,
+  type Capabilities,
+  type QueryRules,
+  type QueryState,
+} from "./field-types.ts";
 import { TEST_DEF, TEST_QUICK_FIELDS } from "./grid-def.fixture.ts";
 import { memoryCapabilities } from "./memory-source.ts";
 import {
@@ -32,6 +38,30 @@ const MEMORY: QueryRules = {
   capabilities: memoryCapabilities(TEST_DEF, TEST_QUICK_FIELDS),
   quickComplete: false,
 };
+
+describe("filter kinds", () => {
+  test("a field is a lookup, an equality, a range or no filter, in that order", () => {
+    const kindOf = (key: string) =>
+      resolveFilterKind(TEST_DEF.fields.find((field) => field.key === key)!);
+    expect(kindOf("status")).toBe("equals");
+    expect(kindOf("total")).toBe("range");
+    expect(kindOf("name")).toBeNull();
+    expect(
+      resolveFilterKind({
+        key: "owner",
+        label: "Owner",
+        type: "id",
+        operators: ["eq", "range"],
+      }),
+    ).toBe("lookup");
+    expect(listFilterFields(TEST_DEF).map((field) => field.key)).toEqual([
+      "created_at",
+      "total",
+      "status",
+      "region",
+    ]);
+  });
+});
 
 describe("actions", () => {
   test("an action the capabilities refuse leaves the query alone", () => {

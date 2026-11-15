@@ -4,7 +4,7 @@ import { SiteBrand } from "@/lib/site-brand";
 
 export default function NotFound() {
   return (
-    <main className="page-message" data-page="not-found">
+    <main className="page-message">
       <SiteBrand />
       <h1>Page not found</h1>
       <p>There is no demo at this address.</p>

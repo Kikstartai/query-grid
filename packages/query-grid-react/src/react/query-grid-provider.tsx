@@ -282,10 +282,6 @@ export function useOffers(): Offers {
   return readOffers(def, useQueryState(), useQueryRules());
 }
 
-export function useQueryDispatch(): (action: QueryAction) => void {
-  return useQueryGridActions().dispatch;
-}
-
 export function useFeedState(): FeedState {
   const { feed } = useQueryGrid();
   return useStoreValue(feed.subscribe, feed.getState);

@@ -15,7 +15,7 @@ export default function RouteError({ error, retry }: RouteErrorProps) {
   }, [error]);
 
   return (
-    <main className="page-message" data-page="error">
+    <main className="page-message">
       <SiteBrand />
       <h1>This page failed to load</h1>
       <p>The grid could not be rendered. Nothing was changed.</p>

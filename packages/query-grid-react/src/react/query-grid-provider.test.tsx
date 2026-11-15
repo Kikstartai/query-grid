@@ -10,14 +10,13 @@ import {
   getLaneQueries,
   encodeQuery,
   type DataSource,
-  type GridDef,
   type QueryState,
   type QueryStore,
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 
 import { NO_PERSISTENCE } from "../components/column-state.ts";
-import { TEST_FIELDS, TEST_ROWS } from "../components/fields.fixture.ts";
+import { TEST_GRID, TEST_ROWS } from "../components/fields.fixture.ts";
 import {
   QueryGridProvider,
   StaticQueryGridProvider,
@@ -35,12 +34,7 @@ import {
 } from "./url-state.ts";
 import { createUrlSync, type UrlSync } from "./url-sync.ts";
 
-const DEF: GridDef = {
-  id: "things",
-  fields: TEST_FIELDS,
-  defaultSort: { field: "created_at", direction: "desc" },
-  facet: { field: "status" },
-};
+const DEF = TEST_GRID;
 const BASE = defaultQuery(DEF);
 const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
 

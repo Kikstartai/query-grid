@@ -16,9 +16,10 @@ import {
   SkeletonTools,
 } from "@/lib/workspace-skeleton";
 
+import { ORDERS_BASE } from "../orders-def";
 import { OrdersQueryProvider } from "../orders-provider";
 
-export function RestyledSkeleton() {
+function RestyledSkeleton() {
   return (
     <>
       <SkeletonTools />
@@ -28,7 +29,7 @@ export function RestyledSkeleton() {
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters />
+        <SkeletonFilters def={ORDERS_BASE} />
         <SkeletonChips />
         <SkeletonGrid />
       </div>

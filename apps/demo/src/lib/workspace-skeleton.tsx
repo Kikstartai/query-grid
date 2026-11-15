@@ -1,6 +1,15 @@
-const FILTER_WIDTHS = [220, 150, 150, 150, 200, 260, 220, 180];
+import {
+  listFilterFields,
+  resolveFilterKind,
+  type GridDef,
+} from "@kikstart/query-grid";
+
 const GRID_ROWS = Array.from({ length: 14 }, (_, index) => index);
 const FACET_ROWS = Array.from({ length: 8 }, (_, index) => index);
+
+interface SkeletonProps {
+  def: GridDef;
+}
 
 export function SkeletonTools() {
   return (
@@ -12,16 +21,18 @@ export function SkeletonTools() {
   );
 }
 
-export function SkeletonFilters() {
+export function SkeletonFilters({ def }: SkeletonProps) {
   return (
     <div className="skeleton-filters" aria-hidden="true">
-      {FILTER_WIDTHS.map((width, index) => (
+      <span className="skeleton skeleton-control" data-kind="quick" />
+      {listFilterFields(def).map((field) => (
         <span
-          key={index}
+          key={field.key}
           className="skeleton skeleton-control"
-          style={{ width }}
+          data-kind={resolveFilterKind(field)}
         />
       ))}
+      <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
   );
 }
@@ -29,13 +40,16 @@ export function SkeletonFilters() {
 export function SkeletonChips() {
   return (
     <div className="workspace-chips" aria-hidden="true">
-      <span className="skeleton skeleton-control" style={{ width: 110 }} />
-      <span className="skeleton skeleton-control" style={{ width: 150 }} />
+      <span className="skeleton skeleton-control" data-kind="chip" />
+      <span className="skeleton skeleton-control" data-kind="chip" />
     </div>
   );
 }
 
-export function SkeletonFacets() {
+function SkeletonFacets({ def }: SkeletonProps) {
+  if (!def.facet) {
+    return null;
+  }
   return (
     <div className="skeleton-facets" aria-hidden="true">
       {FACET_ROWS.map((row) => (
@@ -59,7 +73,18 @@ export function SkeletonGrid() {
   );
 }
 
-export function WorkspaceSkeleton() {
+function SkeletonTotal({ def }: SkeletonProps) {
+  if (!def.total) {
+    return null;
+  }
+  return (
+    <div className="workspace-total" aria-hidden="true">
+      <span className="skeleton skeleton-total" />
+    </div>
+  );
+}
+
+export function WorkspaceSkeleton({ def }: SkeletonProps) {
   return (
     <>
       <SkeletonTools />
@@ -69,22 +94,14 @@ export function WorkspaceSkeleton() {
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters />
+        <SkeletonFilters def={def} />
         <SkeletonChips />
         <div className="workspace-main">
-          <SkeletonFacets />
+          <SkeletonFacets def={def} />
           <SkeletonGrid />
         </div>
       </div>
-      <SkeletonTotal />
+      <SkeletonTotal def={def} />
     </>
-  );
-}
-
-export function SkeletonTotal() {
-  return (
-    <div className="workspace-total" aria-hidden="true">
-      <span className="skeleton skeleton-line" style={{ width: 240 }} />
-    </div>
   );
 }

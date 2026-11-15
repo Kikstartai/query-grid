@@ -3,6 +3,7 @@ export {
   getLaneQueries,
   LANE_PAGE_SIZE,
   type Board,
+  type BoardLaneState,
   type BoardMove,
   type BoardState,
 } from "./model/board.ts";
@@ -26,6 +27,7 @@ export {
   isLookupField,
   KEY_FIELD,
   listFilterFields,
+  resolveFilterKind,
   resolveMaxValues,
   type Capabilities,
   type FacetDef,
@@ -33,6 +35,7 @@ export {
   type FieldLookup,
   type FieldOption,
   type FieldType,
+  type FilterKind,
   type FilterOperator,
   type GridDef,
   type GridFormat,

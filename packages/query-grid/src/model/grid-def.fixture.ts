@@ -1,4 +1,5 @@
-import type { GridDef } from "./field-types.ts";
+import type { DataSource } from "./data-source.ts";
+import type { Capabilities, GridDef } from "./field-types.ts";
 import type { QueryShape } from "./shapes.ts";
 
 export const TEST_QUICK_FIELDS = ["name", "number"];
@@ -57,3 +58,29 @@ export const TEST_DEF: GridDef = {
     },
   ],
 };
+
+export function createTestSource(
+  capabilities: Capabilities,
+  overrides: Partial<DataSource> = {},
+): DataSource {
+  const none = async () => [];
+  return {
+    capabilities,
+    fetchPage: async () => ({ rows: [], nextCursor: null, hasNext: false }),
+    fetchCount: async () => ({ count: 0, capped: false, source: "exact" }),
+    fetchTotal: async () => ({
+      available: false,
+      code: "no_total",
+      params: {},
+    }),
+    fetchFacets: none,
+    fetchOptions: none,
+    fetchTransitions: none,
+    changeFacetValue: async (id) => ({ id }),
+    ...overrides,
+  };
+}
+
+export function settle(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
