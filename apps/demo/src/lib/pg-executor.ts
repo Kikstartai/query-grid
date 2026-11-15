@@ -2,6 +2,8 @@ import { Client, Pool, type PoolClient, type QueryResultRow } from "pg";
 
 import type { SqlExecutor, SqlQuery } from "@kikstart/query-grid-postgres";
 
+import { isPooledConnection } from "./pg-connection";
+
 const STATEMENT_BUDGET_MS = 5000;
 
 let pool: Pool | null = null;
@@ -28,7 +30,7 @@ function getPool(): Pool {
   return pool;
 }
 
-// A proxy in front of Postgres reports its own key as `client.processID`, so the pid to cancel is asked from the server, once per connection; this needs a direct connection, not a transaction pooler.
+// A proxy in front of Postgres reports its own key as `client.processID`, so the pid to cancel is asked from the server, once per connection.
 async function getBackendPid(client: PoolClient): Promise<number> {
   const known = backendPids.get(client);
   if (known !== undefined) {
@@ -120,7 +122,8 @@ export const executeSql: SqlExecutor = async <T extends object>(
   const client = await getPool().connect();
   let poisoned = false;
   try {
-    if (signal) {
+    // Behind a transaction pooler the backend changes between statements, so a pid could name another session's query; there the statement budget bounds an abandoned query instead.
+    if (signal && !isPooledConnection(getConnectionString())) {
       return await runCancellable<T & QueryResultRow>(
         client,
         query,
