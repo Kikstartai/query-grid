@@ -240,6 +240,16 @@ describe("the counter backfill", () => {
     expect(await hasPending()).toBe(false);
   }, 120_000);
 
+  test("a pending table left by another version is replaced, so writes never trip on its columns", async () => {
+    await migrator.query(
+      `CREATE TABLE ${counter.pending} (kind text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL)`,
+    );
+    await migrate(() => churn(writer));
+    await churn(writer);
+    expect(await readCounters()).toEqual(await readGrouped());
+    expect(await hasPending()).toBe(false);
+  }, 120_000);
+
   test("a finished step run again does nothing", async () => {
     await migrator.query(BACKFILL);
     await migrator.query(SWITCH_OVER);

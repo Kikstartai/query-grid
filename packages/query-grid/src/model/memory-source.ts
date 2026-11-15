@@ -199,7 +199,12 @@ export function createMemorySource(
       const groups = new Map<string, GridRow[]>();
       for (const row of matching({ ...query, equals: others })) {
         const value = String(row[key] ?? "");
-        groups.set(value, [...(groups.get(value) ?? []), row]);
+        const group = groups.get(value);
+        if (group) {
+          group.push(row);
+        } else {
+          groups.set(value, [row]);
+        }
       }
       return [...groups].map(([value, group]) => ({
         value,

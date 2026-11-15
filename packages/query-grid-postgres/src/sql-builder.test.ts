@@ -433,19 +433,21 @@ describe("generated DDL", () => {
     expect(install).toContain(
       "CREATE TABLE IF NOT EXISTS thing_status_counts (status text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);",
     );
-    for (const table of [
-      "thing_status_counts",
-      "thing_status_counts_pending",
-    ]) {
-      for (const column of ["total_sum", "number_sum"]) {
-        expect(install).toContain(
-          `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} bigint NOT NULL DEFAULT 0;`,
-        );
-      }
+    expect(install).toStartWith(
+      "BEGIN;\nLOCK TABLE things IN SHARE ROW EXCLUSIVE MODE;\nCREATE TABLE IF NOT EXISTS thing_status_counts",
+    );
+    for (const column of ["total_sum", "number_sum"]) {
+      expect(install).toContain(
+        `ALTER TABLE thing_status_counts ADD COLUMN IF NOT EXISTS ${column} bigint NOT NULL DEFAULT 0;`,
+      );
     }
     expect(install).toContain(
-      "COMMENT ON TABLE thing_status_counts_pending IS NULL;",
+      "DROP TABLE IF EXISTS thing_status_counts_pending;\nCREATE TABLE thing_status_counts_pending (status text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL, number_sum bigint NOT NULL);",
     );
+    expect(install).toContain(
+      "DROP FUNCTION IF EXISTS thing_status_counts_bump(text, bigint, bigint);",
+    );
+    expect(install.match(/LOCK TABLE/g)).toHaveLength(1);
     expect(install).toContain(
       "thing_status_counts_bump(p_value text, p_rows bigint, p_sums bigint[])",
     );

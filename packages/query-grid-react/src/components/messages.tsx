@@ -49,7 +49,6 @@ export interface QueryGridMessages {
   countSources: Record<"counter" | "capped" | "exact" | "underCap", string>;
   noTotal: string;
   totalling: string;
-  total: string;
   totalSum: (params: LabelParams) => string;
   totalFromCounter: (params: { rows: string }) => string;
   totalLive: (params: { rows: string }) => string;
@@ -162,7 +161,6 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   },
   noTotal: "No total for this filter.",
   totalling: "Totalling…",
-  total: "Total",
   totalSum: ({ label }) => `${label} sum`,
   totalFromCounter: ({ rows }) => `from the counter table, ${rows}`,
   totalLive: ({ rows }) => `summed live over ${rows}`,
@@ -275,19 +273,17 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
 };
 
 function mergeMessages(
+  base: QueryGridMessages,
   overrides: QueryGridMessageOverrides,
 ): QueryGridMessages {
   return {
-    ...DEFAULT_MESSAGES,
+    ...base,
     ...overrides,
-    countSources: {
-      ...DEFAULT_MESSAGES.countSources,
-      ...overrides.countSources,
-    },
-    facetNotes: { ...DEFAULT_MESSAGES.facetNotes, ...overrides.facetNotes },
-    reasons: { ...DEFAULT_MESSAGES.reasons, ...overrides.reasons },
-    reasonParts: { ...DEFAULT_MESSAGES.reasonParts, ...overrides.reasonParts },
-    errors: { ...DEFAULT_MESSAGES.errors, ...overrides.errors },
+    countSources: { ...base.countSources, ...overrides.countSources },
+    facetNotes: { ...base.facetNotes, ...overrides.facetNotes },
+    reasons: { ...base.reasons, ...overrides.reasons },
+    reasonParts: { ...base.reasonParts, ...overrides.reasonParts },
+    errors: { ...base.errors, ...overrides.errors },
   };
 }
 
@@ -309,11 +305,17 @@ export interface QueryGridMessagesProviderProps {
 
 export function QueryGridMessagesProvider({
   messages = {},
-  locale = DEFAULT_LOCALE,
+  locale,
   children,
 }: QueryGridMessagesProviderProps) {
+  const outer = use(MessagesContext);
   return (
-    <MessagesContext value={{ messages: mergeMessages(messages), locale }}>
+    <MessagesContext
+      value={{
+        messages: mergeMessages(outer.messages, messages),
+        locale: locale ?? outer.locale,
+      }}
+    >
       {children}
     </MessagesContext>
   );

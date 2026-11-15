@@ -22,15 +22,15 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__region__created_a
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
 -- quick filter over customer_name, order_number
 CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_qs_quick ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
--- Counter table for status_code and the sum of total and the sum of item_count: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is held only for the trigger swap. A count taken before this step no longer stands: the switch waits for a new one.
+-- Counter table for status_code and the sum of total and the sum of item_count: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is taken first, so no write is half way through a trigger while the counter objects change, and is held only for this short step. The pending table starts empty, so a count taken before this step no longer stands: the switch waits for a new one.
 BEGIN;
+LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
 CREATE TABLE IF NOT EXISTS order_status_counts (status_code text PRIMARY KEY, row_count bigint NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL);
 ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
 ALTER TABLE order_status_counts ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
-ALTER TABLE order_status_counts_pending ADD COLUMN IF NOT EXISTS total_sum bigint NOT NULL DEFAULT 0;
-ALTER TABLE order_status_counts_pending ADD COLUMN IF NOT EXISTS item_count_sum bigint NOT NULL DEFAULT 0;
-COMMENT ON TABLE order_status_counts_pending IS NULL;
+DROP TABLE IF EXISTS order_status_counts_pending;
+CREATE TABLE order_status_counts_pending (status_code text NOT NULL, row_count bigint NOT NULL, total_sum bigint NOT NULL, item_count_sum bigint NOT NULL);
+DROP FUNCTION IF EXISTS order_status_counts_bump(text, bigint, bigint);
 CREATE OR REPLACE FUNCTION order_status_counts_bump(p_value text, p_rows bigint, p_sums bigint[]) RETURNS void LANGUAGE sql AS $$
   INSERT INTO order_status_counts (status_code, row_count, total_sum, item_count_sum) VALUES (p_value, p_rows, p_sums[1], p_sums[2])
   ON CONFLICT (status_code) DO UPDATE SET row_count = order_status_counts.row_count + EXCLUDED.row_count, total_sum = order_status_counts.total_sum + EXCLUDED.total_sum, item_count_sum = order_status_counts.item_count_sum + EXCLUDED.item_count_sum;
@@ -55,7 +55,6 @@ BEGIN
   RETURN NULL;
 END;
 $$;
-LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;
 DROP TRIGGER IF EXISTS order_status_counts_on_insert ON orders;
 DROP TRIGGER IF EXISTS order_status_counts_on_delete ON orders;
 DROP TRIGGER IF EXISTS order_status_counts_on_update ON orders;

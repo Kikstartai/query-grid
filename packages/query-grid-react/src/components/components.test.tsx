@@ -529,6 +529,31 @@ describe("messages", () => {
     expect(html).not.toContain("Columns");
   });
 
+  test("a nested provider keeps what the outer one set and it does not name", () => {
+    const html = render(
+      <QueryGridMessagesProvider
+        locale="de-DE"
+        messages={{ countSources: { exact: "genau" } }}
+      >
+        <QueryGridMessagesProvider messages={{ countSources: { capped: "x" } }}>
+          <CountDisplay
+            status="idle"
+            value={{ count: 1234, capped: false, source: "exact" }}
+          />
+        </QueryGridMessagesProvider>
+        <QueryGridMessagesProvider locale="en">
+          <CountDisplay
+            status="idle"
+            value={{ count: 5678, capped: false, source: "exact" }}
+          />
+        </QueryGridMessagesProvider>
+      </QueryGridMessagesProvider>,
+    );
+    expect(html).toContain("1.234 rows");
+    expect(html.match(/genau/g)).toHaveLength(2);
+    expect(html).toContain("5,678 rows");
+  });
+
   test("an override keeps the defaults it does not name", () => {
     const html = render(
       <QueryGridMessagesProvider messages={{ countSources: { exact: "x" } }}>

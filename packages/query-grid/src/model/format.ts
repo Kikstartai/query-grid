@@ -7,11 +7,7 @@ const dateTimes = new Map<string, Intl.DateTimeFormat>();
 const integers = new Map<string, Intl.NumberFormat>();
 const moneys = new Map<string, Intl.NumberFormat>();
 
-function resolveCached<T>(
-  cache: Map<string, T>,
-  key: string,
-  create: () => T,
-): T {
+function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
   const existing = cache.get(key);
   if (existing) {
     return existing;
@@ -22,11 +18,9 @@ function resolveCached<T>(
 }
 
 export function formatCount(count: number, locale = DEFAULT_LOCALE): string {
-  return resolveCached(
-    integers,
-    locale,
-    () => new Intl.NumberFormat(locale),
-  ).format(count);
+  return cached(integers, locale, () => new Intl.NumberFormat(locale)).format(
+    count,
+  );
 }
 
 export function formatMoney(
@@ -34,7 +28,7 @@ export function formatMoney(
   locale = DEFAULT_LOCALE,
   currency = DEFAULT_CURRENCY,
 ): string {
-  return resolveCached(
+  return cached(
     moneys,
     `${locale}|${currency}`,
     () => new Intl.NumberFormat(locale, { style: "currency", currency }),
@@ -42,7 +36,7 @@ export function formatMoney(
 }
 
 function formatDateTime(date: Date, locale: string): string {
-  return resolveCached(
+  return cached(
     dateTimes,
     locale,
     () =>

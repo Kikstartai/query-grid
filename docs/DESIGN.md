@@ -86,6 +86,7 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
 - A shape is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort, or the columns of the quick filter. Each shape is one index.
 - A shape's equality fields take several values each unless it sets `multi: false`.
+- `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
 ## Capability contract
 
@@ -170,7 +171,7 @@ interface QueryState {
 
 - **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`) and `messages`. Every number, date, plural and list a component renders is formatted in that locale, so messages and numbers cannot disagree. A def carries no locale.
 - **The currency is the data's.** A money field carries its own `currency` (default `USD`), so two money fields of one grid can differ.
-- **Every sentence a user reads comes from one messages object**, through `useMessages()`. English is built in, and with no provider a component renders English. An override names only what it changes.
+- **Every sentence a user reads comes from one messages object**, through `useMessages()`. English is built in, and with no provider a component renders English. An override names only what it changes, and a nested provider keeps the locale and the messages the outer one set and it does not name.
 - **Core and the Postgres package emit codes and params, never English.** A refusal reason, a `QueryRejected`, a failed request and an unavailable total are codes; a chip is data. The React package turns each into a sentence.
 - **Plurals** go through `Intl.PluralRules` and lists through `Intl.ListFormat`.
 - **Right to left works.** The stylesheet uses logical properties only, inline layout uses `insetInlineStart`, column resize and drag follow the direction, and every message, count and formatted value sits inside `<bdi>`.

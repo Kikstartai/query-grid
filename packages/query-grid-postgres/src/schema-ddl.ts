@@ -153,17 +153,21 @@ function counterSteps(def: PostgresGridDef): MigrationStep[] {
   const skipWithoutPending = `IF to_regclass('${pending}') IS NULL THEN
     RETURN;
   END IF;`;
+  const pendingColumns = [
+    `${facet} text NOT NULL`,
+    ...counted.map((name) => `${name} bigint NOT NULL`),
+  ].join(", ");
   const install = [
     "BEGIN;",
+    lock,
     `CREATE TABLE IF NOT EXISTS ${ct} (${facet} text PRIMARY KEY, ${ROW_COUNT} bigint NOT NULL DEFAULT 0);`,
-    `CREATE TABLE IF NOT EXISTS ${pending} (${facet} text NOT NULL, ${ROW_COUNT} bigint NOT NULL);`,
-    ...[ct, pending].flatMap((name) =>
-      sums.map(
-        (sum) =>
-          `ALTER TABLE ${name} ADD COLUMN IF NOT EXISTS ${sum} bigint NOT NULL DEFAULT 0;`,
-      ),
+    ...sums.map(
+      (sum) =>
+        `ALTER TABLE ${ct} ADD COLUMN IF NOT EXISTS ${sum} bigint NOT NULL DEFAULT 0;`,
     ),
-    `COMMENT ON TABLE ${pending} IS NULL;`,
+    `DROP TABLE IF EXISTS ${pending};`,
+    `CREATE TABLE ${pending} (${pendingColumns});`,
+    `DROP FUNCTION IF EXISTS ${bump}(text, bigint, bigint);`,
     `CREATE OR REPLACE FUNCTION ${signature} AS $$
   ${bumpCounter}
   INSERT INTO ${pending} (${columns}) VALUES (${bumped});
@@ -187,7 +191,6 @@ BEGIN
   RETURN NULL;
 END;
 $$;`,
-    lock,
     `DROP TRIGGER IF EXISTS ${onInsert} ON ${table};`,
     `DROP TRIGGER IF EXISTS ${onDelete} ON ${table};`,
     `DROP TRIGGER IF EXISTS ${onUpdate} ON ${table};`,
@@ -236,7 +239,7 @@ $switch$;`;
   );
   return [
     {
-      note: `Counter table for ${subject}: install the triggers. They keep ${ct} current and also log each change to ${pending}. The table lock is held only for the trigger swap. A count taken before this step no longer stands: the switch waits for a new one.`,
+      note: `Counter table for ${subject}: install the triggers. They keep ${ct} current and also log each change to ${pending}. The table lock is taken first, so no write is half way through a trigger while the counter objects change, and is held only for this short step. The pending table starts empty, so a count taken before this step no longer stands: the switch waits for a new one.`,
       sql: install.join("\n"),
       transaction: true,
     },

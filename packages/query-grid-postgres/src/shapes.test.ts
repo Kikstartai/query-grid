@@ -13,6 +13,9 @@ describe("validateGridDef", () => {
     const broken: PostgresGridDef = {
       ...TEST_DEF,
       totals: ["name", "total", "total"],
+      fields: TEST_DEF.fields.map((field) =>
+        field.key === "total" ? { ...field, currency: "rand" } : field,
+      ),
       shapes: [
         { equals: [], sort: "note" },
         { equals: ["missing"], sort: "total" },
@@ -31,6 +34,7 @@ describe("validateGridDef", () => {
     expect(problems).toContain("unknown field missing");
     expect(problems).toContain("total: name is not a non-null money");
     expect(problems).toContain("total: total is declared twice");
+    expect(problems).toContain("total: rand is not a currency code");
   });
 
   test("the default sort must be a shape", () => {
