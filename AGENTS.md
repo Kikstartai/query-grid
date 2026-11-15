@@ -1,6 +1,6 @@
 # query-grid
 
-A bun workspace of three published packages and one demo. The README holds the design, the decisions and the verification record; `docs/RESTRUCTURE.md` holds the 0.2.0 spec and its record.
+A bun workspace of three published packages and one demo. The README holds the usage, the decisions, the benchmarks and the verification record; `docs/DESIGN.md` holds the current design.
 
 | Path                           | Package                         | Holds                                                                                                                |
 | ------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
