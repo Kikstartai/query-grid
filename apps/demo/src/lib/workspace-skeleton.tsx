@@ -1,14 +1,14 @@
 import {
   listFilterFields,
   resolveFilterKind,
-  type GridDef,
+  type BaseGridDef,
 } from "@kikstart/query-grid";
 
 const GRID_ROWS = Array.from({ length: 14 }, (_, index) => index);
 const FACET_ROWS = Array.from({ length: 8 }, (_, index) => index);
 
 interface SkeletonProps {
-  def: GridDef;
+  def: BaseGridDef;
 }
 
 export function SkeletonTools() {

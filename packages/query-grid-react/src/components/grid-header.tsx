@@ -26,7 +26,11 @@ import {
   type ReactNode,
 } from "react";
 
-import type { FieldDef, SortDirection, SortState } from "@kikstart/query-grid";
+import type {
+  BaseFieldDef,
+  SortDirection,
+  SortState,
+} from "@kikstart/query-grid";
 
 import {
   beginResize,
@@ -168,7 +172,7 @@ function SortIcon({ direction }: { direction: SortDirection | null }) {
 }
 
 interface HeaderPartProps {
-  field: FieldDef;
+  field: BaseFieldDef;
   controls: HeaderControls;
 }
 

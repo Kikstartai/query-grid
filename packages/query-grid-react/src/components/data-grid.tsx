@@ -28,7 +28,7 @@ import {
 } from "./column-state.ts";
 import { ColumnsMenu } from "./columns-menu.tsx";
 import { FeedNotice, isWindowBlank } from "./feed-notice.tsx";
-import type { ClientFieldDef, RowWindow } from "./fields.ts";
+import type { FieldDef, RowWindow } from "./fields.ts";
 import {
   GridHeader,
   SELECT_COLUMN_WIDTH,
@@ -42,10 +42,10 @@ import { useColumnState } from "./use-column-state.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
 
 type SheetHandle = PrimitiveHandle<typeof sheet>;
-type Column = GridColumn<ClientFieldDef>;
+type Column = GridColumn<FieldDef>;
 
 export interface DataGridProps extends RowWindow {
-  fields: ClientFieldDef[];
+  fields: FieldDef[];
   capped?: boolean;
   format?: GridFormat;
   resetKey?: unknown;

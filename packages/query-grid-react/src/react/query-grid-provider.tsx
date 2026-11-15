@@ -24,7 +24,7 @@ import {
   type FeedState,
   type FieldOption,
   type FilterChip,
-  type GridDef,
+  type BaseGridDef,
   type GridRow,
   type GridView,
   type LabelStore,
@@ -49,7 +49,7 @@ import {
   type ColumnStore,
   type GridColumn,
 } from "../components/column-state.ts";
-import type { ClientFieldDef, ClientGridDef } from "../components/fields.ts";
+import type { FieldDef, GridDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
   formatList,
@@ -73,7 +73,7 @@ const DEFAULT_PAGE_SIZE = 500;
 const REPLACE_THROTTLE_MS = 250;
 
 export interface QueryGridContextValue {
-  def: ClientGridDef;
+  def: GridDef;
   store: QueryStore;
   source: DataSource;
   feed: Feed;
@@ -100,7 +100,7 @@ export interface QueryGridActions {
 }
 
 export interface QueryGridProviderProps {
-  def: ClientGridDef;
+  def: GridDef;
   source: DataSource;
   pageSize?: number;
   urlPrefix?: string;
@@ -114,7 +114,7 @@ export interface StaticQueryGridProviderProps extends QueryGridProviderProps {
 
 export interface ColumnsModel {
   state: ColumnState[];
-  layout: GridColumn<ClientFieldDef>[];
+  layout: GridColumn<FieldDef>[];
   store: ColumnStore;
 }
 
@@ -266,7 +266,7 @@ export function useQueryRules(): QueryRules {
 const offersByQuery = new WeakMap<QueryState, WeakMap<QueryRules, Offers>>();
 
 function readOffers(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   rules: QueryRules,
 ): Offers {
@@ -309,7 +309,7 @@ export function useFieldLabels(): Record<string, string> {
 
 export function formatReason(
   messages: QueryGridMessages,
-  def: GridDef,
+  def: BaseGridDef,
   reason: UnavailableReason,
 ): string {
   const locale = resolveLocale(def.format);
@@ -354,7 +354,7 @@ export function useOfferState(target: OfferTarget): OfferState {
 
 export function formatChip(
   messages: QueryGridMessages,
-  def: GridDef,
+  def: BaseGridDef,
   chip: FilterChip,
 ): ChipItem {
   const label =

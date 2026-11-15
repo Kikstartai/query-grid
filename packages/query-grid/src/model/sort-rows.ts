@@ -1,13 +1,13 @@
 import {
   getField,
-  type FieldDef,
-  type GridDef,
+  type BaseFieldDef,
+  type BaseGridDef,
   type GridRow,
   type SortState,
 } from "./field-types.ts";
 
 export function toComparable(
-  field: FieldDef,
+  field: BaseFieldDef,
   value: string | number | null,
 ): string | number | null {
   if (value === null || value === "") {
@@ -39,7 +39,7 @@ function compareValues(
 }
 
 export function sortRows(
-  def: GridDef,
+  def: BaseGridDef,
   rows: GridRow[],
   sort: SortState,
 ): GridRow[] {

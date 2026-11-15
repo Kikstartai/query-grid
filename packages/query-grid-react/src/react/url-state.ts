@@ -7,7 +7,7 @@ import {
   listQueryKeys,
   normalizeQuery,
   type Capabilities,
-  type GridDef,
+  type BaseGridDef,
   type GridView,
   type QueryKey,
   type QueryState,
@@ -23,7 +23,7 @@ export interface UrlState {
   view: GridView;
 }
 
-function listUrlKeys(def: GridDef): QueryKey[] {
+function listUrlKeys(def: BaseGridDef): QueryKey[] {
   return [...listQueryKeys(def), VIEW_KEY];
 }
 
@@ -31,7 +31,7 @@ function urlName(key: QueryKey, prefix: string): string {
   return prefix ? `${prefix}.${key.name}` : key.name;
 }
 
-export function buildUrlParsers(def: GridDef, prefix = "") {
+export function buildUrlParsers(def: BaseGridDef, prefix = "") {
   return Object.fromEntries(
     listUrlKeys(def).map((key) => [
       urlName(key, prefix),
@@ -40,7 +40,11 @@ export function buildUrlParsers(def: GridDef, prefix = "") {
   );
 }
 
-export function toSearch(def: GridDef, values: UrlValues, prefix = ""): string {
+export function toSearch(
+  def: BaseGridDef,
+  values: UrlValues,
+  prefix = "",
+): string {
   const params = new URLSearchParams();
   for (const key of listUrlKeys(def)) {
     for (const item of [values[urlName(key, prefix)] ?? []].flat()) {
@@ -51,7 +55,7 @@ export function toSearch(def: GridDef, values: UrlValues, prefix = ""): string {
 }
 
 export function normalizeSearch(
-  def: GridDef,
+  def: BaseGridDef,
   search: string,
   prefix: string,
 ): string {
@@ -69,7 +73,7 @@ export function normalizeSearch(
 }
 
 export function readUrlState(
-  def: GridDef,
+  def: BaseGridDef,
   capabilities: Capabilities,
   search: string,
 ): UrlState {
@@ -82,7 +86,7 @@ export function readUrlState(
 }
 
 export function toUrlValues(
-  def: GridDef,
+  def: BaseGridDef,
   state: UrlState,
   prefix = "",
 ): UrlValues {
@@ -98,7 +102,7 @@ export function toUrlValues(
   );
 }
 
-export function encodeUrlState(def: GridDef, state: UrlState): string {
+export function encodeUrlState(def: BaseGridDef, state: UrlState): string {
   return toSearch(def, toUrlValues(def, state));
 }
 

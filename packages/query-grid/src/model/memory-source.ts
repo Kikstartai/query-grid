@@ -3,9 +3,9 @@ import {
   getFacetField,
   getField,
   type Capabilities,
-  type FieldDef,
+  type BaseFieldDef,
   type FieldOption,
-  type GridDef,
+  type BaseGridDef,
   type GridRow,
   type QueryState,
 } from "./field-types.ts";
@@ -23,7 +23,7 @@ export interface MemorySourceOptions {
 }
 
 export function memoryCapabilities(
-  def: GridDef,
+  def: BaseGridDef,
   quickFields: string[] = [],
 ): Capabilities {
   const offers = (key: string, operator: "eq" | "range") =>
@@ -42,7 +42,7 @@ export function memoryCapabilities(
 }
 
 function matchesRange(
-  def: GridDef,
+  def: BaseGridDef,
   row: GridRow,
   range: NonNullable<QueryState["range"]>,
 ): boolean {
@@ -68,7 +68,7 @@ function matchesQuick(row: GridRow, fields: string[], needle: string): boolean {
 }
 
 export function filterRows(
-  def: GridDef,
+  def: BaseGridDef,
   rows: GridRow[],
   query: QueryState,
   quickFields: string[] = [],
@@ -85,7 +85,10 @@ export function filterRows(
   );
 }
 
-function listLookupOptions(field: FieldDef, rows: GridRow[]): FieldOption[] {
+function listLookupOptions(
+  field: BaseFieldDef,
+  rows: GridRow[],
+): FieldOption[] {
   if (field.options) {
     return field.options;
   }
@@ -100,7 +103,7 @@ function listLookupOptions(field: FieldDef, rows: GridRow[]): FieldOption[] {
   return [...labels].map(([value, label]) => ({ value, label }));
 }
 
-function listAllTransitions(def: GridDef): [string, string][] {
+function listAllTransitions(def: BaseGridDef): [string, string][] {
   const values = (getFacetField(def)?.options ?? []).map(
     (option) => option.value,
   );
@@ -118,7 +121,7 @@ interface Selection {
 }
 
 export function createMemorySource(
-  def: GridDef,
+  def: BaseGridDef,
   initialRows: GridRow[],
   options: MemorySourceOptions = {},
 ): DataSource {

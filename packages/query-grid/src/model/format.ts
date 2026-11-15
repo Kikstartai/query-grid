@@ -1,4 +1,4 @@
-import type { FieldDef, GridFormat } from "./field-types.ts";
+import type { BaseFieldDef, GridFormat } from "./field-types.ts";
 
 interface Formatters {
   dateTime: Intl.DateTimeFormat;
@@ -39,7 +39,7 @@ export function formatMoney(cents: number, format?: GridFormat): string {
 }
 
 export function formatValue(
-  field: FieldDef,
+  field: BaseFieldDef,
   value: string | number | null,
   format?: GridFormat,
 ): string {

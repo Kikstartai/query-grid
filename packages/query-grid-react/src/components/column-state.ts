@@ -1,4 +1,4 @@
-import { createStore, type FieldDef } from "@kikstart/query-grid";
+import { createStore, type BaseFieldDef } from "@kikstart/query-grid";
 
 export const COLUMN_MIN_WIDTH = 60;
 export const COLUMN_MAX_WIDTH = 600;
@@ -14,7 +14,7 @@ export interface ColumnState {
   pinned: boolean;
 }
 
-export interface GridColumn<F extends FieldDef = FieldDef> {
+export interface GridColumn<F extends BaseFieldDef = BaseFieldDef> {
   field: F;
   width: number;
   pinned: boolean;
@@ -79,7 +79,7 @@ export function stepWidth(
   return width;
 }
 
-export function defaultColumns(fields: FieldDef[]): ColumnState[] {
+export function defaultColumns(fields: BaseFieldDef[]): ColumnState[] {
   return fields.map((field) => ({
     key: field.key,
     width: clampWidth(field.width ?? COLUMN_DEFAULT_WIDTH),
@@ -106,7 +106,7 @@ function normalizeColumn(
 }
 
 export function normalizeColumns(
-  fields: FieldDef[],
+  fields: BaseFieldDef[],
   stored: unknown,
 ): ColumnState[] | null {
   if (!Array.isArray(stored)) {
@@ -152,7 +152,7 @@ export function reorderColumns(
   );
 }
 
-export function layoutColumns<F extends FieldDef>(
+export function layoutColumns<F extends BaseFieldDef>(
   fields: F[],
   columns: ColumnState[],
 ): GridColumn<F>[] {
@@ -208,7 +208,7 @@ export interface ColumnStore {
 }
 
 export function createColumnStore(
-  fields: FieldDef[],
+  fields: BaseFieldDef[],
   persistence: ColumnPersistence,
 ): ColumnStore {
   const store = createStore(defaultColumns(fields));

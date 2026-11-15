@@ -10,7 +10,7 @@ import {
   QUICK_MAX_LENGTH,
   QUICK_MIN_LENGTH,
   resolveFilterKind,
-  type FieldDef,
+  type BaseFieldDef,
   type FieldOption,
 } from "@kikstart/query-grid";
 
@@ -40,7 +40,7 @@ import {
 } from "../react/query-grid-provider.tsx";
 
 export interface FieldFilterProps {
-  field: FieldDef;
+  field: BaseFieldDef;
 }
 
 export function useFieldOffer(key: string, kind: "equals" | "range") {

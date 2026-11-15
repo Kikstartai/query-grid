@@ -1,7 +1,7 @@
 import {
   getField,
   isDefaultSort,
-  type GridDef,
+  type BaseGridDef,
   type QueryState,
   type SortDirection,
 } from "./field-types.ts";
@@ -50,7 +50,7 @@ export interface SortChip {
 export type FilterChip = EqualsChip | RangeChip | QuickChip | SortChip;
 
 function formatBound(
-  def: GridDef,
+  def: BaseGridDef,
   key: string,
   bound: string | null,
 ): string | null {
@@ -65,7 +65,7 @@ function formatBound(
 }
 
 function formatEquals(
-  def: GridDef,
+  def: BaseGridDef,
   key: string,
   value: string,
   labels: Record<string, string>,
@@ -79,7 +79,7 @@ function formatEquals(
 }
 
 export function listFilterChips(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   labels: Record<string, string> = {},
 ): FilterChip[] {

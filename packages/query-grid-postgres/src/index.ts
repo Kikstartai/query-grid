@@ -52,4 +52,4 @@ export {
   type SqlQuery,
   type SqlValue,
 } from "./sql-builder.ts";
-export type { FacetStorage, ServerGridDef } from "./storage.ts";
+export type { FacetStorage, PostgresGridDef } from "./storage.ts";

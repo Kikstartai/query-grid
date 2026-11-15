@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import type { FieldDef } from "@kikstart/query-grid";
+import type { BaseFieldDef } from "@kikstart/query-grid";
 
 import {
   createColumnStore,
@@ -17,7 +17,7 @@ import { useLatest } from "./use-latest.ts";
 import { useStoreValue } from "./use-store-value.ts";
 
 interface ColumnStateOptions {
-  fields: FieldDef[];
+  fields: BaseFieldDef[];
   columns?: ColumnState[];
   onColumnsChange?: (columns: ColumnState[]) => void;
   columnPersistence?: ColumnPersistence;

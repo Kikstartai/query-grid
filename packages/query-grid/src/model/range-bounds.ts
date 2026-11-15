@@ -1,4 +1,4 @@
-import type { FieldDef } from "./field-types.ts";
+import type { BaseFieldDef } from "./field-types.ts";
 
 const DAY_LENGTH = 10;
 
@@ -11,7 +11,7 @@ export function fromDayBound(bound: string): string {
 }
 
 export function toNumberBound(
-  field: FieldDef,
+  field: BaseFieldDef,
   value: number | null,
 ): string | null {
   if (value === null) {
@@ -21,7 +21,7 @@ export function toNumberBound(
 }
 
 export function fromNumberBound(
-  field: FieldDef,
+  field: BaseFieldDef,
   bound: string | null,
 ): number | null {
   if (bound === null) {

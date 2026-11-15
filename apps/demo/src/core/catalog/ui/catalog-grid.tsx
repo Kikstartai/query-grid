@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { FieldDef, GridRow, SortState } from "@kikstart/query-grid";
+import type { BaseFieldDef, GridRow, SortState } from "@kikstart/query-grid";
 import {
   CountDisplay,
   DataGrid,
@@ -17,7 +17,7 @@ const KINDS = [
   { value: "grain", label: "Grain" },
 ];
 
-const FIELDS: FieldDef[] = [
+const FIELDS: BaseFieldDef[] = [
   { key: "name", label: "Name", type: "text", operators: [], width: 220 },
   {
     key: "kind",

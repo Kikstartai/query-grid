@@ -1,17 +1,17 @@
 import type { ReactNode } from "react";
 
 import type {
-  FieldDef,
-  GridDef,
+  BaseFieldDef,
+  BaseGridDef,
   GridRow,
   LoadStatus,
 } from "@kikstart/query-grid";
 
-export interface ClientFieldDef extends FieldDef {
+export interface FieldDef extends BaseFieldDef {
   cell?: (value: string | number | null, row: GridRow) => ReactNode;
 }
 
-export type ClientGridDef = GridDef<ClientFieldDef>;
+export type GridDef = BaseGridDef<FieldDef>;
 
 export interface ControlOption {
   value: string;

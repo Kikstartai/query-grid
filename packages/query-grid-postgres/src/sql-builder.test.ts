@@ -30,7 +30,7 @@ import {
   toPageResult,
   type SqlQuery,
 } from "./sql-builder.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 const BASE: QueryState = {
   equals: {},
@@ -451,7 +451,7 @@ describe("generated DDL", () => {
 
   test("a name past 63 characters is shortened with a hash, never truncated by Postgres", () => {
     const long = "a_table_with_a_rather_long_name_for_its_rows";
-    const wide: ServerGridDef = {
+    const wide: PostgresGridDef = {
       ...TEST_DEF,
       table: long,
       facet: undefined,
@@ -476,7 +476,7 @@ describe("generated DDL", () => {
   });
 
   test("many defs give one migration per table, with shared indexes once", () => {
-    const other: ServerGridDef = {
+    const other: PostgresGridDef = {
       ...TEST_DEF,
       id: "things-by-region",
       facet: undefined,
@@ -485,7 +485,7 @@ describe("generated DDL", () => {
         { equals: ["region"], sort: "total" },
       ],
     };
-    const widgets: ServerGridDef = {
+    const widgets: PostgresGridDef = {
       ...TEST_DEF,
       id: "widgets",
       table: "widgets",

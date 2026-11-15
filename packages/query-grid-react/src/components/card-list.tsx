@@ -10,7 +10,7 @@ import {
 } from "@kikstart/query-grid";
 
 import { FeedNotice, isWindowBlank } from "./feed-notice.tsx";
-import type { ClientFieldDef, RowWindow } from "./fields.ts";
+import type { FieldDef, RowWindow } from "./fields.ts";
 import { formatLoaded, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
@@ -34,7 +34,7 @@ function createListVirtualizer(latest: LatestWindow) {
 type ListVirtualizer = ReturnType<typeof createListVirtualizer>;
 
 interface CardValueProps {
-  field: ClientFieldDef;
+  field: FieldDef;
   row: GridRow;
   format?: GridFormat;
 }
@@ -52,7 +52,7 @@ interface CardProps {
   index: number;
   start: number;
   row: GridRow;
-  fields: ClientFieldDef[];
+  fields: FieldDef[];
   format?: GridFormat;
 }
 
@@ -108,7 +108,7 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
 }
 
 export interface CardListProps extends RowWindow {
-  fields: ClientFieldDef[];
+  fields: FieldDef[];
   titleField: string;
   badgeField: string;
   format?: GridFormat;

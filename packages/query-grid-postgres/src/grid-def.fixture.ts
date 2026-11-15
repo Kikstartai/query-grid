@@ -1,6 +1,6 @@
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
-export const TEST_DEF: ServerGridDef = {
+export const TEST_DEF: PostgresGridDef = {
   id: "things",
   table: "things",
   defaultSort: { field: "created_at", direction: "desc" },

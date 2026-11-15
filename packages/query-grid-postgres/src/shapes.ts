@@ -4,14 +4,14 @@ import {
   KEY_FIELD,
   listOrderedShapes,
   shapeId,
-  type FieldDef,
+  type BaseFieldDef,
   type OrderedShape,
   type QueryShape,
 } from "@kikstart/query-grid";
 
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
-const QUICK_TYPES: FieldDef["type"][] = [
+const QUICK_TYPES: BaseFieldDef["type"][] = [
   "text",
   "enum",
   "integer",
@@ -30,7 +30,7 @@ export function describeShape(shape: QueryShape): string {
   return `${filters}, sort ${shape.sort}${range}`;
 }
 
-function validateQuickShape(def: ServerGridDef, columns: string[]): string[] {
+function validateQuickShape(def: PostgresGridDef, columns: string[]): string[] {
   const problems: string[] = [];
   if (columns.length === 0) {
     problems.push("the quick filter shape lists no columns");
@@ -51,7 +51,7 @@ function validateQuickShape(def: ServerGridDef, columns: string[]): string[] {
 }
 
 function validateOrderedShape(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   shape: OrderedShape,
 ): string[] {
   const id = shapeId(shape);
@@ -79,7 +79,7 @@ function validateOrderedShape(
   return problems;
 }
 
-function validateTotals(def: ServerGridDef): string[] {
+function validateTotals(def: PostgresGridDef): string[] {
   const problems: string[] = [];
   if (def.facet && !getField(def, def.facet.field)?.options) {
     problems.push(`facet: ${def.facet.field} is not a field with options`);
@@ -96,7 +96,7 @@ function validateTotals(def: ServerGridDef): string[] {
   return problems;
 }
 
-export function validateGridDef(def: ServerGridDef): string[] {
+export function validateGridDef(def: PostgresGridDef): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
   if (!getField(def, KEY_FIELD)) {

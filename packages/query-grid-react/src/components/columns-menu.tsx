@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@ui-sdk/react/popover";
 
-import type { FieldDef } from "@kikstart/query-grid";
+import type { BaseFieldDef } from "@kikstart/query-grid";
 
 import {
   defaultColumns,
@@ -20,7 +20,7 @@ import { ColumnsIcon, PinIcon } from "./icons.tsx";
 import { useMessages } from "./messages.tsx";
 
 export interface ColumnsMenuProps {
-  fields: FieldDef[];
+  fields: BaseFieldDef[];
   columns: ColumnState[];
   onColumnsChange: (columns: ColumnState[]) => void;
 }

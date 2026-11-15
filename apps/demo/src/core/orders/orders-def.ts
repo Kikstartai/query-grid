@@ -1,11 +1,11 @@
 import {
   shapeCapabilities,
-  type FieldDef,
+  type BaseFieldDef,
   type FieldOption,
-  type GridDef,
+  type BaseGridDef,
   type QueryShape,
 } from "@kikstart/query-grid";
-import type { ServerGridDef } from "@kikstart/query-grid-postgres";
+import type { PostgresGridDef } from "@kikstart/query-grid-postgres";
 
 import {
   ORDER_CHANNELS,
@@ -19,7 +19,7 @@ function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
 }
 
-const ORDER_FIELDS: FieldDef[] = [
+const ORDER_FIELDS: BaseFieldDef[] = [
   {
     key: "order_number",
     label: "Order",
@@ -149,7 +149,7 @@ const ORDER_FIELDS: FieldDef[] = [
 export const ORDERS_API = "/api/orders";
 export const ORDERS_FACET_FIELD = "status_code";
 
-export const ORDERS_BASE: GridDef = {
+export const ORDERS_BASE: BaseGridDef = {
   id: "orders",
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD },
@@ -171,7 +171,7 @@ export const ORDERS_SHAPES: QueryShape[] = [
   { quick: ["customer_name", "order_number"] },
 ];
 
-export const ORDERS_SERVER_GRID: ServerGridDef = {
+export const ORDERS_SERVER_GRID: PostgresGridDef = {
   ...ORDERS_BASE,
   table: "orders",
   shapes: ORDERS_SHAPES,

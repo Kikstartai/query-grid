@@ -23,7 +23,7 @@ export interface FieldLookup {
   labelField: string;
 }
 
-export interface FieldDef {
+export interface BaseFieldDef {
   key: string;
   label: string;
   type: FieldType;
@@ -56,7 +56,7 @@ export interface GridFormat {
   currency?: string;
 }
 
-export interface GridDef<F extends FieldDef = FieldDef> {
+export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   id: string;
   fields: F[];
   defaultSort: SortState;
@@ -95,28 +95,30 @@ export interface QueryRules {
 export const KEY_FIELD = "id";
 export const DEFAULT_MAX_VALUES = 20;
 
-export function getField<F extends FieldDef>(
-  def: GridDef<F>,
+export function getField<F extends BaseFieldDef>(
+  def: BaseGridDef<F>,
   key: string,
 ): F | null {
   return def.fields.find((field) => field.key === key) ?? null;
 }
 
-export function getFacetField<F extends FieldDef>(def: GridDef<F>): F | null {
+export function getFacetField<F extends BaseFieldDef>(
+  def: BaseGridDef<F>,
+): F | null {
   return def.facet ? getField(def, def.facet.field) : null;
 }
 
-export function isLookupField(field: FieldDef): boolean {
+export function isLookupField(field: BaseFieldDef): boolean {
   return field.operators.includes("eq") && !field.options;
 }
 
-export function getFieldLabel(def: GridDef, key: string): string {
+export function getFieldLabel(def: BaseGridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }
 
 export type FilterKind = "lookup" | "equals" | "range";
 
-export function resolveFilterKind(field: FieldDef): FilterKind | null {
+export function resolveFilterKind(field: BaseFieldDef): FilterKind | null {
   if (isLookupField(field)) {
     return "lookup";
   }
@@ -129,17 +131,19 @@ export function resolveFilterKind(field: FieldDef): FilterKind | null {
   return null;
 }
 
-export function listFilterFields<F extends FieldDef>(def: GridDef<F>): F[] {
+export function listFilterFields<F extends BaseFieldDef>(
+  def: BaseGridDef<F>,
+): F[] {
   return def.fields.filter((field) => resolveFilterKind(field) !== null);
 }
 
-export function isDefaultSort(def: GridDef, sort: SortState): boolean {
+export function isDefaultSort(def: BaseGridDef, sort: SortState): boolean {
   return (
     sort.field === def.defaultSort.field &&
     sort.direction === def.defaultSort.direction
   );
 }
 
-export function resolveMaxValues(field: FieldDef): number {
+export function resolveMaxValues(field: BaseFieldDef): number {
   return field.maxValues ?? DEFAULT_MAX_VALUES;
 }

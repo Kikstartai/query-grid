@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import { validateGridDef } from "./shapes.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 describe("validateGridDef", () => {
   test("the test def is valid", () => {
@@ -10,7 +10,7 @@ describe("validateGridDef", () => {
   });
 
   test("bad shapes are named", () => {
-    const broken: ServerGridDef = {
+    const broken: PostgresGridDef = {
       ...TEST_DEF,
       total: { field: "name" },
       shapes: [

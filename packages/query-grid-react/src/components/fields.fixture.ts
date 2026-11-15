@@ -1,8 +1,8 @@
-import type { GridDef, GridRow } from "@kikstart/query-grid";
+import type { BaseGridDef, GridRow } from "@kikstart/query-grid";
 
-import type { ClientFieldDef } from "./fields.ts";
+import type { FieldDef } from "./fields.ts";
 
-export const TEST_FIELDS: ClientFieldDef[] = [
+export const TEST_FIELDS: FieldDef[] = [
   { key: "id", label: "ID", type: "id", operators: [] },
   { key: "number", label: "Number", type: "integer", operators: [] },
   {
@@ -47,7 +47,7 @@ export const TEST_ROWS: GridRow[] = Array.from({ length: 6 }, (_, index) => ({
   note: null,
 }));
 
-export const TEST_GRID: GridDef = {
+export const TEST_GRID: BaseGridDef = {
   id: "things",
   fields: TEST_FIELDS,
   defaultSort: { field: "created_at", direction: "desc" },

@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import {
   formatCount,
   formatValue,
-  type FieldDef,
+  type BaseFieldDef,
   type GridFormat,
   type GridRow,
 } from "@kikstart/query-grid";
@@ -46,7 +46,7 @@ export interface BoardMoveDetails {
 
 export interface StatusBoardProps {
   lanes: BoardLane[];
-  fields: FieldDef[];
+  fields: BaseFieldDef[];
   titleField: string;
   detailFields: string[];
   onMove: (
@@ -61,8 +61,8 @@ export interface StatusBoardProps {
 
 interface BoardCardBodyProps {
   row: GridRow | undefined;
-  title: FieldDef;
-  details: FieldDef[];
+  title: BaseFieldDef;
+  details: BaseFieldDef[];
   format?: GridFormat;
 }
 
@@ -135,8 +135,8 @@ function BoardCard({
 
 interface LaneContent {
   rows: Map<string, GridRow>;
-  title: FieldDef;
-  details: FieldDef[];
+  title: BaseFieldDef;
+  details: BaseFieldDef[];
   format?: GridFormat;
 }
 

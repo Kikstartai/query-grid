@@ -25,7 +25,7 @@ import {
   type SqlExecutor,
 } from "./query-runner.ts";
 import { DEFAULT_PAGE_LIMIT, QueryRejected } from "./sql-builder.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 type Route = "page" | SubRoute;
 
@@ -38,7 +38,7 @@ export interface GridMoves {
 }
 
 export interface GridHandlerConfig {
-  def: ServerGridDef;
+  def: PostgresGridDef;
   execute: SqlExecutor;
   basePath?: string;
   options?: (
@@ -105,7 +105,7 @@ function resolveStatus(error: QueryRejected): number {
 }
 
 async function readMove(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   request: Request,
 ): Promise<MoveBody> {
   const body = (await request.json().catch(() => null)) as {

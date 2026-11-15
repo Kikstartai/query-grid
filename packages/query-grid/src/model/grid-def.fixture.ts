@@ -1,5 +1,5 @@
 import type { DataSource } from "./data-source.ts";
-import type { Capabilities, GridDef } from "./field-types.ts";
+import type { Capabilities, BaseGridDef } from "./field-types.ts";
 import type { QueryShape } from "./shapes.ts";
 
 export const TEST_QUICK_FIELDS = ["name", "number"];
@@ -13,7 +13,7 @@ export const TEST_SHAPES: QueryShape[] = [
   { quick: TEST_QUICK_FIELDS },
 ];
 
-export const TEST_DEF: GridDef = {
+export const TEST_DEF: BaseGridDef = {
   id: "things",
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: "status" },

@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type {
   Capabilities,
   FieldOption,
-  GridDef,
+  BaseGridDef,
   GridRow,
   QueryState,
 } from "./field-types.ts";
@@ -54,7 +54,7 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
 }
 
 export function createHttpSource(
-  def: GridDef,
+  def: BaseGridDef,
   basePath: string,
   capabilities: Capabilities,
 ): DataSource {

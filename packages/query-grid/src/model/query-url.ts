@@ -1,6 +1,6 @@
 import {
   isDefaultSort,
-  type GridDef,
+  type BaseGridDef,
   type QueryState,
   type RangeState,
   type SortDirection,
@@ -18,7 +18,7 @@ export interface QueryKey {
   repeated: boolean;
 }
 
-export function listQueryKeys(def: GridDef): QueryKey[] {
+export function listQueryKeys(def: BaseGridDef): QueryKey[] {
   const keysFor = (operator: "eq" | "range", prefix: string) =>
     def.fields
       .filter((field) => field.operators.includes(operator))
@@ -34,7 +34,10 @@ export function listQueryKeys(def: GridDef): QueryKey[] {
   ];
 }
 
-export function encodeQuery(def: GridDef, query: QueryState): URLSearchParams {
+export function encodeQuery(
+  def: BaseGridDef,
+  query: QueryState,
+): URLSearchParams {
   const params = new URLSearchParams();
   for (const [field, values] of Object.entries(query.equals)) {
     for (const value of values) {
@@ -66,7 +69,7 @@ function decodeRange(field: string, raw: string): RangeState {
   return { field, min: min || null, max: max || null };
 }
 
-function decodeSort(def: GridDef, raw: string | null): QueryState["sort"] {
+function decodeSort(def: BaseGridDef, raw: string | null): QueryState["sort"] {
   if (!raw) {
     return def.defaultSort;
   }
@@ -75,7 +78,10 @@ function decodeSort(def: GridDef, raw: string | null): QueryState["sort"] {
   return { field: at < 0 ? raw : raw.slice(0, at), direction };
 }
 
-export function decodeQuery(def: GridDef, params: URLSearchParams): QueryState {
+export function decodeQuery(
+  def: BaseGridDef,
+  params: URLSearchParams,
+): QueryState {
   const equals = new Map<string, string[]>();
   let range: RangeState | null = null;
   for (const [name, value] of params) {

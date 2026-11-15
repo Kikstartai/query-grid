@@ -3,7 +3,7 @@ import type { Listener } from "./emitter.ts";
 import {
   getFacetField,
   type Capabilities,
-  type GridDef,
+  type BaseGridDef,
   type GridRow,
   type QueryState,
 } from "./field-types.ts";
@@ -68,7 +68,7 @@ function loadTransitions(source: DataSource): TransitionLoad {
 }
 
 export function getLaneQueries(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   capabilities: Capabilities,
 ): Map<string, QueryState> | null {
@@ -107,7 +107,7 @@ function sameLanes(
 }
 
 export function createBoard(
-  def: GridDef,
+  def: BaseGridDef,
   source: DataSource,
   laneQueries: Map<string, QueryState>,
 ): Board {

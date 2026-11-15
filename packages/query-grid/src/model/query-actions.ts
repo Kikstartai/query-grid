@@ -2,7 +2,7 @@ import {
   getField,
   isDefaultSort,
   resolveMaxValues,
-  type GridDef,
+  type BaseGridDef,
   type QueryRules,
   type QueryState,
   type SortDirection,
@@ -53,7 +53,7 @@ export interface UnavailableReason {
 
 const PROBE = ["x", "y"];
 
-export function defaultQuery(def: GridDef): QueryState {
+export function defaultQuery(def: BaseGridDef): QueryState {
   return {
     equals: {},
     range: null,
@@ -73,7 +73,7 @@ export function withoutKey(
 }
 
 function proposeClear(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   field: string,
 ): QueryState[] {
@@ -92,7 +92,7 @@ function proposeClear(
 }
 
 function proposeEquals(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   field: string,
   values: string[],
@@ -111,7 +111,7 @@ function proposeEquals(
 }
 
 function proposeAction(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
   rules: QueryRules,
@@ -167,7 +167,7 @@ function proposeAction(
 }
 
 export function applyAction(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
   rules: QueryRules,
@@ -179,7 +179,7 @@ export function applyAction(
 }
 
 function isOffered(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
   rules: QueryRules,
@@ -189,7 +189,7 @@ function isOffered(
 }
 
 export function listOffers(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   rules: QueryRules,
 ): Offers {
@@ -288,7 +288,7 @@ function stateKey(query: QueryState): string {
 }
 
 export function listControlActions(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
   rules: QueryRules,
 ): QueryAction[] {
@@ -324,7 +324,7 @@ export function listControlActions(
 }
 
 export function enumerateReachableStates(
-  def: GridDef,
+  def: BaseGridDef,
   rules: QueryRules,
 ): QueryState[] {
   const start = defaultQuery(def);

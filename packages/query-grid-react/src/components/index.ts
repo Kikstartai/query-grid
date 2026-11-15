@@ -53,8 +53,8 @@ export {
   type FieldFrameProps,
 } from "./field-frame.tsx";
 export type {
-  ClientFieldDef,
-  ClientGridDef,
+  FieldDef,
+  GridDef,
   ControlOption,
   ControlState,
   LoadStatus,

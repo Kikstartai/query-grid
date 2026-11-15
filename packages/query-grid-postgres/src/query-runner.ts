@@ -21,7 +21,7 @@ import {
   toPageResult,
   type SqlQuery,
 } from "./sql-builder.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 export const QUICK_BUDGET_MS = 120;
 export const QUICK_SETTINGS = [
@@ -66,7 +66,7 @@ async function runFiltered<T extends object>(
 }
 
 export async function listGridPage(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   limit: number,
@@ -83,7 +83,7 @@ export async function listGridPage(
 }
 
 export async function* walkGridPages(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   pageSize: number = WALK_PAGE_SIZE,
@@ -104,7 +104,7 @@ export async function* walkGridPages(
 }
 
 export async function listFacetCounts(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   signal?: AbortSignal,
 ): Promise<FacetCount[]> {
@@ -113,7 +113,7 @@ export async function listFacetCounts(
 }
 
 async function listSelectedCounters(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   signal?: AbortSignal,
@@ -126,7 +126,7 @@ async function listSelectedCounters(
 }
 
 export async function getGridCount(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   exact: boolean,
@@ -167,7 +167,7 @@ export async function getGridCount(
 }
 
 export async function getGridTotal(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   signal?: AbortSignal,

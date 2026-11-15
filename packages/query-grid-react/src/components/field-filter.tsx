@@ -50,7 +50,7 @@ import {
   fromNumberBound,
   toDayBound,
   toNumberBound,
-  type FieldDef,
+  type BaseFieldDef,
   type FieldOption,
   type GridFormat,
 } from "@kikstart/query-grid";
@@ -72,7 +72,7 @@ export type LoadOptions = (
 ) => Promise<FieldOption[]>;
 
 interface FilterProps extends ControlState {
-  field: FieldDef;
+  field: BaseFieldDef;
 }
 
 export interface EqualsSelectProps extends FilterProps {

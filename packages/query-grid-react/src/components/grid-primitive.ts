@@ -13,7 +13,7 @@ import {
 
 import {
   formatValue,
-  type FieldDef,
+  type BaseFieldDef,
   type GridFormat,
   type GridRow,
 } from "@kikstart/query-grid";
@@ -24,7 +24,7 @@ const REACH_EVERY_ROW = 400;
 
 interface SheetOptions {
   rows: GridRow[];
-  columns: FieldDef[];
+  columns: BaseFieldDef[];
   format?: GridFormat;
   onEndReached?: () => void;
 }

@@ -4,12 +4,12 @@ import { Client } from "pg";
 import {
   listCounterObjects,
   listGridMigrationSteps,
-  type ServerGridDef,
+  type PostgresGridDef,
 } from "@kikstart/query-grid-postgres";
 
 const TABLE = "query_grid_backfill_probe";
 
-const PROBE: ServerGridDef = {
+const PROBE: PostgresGridDef = {
   id: "backfill-probe",
   table: TABLE,
   defaultSort: { field: "created_at", direction: "desc" },

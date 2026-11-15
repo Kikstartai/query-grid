@@ -9,7 +9,7 @@ import {
   PAGE_LIMIT_MAX,
   QUICK_LIMIT,
   validateQueryValues,
-  type FieldDef,
+  type BaseFieldDef,
   type FieldType,
   type GridRow,
   type PageResult,
@@ -18,7 +18,7 @@ import {
 } from "@kikstart/query-grid";
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 export const DEFAULT_PAGE_LIMIT = 200;
 
@@ -79,11 +79,11 @@ function column(name: string): string {
   return `${TABLE_ALIAS}.${identifier(name)}`;
 }
 
-function from(def: ServerGridDef): string {
+function from(def: PostgresGridDef): string {
   return `${identifier(def.table)} ${TABLE_ALIAS}`;
 }
 
-function selectExpression(field: FieldDef): string {
+function selectExpression(field: BaseFieldDef): string {
   const name = column(field.key);
   const alias = identifier(field.key);
   if (field.type === "datetime") {
@@ -95,7 +95,7 @@ function selectExpression(field: FieldDef): string {
   return name;
 }
 
-function requireField(def: ServerGridDef, key: string): FieldDef {
+function requireField(def: PostgresGridDef, key: string): BaseFieldDef {
   const field = getField(def, key);
   if (!field) {
     throw new QueryRejected("undeclared_shape", "unknown_field", {
@@ -105,20 +105,20 @@ function requireField(def: ServerGridDef, key: string): FieldDef {
   return field;
 }
 
-function quickPart(field: FieldDef, prefix: string): string {
+function quickPart(field: BaseFieldDef, prefix: string): string {
   const name = `${prefix}${identifier(field.key)}`;
   const text =
     field.type === "text" || field.type === "enum" ? name : `${name}::text`;
   return field.nullable ? `coalesce(${text}, '')` : text;
 }
 
-export function quickExpression(def: ServerGridDef, prefix = ""): string {
+export function quickExpression(def: PostgresGridDef, prefix = ""): string {
   return listQuickFields(def.shapes)
     .map((key) => quickPart(requireField(def, key), prefix))
     .join(" || ' ' || ");
 }
 
-export function assertDeclared(def: ServerGridDef, query: QueryState): void {
+export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
   if (!matchShape(def.shapes, query)) {
     throw new QueryRejected("undeclared_shape");
   }
@@ -131,12 +131,12 @@ export function assertDeclared(def: ServerGridDef, query: QueryState): void {
 class Params {
   readonly values: SqlValue[] = [];
 
-  addList(values: string[], field: FieldDef): string {
+  addList(values: string[], field: BaseFieldDef): string {
     this.values.push(values);
     return `$${this.values.length}::${SQL_CASTS[field.type]}[]`;
   }
 
-  add(value: string, field: FieldDef): string {
+  add(value: string, field: BaseFieldDef): string {
     this.values.push(value);
     return `$${this.values.length}::${SQL_CASTS[field.type]}`;
   }
@@ -151,7 +151,7 @@ export function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
-function selectList(def: ServerGridDef): string {
+function selectList(def: PostgresGridDef): string {
   return def.fields.map(selectExpression).join(", ");
 }
 
@@ -160,7 +160,7 @@ interface Filter {
   clauses: string[];
 }
 
-function filter(def: ServerGridDef, query: QueryState): Filter {
+function filter(def: PostgresGridDef, query: QueryState): Filter {
   assertDeclared(def, query);
   const params = new Params();
   const clauses: string[] = [];
@@ -206,7 +206,7 @@ function clampLimit(requested: number): number {
 }
 
 export function buildPageSql(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   query: QueryState,
   limit: number,
 ): SqlQuery {
@@ -244,7 +244,7 @@ export function buildPageSql(
   };
 }
 
-export function buildRowSql(def: ServerGridDef, id: string): SqlQuery {
+export function buildRowSql(def: PostgresGridDef, id: string): SqlQuery {
   const keyField = requireField(def, KEY_FIELD);
   const params = new Params();
   return {
@@ -254,7 +254,7 @@ export function buildRowSql(def: ServerGridDef, id: string): SqlQuery {
 }
 
 export function buildCappedCountSql(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   query: QueryState,
   cap: number = COUNT_CAP,
 ): SqlQuery {
@@ -266,7 +266,7 @@ export function buildCappedCountSql(
 }
 
 export function buildExactCountSql(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   query: QueryState,
 ): SqlQuery {
   const { params, clauses } = filter(def, query);
@@ -277,7 +277,7 @@ export function buildExactCountSql(
 }
 
 export function buildCappedTotalSql(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   query: QueryState,
   cap: number = COUNT_CAP,
 ): SqlQuery {
@@ -296,7 +296,7 @@ export function buildCappedTotalSql(
   };
 }
 
-export function buildFacetSql(def: ServerGridDef): SqlQuery | null {
+export function buildFacetSql(def: PostgresGridDef): SqlQuery | null {
   if (!def.facet) {
     return null;
   }
@@ -308,7 +308,7 @@ export function buildFacetSql(def: ServerGridDef): SqlQuery | null {
 }
 
 export function toPageResult(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   query: QueryState,
   rows: GridRow[],
   limit: number,

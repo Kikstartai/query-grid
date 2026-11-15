@@ -1,6 +1,6 @@
 import type {
   Capabilities,
-  GridDef,
+  BaseGridDef,
   QueryRules,
   QueryState,
 } from "./field-types.ts";
@@ -19,7 +19,7 @@ export type HistoryWrite = "push" | "replace";
 export const GRID_VIEWS: readonly GridView[] = ["grid", "list", "board"];
 
 export interface QueryStore {
-  def: GridDef;
+  def: BaseGridDef;
   getQuery: () => QueryState;
   getView: () => GridView;
   getRules: () => QueryRules;
@@ -32,7 +32,7 @@ export interface QueryStore {
 }
 
 export function normalizeQuery(
-  def: GridDef,
+  def: BaseGridDef,
   capabilities: Capabilities,
   query: QueryState,
 ): QueryState {
@@ -74,7 +74,7 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
 }
 
 export function createQueryStore(
-  def: GridDef,
+  def: BaseGridDef,
   capabilities: Capabilities,
   initial: QueryState,
   initialView: GridView = "grid",

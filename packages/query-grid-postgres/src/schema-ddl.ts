@@ -2,7 +2,7 @@ import { isQuickShape, KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
 
 import { describeShape, validateGridDef } from "./shapes.ts";
 import { identifier, quickExpression } from "./sql-builder.ts";
-import type { ServerGridDef } from "./storage.ts";
+import type { PostgresGridDef } from "./storage.ts";
 
 export const IDENTIFIER_MAX_LENGTH = 63;
 
@@ -73,7 +73,7 @@ function createIndex(concurrently: boolean): string {
 }
 
 function shapeIndex(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   shape: QueryShape,
   concurrently: boolean,
 ): ShapeIndex {
@@ -105,14 +105,16 @@ function shapeIndex(
 }
 
 export function listShapeIndexes(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   options: MigrationOptions = {},
 ): ShapeIndex[] {
   const concurrently = options.concurrently ?? true;
   return def.shapes.map((shape) => shapeIndex(def, shape, concurrently));
 }
 
-export function listCounterObjects(def: ServerGridDef): CounterObjects | null {
+export function listCounterObjects(
+  def: PostgresGridDef,
+): CounterObjects | null {
   if (!def.facet) {
     return null;
   }
@@ -130,7 +132,7 @@ export function listCounterObjects(def: ServerGridDef): CounterObjects | null {
   };
 }
 
-function counterSteps(def: ServerGridDef): MigrationStep[] {
+function counterSteps(def: PostgresGridDef): MigrationStep[] {
   const counter = listCounterObjects(def);
   if (!def.facet || !counter) {
     return [];
@@ -243,7 +245,7 @@ $switch$;`;
 }
 
 function indexSteps(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   options: MigrationOptions,
 ): MigrationStep[] {
   const indexes = listShapeIndexes(def, options);
@@ -269,7 +271,7 @@ function indexSteps(
 }
 
 export function listGridMigrationSteps(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   options: MigrationOptions = {},
 ): MigrationStep[] {
   return [...indexSteps(def, options), ...counterSteps(def)];
@@ -285,7 +287,7 @@ function renderMigration(table: string, steps: MigrationStep[]): string {
 }
 
 export function generateGridMigration(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   options: MigrationOptions = {},
 ): string {
   return renderMigration(def.table, listGridMigrationSteps(def, options));
@@ -299,7 +301,7 @@ function mergeSteps(steps: MigrationStep[]): MigrationStep[] {
 }
 
 export function listTableMigrations(
-  defs: ServerGridDef[],
+  defs: PostgresGridDef[],
   options: MigrationOptions = {},
 ): TableMigration[] {
   const tables = [...new Set(defs.map((def) => def.table))];
@@ -330,7 +332,7 @@ function listConflicts(noun: string, declarations: Declaration[]): string[] {
   });
 }
 
-export function validateGridDefs(defs: ServerGridDef[]): string[] {
+export function validateGridDefs(defs: PostgresGridDef[]): string[] {
   const ids = defs.map((def) => def.id);
   return [
     ...defs.flatMap((def) =>
@@ -399,7 +401,7 @@ function answers(index: ShapeIndex, row: PgIndexRow): boolean {
 }
 
 export function listMissingIndexes(
-  def: ServerGridDef,
+  def: PostgresGridDef,
   rows: PgIndexRow[],
 ): ShapeIndex[] {
   return listShapeIndexes(def).filter(

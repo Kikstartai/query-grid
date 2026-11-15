@@ -1,8 +1,8 @@
 import {
   getField,
   resolveMaxValues,
-  type FieldDef,
-  type GridDef,
+  type BaseFieldDef,
+  type BaseGridDef,
   type QueryState,
 } from "./field-types.ts";
 import type { Problem } from "./problems.ts";
@@ -13,7 +13,7 @@ export const QUICK_MAX_LENGTH = 80;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INTEGER = /^-?\d{1,15}$/;
 
-function isValidValue(field: FieldDef, value: string): boolean {
+function isValidValue(field: BaseFieldDef, value: string): boolean {
   switch (field.type) {
     case "id":
       return UUID.test(value);
@@ -29,7 +29,11 @@ function isValidValue(field: FieldDef, value: string): boolean {
   }
 }
 
-function checkValue(def: GridDef, key: string, value: string): Problem | null {
+function checkValue(
+  def: BaseGridDef,
+  key: string,
+  value: string,
+): Problem | null {
   const field = getField(def, key);
   if (!field) {
     return { code: "unknown_field", params: { field: key } };
@@ -40,7 +44,7 @@ function checkValue(def: GridDef, key: string, value: string): Problem | null {
 }
 
 function checkEquals(
-  def: GridDef,
+  def: BaseGridDef,
   key: string,
   values: string[],
 ): Problem | null {
@@ -61,7 +65,7 @@ function checkEquals(
 }
 
 export function isValidFieldValue(
-  def: GridDef,
+  def: BaseGridDef,
   key: string,
   value: string,
 ): boolean {
@@ -74,7 +78,7 @@ export function isValidQuickValue(value: string): boolean {
 }
 
 export function validateQueryValues(
-  def: GridDef,
+  def: BaseGridDef,
   query: QueryState,
 ): Problem | null {
   for (const [key, values] of Object.entries(query.equals)) {
