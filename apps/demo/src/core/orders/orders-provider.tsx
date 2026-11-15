@@ -12,16 +12,12 @@ const ORDERS_LOCALE = "en-ZA";
 const ORDERS_SOURCE = createHttpSource(ORDERS_GRID_DEF, ORDERS_API);
 
 interface OrdersQueryProviderProps {
-  locale?: string;
   children: ReactNode;
 }
 
-export function OrdersQueryProvider({
-  locale = ORDERS_LOCALE,
-  children,
-}: OrdersQueryProviderProps) {
+export function OrdersQueryProvider({ children }: OrdersQueryProviderProps) {
   return (
-    <QueryGridMessagesProvider locale={locale}>
+    <QueryGridMessagesProvider locale={ORDERS_LOCALE}>
       <QueryGridProvider def={ORDERS_GRID_DEF} source={ORDERS_SOURCE}>
         {children}
       </QueryGridProvider>

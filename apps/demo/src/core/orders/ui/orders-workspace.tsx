@@ -14,10 +14,9 @@ import { OrdersView } from "./orders-view";
 interface OrdersWorkspaceProps {
   title: string;
   dir?: "rtl";
-  locale?: string;
 }
 
-export function OrdersWorkspace({ title, dir, locale }: OrdersWorkspaceProps) {
+export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
   return (
     <div className="workspace" dir={dir} data-dir={dir}>
       <header className="workspace-head">
@@ -33,7 +32,7 @@ export function OrdersWorkspace({ title, dir, locale }: OrdersWorkspaceProps) {
         }
       >
         <AtRequest>
-          <OrdersQueryProvider locale={locale}>
+          <OrdersQueryProvider>
             <WorkspaceParts>
               <OrdersView />
             </WorkspaceParts>
