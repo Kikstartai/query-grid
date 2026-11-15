@@ -97,6 +97,11 @@ export interface QueryGridMessages {
   matchMode: string;
   matchAll: string;
   matchAny: string;
+  group: string;
+  groupBy: string;
+  groupToggle: (params: LabelParams) => string;
+  groupLoadMore: string;
+  chipGroup: (params: LabelParams) => string;
   moreValues: (params: { count: number }) => string;
   fieldFilter: (params: LabelParams) => string;
   clearField: (params: LabelParams) => string;
@@ -251,6 +256,11 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   matchMode: "Match",
   matchAll: "Match all",
   matchAny: "Match any",
+  group: "Group",
+  groupBy: "Group by",
+  groupToggle: ({ label }) => `${label} group`,
+  groupLoadMore: "Load more",
+  chipGroup: ({ label }) => `Group: ${label}`,
   moreValues: ({ count }) => `${count} more`,
   fieldFilter: ({ label }) => `${label} filter`,
   clearField: ({ label }) => `Clear ${label}`,
@@ -303,6 +313,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
         ? `Narrow by ${narrowBy} first: ${rows}.`
         : `Narrow the filters first: ${rows}.`,
     narrow_counting: () => "Counting the rows these filters leave…",
+    no_group_with: ({ label, blockers }) =>
+      `No index reads the rows of one ${label} group with ${blockers}.`,
   },
   reasonParts: {
     filter: (label) => `the ${label} filter`,

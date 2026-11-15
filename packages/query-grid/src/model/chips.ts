@@ -71,7 +71,15 @@ export interface MatchChip {
   clear: QueryAction;
 }
 
+export interface GroupChip {
+  id: string;
+  kind: "group";
+  field: string;
+  clear: QueryAction;
+}
+
 export type FilterChip =
+  | GroupChip
   | EqualsChip
   | RangeChip
   | ContainsChip
@@ -186,6 +194,14 @@ export function listFilterChips(
       kind: "search",
       value: query.search,
       clear: { type: "clearSearch" },
+    });
+  }
+  if (query.group !== null) {
+    chips.push({
+      id: "group",
+      kind: "group",
+      field: query.group,
+      clear: { type: "setGroup", field: null },
     });
   }
   chips.push({

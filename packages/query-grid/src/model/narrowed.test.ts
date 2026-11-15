@@ -403,6 +403,7 @@ describe("the URL, validation and chips", () => {
       "c.name",
       "c.note",
       "match",
+      "group",
       "q",
       "sort",
       "cursor",

@@ -123,6 +123,9 @@ export function validateQueryValues(
       return { code: "invalid_value", params: { field } };
     }
   }
+  if (query.group !== null && !getField(def, query.group)) {
+    return { code: "unknown_field", params: { field: query.group } };
+  }
   if (query.match !== "all" && query.match !== "any") {
     return { code: "invalid_value", params: { field: "match" } };
   }

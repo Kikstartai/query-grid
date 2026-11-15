@@ -5,6 +5,7 @@ import {
   DEFAULT_LIMITS,
   defaultQuery,
   EMPTY_VALUE,
+  getGroupQuery,
   NOT_EMPTY_VALUE,
   type GridRow,
   type QueryState,
@@ -15,6 +16,7 @@ import {
   getGridCount,
   getNarrowedSizes,
   listCounterObjects,
+  listGridGroups,
   listGridPage,
   listGridTotals,
   listMissingIndexes,
@@ -403,6 +405,155 @@ describe("the narrowed-set tier", () => {
     for (const row of page.rows) {
       expect(String(row.note).toLowerCase()).toContain("fragile");
     }
+  }, 60_000);
+});
+
+describe("grouping", () => {
+  const base = defaultQuery(ORDERS_GRID_DEF);
+
+  interface Grouped {
+    value: string | null;
+    rows: number;
+    sum: number;
+    items: number;
+  }
+
+  async function groupWhere(field: string, where: string): Promise<Grouped[]> {
+    const { rows } = await client.query<Grouped>(
+      `SELECT ${field}::text AS value, count(*)::float8 AS rows, sum(total)::float8 AS sum, sum(item_count)::float8 AS items FROM orders WHERE ${where} GROUP BY ${field}`,
+    );
+    return rows;
+  }
+
+  test("by the counted field the headers are the counter table: every count and both sums", async () => {
+    const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
+      ...base,
+      group: "status_code",
+    });
+    expect(result.source).toBe("counter");
+    const real = await groupWhere("status_code", "true");
+    expect(result.groups).toHaveLength(real.length);
+    for (const group of result.groups) {
+      const match = real.find((row) => row.value === group.value)!;
+      expect(group).toEqual({
+        value: match.value!,
+        label: null,
+        count: match.rows,
+        capped: false,
+        sums: { total: match.sum, item_count: match.items },
+      });
+    }
+  }, 60_000);
+
+  test("by the counted field under another filter the headers are capped live counts", async () => {
+    const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
+      ...base,
+      group: "status_code",
+      equals: { region: ["windhoek"] },
+    });
+    expect(result.source).toBe("capped");
+    const real = await groupWhere("status_code", "region = 'windhoek'");
+    expect(result.groups).toHaveLength(real.length);
+    for (const group of result.groups) {
+      const match = real.find((row) => row.value === group.value)!;
+      expect(group.sums).toBeNull();
+      expect(group.count).toBe(Math.min(match.rows, 10_000));
+      expect(group.capped).toBe(match.rows > 10_000);
+    }
+  }, 60_000);
+
+  test("by another field over a narrowed set it is one live GROUP BY, with an empty group", async () => {
+    const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
+      ...base,
+      group: "assignee",
+      ranges: [
+        {
+          field: "created_at",
+          min: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+          max: null,
+        },
+      ],
+    });
+    expect(result).toMatchObject({ source: "live", truncated: false });
+    const real = await groupWhere(
+      "assignee",
+      "created_at >= now() - interval '30 days'",
+    );
+    expect(result.groups).toHaveLength(real.length);
+    const empty = result.groups.find((group) => group.value === EMPTY_VALUE)!;
+    const realEmpty = real.find((row) => row.value === null)!;
+    expect(Math.abs(empty.count - realEmpty.rows)).toBeLessThan(50);
+    expect(empty.sums).not.toBeNull();
+    const counts = result.groups.map((group) => group.count);
+    expect(counts).toEqual([...counts].sort((a, b) => b - a));
+  }, 60_000);
+
+  test("a lookup field reads each group's label in the same statement", async () => {
+    const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
+      ...base,
+      group: "customer_id",
+      ranges: [
+        {
+          field: "created_at",
+          min: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+          max: null,
+        },
+      ],
+    });
+    expect(result.source).toBe("live");
+    expect(result.groups.length).toBeGreaterThan(0);
+    expect(result.groups.length).toBeLessThanOrEqual(200);
+    for (const group of result.groups.slice(0, 20)) {
+      expect(group.label).toMatch(/\S/);
+      expect(group.value).toMatch(/^[0-9a-f-]{36}$/);
+    }
+  }, 60_000);
+
+  test("over the limit a field other than the counted one is refused", async () => {
+    let refusal: unknown = null;
+    try {
+      await listGridGroups(ORDERS_GRID_DEF, execute, {
+        ...base,
+        group: "region",
+      });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toMatchObject({
+      code: "narrow_first",
+      params: { rows: 620_000, limit: DEFAULT_LIMITS.narrowLimit },
+    });
+  }, 60_000);
+
+  test("the rows of one group are the ordinary keyset page with that value added", async () => {
+    const query: QueryState = {
+      ...base,
+      group: "region",
+      equals: { status_code: ["failed"] },
+    };
+    const headers = await listGridGroups(ORDERS_GRID_DEF, execute, query);
+    const [largest] = headers.groups;
+    const page = await listGridPage(
+      ORDERS_GRID_DEF,
+      execute,
+      getGroupQuery(query, largest.value),
+      1000,
+    );
+    expect(page.rows).toHaveLength(largest.count);
+    for (const row of page.rows) {
+      expect(row.region).toBe(largest.value);
+      expect(row.status_code).toBe("failed");
+    }
+    expect(headers.groups.reduce((sum, group) => sum + group.count, 0)).toBe(
+      (
+        await getGridCount(
+          ORDERS_GRID_DEF,
+          execute,
+          { ...query, group: null },
+          true,
+        )
+      ).count,
+    );
   }, 60_000);
 });
 

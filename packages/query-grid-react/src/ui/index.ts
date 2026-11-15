@@ -11,6 +11,7 @@ export {
   FilterBar,
   FilterChips,
   FilterSidebar,
+  GroupControl,
   MatchToggle,
   SearchFilter,
   SortControl,

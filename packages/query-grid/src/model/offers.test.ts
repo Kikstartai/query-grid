@@ -51,6 +51,7 @@ describe("offers from declared indexes", () => {
       ranges: ["total"],
       contains: [],
       matchAny: false,
+      groups: [],
       search: true,
     });
     expect(listOffers(TEST_DEF, BASE, CAPPED).equals).toEqual([
@@ -107,6 +108,7 @@ describe("offers from declared indexes", () => {
       ranges: [],
       contains: [],
       matchAny: false,
+      groups: [],
       search: true,
     });
     expect(listOffers(TEST_DEF, search, COMPLETE).sorts).toEqual([

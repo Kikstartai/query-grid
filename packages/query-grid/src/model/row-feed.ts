@@ -127,6 +127,14 @@ export function createFeed(
       set({ query: next, rows: sortRows(def, state.rows, next.sort) });
       return;
     }
+    const sameRows =
+      sameFilters(next, state.query) &&
+      next.sort === state.query.sort &&
+      next.cursor === state.query.cursor;
+    if (sameRows) {
+      set({ query: next });
+      return;
+    }
     restart();
   };
 

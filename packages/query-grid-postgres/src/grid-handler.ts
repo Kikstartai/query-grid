@@ -23,6 +23,7 @@ import {
   getGridCount,
   getNarrowedSizes,
   listFacetCounts,
+  listGridGroups,
   listGridPage,
   listGridTotals,
   QUERY_CANCELED,
@@ -191,6 +192,14 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
             value: params.get("value") ?? undefined,
           },
           signal,
+        );
+      case "groups":
+        return listGridGroups(
+          def,
+          execute,
+          decodeQuery(def, params),
+          signal,
+          limits,
         );
       case "narrowed":
         return getNarrowedSizes(

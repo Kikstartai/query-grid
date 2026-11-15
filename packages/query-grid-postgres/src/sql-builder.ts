@@ -2,6 +2,7 @@ import {
   DEFAULT_LIMITS,
   formatProblem,
   getField,
+  GROUP_LIMIT,
   getReservedValue,
   isMatchAny,
   isQueryRunnable,
@@ -364,6 +365,39 @@ export function buildCappedTotalSql(
       : "";
   return {
     text: `SELECT count(*)::int AS count, ${sums.join(", ")} FROM (SELECT ${amounts.join(", ")} FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
+    values: params.values,
+  };
+}
+
+export function buildGroupSql(
+  def: PostgresGridDef,
+  query: QueryState,
+  limit: number = GROUP_LIMIT,
+): SqlQuery {
+  assertDeclared(def, query);
+  if (query.group === null) {
+    throw new QueryRejected("invalid_value", "invalid_value", {
+      field: "group",
+    });
+  }
+  const field = requireField(def, query.group);
+  const { params, clauses } = filter(def, {
+    ...query,
+    group: null,
+    cursor: null,
+  });
+  const name = column(field.key);
+  const label = field.lookup
+    ? `, min(${column(requireField(def, field.lookup.labelField).key)})::text AS label`
+    : "";
+  const sums = (def.totals ?? [])
+    .map(
+      (key) =>
+        `, coalesce(sum(${column(requireField(def, key).key)}), 0)::float8 AS ${sumColumn(key)}`,
+    )
+    .join("");
+  return {
+    text: `SELECT ${name}::text AS value${label}, count(*)::float8 AS count${sums} FROM ${from(def)}${whereClause(clauses)} GROUP BY ${name} ORDER BY count(*) DESC, ${name} LIMIT ${limit + 1}`,
     values: params.values,
   };
 }

@@ -61,6 +61,7 @@ export const UNTIERED = {
   isNarrowed: () => false,
   narrowBasis: () => "",
   containsFields: [],
+  groupFields: [],
 };
 
 export function createTestSource(
@@ -75,6 +76,7 @@ export function createTestSource(
     fetchTotals: none,
     fetchFacets: none,
     fetchOptions: none,
+    fetchGroups: async () => ({ groups: [], source: "live", truncated: false }),
     fetchNarrowed: async () => null,
     fetchLimits: async () => null,
     fetchTransitions: none,

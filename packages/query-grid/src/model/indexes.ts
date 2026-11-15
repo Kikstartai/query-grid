@@ -24,6 +24,8 @@ export interface IndexRunnableOptions {
   fields?: BaseFieldDef[];
 }
 
+const GROUP_PROBE = ["x"];
+
 export interface QueryPlan {
   core: QueryState;
   narrowed: boolean;
@@ -57,6 +59,19 @@ export function listSortFields(indexes: IndexDef[]): string[] {
 export function listNarrowRangeFields(fields: BaseFieldDef[]): string[] {
   return fields
     .filter((field) => isRangeType(field.type) && !field.options)
+    .map((field) => field.key);
+}
+
+export function listGroupFields(
+  fields: BaseFieldDef[],
+  equalsFields: string[],
+): string[] {
+  return fields
+    .filter(
+      (field) =>
+        equalsFields.includes(field.key) &&
+        (field.type !== "id" || field.lookup !== undefined),
+    )
     .map((field) => field.key);
 }
 
@@ -198,12 +213,37 @@ export function planQuery(
   return isMatchAny(query) ? planAny(indexes, query) : planAll(indexes, query);
 }
 
+function isGroupRunnable(
+  indexes: IndexDef[],
+  fields: BaseFieldDef[],
+  query: QueryState,
+): boolean {
+  const { group } = query;
+  if (group === null) {
+    return true;
+  }
+  const grouped: QueryState = {
+    ...query,
+    group: null,
+    equals: { ...query.equals, [group]: query.equals[group] ?? GROUP_PROBE },
+  };
+  return (
+    query.search === null &&
+    !isMatchAny(query) &&
+    listGroupFields(fields, listEqualsFields(indexes)).includes(group) &&
+    planQuery(indexes, grouped) !== null
+  );
+}
+
 function isTierRunnable(
   indexes: IndexDef[],
   searchFields: string[],
   fields: BaseFieldDef[],
   query: QueryState,
 ): boolean {
+  if (!isGroupRunnable(indexes, fields, query)) {
+    return false;
+  }
   if (query.search !== null) {
     return isQueryIndexed(indexes, searchFields, query);
   }
@@ -222,6 +262,13 @@ export function isQueryRunnable(
   query: QueryState,
 ): boolean {
   return isTierRunnable(def.indexes, listSearchFields(def), def.fields, query);
+}
+
+export function isGroupNarrowed(
+  facetField: string | undefined,
+  query: QueryState,
+): boolean {
+  return query.group !== null && query.group !== facetField;
 }
 
 function describeBasis(indexes: IndexDef[], query: QueryState): string {
@@ -272,15 +319,20 @@ export function indexRunnable(
     canRun: (query) =>
       fields
         ? isTierRunnable(indexes, searchFields, fields, query)
-        : isQueryIndexed(indexes, searchFields, query),
+        : query.group === null && isQueryIndexed(indexes, searchFields, query),
     isNarrowed: (query) =>
-      fields !== undefined && (planQuery(indexes, query)?.narrowed ?? false),
+      fields !== undefined &&
+      (isGroupNarrowed(options.facetField, query) ||
+        (planQuery(indexes, query)?.narrowed ?? false)),
     narrowBasis: (query) => describeBasis(indexes, query),
     equalsFields: listEqualsFields(indexes),
     rangeFields: fields
       ? listNarrowRangeFields(fields)
       : listRangeFields(indexes),
     containsFields: fields ? listContainsFields(fields) : [],
+    groupFields: fields
+      ? listGroupFields(fields, listEqualsFields(indexes))
+      : [],
     sortFields: listSortFields(indexes),
     searchFields,
     isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),

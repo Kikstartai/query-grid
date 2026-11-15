@@ -36,6 +36,22 @@ export interface TotalUnavailable extends Problem {
 
 export type TotalResult = TotalAvailable | TotalUnavailable;
 
+export interface GroupHeader {
+  value: string;
+  label: string | null;
+  count: number;
+  capped: boolean;
+  sums: Record<string, number> | null;
+}
+
+export type GroupSource = "counter" | "capped" | "live";
+
+export interface GroupsResult {
+  groups: GroupHeader[];
+  source: GroupSource;
+  truncated: boolean;
+}
+
 export interface OptionSearch {
   query?: string;
   value?: string;

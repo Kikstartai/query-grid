@@ -20,13 +20,13 @@ test("filter sidebar", async ({ page }) => {
   await openGrid(page, "/orders?f.status_code=paid&sort=total.desc");
   await page.locator("[data-part=filter-sidebar-trigger]").click();
   const sidebar = page.locator("[data-part=filter-sidebar]");
-  await expect(sidebar.locator("[data-field]")).toHaveCount(8);
+  await expect(sidebar.locator("[data-field]")).toHaveCount(17);
   const disabled = sidebar.locator("[data-unavailable]");
-  await expect(disabled).toHaveCount(5);
+  await expect(disabled).toHaveCount(4);
   for (const reason of await texts(disabled.locator("[data-field-reason]"))) {
     expect(reason).not.toBe("");
   }
-  await expect(disabled.locator("[data-field-reason]")).toHaveCount(5);
+  await expect(disabled.locator("[data-field-reason]")).toHaveCount(4);
   await sidebar.locator("[data-sort=direction]").click();
   await expect(page).toHaveURL(/sort=total\.asc/);
   await expect(

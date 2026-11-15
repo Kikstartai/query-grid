@@ -86,7 +86,14 @@ describe("the bound filter containers", () => {
     const shown = [...html.matchAll(/data-field="([a-z_]+)"/g)].map(
       (match) => match[1],
     );
-    expect(shown).toEqual(["search", "region", "status", "match", "sort"]);
+    expect(shown).toEqual([
+      "search",
+      "region",
+      "status",
+      "match",
+      "sort",
+      "group",
+    ]);
     const withText = render(
       <FilterBar fields={["region"]} contains={["note"]} />,
     );
@@ -161,5 +168,23 @@ describe("the narrowed-set controls, bound", () => {
     expect(html).toContain("Note contains “gift”");
     expect(html).toContain('data-chip="match"');
     expect(html).toContain("Match any");
+  });
+});
+
+describe("grouping, bound", () => {
+  test("the group control lists the equality fields and the URL picks one", () => {
+    const html = render(<FilterBar />, "group=region");
+    expect(html).toContain('data-field="group"');
+    expect(html).toMatch(/data-filter="group"[^>]*>.*Region/s);
+    const chips = render(<FilterChips />, "group=region");
+    expect(chips).toContain('data-chip="group"');
+    expect(chips).toContain("Group: Region");
+  });
+
+  test("a grouped grid mounts with no rows of its own before the headers load", () => {
+    const html = render(<DataGrid />, "group=status");
+    expect(html).toContain('data-part="grid-scroller"');
+    expect(html).toContain('data-feed-state="loading"');
+    expect(html).not.toContain("data-row-id");
   });
 });

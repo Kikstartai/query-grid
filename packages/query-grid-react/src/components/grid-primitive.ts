@@ -21,10 +21,16 @@ const ROW_ESTIMATE = 37;
 export const HEADER_HEIGHT = 40;
 const REACH_EVERY_ROW = 400;
 
+export interface SheetLayout {
+  keys: string[];
+  rowItems: number[];
+}
+
 interface SheetOptions {
   rows: GridRow[];
   columns: BaseFieldDef[];
   locale: string;
+  layout?: SheetLayout | null;
   onEndReached?: () => void;
 }
 
@@ -122,6 +128,7 @@ export const sheet = definePrimitive({
     rows: "value",
     columns: "value",
     locale: "value",
+    layout: "value",
     onEndReached: "callback",
   },
   state: (_options: SheetOptions): SheetState => ({
@@ -136,6 +143,8 @@ export const sheet = definePrimitive({
     const rowCount = () => rows().length;
     const colCount = () => columns().length;
     const rowId = (row: number) => rows()[row]?.id ?? null;
+    const layout = () => context.options().layout ?? null;
+    const itemOf = (row: number) => layout()?.rowItems[row] ?? row;
     const cellText = (cell: GridCell) => {
       const field = columns()[cell.col];
       const row = rows()[cell.row];
@@ -144,19 +153,19 @@ export const sheet = definePrimitive({
         : "";
     };
     const virtual = createVirtualizer({
-      count: rowCount,
+      count: () => layout()?.keys.length ?? rowCount(),
       estimate: () => ROW_ESTIMATE,
-      key: (index) => rowId(index) ?? String(index),
+      key: (index) => layout()?.keys[index] ?? rowId(index) ?? String(index),
       overscan: 8,
       endThreshold: 60,
       scrollMargin: HEADER_HEIGHT,
       keep: () => {
         const active = context.store.get().active;
-        return active && active.row < rowCount() ? [active.row] : [];
+        return active && active.row < rowCount() ? [itemOf(active.row)] : [];
       },
       onEnd: () => context.options().onEndReached?.(),
     });
-    const reveal = (cell: GridCell) => virtual.scrollToIndex(cell.row);
+    const reveal = (cell: GridCell) => virtual.scrollToIndex(itemOf(cell.row));
     const grid = createGridFocus(context, {
       key: "active",
       rows: rowCount,

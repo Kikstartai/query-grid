@@ -143,6 +143,7 @@ export function withQueryResolution(
       source.fetchCount(resolve(query), exact, signal),
     fetchTotals: (query, signal) => source.fetchTotals(resolve(query), signal),
     fetchFacets: (query, signal) => source.fetchFacets(resolve(query), signal),
+    fetchGroups: (query, signal) => source.fetchGroups(resolve(query), signal),
     fetchNarrowed: (query, signal) =>
       source.fetchNarrowed(resolve(query), signal),
   };

@@ -126,6 +126,78 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).not.toContain('data-header="note"');
   });
 
+  test("DataGrid with groups mixes header rows, the rows of an open group and its load more", () => {
+    const html = render(
+      <DataGrid
+        fields={TEST_FIELDS}
+        rows={[]}
+        hasNext={false}
+        onEndReached={noop}
+        loading={false}
+        groups={[
+          {
+            key: "open",
+            label: "Open",
+            count: "3 rows",
+            detail: "Total sum $9.00",
+            expanded: true,
+            rows: TEST_ROWS.slice(0, 3),
+            hasNext: true,
+            loading: false,
+          },
+          {
+            key: "done",
+            label: "Done",
+            count: "10,000+ rows",
+            expanded: false,
+            rows: [],
+            hasNext: false,
+            loading: false,
+          },
+        ]}
+        onGroupToggle={noop}
+        onGroupLoadMore={noop}
+      />,
+    );
+    expect(html).toContain("data-grouped");
+    expect(html.match(/data-group="/g)).toHaveLength(2);
+    expect(html).toMatch(/aria-expanded="true"[^>]*data-group-toggle="open"/);
+    expect(html).toMatch(/aria-expanded="false"[^>]*data-group-toggle="done"/);
+    expect(html).toContain('aria-label="Open group"');
+    expect(html).toContain("10,000+ rows");
+    expect(html).toContain("Total sum $9.00");
+    expect(html.match(/data-row-id=/g)).toHaveLength(3);
+    expect(html).toContain('data-group-more="open"');
+    expect(html).not.toContain('data-group-more="done"');
+    expect(html).toContain('data-value="3"');
+  });
+
+  test("DataGrid with no groups yet shows the loading notice, and an error in place of the groups", () => {
+    const loading = render(
+      <DataGrid
+        fields={TEST_FIELDS}
+        rows={[]}
+        hasNext={false}
+        onEndReached={noop}
+        loading
+        groups={[]}
+      />,
+    );
+    expect(loading).toContain('data-feed-state="loading"');
+    const failed = render(
+      <DataGrid
+        fields={TEST_FIELDS}
+        rows={[]}
+        hasNext={false}
+        onEndReached={noop}
+        loading={false}
+        error="Narrow the filters first."
+        groups={[]}
+      />,
+    );
+    expect(failed).toContain("Narrow the filters first.");
+  });
+
   test("DataGrid states", () => {
     const empty = { ...ROW_WINDOW, rows: [] };
     expect(render(<DataGrid fields={TEST_FIELDS} {...empty} />)).toContain(

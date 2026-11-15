@@ -9,6 +9,7 @@ import type { GridLimits } from "./limits.ts";
 import type {
   CountResult,
   FacetCount,
+  GroupsResult,
   OptionSearch,
   PageResult,
   TotalResult,
@@ -39,6 +40,10 @@ export interface DataSource {
     search: OptionSearch,
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
+  fetchGroups: (
+    query: QueryState,
+    signal: AbortSignal,
+  ) => Promise<GroupsResult>;
   fetchNarrowed: (
     query: QueryState,
     signal: AbortSignal,

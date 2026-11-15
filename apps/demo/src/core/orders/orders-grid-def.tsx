@@ -167,7 +167,7 @@ const ORDER_INDEXES: IndexDef[] = [
   { equals: ["customer_id"], sort: "created_at" },
   { equals: ["region"], sort: "created_at", range: true },
   { equals: ["channel"], sort: "created_at" },
-  { equals: ["assignee"], sort: "created_at" },
+  { equals: ["assignee"], sort: "created_at", range: true },
   { equals: ["status_code", "region"], sort: "created_at" },
   { equals: ["status_code", "channel"], sort: "created_at" },
 ];

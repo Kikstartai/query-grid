@@ -14,10 +14,12 @@ import {
   type RangeState,
 } from "./field-types.ts";
 import { matchesEquals } from "./field-values.ts";
-import { isMatchAny, listContainsFields } from "./indexes.ts";
+import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
+import { isMatchAny, listContainsFields, listGroupFields } from "./indexes.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
+import type { GroupHeader } from "./wire-types.ts";
 import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 
@@ -41,7 +43,10 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
     isNarrowed: () => false,
     narrowBasis: () => "",
     containsFields,
+    groupFields: listGroupFields(def.fields, equalsFields),
     canRun: (query) =>
+      (query.group === null ||
+        listGroupFields(def.fields, equalsFields).includes(query.group)) &&
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
       (query.contains === null ||
@@ -275,6 +280,33 @@ export function createMemorySource(
         return all
           .filter((option) => option.label.toLowerCase().includes(needle))
           .slice(0, OPTION_LIMIT);
+      },
+      fetchGroups: async (query) => {
+        const key = query.group;
+        if (key === null) {
+          return { groups: [], source: "live", truncated: false };
+        }
+        const labelField = getField(def, key)?.lookup?.labelField;
+        const headers = new Map<string, GroupHeader>();
+        for (const row of matching(query)) {
+          const value = toGroupValue(row[key]);
+          const header = headers.get(value) ?? {
+            value,
+            label: labelField ? String(row[labelField] ?? value) : null,
+            count: 0,
+            capped: false,
+            sums: emptySums(totals),
+          };
+          header.count += 1;
+          addToSums(header.sums ?? {}, totals, row);
+          headers.set(value, header);
+        }
+        const groups = sortGroups(def, key, [...headers.values()]);
+        return {
+          groups: groups.slice(0, GROUP_LIMIT),
+          source: "live",
+          truncated: groups.length > GROUP_LIMIT,
+        };
       },
       fetchNarrowed: async () => null,
       fetchLimits: async () => null,

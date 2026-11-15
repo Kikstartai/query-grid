@@ -29,6 +29,7 @@ import {
 import {
   FilterBar as BaseFilterBar,
   FilterChips as BaseFilterChips,
+  GroupControl as BaseGroupControl,
   SearchFilter as BaseSearchFilter,
   SortControl as BaseSortControl,
 } from "../components/filter-bar.tsx";
@@ -197,6 +198,46 @@ export function SortControl() {
   );
 }
 
+export function GroupControl() {
+  const { def } = useQueryGrid();
+  const messages = useMessages();
+  const locale = useLocale();
+  const query = useQueryState();
+  const context = useOfferContext();
+  const offers = useOffers();
+  const { dispatch } = useQueryGridActions();
+  const fields = context.runnable.groupFields;
+  if (fields.length === 0) {
+    return null;
+  }
+  return (
+    <BaseGroupControl
+      options={fields.map((key) => {
+        const offered = offers.groups.includes(key) || query.group === key;
+        return {
+          value: key,
+          label: getFieldLabel(def, key),
+          disabled: !offered,
+          reason: offered
+            ? null
+            : formatReason(
+                messages,
+                def,
+                explainUnavailable(
+                  query,
+                  { kind: "group", field: key },
+                  context,
+                ),
+                locale,
+              ),
+        };
+      })}
+      value={query.group}
+      onGroupChange={(field) => dispatch({ type: "setGroup", field })}
+    />
+  );
+}
+
 export function SearchFilter() {
   const { def } = useQueryGrid();
   const query = useQueryState();
@@ -316,6 +357,7 @@ function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
       <ContainsFilter fields={contains ?? fields} />
       <MatchToggle />
       <SortControl />
+      <GroupControl />
     </>
   );
 }

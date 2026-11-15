@@ -29,6 +29,7 @@ export {
 } from "./count-display.tsx";
 export {
   DataGrid,
+  type GridGroup,
   type DataGridProps,
   type DataGridRootProps,
   type DataGridToolbarProps,
@@ -64,12 +65,14 @@ export type {
 export {
   FilterBar,
   FilterChips,
+  GroupControl,
   SearchFilter,
   SortControl,
   type ChipItem,
   type ChipValueItem,
   type FilterBarProps,
   type FilterChipsProps,
+  type GroupControlProps,
   type SearchFilterProps,
   type SortControlProps,
 } from "./filter-bar.tsx";

@@ -73,6 +73,7 @@ export interface QueryState {
   match: MatchMode;
   search: string | null;
   sort: SortState;
+  group: string | null;
   cursor: string | null;
 }
 
@@ -88,6 +89,7 @@ export interface RunnableQueries {
   equalsFields: string[];
   rangeFields: string[];
   containsFields: string[];
+  groupFields: string[];
   sortFields: string[];
   searchFields: string[];
   isFacetCountExact: (query: QueryState) => boolean;

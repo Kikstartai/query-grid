@@ -4,6 +4,7 @@ import { Button } from "@ui-sdk/react/button";
 import { Input, InputClear, InputGroup } from "@ui-sdk/react/input";
 import {
   Select,
+  SelectClear,
   SelectContent,
   SelectTrigger,
   SelectValue,
@@ -77,6 +78,62 @@ export function SortControl({
       >
         {descending ? <ArrowDownIcon /> : <ArrowUpIcon />}
       </Button>
+    </FieldFrame>
+  );
+}
+
+export interface GroupControlProps extends ControlState {
+  options: ControlOption[];
+  value: string | null;
+  onGroupChange: (field: string | null) => void;
+}
+
+export function GroupControl({
+  options,
+  value,
+  onGroupChange,
+  disabled,
+  reason,
+}: GroupControlProps) {
+  const messages = useMessages();
+  return (
+    <FieldFrame
+      name="group"
+      kind="group"
+      label={messages.group}
+      disabled={disabled}
+      reason={reason}
+    >
+      <Select
+        items={options}
+        value={value}
+        disabled={disabled}
+        placeholder={messages.none}
+        onValueChange={(next: string | null) => onGroupChange(next)}
+      >
+        <SelectTrigger aria-label={messages.groupBy} data-filter="group">
+          <span className="qg-select-prefix">{messages.group}</span>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectClear
+          className="qg-clear"
+          aria-label={messages.clearField({ label: messages.group })}
+          data-filter-clear="group"
+        >
+          <XIcon size={12} />
+        </SelectClear>
+        <SelectContent>
+          {options.map((item) => (
+            <SelectOption
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              disabled={item.disabled}
+              reason={item.reason}
+            />
+          ))}
+        </SelectContent>
+      </Select>
     </FieldFrame>
   );
 }

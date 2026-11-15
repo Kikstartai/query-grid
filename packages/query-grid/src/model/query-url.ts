@@ -13,6 +13,7 @@ const EQUALS_PREFIX = "f.";
 const RANGE_PREFIX = "r.";
 const CONTAINS_PREFIX = "c.";
 const MATCH_PARAM = "match";
+const GROUP_PARAM = "group";
 const SEARCH_PARAM = "q";
 const SORT_PARAM = "sort";
 const CURSOR_PARAM = "cursor";
@@ -30,12 +31,14 @@ export function listQueryKeys(runnable: RunnableQueries): QueryKey[] {
     (key) => `${CONTAINS_PREFIX}${key}`,
   );
   const match = runnable.matchAny ? [MATCH_PARAM] : [];
+  const group = runnable.groupFields.length > 0 ? [GROUP_PARAM] : [];
   return [
     ...equals.map((name) => ({ name, repeated: true })),
     ...[
       ...ranges,
       ...contains,
       ...match,
+      ...group,
       SEARCH_PARAM,
       SORT_PARAM,
       CURSOR_PARAM,
@@ -73,6 +76,9 @@ export function encodeQuery(
   }
   if (!isDefaultSort(def, query.sort)) {
     params.set(SORT_PARAM, `${query.sort.field}.${query.sort.direction}`);
+  }
+  if (query.group !== null) {
+    params.set(GROUP_PARAM, query.group);
   }
   if (query.cursor) {
     params.set(CURSOR_PARAM, query.cursor);
@@ -127,6 +133,7 @@ export function decodeQuery(
     match: params.get(MATCH_PARAM) === "any" ? "any" : "all",
     search: params.get(SEARCH_PARAM),
     sort: decodeSort(def, params.get(SORT_PARAM)),
+    group: params.get(GROUP_PARAM),
     cursor: params.get(CURSOR_PARAM),
   };
 }

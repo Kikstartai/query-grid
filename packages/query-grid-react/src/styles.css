@@ -536,6 +536,49 @@
   background: var(--ui-background);
 }
 
+:where(.qg-group-row, .qg-group-more) {
+  box-sizing: border-box;
+  min-block-size: 2.25rem;
+  border-block-end: 1px solid var(--ui-border);
+}
+
+:where(.qg-group-row) {
+  background: color-mix(in oklab, var(--ui-muted) 60%, var(--ui-background));
+}
+
+:where(.qg-group-cell) {
+  gap: calc(var(--ui-spacing) * 2);
+  padding-block: var(--ui-spacing);
+  padding-inline: calc(var(--ui-spacing) * 2);
+  background: inherit;
+}
+
+:where(.qg-group-toggle) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-spacing);
+  font-weight: 600;
+}
+
+:where(.qg-group-chevron) {
+  display: inline-flex;
+}
+
+:where([dir="rtl"]) :where(.qg-group-chevron) {
+  transform: scaleX(-1);
+}
+
+:where(.qg-group-count, .qg-group-detail) {
+  color: var(--ui-muted-foreground);
+  font-size: calc(var(--ui-font-size) - 0.125rem);
+  white-space: nowrap;
+}
+
+:where(.qg-exclude) {
+  min-inline-size: 2rem;
+  justify-content: center;
+}
+
 :where(.qg-row:has(.qg-row-check[data-checked])) {
   background: var(--ui-muted);
 }

@@ -13,6 +13,7 @@ import type { GridLimits } from "./limits.ts";
 import type {
   CountResult,
   FacetCount,
+  GroupsResult,
   PageResult,
   TotalResult,
 } from "./wire-types.ts";
@@ -22,6 +23,7 @@ export const SUB_ROUTES = [
   "total",
   "facets",
   "options",
+  "groups",
   "narrowed",
   "limits",
   "transitions",
@@ -100,6 +102,10 @@ export function createHttpSource(
           signal,
         });
       },
+      fetchGroups: (query, signal) =>
+        readJson<GroupsResult>(`${route("groups")}?${filterParams(query)}`, {
+          signal,
+        }),
       fetchNarrowed: (query, signal) =>
         readJson<NarrowedResult>(
           `${route("narrowed")}?${filterParams(query)}`,

@@ -25,6 +25,7 @@ export type QueryAction =
   | { type: "setContains"; field: string; value: string }
   | { type: "clearContains" }
   | { type: "setMatch"; mode: MatchMode }
+  | { type: "setGroup"; field: string | null }
   | { type: "setSort"; field: string; direction: SortDirection }
   | { type: "setSearch"; value: string }
   | { type: "clearSearch" }
@@ -38,6 +39,7 @@ export interface Offers {
   ranges: string[];
   contains: string[];
   matchAny: boolean;
+  groups: string[];
   search: boolean;
 }
 
@@ -47,6 +49,7 @@ export type OfferTarget =
   | { kind: "contains"; field: string }
   | { kind: "sort"; field: string }
   | { kind: "match" }
+  | { kind: "group"; field: string }
   | { kind: "search" };
 
 export type ReasonCode =
@@ -59,7 +62,8 @@ export type ReasonCode =
   | "no_filter_with"
   | "no_range_with"
   | "narrow_first"
-  | "narrow_counting";
+  | "narrow_counting"
+  | "no_group_with";
 
 export interface UnavailableReason {
   code: ReasonCode;
@@ -82,6 +86,7 @@ export function defaultQuery(def: BaseGridDef): QueryState {
     match: "all",
     search: null,
     sort: def.defaultSort,
+    group: null,
     cursor: null,
   };
 }
@@ -193,6 +198,8 @@ function proposeAction(
       return [{ ...top, contains: null }];
     case "setMatch":
       return [{ ...top, match: action.mode }];
+    case "setGroup":
+      return [{ ...top, group: action.field }];
     case "setSort": {
       const unordered =
         !searchIsOrdered &&
@@ -325,6 +332,9 @@ export function listOffers(
     matchAny:
       context.runnable.matchAny &&
       isOffered(def, query, { type: "setMatch", mode: "any" }, context),
+    groups: context.runnable.groupFields.filter((field) =>
+      isOffered(def, query, { type: "setGroup", field }, context),
+    ),
     search: isOffered(def, query, { type: "setSearch", value: "xxx" }, context),
   };
 }
@@ -364,6 +374,8 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
       return { ...query, contains: { field: target.field, value: "xx" } };
     case "match":
       return { ...query, match: "any" };
+    case "group":
+      return { ...query, group: target.field };
     default:
       return query;
   }
@@ -421,6 +433,13 @@ export function explainUnavailable(
   if (target.kind === "match") {
     return describeQuery(query, "no_filter_with", null);
   }
+  if (target.kind === "group") {
+    return describeQuery(
+      query,
+      query.search === null ? "no_group_with" : "search_no_combine",
+      target.field,
+    );
+  }
   if (query.search !== null && target.kind === "sort") {
     return describeQuery(
       query,
@@ -459,6 +478,7 @@ function stateKey(query: QueryState): string {
       .join("+"),
     query.contains ? `contains:${query.contains.field}` : "",
     query.match,
+    query.group ?? "",
     query.search !== null ? "search" : "",
     query.sort.field,
   ].join("|");
@@ -502,6 +522,12 @@ export function listControlActions(
   }
   if (query.match === "any") {
     actions.push({ type: "setMatch", mode: "all" });
+  }
+  for (const field of offers.groups) {
+    actions.push({ type: "setGroup", field });
+  }
+  if (query.group !== null) {
+    actions.push({ type: "setGroup", field: null });
   }
   if (offers.search) {
     actions.push({ type: "setSearch", value: "xxx" });

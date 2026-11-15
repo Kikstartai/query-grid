@@ -383,6 +383,7 @@ function isOffered(offers: Offers, target: OfferTarget): boolean {
     equals: offers.equals,
     range: offers.ranges,
     contains: offers.contains,
+    group: offers.groups,
     sort: offers.sorts,
   }[target.kind];
   return fields.includes(target.field);
@@ -461,6 +462,13 @@ export function formatChip(
         id: chip.id,
         kind: chip.kind,
         label: messages.chipMatchAny,
+        removable,
+      };
+    case "group":
+      return {
+        id: chip.id,
+        kind: chip.kind,
+        label: messages.chipGroup({ label }),
         removable,
       };
     case "search":

@@ -1,6 +1,19 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+
+import {
+  createGrouping,
+  EMPTY_VALUE,
+  formatSum,
+  formatValue,
+  getField,
+  listTotalFields,
+  resolveFilterKind,
+  type BaseFieldDef,
+  type GroupHeader,
+  type SortDirection,
+} from "@kikstart/query-grid";
 
 import { CardList as BaseCardList } from "../components/card-list.tsx";
 import { ColumnsMenu as BaseColumnsMenu } from "../components/columns-menu.tsx";
@@ -10,10 +23,14 @@ import {
 } from "../components/data-grid.tsx";
 import type { RowWindow } from "../components/fields.ts";
 import {
+  countParams,
+  formatList,
   formatProblemMessage,
   useLocale,
   useMessages,
+  type QueryGridMessages,
 } from "../components/messages.tsx";
+import { useStoreValue } from "../components/use-store-value.ts";
 import {
   useColumns,
   useFeedState,
@@ -45,48 +62,158 @@ export interface DataGridRootProps {
   children: ReactNode;
 }
 
-function DataGridRoot({ children }: DataGridRootProps) {
-  const { def } = useQueryGrid();
-  const rowWindow = useRowWindow();
-  const state = useFeedState();
+function useGridControls() {
+  const { def, source } = useQueryGrid();
   const query = useQueryState();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
   const { state: columns, store } = useColumns();
+  return {
+    fields: def.fields,
+    columns,
+    onColumnsChange: store.setColumns,
+    sort: query.sort,
+    sortableFields: offers.sorts,
+    onSortChange: (field: string, direction: SortDirection) =>
+      dispatch({ type: "setSort", field, direction }),
+    filters: Object.fromEntries(
+      def.fields
+        .filter((field) => resolveFilterKind(field, source.runnable) !== null)
+        .map((field) => [
+          field.key,
+          <FieldFilter key={field.key} field={field} />,
+        ]),
+    ),
+    activeFilters: [
+      ...Object.keys(query.equals),
+      ...query.ranges.map((range) => range.field),
+      ...(query.contains ? [query.contains.field] : []),
+    ],
+  };
+}
+
+function FlatRoot({ children }: DataGridRootProps) {
+  const rowWindow = useRowWindow();
+  const state = useFeedState();
+  const controls = useGridControls();
   return (
     <BaseDataGrid.Root
-      fields={def.fields}
+      {...controls}
       {...rowWindow}
       capped={state.capped}
       resetKey={state.query}
-      columns={columns}
-      onColumnsChange={store.setColumns}
-      sort={query.sort}
-      sortableFields={offers.sorts}
-      onSortChange={(field, direction) =>
-        dispatch({ type: "setSort", field, direction })
-      }
-      filters={Object.fromEntries(
-        def.fields
-          .filter(
-            (field) =>
-              offers.equals.includes(field.key) ||
-              offers.ranges.includes(field.key),
-          )
-          .map((field) => [
-            field.key,
-            <FieldFilter key={field.key} field={field} />,
-          ]),
-      )}
-      activeFilters={[
-        ...Object.keys(query.equals),
-        ...query.ranges.map((range) => range.field),
-        ...(query.contains ? [query.contains.field] : []),
-      ]}
     >
       {children}
     </BaseDataGrid.Root>
   );
+}
+
+function ignoreEnd(): void {
+  return;
+}
+
+function formatGroupLabel(
+  messages: QueryGridMessages,
+  field: BaseFieldDef | null,
+  header: GroupHeader,
+  locale: string,
+): string {
+  if (header.value === EMPTY_VALUE) {
+    return messages.emptyValue;
+  }
+  if (header.label !== null) {
+    return header.label;
+  }
+  return field ? formatValue(field, header.value, locale) : header.value;
+}
+
+function formatGroupCount(
+  messages: QueryGridMessages,
+  header: GroupHeader,
+  locale: string,
+): string {
+  const params = countParams(header.count, locale);
+  return header.capped ? messages.rowsCapped(params) : messages.rows(params);
+}
+
+function formatGroupSums(
+  messages: QueryGridMessages,
+  totals: BaseFieldDef[],
+  header: GroupHeader,
+  locale: string,
+): string | null {
+  const { sums } = header;
+  if (!sums || totals.length === 0) {
+    return null;
+  }
+  return formatList(
+    locale,
+    totals.map(
+      (field) =>
+        `${messages.totalSum({ label: field.label })} ${formatSum(field, sums[field.key] ?? 0, locale)}`,
+    ),
+    "unit",
+  );
+}
+
+function GroupedRoot({ children }: DataGridRootProps) {
+  const { def, source } = useQueryGrid();
+  const query = useQueryState();
+  const messages = useMessages();
+  const locale = useLocale();
+  const controls = useGridControls();
+  const [grouping] = useState(() => createGrouping(def, source, query));
+  const state = useStoreValue(grouping.subscribe, grouping.getState);
+  const field = getField(def, query.group ?? "");
+  const totals = listTotalFields(def);
+  return (
+    <BaseDataGrid.Root
+      {...controls}
+      rows={[]}
+      hasNext={false}
+      onEndReached={ignoreEnd}
+      loading={state.status === "loading"}
+      pages={state.loaded ? undefined : 0}
+      error={
+        state.error ? formatProblemMessage(messages, state.error, locale) : null
+      }
+      capped={state.truncated}
+      resetKey={grouping}
+      groups={state.groups.map((group) => ({
+        key: group.header.value,
+        label: formatGroupLabel(messages, field, group.header, locale),
+        count: formatGroupCount(messages, group.header, locale),
+        detail: formatGroupSums(messages, totals, group.header, locale),
+        expanded: group.expanded,
+        rows: group.rows,
+        hasNext: group.hasNext,
+        loading: group.status === "loading",
+        error: group.error
+          ? formatProblemMessage(messages, group.error, locale)
+          : null,
+      }))}
+      onGroupToggle={grouping.toggle}
+      onGroupLoadMore={grouping.loadMore}
+    >
+      {children}
+    </BaseDataGrid.Root>
+  );
+}
+
+function DataGridRoot({ children }: DataGridRootProps) {
+  const query = useQueryState();
+  if (query.group === null) {
+    return <FlatRoot>{children}</FlatRoot>;
+  }
+  const key = JSON.stringify([
+    query.group,
+    query.equals,
+    query.ranges,
+    query.contains,
+    query.match,
+    query.sort,
+  ]);
+  return <GroupedRoot key={key}>{children}</GroupedRoot>;
 }
 
 function DefaultDataGrid() {

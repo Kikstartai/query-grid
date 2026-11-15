@@ -12,6 +12,7 @@ export {
   type ChipValue,
   type ContainsChip,
   type EqualsChip,
+  type GroupChip,
   type MatchChip,
   type FilterChip,
   type SearchChip,
@@ -19,6 +20,17 @@ export {
   type SortChip,
 } from "./model/chips.ts";
 export type { DataSource } from "./model/data-source.ts";
+export {
+  createGrouping,
+  getGroupQuery,
+  GROUP_LIMIT,
+  GROUP_PAGE_SIZE,
+  sortGroups,
+  toGroupValue,
+  type Grouping,
+  type GroupingState,
+  type GroupState,
+} from "./model/groups.ts";
 export {
   DATE_PRESETS,
   isDatePreset,
@@ -151,10 +163,12 @@ export {
   countFilterTerms,
   gridDefRunnable,
   isFacetOnlyQuery,
+  isGroupNarrowed,
   isMatchAny,
   isQueryIndexed,
   isQueryRunnable,
   listContainsFields,
+  listGroupFields,
   listNarrowRangeFields,
   planQuery,
   listSortFields,
@@ -195,6 +209,9 @@ export type {
   CountResult,
   CountSource,
   FacetCount,
+  GroupHeader,
+  GroupSource,
+  GroupsResult,
   OptionSearch,
   PageResult,
   TotalAvailable,

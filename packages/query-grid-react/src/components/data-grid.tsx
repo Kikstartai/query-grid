@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@ui-sdk/react/button";
 import { Checkbox, CheckboxIndicator } from "@ui-sdk/react/checkbox";
 import {
   usePart,
@@ -33,8 +34,13 @@ import {
   SELECT_COLUMN_WIDTH,
   type HeaderControls,
 } from "./grid-header.tsx";
-import { HEADER_HEIGHT, sheet, type RowView } from "./grid-primitive.ts";
-import { CheckIcon } from "./icons.tsx";
+import {
+  HEADER_HEIGHT,
+  sheet,
+  type RowView,
+  type SheetLayout,
+} from "./grid-primitive.ts";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from "./icons.tsx";
 import { useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useColumnState } from "./use-column-state.ts";
@@ -43,8 +49,23 @@ import { useVirtualItems } from "./use-virtual-items.ts";
 type SheetHandle = PrimitiveHandle<typeof sheet>;
 type Column = GridColumn<FieldDef>;
 
+export interface GridGroup {
+  key: string;
+  label: string;
+  count: string;
+  detail?: string | null;
+  expanded: boolean;
+  rows: GridRow[];
+  hasNext: boolean;
+  loading: boolean;
+  error?: string | null;
+}
+
 export interface DataGridProps extends RowWindow {
   fields: FieldDef[];
+  groups?: GridGroup[];
+  onGroupToggle?: (key: string) => void;
+  onGroupLoadMore?: (key: string) => void;
   capped?: boolean;
   resetKey?: unknown;
   columns?: ColumnState[];
@@ -72,8 +93,50 @@ interface GridLayout {
   layoutKey: string;
 }
 
+type GridEntry =
+  | { kind: "row"; key: string; row: number }
+  | { kind: "group"; key: string; group: GridGroup }
+  | { kind: "more"; key: string; group: GridGroup };
+
+interface GroupedRows {
+  rows: GridRow[];
+  entries: GridEntry[];
+  layout: SheetLayout;
+}
+
+function needsMoreRow(group: GridGroup): boolean {
+  return group.hasNext || group.loading || Boolean(group.error);
+}
+
+function layoutGroups(groups: GridGroup[]): GroupedRows {
+  const rows: GridRow[] = [];
+  const entries: GridEntry[] = [];
+  const rowItems: number[] = [];
+  for (const group of groups) {
+    entries.push({ kind: "group", key: `group:${group.key}`, group });
+    if (!group.expanded) {
+      continue;
+    }
+    for (const row of group.rows) {
+      rowItems.push(entries.length);
+      entries.push({ kind: "row", key: row.id, row: rows.length });
+      rows.push(row);
+    }
+    if (needsMoreRow(group)) {
+      entries.push({ kind: "more", key: `more:${group.key}`, group });
+    }
+  }
+  return {
+    rows,
+    entries,
+    layout: { keys: entries.map((entry) => entry.key), rowItems },
+  };
+}
+
 interface DataGridContextValue {
   props: DataGridProps;
+  rows: GridRow[];
+  entries: GridEntry[] | null;
   handle: SheetHandle;
   state: ColumnState[];
   update: (change: ColumnUpdate) => void;
@@ -181,13 +244,21 @@ function GridCells({ handle, view, row, columns }: GridCellsProps) {
 
 interface GridRowPartProps {
   handle: SheetHandle;
+  item: number;
   index: number;
   start: number;
   row: GridRow;
   layout: GridLayout;
 }
 
-function GridRowPart({ handle, index, start, row, layout }: GridRowPartProps) {
+function GridRowPart({
+  handle,
+  item,
+  index,
+  start,
+  row,
+  layout,
+}: GridRowPartProps) {
   return usePart(
     handle,
     "row",
@@ -195,7 +266,7 @@ function GridRowPart({ handle, index, start, row, layout }: GridRowPartProps) {
     withData(
       {
         ref: (el: HTMLDivElement | null) =>
-          handle.api.virtual.measure(index, el),
+          handle.api.virtual.measure(item, el),
         className: "qg-row",
         style: {
           position: "absolute" as const,
@@ -217,6 +288,209 @@ function GridRowPart({ handle, index, start, row, layout }: GridRowPartProps) {
       { "data-row": index, "data-row-id": row.id },
     ),
     "div",
+  );
+}
+
+interface GroupRowProps {
+  handle: SheetHandle;
+  item: number;
+  start: number;
+  group: GridGroup;
+  layout: GridLayout;
+}
+
+function groupRowStyle(start: number, layout: GridLayout) {
+  return {
+    position: "absolute" as const,
+    top: 0,
+    insetInlineStart: 0,
+    display: "flex",
+    transform: `translateY(${start}px)`,
+    width: SELECT_COLUMN_WIDTH + layout.totalWidth,
+  };
+}
+
+const GROUP_CELL_STYLE = {
+  position: "sticky" as const,
+  insetInlineStart: 0,
+  display: "flex",
+  alignItems: "center",
+};
+
+function GroupChevron({ expanded }: { expanded: boolean }) {
+  if (expanded) {
+    return <ChevronDownIcon />;
+  }
+  return (
+    <span className="qg-group-chevron">
+      <ChevronRightIcon />
+    </span>
+  );
+}
+
+function GroupDetail({ detail }: { detail?: string | null }) {
+  if (!detail) {
+    return null;
+  }
+  return <bdi className="qg-group-detail">{detail}</bdi>;
+}
+
+function GroupHeaderRow({ handle, item, start, group, layout }: GroupRowProps) {
+  const { props } = useDataGrid();
+  const messages = useMessages();
+  return (
+    <div
+      ref={(el) => handle.api.virtual.measure(item, el)}
+      className="qg-group-row"
+      role="row"
+      data-group={group.key}
+      data-expanded={group.expanded ? "" : undefined}
+      style={groupRowStyle(start, layout)}
+    >
+      <div
+        className="qg-group-cell"
+        role="gridcell"
+        aria-colspan={layout.columns.length + 1}
+        style={GROUP_CELL_STYLE}
+      >
+        <Button
+          className="qg-group-toggle"
+          aria-expanded={group.expanded}
+          aria-label={messages.groupToggle({ label: group.label })}
+          data-group-toggle={group.key}
+          onClick={() => props.onGroupToggle?.(group.key)}
+        >
+          <GroupChevron expanded={group.expanded} />
+          <bdi className="qg-group-label">{group.label}</bdi>
+        </Button>
+        <bdi className="qg-group-count" data-group-count={group.key}>
+          {group.count}
+        </bdi>
+        <GroupDetail detail={group.detail} />
+      </div>
+    </div>
+  );
+}
+
+function GroupMoreContent({ group }: { group: GridGroup }) {
+  const { props } = useDataGrid();
+  const messages = useMessages();
+  if (group.error) {
+    return (
+      <bdi className="qg-notice-error" data-group-error={group.key}>
+        {group.error}
+      </bdi>
+    );
+  }
+  if (group.loading) {
+    return <bdi data-group-loading={group.key}>{messages.feedLoading}</bdi>;
+  }
+  return (
+    <Button
+      data-group-more={group.key}
+      onClick={() => props.onGroupLoadMore?.(group.key)}
+    >
+      {messages.groupLoadMore}
+    </Button>
+  );
+}
+
+function GroupMoreRow({ handle, item, start, group, layout }: GroupRowProps) {
+  return (
+    <div
+      ref={(el) => handle.api.virtual.measure(item, el)}
+      className="qg-group-more"
+      role="row"
+      style={groupRowStyle(start, layout)}
+    >
+      <div
+        className="qg-group-cell"
+        role="gridcell"
+        aria-colspan={layout.columns.length + 1}
+        style={GROUP_CELL_STYLE}
+      >
+        <GroupMoreContent group={group} />
+      </div>
+    </div>
+  );
+}
+
+interface GridEntryRowProps {
+  entry: GridEntry;
+  item: number;
+  start: number;
+}
+
+function GridEntryRow({ entry, item, start }: GridEntryRowProps) {
+  const { rows, handle, layout } = useDataGrid();
+  if (entry.kind === "group") {
+    return (
+      <GroupHeaderRow
+        handle={handle}
+        item={item}
+        start={start}
+        group={entry.group}
+        layout={layout}
+      />
+    );
+  }
+  if (entry.kind === "more") {
+    return (
+      <GroupMoreRow
+        handle={handle}
+        item={item}
+        start={start}
+        group={entry.group}
+        layout={layout}
+      />
+    );
+  }
+  const row = rows[entry.row];
+  if (!row) {
+    return null;
+  }
+  return (
+    <GridRowPart
+      handle={handle}
+      item={item}
+      index={entry.row}
+      start={start}
+      row={row}
+      layout={layout}
+    />
+  );
+}
+
+function GroupedRows() {
+  const { entries, handle, layout } = useDataGrid();
+  const { items, size } = useVirtualItems(handle.api.virtual);
+  return (
+    <div
+      className="qg-rows"
+      role="rowgroup"
+      data-part="grid-rows"
+      data-grouped=""
+      data-mounted={items.length}
+      style={{
+        position: "relative",
+        height: size,
+        width: SELECT_COLUMN_WIDTH + layout.totalWidth,
+      }}
+    >
+      {items.flatMap((item) => {
+        const entry = entries?.[item.index];
+        return entry
+          ? [
+              <GridEntryRow
+                key={`${item.key}:${layout.layoutKey}`}
+                entry={entry}
+                item={item.index}
+                start={item.start}
+              />,
+            ]
+          : [];
+      })}
+    </div>
   );
 }
 
@@ -242,6 +516,7 @@ function GridRows() {
               <GridRowPart
                 key={`${item.key}:${layout.layoutKey}`}
                 handle={handle}
+                item={item.index}
                 index={item.index}
                 start={item.start}
                 row={row}
@@ -255,7 +530,13 @@ function GridRows() {
 }
 
 function GridBody() {
-  const { props } = useDataGrid();
+  const { props, entries } = useDataGrid();
+  if (entries) {
+    if (props.error || entries.length === 0) {
+      return <FeedNotice {...props} />;
+    }
+    return <GroupedRows />;
+  }
   if (isWindowBlank(props)) {
     return <FeedNotice {...props} />;
   }
@@ -270,7 +551,7 @@ interface SheetStatus {
 }
 
 function FeedProgress() {
-  const { props } = useDataGrid();
+  const { props, entries } = useDataGrid();
   const messages = useMessages();
   if (props.loading) {
     return <bdi data-status="feed">{messages.feedLoading}</bdi>;
@@ -278,16 +559,16 @@ function FeedProgress() {
   if (props.capped) {
     return <bdi data-status="feed">{messages.feedCapped}</bdi>;
   }
-  if (!props.hasNext) {
+  if (!props.hasNext && !entries) {
     return <bdi data-status="feed">{messages.feedEnd}</bdi>;
   }
   return <span data-status="feed" />;
 }
 
 function SelectAll() {
-  const { props, handle } = useDataGrid();
+  const { rows, handle } = useDataGrid();
   const messages = useMessages();
-  const loaded = props.rows.length;
+  const loaded = rows.length;
   return usePart(
     handle,
     "status",
@@ -309,7 +590,9 @@ function SelectAll() {
 }
 
 function DataGridRoot({ children, ...props }: DataGridRootProps) {
-  const { fields, rows, resetKey } = props;
+  const { fields, resetKey } = props;
+  const grouped = props.groups ? layoutGroups(props.groups) : null;
+  const rows = grouped?.rows ?? props.rows;
   const locale = useLocale();
   const { columns: state, update } = useColumnState(props);
   const columns = layoutColumns(fields, state);
@@ -329,13 +612,16 @@ function DataGridRoot({ children, ...props }: DataGridRootProps) {
     rows,
     columns: columns.map((column) => column.field),
     locale,
+    layout: grouped?.layout ?? null,
     onEndReached: props.onEndReached,
   });
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
 
+  const entryCount = grouped?.entries.length ?? rows.length;
+
   useEffect(() => {
     handle.api.virtual.refresh();
-  }, [handle, rows, layout.layoutKey]);
+  }, [handle, rows, entryCount, layout.layoutKey]);
 
   useEffect(() => {
     if (epoch === 0) {
@@ -348,7 +634,16 @@ function DataGridRoot({ children, ...props }: DataGridRootProps) {
   return (
     <div className="qg-grid" data-part="grid" style={FILL_COLUMN_STYLE}>
       <DataGridContext
-        value={{ props, handle, state, update, layout, setScroller }}
+        value={{
+          props,
+          rows,
+          entries: grouped?.entries ?? null,
+          handle,
+          state,
+          update,
+          layout,
+          setScroller,
+        }}
       >
         {children}
       </DataGridContext>
@@ -361,7 +656,7 @@ function DataGridToolbar({ children }: DataGridToolbarProps) {
 }
 
 function DataGridStatus() {
-  const { props, handle } = useDataGrid();
+  const { props, rows, handle } = useDataGrid();
   const messages = useMessages();
   const none = (value: string) => (value === "none" ? messages.none : value);
   return usePart(
@@ -375,7 +670,7 @@ function DataGridStatus() {
           <>
             <span className="qg-status-feed">
               <LoadedText
-                rows={props.rows}
+                rows={rows}
                 loading={props.loading}
                 pages={props.pages}
               />

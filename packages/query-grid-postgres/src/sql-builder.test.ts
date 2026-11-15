@@ -43,6 +43,7 @@ const BASE: QueryState = {
   equals: {},
   ranges: [],
   contains: null,
+  group: null,
   match: "all",
   search: null,
   sort: TEST_DEF.defaultSort,
