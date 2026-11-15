@@ -53,6 +53,7 @@ function formatBound(
   def: BaseGridDef,
   key: string,
   bound: string | null,
+  locale: string | undefined,
 ): string | null {
   const field = getField(def, key);
   if (!field || bound === null) {
@@ -61,7 +62,7 @@ function formatBound(
   if (field.type === "datetime") {
     return fromDayBound(bound);
   }
-  return formatValue(field, bound, def.format);
+  return formatValue(field, bound, locale);
 }
 
 function formatEquals(
@@ -69,19 +70,21 @@ function formatEquals(
   key: string,
   value: string,
   labels: Record<string, string>,
+  locale: string | undefined,
 ): string {
   const field = getField(def, key);
   const known = labels[labelKey(key, value)];
   if (known) {
     return known;
   }
-  return field ? formatValue(field, value, def.format) : value;
+  return field ? formatValue(field, value, locale) : value;
 }
 
 export function listFilterChips(
   def: BaseGridDef,
   query: QueryState,
   labels: Record<string, string> = {},
+  locale?: string,
 ): FilterChip[] {
   const chips: FilterChip[] = Object.entries(query.equals).map(
     ([field, values]) => ({
@@ -90,7 +93,7 @@ export function listFilterChips(
       field,
       values: values.map((value) => ({
         value,
-        text: formatEquals(def, field, value, labels),
+        text: formatEquals(def, field, value, labels, locale),
         clear: { type: "removeEqualsValue", field, value },
       })),
       clear: { type: "clearEquals", field },
@@ -102,8 +105,8 @@ export function listFilterChips(
       id: `range:${field}`,
       kind: "range",
       field,
-      min: formatBound(def, field, min),
-      max: formatBound(def, field, max),
+      min: formatBound(def, field, min, locale),
+      max: formatBound(def, field, max, locale),
       clear: { type: "clearRange" },
     });
   }

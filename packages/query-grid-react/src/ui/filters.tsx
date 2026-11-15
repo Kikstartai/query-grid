@@ -26,7 +26,7 @@ import {
   SortControl as BaseSortControl,
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
-import { useMessages } from "../components/messages.tsx";
+import { useLocale, useMessages } from "../components/messages.tsx";
 import {
   formatReason,
   useFieldLabels,
@@ -94,7 +94,6 @@ function BoundLookupFilter({ field }: FieldFilterProps) {
 }
 
 function BoundRangeFilter({ field }: FieldFilterProps) {
-  const { def } = useQueryGrid();
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   return (
@@ -108,7 +107,6 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
             : { type: "clearRange" },
         )
       }
-      format={def.format}
       {...useFieldOffer(field.key, "range")}
     />
   );
@@ -131,6 +129,7 @@ export function FieldFilter(props: FieldFilterProps) {
 export function SortControl() {
   const { def } = useQueryGrid();
   const messages = useMessages();
+  const locale = useLocale();
   const query = useQueryState();
   const rules = useQueryRules();
   const offers = useOffers();
@@ -160,6 +159,7 @@ export function SortControl() {
                 { kind: "sort", field: query.sort.field },
                 rules,
               ),
+              locale,
             )
       }
     />

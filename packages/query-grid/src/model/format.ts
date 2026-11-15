@@ -1,57 +1,72 @@
-import type { BaseFieldDef, GridFormat } from "./field-types.ts";
+import type { BaseFieldDef } from "./field-types.ts";
 
-interface Formatters {
-  dateTime: Intl.DateTimeFormat;
-  money: Intl.NumberFormat;
-  integer: Intl.NumberFormat;
-}
-
-export const DEFAULT_LOCALE = "en-US";
+export const DEFAULT_LOCALE = "en";
 export const DEFAULT_CURRENCY = "USD";
-const cache = new Map<string, Formatters>();
 
-function resolveFormatters(format: GridFormat | undefined): Formatters {
-  const locale = format?.locale ?? DEFAULT_LOCALE;
-  const currency = format?.currency ?? DEFAULT_CURRENCY;
-  const key = `${locale}|${currency}`;
+const dateTimes = new Map<string, Intl.DateTimeFormat>();
+const integers = new Map<string, Intl.NumberFormat>();
+const moneys = new Map<string, Intl.NumberFormat>();
+
+function resolveCached<T>(
+  cache: Map<string, T>,
+  key: string,
+  create: () => T,
+): T {
   const existing = cache.get(key);
   if (existing) {
     return existing;
   }
-  const created: Formatters = {
-    dateTime: new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }),
-    money: new Intl.NumberFormat(locale, { style: "currency", currency }),
-    integer: new Intl.NumberFormat(locale),
-  };
+  const created = create();
   cache.set(key, created);
   return created;
 }
 
-export function formatCount(count: number, format?: GridFormat): string {
-  return resolveFormatters(format).integer.format(count);
+export function formatCount(count: number, locale = DEFAULT_LOCALE): string {
+  return resolveCached(
+    integers,
+    locale,
+    () => new Intl.NumberFormat(locale),
+  ).format(count);
 }
 
-export function formatMoney(cents: number, format?: GridFormat): string {
-  return resolveFormatters(format).money.format(cents / 100);
+export function formatMoney(
+  cents: number,
+  locale = DEFAULT_LOCALE,
+  currency = DEFAULT_CURRENCY,
+): string {
+  return resolveCached(
+    moneys,
+    `${locale}|${currency}`,
+    () => new Intl.NumberFormat(locale, { style: "currency", currency }),
+  ).format(cents / 100);
+}
+
+function formatDateTime(date: Date, locale: string): string {
+  return resolveCached(
+    dateTimes,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }),
+  ).format(date);
 }
 
 export function formatSum(
   field: BaseFieldDef,
   sum: number,
-  format?: GridFormat,
+  locale = DEFAULT_LOCALE,
 ): string {
   return field.type === "money"
-    ? formatMoney(sum, format)
-    : formatCount(sum, format);
+    ? formatMoney(sum, locale, field.currency)
+    : formatCount(sum, locale);
 }
 
 export function formatValue(
   field: BaseFieldDef,
   value: string | number | null,
-  format?: GridFormat,
+  locale = DEFAULT_LOCALE,
 ): string {
   if (value === null || value === "") {
     return "";
@@ -61,10 +76,10 @@ export function formatValue(
       const date = new Date(String(value));
       return Number.isNaN(date.getTime())
         ? String(value)
-        : resolveFormatters(format).dateTime.format(date);
+        : formatDateTime(date, locale);
     }
     case "money":
-      return formatMoney(Number(value), format);
+      return formatMoney(Number(value), locale, field.currency);
     case "integer":
       return String(value);
     case "enum":

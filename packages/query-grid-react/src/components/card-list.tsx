@@ -3,14 +3,11 @@
 import { createVirtualizer } from "@ui-sdk/core";
 import { useEffect, useState, type RefObject } from "react";
 
-import {
-  formatValue,
-  type GridFormat,
-  type GridRow,
-} from "@kikstart/query-grid";
+import { formatValue, type GridRow } from "@kikstart/query-grid";
 
 import { FeedNotice, isWindowBlank, LoadedText } from "./feed-notice.tsx";
 import type { FieldDef, RowWindow } from "./fields.ts";
+import { useLocale } from "./messages.tsx";
 import { FILL_COLUMN_STYLE } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -35,15 +32,15 @@ type ListVirtualizer = ReturnType<typeof createListVirtualizer>;
 interface CardValueProps {
   field: FieldDef;
   row: GridRow;
-  format?: GridFormat;
 }
 
-function CardValue({ field, row, format }: CardValueProps) {
+function CardValue({ field, row }: CardValueProps) {
+  const locale = useLocale();
   const value = row[field.key] ?? null;
   if (field.cell) {
     return field.cell(value, row);
   }
-  return <bdi>{formatValue(field, value, format)}</bdi>;
+  return <bdi>{formatValue(field, value, locale)}</bdi>;
 }
 
 interface CardProps {
@@ -52,10 +49,10 @@ interface CardProps {
   start: number;
   row: GridRow;
   fields: FieldDef[];
-  format?: GridFormat;
 }
 
-function Card({ virtual, index, start, row, fields, format }: CardProps) {
+function Card({ virtual, index, start, row, fields }: CardProps) {
+  const locale = useLocale();
   const [measure] = useState(
     () => (el: HTMLElement | null) => virtual.measure(index, el),
   );
@@ -77,16 +74,15 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
       <div className="qg-card">
         <div className="qg-card-head">
           <div className="qg-card-title">
-            <bdi>{title.label}</bdi>{" "}
-            <CardValue field={title} row={row} format={format} />
+            <bdi>{title.label}</bdi> <CardValue field={title} row={row} />
           </div>
           <span className="qg-badge" data-value={row[badge.key] ?? ""}>
-            <CardValue field={badge} row={row} format={format} />
+            <CardValue field={badge} row={row} />
           </span>
         </div>
         <dl className="qg-card-details">
           {rest.flatMap((field) => {
-            const text = formatValue(field, row[field.key] ?? null, format);
+            const text = formatValue(field, row[field.key] ?? null, locale);
             return text
               ? [
                   <div key={field.key} className="qg-card-detail">
@@ -94,7 +90,7 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
                       <bdi>{field.label}:</bdi>
                     </dt>
                     <dd>
-                      <CardValue field={field} row={row} format={format} />
+                      <CardValue field={field} row={row} />
                     </dd>
                   </div>,
                 ]
@@ -110,11 +106,10 @@ export interface CardListProps extends RowWindow {
   fields: FieldDef[];
   titleField: string;
   badgeField: string;
-  format?: GridFormat;
 }
 
 export function CardList(props: CardListProps) {
-  const { rows, onEndReached, titleField, badgeField, format } = props;
+  const { rows, onEndReached, titleField, badgeField } = props;
   const latest = useLatest({ rows, onEndReached });
   const [virtual] = useState(() => createListVirtualizer(latest));
   const { items, size } = useVirtualItems(virtual);
@@ -138,12 +133,7 @@ export function CardList(props: CardListProps) {
   return (
     <div className="qg-list" data-part="list" style={FILL_COLUMN_STYLE}>
       <div className="qg-status">
-        <LoadedText
-          rows={rows}
-          loading={props.loading}
-          pages={props.pages}
-          format={format}
-        />
+        <LoadedText rows={rows} loading={props.loading} pages={props.pages} />
       </div>
       <div
         className="qg-list-scroller"
@@ -164,7 +154,6 @@ export function CardList(props: CardListProps) {
                     start={item.start}
                     row={row}
                     fields={fields}
-                    format={format}
                   />,
                 ]
               : [];

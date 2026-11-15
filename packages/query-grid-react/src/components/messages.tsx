@@ -5,7 +5,6 @@ import { createContext, use, type ReactNode } from "react";
 import {
   DEFAULT_LOCALE,
   formatCount,
-  type GridFormat,
   type Problem,
   type ProblemParams,
   type ReasonCode,
@@ -292,73 +291,72 @@ function mergeMessages(
   };
 }
 
-const MessagesContext = createContext<QueryGridMessages>(DEFAULT_MESSAGES);
+interface MessagesContextValue {
+  messages: QueryGridMessages;
+  locale: string;
+}
+
+const MessagesContext = createContext<MessagesContextValue>({
+  messages: DEFAULT_MESSAGES,
+  locale: DEFAULT_LOCALE,
+});
 
 export interface QueryGridMessagesProviderProps {
-  messages: QueryGridMessageOverrides;
+  messages?: QueryGridMessageOverrides;
+  locale?: string;
   children: ReactNode;
 }
 
 export function QueryGridMessagesProvider({
-  messages,
+  messages = {},
+  locale = DEFAULT_LOCALE,
   children,
 }: QueryGridMessagesProviderProps) {
   return (
-    <MessagesContext value={mergeMessages(messages)}>
+    <MessagesContext value={{ messages: mergeMessages(messages), locale }}>
       {children}
     </MessagesContext>
   );
 }
 
 export function useMessages(): QueryGridMessages {
-  return use(MessagesContext);
+  return use(MessagesContext).messages;
 }
 
-export function resolveLocale(format: GridFormat | undefined): string {
-  return format?.locale ?? DEFAULT_LOCALE;
+export function useLocale(): string {
+  return use(MessagesContext).locale;
 }
 
-export function countParams(count: number, format?: GridFormat): CountParams {
-  return {
-    count,
-    formatted: formatCount(count, format),
-    locale: resolveLocale(format),
-  };
+export function countParams(count: number, locale: string): CountParams {
+  return { count, formatted: formatCount(count, locale), locale };
 }
 
 export function formatRows(
   messages: QueryGridMessages,
   count: number,
-  format?: GridFormat,
+  locale: string,
 ): string {
-  return messages.rows(countParams(count, format));
+  return messages.rows(countParams(count, locale));
 }
 
 export function formatLoaded(
   messages: QueryGridMessages,
   rows: number,
   pages: number | undefined,
-  format?: GridFormat,
+  locale: string,
 ): string {
-  const text = formatRows(messages, rows, format);
+  const text = formatRows(messages, rows, locale);
   if (pages === undefined) {
     return messages.loaded({ rows: text });
   }
-  return messages.loadedInPages({
-    rows: text,
-    pages,
-    locale: resolveLocale(format),
-  });
+  return messages.loadedInPages({ rows: text, pages, locale });
 }
 
-function formatParams(
-  params: ProblemParams,
-  format: GridFormat | undefined,
-): MessageParams {
+function formatParams(params: ProblemParams, locale: string): MessageParams {
   return Object.fromEntries(
     Object.entries(params).map(([name, value]) => [
       name,
-      typeof value === "number" ? formatCount(value, format) : value,
+      typeof value === "number" ? formatCount(value, locale) : value,
     ]),
   );
 }
@@ -366,10 +364,10 @@ function formatParams(
 export function formatProblemMessage(
   messages: QueryGridMessages,
   problem: Problem,
-  format?: GridFormat,
+  locale: string,
 ): string {
   const render = messages.errors[problem.code];
   return render
-    ? render(formatParams(problem.params, format))
+    ? render(formatParams(problem.params, locale))
     : messages.errorFallback({ code: problem.code });
 }

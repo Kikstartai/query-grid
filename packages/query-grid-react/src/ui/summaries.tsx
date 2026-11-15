@@ -8,7 +8,11 @@ import {
   type TotalCell,
 } from "../components/count-display.tsx";
 import { FacetPanel as BaseFacetPanel } from "../components/facet-panel.tsx";
-import { formatProblemMessage, useMessages } from "../components/messages.tsx";
+import {
+  formatProblemMessage,
+  useLocale,
+  useMessages,
+} from "../components/messages.tsx";
 import {
   ViewSwitch as BaseViewSwitch,
   type ViewOption as BaseViewOption,
@@ -27,7 +31,6 @@ import {
 import { useEqualsFilter, useFieldOffer } from "./filters.tsx";
 
 export function CountDisplay() {
-  const { def } = useQueryGrid();
   const { requestExact } = useQueryGridActions();
   const state = useCountState();
   return (
@@ -35,7 +38,6 @@ export function CountDisplay() {
       status={state.status}
       value={state.result}
       onRequestExact={requestExact}
-      format={def.format}
     />
   );
 }
@@ -43,6 +45,7 @@ export function CountDisplay() {
 export function TotalFooter() {
   const { def } = useQueryGrid();
   const messages = useMessages();
+  const locale = useLocale();
   const state = useTotalState();
   const totals = listTotalFields(def).map((field): TotalCell => {
     const result = state.result.find((item) => item.field === field.key);
@@ -51,18 +54,10 @@ export function TotalFooter() {
     return {
       field,
       value: result?.available ? result : null,
-      reason: problem
-        ? formatProblemMessage(messages, problem, def.format)
-        : null,
+      reason: problem ? formatProblemMessage(messages, problem, locale) : null,
     };
   });
-  return (
-    <BaseTotalFooter
-      status={state.status}
-      totals={totals}
-      format={def.format}
-    />
-  );
+  return <BaseTotalFooter status={state.status} totals={totals} />;
 }
 
 export function FacetPanel() {
@@ -100,7 +95,6 @@ export function FacetPanel() {
         messages.facetNotes[capabilities.mode === "memory" ? "memory" : shown]
       }
       {...offer}
-      format={def.format}
     />
   );
 }

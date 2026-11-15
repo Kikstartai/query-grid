@@ -53,7 +53,7 @@ import type { FieldDef, GridDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
   formatList,
-  resolveLocale,
+  useLocale,
   useMessages,
   type QueryGridMessages,
 } from "../components/messages.tsx";
@@ -312,8 +312,8 @@ export function formatReason(
   messages: QueryGridMessages,
   def: BaseGridDef,
   reason: UnavailableReason,
+  locale: string,
 ): string {
-  const locale = resolveLocale(def.format);
   const label = reason.field ? getFieldLabel(def, reason.field) : "";
   const blockers = formatList(locale, [
     ...reason.filters.map((key) =>
@@ -342,6 +342,7 @@ function isOffered(offers: Offers, target: OfferTarget): boolean {
 export function useOfferState(target: OfferTarget): OfferState {
   const { def } = useQueryGrid();
   const messages = useMessages();
+  const locale = useLocale();
   const query = useQueryState();
   const rules = useQueryRules();
   const offered = isOffered(useOffers(), target);
@@ -349,7 +350,12 @@ export function useOfferState(target: OfferTarget): OfferState {
     offered,
     reason: offered
       ? null
-      : formatReason(messages, def, explainUnavailable(query, target, rules)),
+      : formatReason(
+          messages,
+          def,
+          explainUnavailable(query, target, rules),
+          locale,
+        ),
   };
 }
 
@@ -407,9 +413,10 @@ export function formatChip(
 export function useFilterChips(): LabelledChip[] {
   const { def } = useQueryGrid();
   const messages = useMessages();
+  const locale = useLocale();
   const query = useQueryState();
   const known = useFieldLabels();
-  return listFilterChips(def, query, known).map((chip) => ({
+  return listFilterChips(def, query, known, locale).map((chip) => ({
     chip,
     item: formatChip(messages, def, chip),
   }));

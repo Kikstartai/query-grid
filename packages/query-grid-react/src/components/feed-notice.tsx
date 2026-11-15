@@ -1,9 +1,7 @@
 "use client";
 
-import type { GridFormat } from "@kikstart/query-grid";
-
 import type { RowWindow } from "./fields.ts";
-import { formatLoaded, useMessages } from "./messages.tsx";
+import { formatLoaded, useLocale, useMessages } from "./messages.tsx";
 
 type NoticeProps = Pick<RowWindow, "rows" | "loading" | "error" | "pages">;
 
@@ -15,21 +13,17 @@ function isWindowPending(props: Pick<RowWindow, "loading" | "pages">): boolean {
   return props.loading || props.pages === 0;
 }
 
-interface LoadedTextProps extends Pick<
-  RowWindow,
-  "rows" | "loading" | "pages"
-> {
-  format?: GridFormat;
-}
+type LoadedTextProps = Pick<RowWindow, "rows" | "loading" | "pages">;
 
-export function LoadedText({ rows, loading, pages, format }: LoadedTextProps) {
+export function LoadedText({ rows, loading, pages }: LoadedTextProps) {
   const messages = useMessages();
+  const locale = useLocale();
   if (rows.length === 0 && isWindowPending({ loading, pages })) {
     return null;
   }
   return (
     <bdi data-status="loaded" data-value={rows.length}>
-      {formatLoaded(messages, rows.length, pages, format)}
+      {formatLoaded(messages, rows.length, pages, locale)}
     </bdi>
   );
 }

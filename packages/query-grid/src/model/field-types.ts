@@ -29,6 +29,7 @@ export interface BaseFieldDef {
   options?: FieldOption[];
   lookup?: FieldLookup;
   maxValues?: number;
+  currency?: string;
   width?: number;
   pinned?: boolean;
   hidden?: boolean;
@@ -44,18 +45,12 @@ export interface SortState {
   direction: SortDirection;
 }
 
-export interface GridFormat {
-  locale?: string;
-  currency?: string;
-}
-
 export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   id: string;
   fields: F[];
   defaultSort: SortState;
   facet?: FacetDef;
   totals?: string[];
-  format?: GridFormat;
 }
 
 export interface RangeState {

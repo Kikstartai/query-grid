@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { createMemorySource } from "@kikstart/query-grid/memory";
 import { QueryGridProvider } from "@kikstart/query-grid-react";
+import { QueryGridMessagesProvider } from "@kikstart/query-grid-react/components";
 
 import {
   listTaskRows,
@@ -24,8 +25,10 @@ export function TasksQueryProvider({ children }: TasksQueryProviderProps) {
     }),
   );
   return (
-    <QueryGridProvider def={TASKS_GRID_DEF} source={source}>
-      {children}
-    </QueryGridProvider>
+    <QueryGridMessagesProvider locale="en-US">
+      <QueryGridProvider def={TASKS_GRID_DEF} source={source}>
+        {children}
+      </QueryGridProvider>
+    </QueryGridMessagesProvider>
   );
 }

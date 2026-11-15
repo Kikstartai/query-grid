@@ -12,7 +12,6 @@ import {
   formatCount,
   formatValue,
   type BaseFieldDef,
-  type GridFormat,
   type GridRow,
 } from "@kikstart/query-grid";
 
@@ -23,7 +22,7 @@ import {
   type BoardMove,
   type BoardSource,
 } from "./board-primitive.ts";
-import { useMessages } from "./messages.tsx";
+import { useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -56,17 +55,16 @@ export interface StatusBoardProps {
   ) => void | Promise<unknown>;
   canMove: (from: string, to: string) => boolean;
   message?: string | null;
-  format?: GridFormat;
 }
 
 interface BoardCardBodyProps {
   row: GridRow | undefined;
   title: BaseFieldDef;
   details: BaseFieldDef[];
-  format?: GridFormat;
 }
 
-function BoardCardBody({ row, title, details, format }: BoardCardBodyProps) {
+function BoardCardBody({ row, title, details }: BoardCardBodyProps) {
+  const locale = useLocale();
   if (!row) {
     return null;
   }
@@ -74,12 +72,12 @@ function BoardCardBody({ row, title, details, format }: BoardCardBodyProps) {
     <>
       <div className="qg-board-card-title">
         <bdi>
-          {title.label} {formatValue(title, row[title.key] ?? null, format)}
+          {title.label} {formatValue(title, row[title.key] ?? null, locale)}
         </bdi>
       </div>
       {details.map((field) => (
         <div key={field.key} className="qg-board-card-detail">
-          <bdi>{formatValue(field, row[field.key] ?? null, format)}</bdi>
+          <bdi>{formatValue(field, row[field.key] ?? null, locale)}</bdi>
         </div>
       ))}
     </>
@@ -92,15 +90,7 @@ interface BoardCardProps extends BoardCardBodyProps {
   start: number;
 }
 
-function BoardCard({
-  id,
-  index,
-  start,
-  row,
-  title,
-  details,
-  format,
-}: BoardCardProps) {
+function BoardCard({ id, index, start, row, title, details }: BoardCardProps) {
   return usePart(
     board,
     "card",
@@ -118,14 +108,7 @@ function BoardCard({
           height: CARD_HEIGHT,
           transform: `translateY(${start + CARD_GAP}px)`,
         },
-        children: (
-          <BoardCardBody
-            row={row}
-            title={title}
-            details={details}
-            format={format}
-          />
-        ),
+        children: <BoardCardBody row={row} title={title} details={details} />,
       },
       { "data-card": id, "data-index": index },
     ),
@@ -137,7 +120,6 @@ interface LaneContent {
   rows: Map<string, GridRow>;
   title: BaseFieldDef;
   details: BaseFieldDef[];
-  format?: GridFormat;
 }
 
 interface LaneCardsProps extends LaneContent {
@@ -183,6 +165,7 @@ function BoardLaneColumn({
   syncVersion,
   ...content
 }: BoardLaneProps) {
+  const locale = useLocale();
   const [virtual] = useState(() => handle.api.virtualFor(lane.id));
   const laneRows = lane.rows;
 
@@ -222,7 +205,7 @@ function BoardLaneColumn({
         <span className="qg-board-column-count" data-column-count={lane.id}>
           {lane.count === null || lane.count === undefined
             ? ""
-            : formatCount(lane.count, content.format)}
+            : formatCount(lane.count, locale)}
         </span>
       </header>
       {list}
@@ -243,7 +226,7 @@ function laneOf(lanes: BoardLane[], id: string): BoardLane | null {
 }
 
 export function StatusBoard(props: StatusBoardProps) {
-  const { lanes, fields, titleField, detailFields, message, format } = props;
+  const { lanes, fields, titleField, detailFields, message } = props;
   const messages = useMessages();
   const latest = useLatest(props);
   const [syncVersion, setSyncVersion] = useState(0);
@@ -307,7 +290,6 @@ export function StatusBoard(props: StatusBoardProps) {
             rows={rows}
             title={title}
             details={details}
-            format={format}
             syncVersion={syncVersion}
           />
         ))}

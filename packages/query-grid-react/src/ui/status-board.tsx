@@ -11,7 +11,11 @@ import {
   type QueryState,
 } from "@kikstart/query-grid";
 
-import { formatProblemMessage, useMessages } from "../components/messages.tsx";
+import {
+  formatProblemMessage,
+  useLocale,
+  useMessages,
+} from "../components/messages.tsx";
 import {
   StatusBoard as BaseStatusBoard,
   type BoardMoveDetails,
@@ -43,6 +47,7 @@ function BoardLanes({
   const { def, source } = useQueryGrid();
   const { moveRow } = useQueryGridActions();
   const messages = useMessages();
+  const locale = useLocale();
   const facetState = useFacetState();
   const [board] = useState(() => createBoard(def, source, queries));
   const state = useStoreValue(board.subscribe, board.getState);
@@ -66,7 +71,7 @@ function BoardLanes({
       setError(
         problem.code === "request_failed"
           ? messages.moveFailed
-          : formatProblemMessage(messages, problem, def.format),
+          : formatProblemMessage(messages, problem, locale),
       );
       throw failure;
     }
@@ -78,9 +83,7 @@ function BoardLanes({
         const facet = facetState.result.find((item) => item.value === status);
         return {
           id: status,
-          label: facetField
-            ? formatValue(facetField, status, def.format)
-            : status,
+          label: facetField ? formatValue(facetField, status, locale) : status,
           count: showCounts && facet ? facet.count : null,
           rows: lane.rows,
           hasNext: lane.hasNext,
@@ -93,7 +96,6 @@ function BoardLanes({
       onMove={onMove}
       canMove={board.canMove}
       message={error}
-      format={def.format}
     />
   );
 }

@@ -6,12 +6,16 @@ import {
   formatSum,
   type BaseFieldDef,
   type CountResult,
-  type GridFormat,
   type TotalAvailable,
 } from "@kikstart/query-grid";
 
 import type { LoadStatus } from "./fields.ts";
-import { countParams, formatRows, useMessages } from "./messages.tsx";
+import {
+  countParams,
+  formatRows,
+  useLocale,
+  useMessages,
+} from "./messages.tsx";
 
 export type CountValue = CountResult;
 
@@ -19,7 +23,6 @@ export interface CountDisplayProps {
   status: LoadStatus;
   value: CountValue | null;
   onRequestExact?: () => void;
-  format?: GridFormat;
 }
 
 interface ExactCountButtonProps {
@@ -48,9 +51,9 @@ export function CountDisplay({
   status,
   value,
   onRequestExact,
-  format,
 }: CountDisplayProps) {
   const messages = useMessages();
+  const locale = useLocale();
   if (status === "error") {
     return (
       <div className="qg-count qg-count-error" data-part="count">
@@ -75,8 +78,8 @@ export function CountDisplay({
         data-count-source={source}
       >
         {capped
-          ? messages.rowsCapped(countParams(count, format))
-          : formatRows(messages, count, format)}
+          ? messages.rowsCapped(countParams(count, locale))
+          : formatRows(messages, count, locale)}
       </bdi>
       <bdi className="qg-muted">
         {messages.countSources[underCap ? "underCap" : source]}
@@ -101,7 +104,6 @@ export interface TotalCell {
 export interface TotalFooterProps {
   status: LoadStatus;
   totals: TotalCell[];
-  format?: GridFormat;
 }
 
 function TotalUnavailable({ reason }: { reason: string }) {
@@ -116,13 +118,9 @@ function TotalUnavailable({ reason }: { reason: string }) {
   );
 }
 
-interface TotalCellViewProps {
-  cell: TotalCell;
-  format?: GridFormat;
-}
-
-function TotalCellView({ cell, format }: TotalCellViewProps) {
+function TotalCellView({ cell }: { cell: TotalCell }) {
   const messages = useMessages();
+  const locale = useLocale();
   const { field, value, reason } = cell;
   const label = messages.totalSum({ label: field.label });
   if (reason) {
@@ -159,14 +157,15 @@ function TotalCellView({ cell, format }: TotalCellViewProps) {
     >
       <bdi className="qg-total-label">{label}</bdi>
       <bdi className="qg-total-value" data-total-sum={value.sum}>
-        {formatSum(field, value.sum, format)}
+        {formatSum(field, value.sum, locale)}
       </bdi>
     </div>
   );
 }
 
-export function TotalFooter({ status, totals, format }: TotalFooterProps) {
+export function TotalFooter({ status, totals }: TotalFooterProps) {
   const messages = useMessages();
+  const locale = useLocale();
   if (totals.length === 0) {
     return null;
   }
@@ -182,11 +181,11 @@ export function TotalFooter({ status, totals, format }: TotalFooterProps) {
       </div>
     );
   }
-  const rows = formatRows(messages, first.rows, format);
+  const rows = formatRows(messages, first.rows, locale);
   return (
     <div className="qg-total" data-part="total" data-total={first.source}>
       {totals.map((cell) => (
-        <TotalCellView key={cell.field.key} cell={cell} format={format} />
+        <TotalCellView key={cell.field.key} cell={cell} />
       ))}
       <bdi className="qg-muted">
         {first.source === "counter"

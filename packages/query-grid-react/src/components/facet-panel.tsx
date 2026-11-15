@@ -3,9 +3,9 @@
 import { Button } from "@ui-sdk/react/button";
 import type { ReactNode } from "react";
 
-import { formatCount, type GridFormat } from "@kikstart/query-grid";
+import { formatCount } from "@kikstart/query-grid";
 
-import { useMessages } from "./messages.tsx";
+import { useLocale, useMessages } from "./messages.tsx";
 
 export interface FacetOption {
   value: string;
@@ -23,18 +23,17 @@ export interface FacetPanelProps {
   note?: ReactNode;
   disabled?: boolean;
   reason?: string | null;
-  format?: GridFormat;
 }
 
 interface FacetCountProps {
   count: number | null | undefined;
-  format?: GridFormat;
 }
 
-function FacetCountText({ count, format }: FacetCountProps) {
+function FacetCountText({ count }: FacetCountProps) {
+  const locale = useLocale();
   return (
     <bdi className="qg-facet-count" data-facet-count>
-      {count === null || count === undefined ? "" : formatCount(count, format)}
+      {count === null || count === undefined ? "" : formatCount(count, locale)}
     </bdi>
   );
 }
@@ -66,7 +65,6 @@ export function FacetPanel({
   note,
   disabled,
   reason,
-  format,
 }: FacetPanelProps) {
   const messages = useMessages();
   const none = values.length === 0;
@@ -87,7 +85,7 @@ export function FacetPanel({
         onClick={() => onValuesChange([])}
       >
         <bdi>{messages.all}</bdi>
-        <FacetCountText count={total} format={format} />
+        <FacetCountText count={total} />
       </Button>
       {options.map((option) => (
         <Button
@@ -103,7 +101,7 @@ export function FacetPanel({
           }
         >
           <bdi>{option.label}</bdi>
-          <FacetCountText count={option.count} format={format} />
+          <FacetCountText count={option.count} />
         </Button>
       ))}
       <FacetNote note={note} />

@@ -28,7 +28,7 @@ There is one query contract, in core. The React package encodes a query with cor
 | `@kikstart/query-grid/http`             | `createHttpSource`, and the protocol it shares with `createGridHandler`: route names, query parameters, the error and move bodies                                                                                    |
 | `@kikstart/query-grid/memory`           | `createMemorySource` and `memoryCapabilities`                                                                                                                                                                        |
 | `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState`, `useQueryGridActions`                                                                                                               |
-| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, the column-state API, `FieldDef` and `GridDef`                                                                                           |
+| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, `useLocale`, the column-state API, `FieldDef` and `GridDef`                                                                              |
 | `@kikstart/query-grid-react/ui`         | the same components, by the same names, bound to the provider                                                                                                                                                        |
 | `@kikstart/query-grid-react/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                          |
 | `@kikstart/query-grid-postgres`         | `createGridHandler`, `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes`                                                                                 |
@@ -312,6 +312,7 @@ Every visible string and `aria-label` comes from one messages object. English is
 import { QueryGridMessagesProvider } from "@kikstart/query-grid-react/components";
 
 <QueryGridMessagesProvider
+  locale="af-ZA"
   messages={{
     noRows: "Geen rye nie.",
     rows: ({ count, formatted, locale }) =>
@@ -326,7 +327,8 @@ import { QueryGridMessagesProvider } from "@kikstart/query-grid-react/components
 - `useMessages()` merges the provider's messages over the defaults, so an override names only what it changes. Base components and bound wrappers read the same object; the query provider takes no messages.
 - **Plurals** go through `Intl.PluralRules`, and lists through `Intl.ListFormat`. `selectPlural(locale, count, forms)` is exported for your own messages.
 - **Core and the server speak codes, never English.** A refusal reason is `{ code, field, filters, range, sort }`; a `QueryRejected`, a failed request and an unavailable total are `{ code, params }`; a chip is data. The React package turns each into a sentence through `messages.reasons` and `messages.errors`. A host's own code, thrown from an `options` or `moves` hook as `new QueryRejected(error, code, params)`, renders through `messages.errors[code]`.
-- **Locale** flows through `def.format.locale` and `def.format.currency`, as before.
+- **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`), and every number, date, plural and list a component renders is formatted in it, so the messages and the numbers cannot disagree. `useLocale()` reads it. A def carries no locale.
+- **The currency is the data's.** A money field carries its own `currency` (default `USD`), so two money fields of one grid can differ. One field holds one currency.
 - Only English ships.
 
 ## Right to left
@@ -505,7 +507,7 @@ A source carries its own capabilities. Create it once per mount, because it hold
 
 ### Field defs and query shapes
 
-One field description drives the grid and the filters. Core's `BaseFieldDef` carries `key`, `label`, `type`, `options`, a `lookup` for large option lists, `maxValues`, `nullable` and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `FieldDef` extends it with `cell`; the Postgres package never reads it. A core `BaseGridDef` is an `id`, the fields, the default sort, the facet field, the total field and the format. A host writes one object per grid that satisfies the layers it uses. A field says nothing about filtering: the shapes do, on a server grid, and on a client grid every field is a filter.
+One field description drives the grid and the filters. Core's `BaseFieldDef` carries `key`, `label`, `type`, `options`, a `lookup` for large option lists, `maxValues`, `nullable`, a `currency` on a money field and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `FieldDef` extends it with `cell`; the Postgres package never reads it. A core `BaseGridDef` is an `id`, the fields, the default sort, the facet field and the total fields. A host writes one object per grid that satisfies the layers it uses. A field says nothing about filtering: the shapes do, on a server grid, and on a client grid every field is a filter.
 
 The def then declares its **query shapes**. A shape is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
 

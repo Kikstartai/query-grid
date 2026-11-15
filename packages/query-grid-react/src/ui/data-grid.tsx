@@ -9,7 +9,11 @@ import {
   DataGridDefaultParts,
 } from "../components/data-grid.tsx";
 import type { RowWindow } from "../components/fields.ts";
-import { formatProblemMessage, useMessages } from "../components/messages.tsx";
+import {
+  formatProblemMessage,
+  useLocale,
+  useMessages,
+} from "../components/messages.tsx";
 import {
   useColumns,
   useFeedState,
@@ -21,9 +25,9 @@ import {
 import { FieldFilter } from "./filters.tsx";
 
 function useRowWindow(): RowWindow {
-  const { def } = useQueryGrid();
   const { loadMore } = useQueryGridActions();
   const messages = useMessages();
+  const locale = useLocale();
   const state = useFeedState();
   return {
     rows: state.rows,
@@ -31,7 +35,7 @@ function useRowWindow(): RowWindow {
     onEndReached: loadMore,
     loading: state.status === "loading",
     error: state.error
-      ? formatProblemMessage(messages, state.error, def.format)
+      ? formatProblemMessage(messages, state.error, locale)
       : null,
     pages: state.pages,
   };
@@ -54,7 +58,6 @@ function DataGridRoot({ children }: DataGridRootProps) {
       fields={def.fields}
       {...rowWindow}
       capped={state.capped}
-      format={def.format}
       resetKey={state.query}
       columns={columns}
       onColumnsChange={store.setColumns}
@@ -127,7 +130,6 @@ export function CardList({ titleField, badgeField }: CardListProps) {
       {...rowWindow}
       titleField={titleField}
       badgeField={badgeField}
-      format={def.format}
     />
   );
 }

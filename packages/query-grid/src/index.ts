@@ -38,7 +38,6 @@ export {
   type FieldType,
   type FilterKind,
   type BaseGridDef,
-  type GridFormat,
   type GridRow,
   type QueryMode,
   type QueryRules,

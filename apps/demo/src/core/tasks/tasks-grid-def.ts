@@ -79,7 +79,6 @@ export const TASKS_GRID_DEF: BaseGridDef = {
   defaultSort: { field: "due_at", direction: "asc" },
   facet: { field: "status" },
   totals: ["budget"],
-  format: { locale: "en-US", currency: "USD" },
   fields: [
     {
       key: "number",
@@ -121,6 +120,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "budget",
       label: "Budget",
       type: "money",
+      currency: "USD",
       width: 120,
     },
     {

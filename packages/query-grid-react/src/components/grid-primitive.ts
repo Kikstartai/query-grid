@@ -14,7 +14,6 @@ import {
 import {
   formatValue,
   type BaseFieldDef,
-  type GridFormat,
   type GridRow,
 } from "@kikstart/query-grid";
 
@@ -25,7 +24,7 @@ const REACH_EVERY_ROW = 400;
 interface SheetOptions {
   rows: GridRow[];
   columns: BaseFieldDef[];
-  format?: GridFormat;
+  locale: string;
   onEndReached?: () => void;
 }
 
@@ -122,7 +121,7 @@ export const sheet = definePrimitive({
   options: {
     rows: "value",
     columns: "value",
-    format: "value",
+    locale: "value",
     onEndReached: "callback",
   },
   state: (_options: SheetOptions): SheetState => ({
@@ -141,7 +140,7 @@ export const sheet = definePrimitive({
       const field = columns()[cell.col];
       const row = rows()[cell.row];
       return field && row
-        ? formatValue(field, row[field.key] ?? null, context.options().format)
+        ? formatValue(field, row[field.key] ?? null, context.options().locale)
         : "";
     };
     const virtual = createVirtualizer({

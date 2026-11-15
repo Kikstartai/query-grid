@@ -443,12 +443,10 @@ describe("each base component mounts alone, with plain props and no provider", (
 
 describe("messages", () => {
   test("plurals follow the locale's rules, not an English ternary", () => {
-    expect(formatRows(DEFAULT_MESSAGES, 1)).toBe("1 row");
-    expect(formatRows(DEFAULT_MESSAGES, 0)).toBe("0 rows");
-    expect(formatRows(DEFAULT_MESSAGES, 620000, { locale: "de-DE" })).toBe(
-      "620.000 rows",
-    );
-    expect(formatLoaded(DEFAULT_MESSAGES, 500, 1)).toBe(
+    expect(formatRows(DEFAULT_MESSAGES, 1, "en")).toBe("1 row");
+    expect(formatRows(DEFAULT_MESSAGES, 0, "en")).toBe("0 rows");
+    expect(formatRows(DEFAULT_MESSAGES, 620000, "de-DE")).toBe("620.000 rows");
+    expect(formatLoaded(DEFAULT_MESSAGES, 500, 1, "en")).toBe(
       "500 rows loaded in 1 keyset page",
     );
     const welsh = {
@@ -456,8 +454,48 @@ describe("messages", () => {
       rows: ({ count, locale }: { count: number; locale: string }) =>
         new Intl.PluralRules(locale).select(count),
     };
-    expect(formatRows(welsh, 2, { locale: "cy" })).toBe("two");
-    expect(formatRows(welsh, 3, { locale: "cy" })).toBe("few");
+    expect(formatRows(welsh, 2, "cy")).toBe("two");
+    expect(formatRows(welsh, 3, "cy")).toBe("few");
+  });
+
+  test("the provider's locale formats every number, and each money field carries its own currency", () => {
+    const rand = { ...TOTAL, currency: "ZAR" };
+    const euro = { ...TOTAL, key: "fee", label: "Fee", currency: "EUR" };
+    const html = render(
+      <QueryGridMessagesProvider locale="de-DE">
+        <CountDisplay
+          status="idle"
+          value={{ count: 620000, capped: false, source: "exact" }}
+        />
+        <TotalFooter
+          status="idle"
+          totals={[
+            { field: rand, value: { sum: 123456, rows: 1200, source: "live" } },
+            { field: euro, value: { sum: 123456, rows: 1200, source: "live" } },
+            { field: NUMBER, value: { sum: 2001, rows: 1200, source: "live" } },
+          ]}
+        />
+        <DataGrid
+          fields={[...TEST_FIELDS, euro]}
+          {...ROW_WINDOW}
+          rows={[{ ...TEST_ROWS[0], fee: 250000 }]}
+        />
+      </QueryGridMessagesProvider>,
+    );
+    expect(html).toContain("620.000 rows");
+    expect(html).toContain("1.234,56 ZAR");
+    expect(html).toContain("1.234,56 €");
+    expect(html).toContain("2.001");
+    expect(html).toContain("summed live over 1.200 rows");
+    expect(html).toContain("2.500,00 €");
+    expect(html).toContain("1,00 $");
+    const plain = render(
+      <CountDisplay
+        status="idle"
+        value={{ count: 620000, capped: false, source: "exact" }}
+      />,
+    );
+    expect(plain).toContain("620,000 rows");
   });
 
   test("the provider's messages replace the defaults in every component", () => {

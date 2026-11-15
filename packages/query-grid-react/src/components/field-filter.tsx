@@ -52,13 +52,12 @@ import {
   toNumberBound,
   type BaseFieldDef,
   type FieldOption,
-  type GridFormat,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
 import type { ControlState } from "./fields.ts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
-import { useMessages } from "./messages.tsx";
+import { useLocale, useMessages } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 
 export interface FieldRange {
@@ -90,7 +89,6 @@ export interface LookupFilterProps extends EqualsSelectProps {
 export interface RangeFilterProps extends FilterProps {
   range: FieldRange | null;
   onRangeChange: (range: FieldRange | null) => void;
-  format?: GridFormat;
 }
 
 interface FilterFrameProps {
@@ -396,8 +394,9 @@ function DateRange(props: RangeFilterProps) {
 }
 
 function NumberRange(props: RangeFilterProps) {
-  const { field, range, disabled, format, onRangeChange } = props;
+  const { field, range, disabled, onRangeChange } = props;
   const messages = useMessages();
+  const locale = useLocale();
   const rangeKey = `${range?.min ?? ""}|${range?.max ?? ""}`;
   const [seen, setSeen] = useState(rangeKey);
   const [min, setMin] = useState(fromNumberBound(field, range?.min ?? null));
@@ -419,7 +418,7 @@ function NumberRange(props: RangeFilterProps) {
   };
   const numberFormat: Intl.NumberFormatOptions | undefined =
     field.type === "money"
-      ? { style: "currency", currency: format?.currency ?? DEFAULT_CURRENCY }
+      ? { style: "currency", currency: field.currency ?? DEFAULT_CURRENCY }
       : undefined;
   const label = { label: field.label };
   return (
@@ -428,7 +427,7 @@ function NumberRange(props: RangeFilterProps) {
         value={min}
         min={0}
         format={numberFormat}
-        locale={format?.locale}
+        locale={locale}
         disabled={disabled}
         onValueChange={(value: number | null) => setMin(value)}
         onValueCommit={(value: number | null) => apply(value, max)}
@@ -447,7 +446,7 @@ function NumberRange(props: RangeFilterProps) {
         value={max}
         min={0}
         format={numberFormat}
-        locale={format?.locale}
+        locale={locale}
         disabled={disabled}
         onValueChange={(value: number | null) => setMax(value)}
         onValueCommit={(value: number | null) => apply(min, value)}

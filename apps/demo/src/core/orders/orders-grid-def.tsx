@@ -16,6 +16,7 @@ import {
 
 export const ORDERS_API = "/api/orders";
 export const ORDERS_FACET_FIELD = "status_code";
+export const ORDERS_LOCALE = "en-ZA";
 
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
@@ -59,6 +60,7 @@ const ORDER_FIELDS: FieldDef[] = [
     key: "total",
     label: "Total",
     type: "money",
+    currency: "ZAR",
     width: 120,
   },
   {
@@ -160,5 +162,4 @@ export const ORDERS_GRID_DEF = {
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
   totals: ["total", "item_count"],
-  format: { locale: "en-ZA", currency: "ZAR" },
 } satisfies GridDef & PostgresGridDef;

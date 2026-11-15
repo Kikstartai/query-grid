@@ -10,7 +10,6 @@ import { createContext, use, useEffect, useState, type ReactNode } from "react";
 
 import {
   formatValue,
-  type GridFormat,
   type GridRow,
   type SortDirection,
   type SortState,
@@ -36,7 +35,7 @@ import {
 } from "./grid-header.tsx";
 import { HEADER_HEIGHT, sheet, type RowView } from "./grid-primitive.ts";
 import { CheckIcon } from "./icons.tsx";
-import { useMessages } from "./messages.tsx";
+import { useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useColumnState } from "./use-column-state.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -47,7 +46,6 @@ type Column = GridColumn<FieldDef>;
 export interface DataGridProps extends RowWindow {
   fields: FieldDef[];
   capped?: boolean;
-  format?: GridFormat;
   resetKey?: unknown;
   columns?: ColumnState[];
   onColumnsChange?: (columns: ColumnState[]) => void;
@@ -102,11 +100,11 @@ interface GridCellsProps {
   view: RowView;
   row: GridRow;
   columns: Column[];
-  format?: GridFormat;
 }
 
-function GridCells({ handle, view, row, columns, format }: GridCellsProps) {
+function GridCells({ handle, view, row, columns }: GridCellsProps) {
   const messages = useMessages();
+  const locale = useLocale();
   return (
     <>
       <div
@@ -172,7 +170,7 @@ function GridCells({ handle, view, row, columns, format }: GridCellsProps) {
             {column.field.cell ? (
               column.field.cell(value, row)
             ) : (
-              <bdi>{formatValue(column.field, value, format)}</bdi>
+              <bdi>{formatValue(column.field, value, locale)}</bdi>
             )}
           </div>
         );
@@ -187,17 +185,9 @@ interface GridRowPartProps {
   start: number;
   row: GridRow;
   layout: GridLayout;
-  format?: GridFormat;
 }
 
-function GridRowPart({
-  handle,
-  index,
-  start,
-  row,
-  layout,
-  format,
-}: GridRowPartProps) {
+function GridRowPart({ handle, index, start, row, layout }: GridRowPartProps) {
   const [measure] = useState(
     () => (el: HTMLDivElement | null) => handle.api.virtual.measure(index, el),
   );
@@ -223,7 +213,6 @@ function GridRowPart({
             view={view}
             row={row}
             columns={layout.columns}
-            format={format}
           />
         ),
       },
@@ -259,7 +248,6 @@ function GridRows() {
                 start={item.start}
                 row={row}
                 layout={layout}
-                format={props.format}
               />,
             ]
           : [];
@@ -323,7 +311,8 @@ function SelectAll() {
 }
 
 function DataGridRoot({ children, ...props }: DataGridRootProps) {
-  const { fields, rows, format, resetKey } = props;
+  const { fields, rows, resetKey } = props;
+  const locale = useLocale();
   const { columns: state, update } = useColumnState(props);
   const columns = layoutColumns(fields, state);
   const [seenKey, setSeenKey] = useState(resetKey);
@@ -341,7 +330,7 @@ function DataGridRoot({ children, ...props }: DataGridRootProps) {
   const handle = usePrimitive(sheet, {
     rows,
     columns: columns.map((column) => column.field),
-    format,
+    locale,
     onEndReached: props.onEndReached,
   });
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
@@ -391,7 +380,6 @@ function DataGridStatus() {
                 rows={props.rows}
                 loading={props.loading}
                 pages={props.pages}
-                format={props.format}
               />
               <FeedProgress />
             </span>
