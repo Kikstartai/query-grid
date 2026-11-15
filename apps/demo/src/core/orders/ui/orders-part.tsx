@@ -1,8 +1,5 @@
-"use client";
+import { Suspense, type ComponentType } from "react";
 
-import type { ComponentType } from "react";
-
-import { useQueryState } from "@kikstart/query-grid-react";
 import {
   CountDisplay,
   DataGrid,
@@ -13,11 +10,13 @@ import {
   TotalFooter,
 } from "@kikstart/query-grid-react/ui";
 
+import { AtRequest } from "@/lib/at-request";
 import type { PartName } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
 import { OrdersQueryProvider } from "../orders-provider";
-import { OrdersBoard, OrdersCardList } from "./orders-workspace";
+import { OrdersBoard, OrdersCardList } from "./orders-view";
+import { QueryReadout } from "./query-readout";
 
 const PARTS: Record<PartName, ComponentType> = {
   "filter-bar": FilterBar,
@@ -31,32 +30,36 @@ const PARTS: Record<PartName, ComponentType> = {
   board: OrdersBoard,
 };
 
-function QueryReadout() {
-  const query = useQueryState();
-  return (
-    <pre className="part-readout" data-part="query-readout">
-      {JSON.stringify(query)}
-    </pre>
-  );
-}
-
 interface OrdersPartProps {
   part: PartName;
+}
+
+export function OrdersPartSkeleton() {
+  return (
+    <>
+      <span className="skeleton part-readout" aria-hidden="true" />
+      <span className="skeleton skeleton-part" aria-hidden="true" />
+    </>
+  );
 }
 
 export function OrdersPart({ part }: OrdersPartProps) {
   const Part = PARTS[part];
   return (
-    <OrdersQueryProvider>
-      <div className="part-page" data-solo-part={part}>
-        <SiteBrand />
-        <p className="part-intro">
-          The <code>{part}</code> part mounted alone. It reads and writes the
-          shared query state shown below, and the URL.
-        </p>
-        <QueryReadout />
-        <Part />
-      </div>
-    </OrdersQueryProvider>
+    <div className="part-page" data-solo-part={part}>
+      <SiteBrand />
+      <p className="part-intro">
+        The <code>{part}</code> part mounted alone. It reads and writes the
+        shared query state shown below, and the URL.
+      </p>
+      <Suspense fallback={<OrdersPartSkeleton />}>
+        <AtRequest>
+          <OrdersQueryProvider>
+            <QueryReadout />
+            <Part />
+          </OrdersQueryProvider>
+        </AtRequest>
+      </Suspense>
+    </div>
   );
 }

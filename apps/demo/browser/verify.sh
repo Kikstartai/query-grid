@@ -411,13 +411,25 @@ run_history() {
   note "Back then Forward" "$(url); lanes $(js "document.querySelectorAll('[data-column]').length")"
 }
 
+run_shift() {
+  say "Static shell and layout shift"
+  for path in /orders /memory /restyled /rtl /parts/grid; do
+    note "$path shell" "$(curl -s -m 60 "$BASE$path" | node -e "let h='';process.stdin.on('data',(d)=>h+=d).on('end',()=>{const cut=h.indexOf('hidden id=\"S:');const shell=cut<0?h:h.slice(0,cut);console.log('brand '+shell.includes('data-brand=\"header\"')+', skeleton '+/class=\"skeleton/.test(shell)+', loading text '+shell.includes('Loading'))})")"
+  done
+  local shift="new Promise((resolve) => { let total = 0; new PerformanceObserver((list) => { for (const entry of list.getEntries()) { if (!entry.hadRecentInput) { total += entry.value; } } }).observe({ type: 'layout-shift', buffered: true }); setTimeout(() => resolve(total.toFixed(4)), 300); })"
+  for path in "/orders" "/orders?f.status_code=paid&sort=total.desc" "/orders?view=list" "/orders?view=board" "/memory" "/restyled" "/rtl" "/parts/grid" "/components"; do
+    go "$path" 6
+    note "$path" "cumulative layout shift $(js "$shift")"
+  done
+}
+
 run_errors() {
   say "No errors"
   note "browser errors" "'$(errors)'"
 }
 
 ab set viewport 1500 900 >/dev/null
-SECTIONS="${*:-refusals counts sidebar chips multi history quick customer resize memory parts scroll keys columns board rtl components errors}"
+SECTIONS="${*:-refusals counts sidebar chips multi history quick customer resize memory parts scroll keys columns board rtl components shift errors}"
 for section in $SECTIONS; do
   "run_$section"
 done

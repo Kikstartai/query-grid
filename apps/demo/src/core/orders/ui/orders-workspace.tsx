@@ -1,63 +1,61 @@
-"use client";
+import { Suspense } from "react";
 
-import { useGridView } from "@kikstart/query-grid-react";
 import {
-  CardList,
   CountDisplay,
-  DataGrid,
   FacetPanel,
   FilterBar,
   FilterChips,
   FilterSidebar,
-  StatusBoard,
   TotalFooter,
   ViewSwitch,
 } from "@kikstart/query-grid-react/ui";
 
+import { AtRequest } from "@/lib/at-request";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
+import {
+  SkeletonChips,
+  SkeletonFacets,
+  SkeletonFilters,
+  SkeletonGrid,
+  SkeletonTools,
+  SkeletonTotal,
+} from "@/lib/workspace-skeleton";
 
 import { OrdersQueryProvider } from "../orders-provider";
-
-const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
+import { OrdersView } from "./orders-view";
 
 interface OrdersWorkspaceProps {
   title: string;
   dir?: "rtl";
 }
 
-export function OrdersCardList() {
-  return <CardList titleField="order_number" badgeField="status_code" />;
-}
-
-export function OrdersBoard() {
+export function OrdersSkeleton() {
   return (
-    <StatusBoard titleField="order_number" detailFields={BOARD_DETAIL_FIELDS} />
+    <>
+      <SkeletonTools />
+      <div className="workspace-body" data-skeleton="orders">
+        <SkeletonFilters />
+        <SkeletonChips />
+        <div className="workspace-main">
+          <SkeletonFacets />
+          <SkeletonGrid />
+        </div>
+      </div>
+      <SkeletonTotal />
+    </>
   );
 }
 
-function OrdersView() {
-  const view = useGridView();
-  if (view === "list") {
-    return <OrdersCardList />;
-  }
-  if (view === "board") {
-    return <OrdersBoard />;
-  }
-  return <DataGrid />;
-}
-
-export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
+function OrdersGrid() {
   return (
     <OrdersQueryProvider>
-      <div className="workspace" dir={dir} data-dir={dir}>
-        <header className="workspace-head">
-          <SiteBrand />
-          <h1>{title}</h1>
-          <CountDisplay />
-          <span className="workspace-spacer" />
-          <ViewSwitch views={VIEWS} />
-        </header>
+      <div className="workspace-tools">
+        <CountDisplay />
+        <span className="workspace-spacer" />
+        <ViewSwitch views={VIEWS} />
+      </div>
+      <div className="workspace-body">
         <FilterBar />
         <div className="workspace-chips">
           <FilterSidebar />
@@ -67,11 +65,29 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
           <FacetPanel />
           <OrdersView />
         </div>
-        <footer className="workspace-foot">
-          <TotalFooter />
-          <ByKikstart />
-        </footer>
+      </div>
+      <div className="workspace-total">
+        <TotalFooter />
       </div>
     </OrdersQueryProvider>
+  );
+}
+
+export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
+  return (
+    <div className="workspace" dir={dir} data-dir={dir}>
+      <header className="workspace-head">
+        <SiteBrand />
+        <h1>{title}</h1>
+      </header>
+      <Suspense fallback={<OrdersSkeleton />}>
+        <AtRequest>
+          <OrdersGrid />
+        </AtRequest>
+      </Suspense>
+      <footer className="workspace-foot">
+        <ByKikstart />
+      </footer>
+    </div>
   );
 }
