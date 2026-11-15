@@ -15,7 +15,6 @@
   --border: light-dark(oklch(0.92 0.004 286.32), oklch(0.3 0.006 286));
   --destructive: light-dark(oklch(0.56 0.245 27.325), oklch(0.7 0.19 22));
   --brand: light-dark(oklch(0.55 0.2 27), oklch(0.7 0.17 28));
-  --brand-fill: light-dark(oklch(0.55 0.2 27), oklch(0.57 0.2 27));
   --brand-muted: light-dark(oklch(0.97 0.015 25), oklch(0.29 0.06 25));
   --logo-from: light-dark(#d42f2a, #ef4b3f);
   --logo-to: light-dark(#a3161a, #c8231f);
@@ -29,8 +28,8 @@
   --ui-muted-foreground: var(--muted-foreground);
   --ui-border: var(--border);
   --ui-input: light-dark(oklch(0.87 0.004 286.32), oklch(0.52 0.006 286));
-  --ui-primary: var(--brand-fill);
-  --ui-primary-foreground: oklch(0.985 0 0);
+  --ui-primary: var(--brand);
+  --ui-primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.17 0.005 285));
   --ui-destructive: var(--destructive);
   --ui-ring: color-mix(in oklab, var(--brand) 25%, transparent);
   --ui-ring-border: var(--brand);
@@ -195,7 +194,7 @@ pre {
 .workspace-note {
   grid-area: note;
   margin: 10px 0 0;
-  color: var(--muted-foreground);
+  color: var(--ui-muted-foreground);
   font-size: 13px;
 }
 

@@ -1,13 +1,13 @@
 .restyled {
   --ui-background: light-dark(#fffbeb, #1c1408);
   --ui-foreground: light-dark(#0f172a, #fef3c7);
-  --ui-muted: light-dark(#fde68a, #78350f);
+  --ui-muted: light-dark(#fde68a, #451a03);
   --ui-muted-foreground: light-dark(#475569, #fcd34d);
   --ui-border: light-dark(#0f172a, #fef3c7);
   --ui-input: light-dark(#0f172a, #fef3c7);
   --ui-primary: light-dark(#0f172a, #fde68a);
   --ui-primary-foreground: light-dark(#fffbeb, #1c1408);
-  --ui-ring: #f59e0b;
+  --ui-ring: light-dark(#f59e0b, #92400e);
   --ui-ring-border: light-dark(#0f172a, #fef3c7);
   --ui-radius: 0;
   --ui-font-size: 0.75rem;
