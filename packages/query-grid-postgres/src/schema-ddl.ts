@@ -1,4 +1,8 @@
-import { KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
+import {
+  KEY_FIELD,
+  listQuickFields,
+  type QueryShape,
+} from "@kikstart/query-grid";
 
 import { describeQuick, describeShape, validateGridDef } from "./shapes.ts";
 import {
@@ -103,8 +107,9 @@ export function listShapeIndexes(
   const ordered = def.shapes.map((shape) =>
     shapeIndex(def, shape, concurrently),
   );
-  return def.quick
-    ? [...ordered, quickIndex(def, def.quick, concurrently)]
+  const quick = listQuickFields(def);
+  return quick.length > 0
+    ? [...ordered, quickIndex(def, quick, concurrently)]
     : ordered;
 }
 

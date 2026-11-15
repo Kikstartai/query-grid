@@ -84,7 +84,7 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 - A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `money`, `datetime`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
 - The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores shapes and storage.
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
-- A shape is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort, or the columns of the quick filter. Each shape is one index.
+- A shape is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each shape is one index; the quick filter's columns are `quick` on the def, with one index of their own.
 - A shape's equality fields take several values each unless it sets `multi: false`.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
@@ -104,7 +104,7 @@ interface Capabilities {
 }
 ```
 
-- `shapeCapabilities(shapes, { facetField })` builds them for a server grid: every field in a shape's `equals`, the sort of every shape with `range`, every shape's sort, the quick shape's columns. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `shapeCapabilities(shapes, { facetField, quickFields })` builds them for a server grid: every field in a shape's `equals`, the sort of every shape with `range`, every shape's sort, and `quickFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
 - `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
 - `isAnswerable` is the answer for one query. The field lists are what could ever be asked.
 - `QueryRules` is the capabilities plus whether a quick-filter result is complete.
@@ -157,7 +157,7 @@ interface QueryState {
 
 ## Storage
 
-- **One shape, one index.** An ordered shape is a btree over its equality columns, its sort and the key. The quick filter is one trigram index over the concatenated columns.
+- **One shape, one index.** An ordered shape is a btree over its equality columns, its sort and the key. The def's `quick` is one trigram index over the concatenated columns.
 - **Paging is keyset**, on the sort and the key, in both directions.
 - **One value is `= $n`; several are `= ANY($n)`** with one array parameter. SQL is never built from a value.
 - **The counter table** holds one row per facet value: `row_count` and one `<field>_sum` column per total field. Three row triggers keep it current, on insert, delete and update of the facet field or of a total field.

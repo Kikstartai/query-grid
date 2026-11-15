@@ -54,6 +54,11 @@ function validateOrderedShape(
   def: PostgresGridDef,
   shape: QueryShape,
 ): string[] {
+  if (!Array.isArray(shape.equals)) {
+    return [
+      "a shape needs `equals` and `sort`; the quick columns are `quick` on the def",
+    ];
+  }
   const id = shapeId(shape);
   const sort = getField(def, shape.sort);
   if (!sort) {
@@ -111,6 +116,10 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     problems.push(...validateQuick(def, def.quick));
   }
   for (const shape of def.shapes) {
+    if (!Array.isArray(shape.equals)) {
+      problems.push(...validateOrderedShape(def, shape));
+      continue;
+    }
     const id = shapeId(shape);
     if (seen.has(id)) {
       problems.push(`shape ${id} is declared twice`);

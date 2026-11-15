@@ -21,6 +21,7 @@ export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
   DEFAULT_MAX_VALUES,
   getFacetField,
+  listQuickFields,
   getField,
   getFieldLabel,
   isDefaultSort,

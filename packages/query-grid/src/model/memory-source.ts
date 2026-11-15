@@ -3,6 +3,7 @@ import {
   getFacetField,
   getField,
   isRangeType,
+  listQuickFields,
   listTotalFields,
   type Capabilities,
   type BaseFieldDef,
@@ -19,7 +20,7 @@ import { sortRows, toComparable } from "./sort-rows.ts";
 const OPTION_LIMIT = 50;
 
 export function memoryCapabilities(def: BaseGridDef): Capabilities {
-  const quickFields = def.quick ?? [];
+  const quickFields = listQuickFields(def);
   const ranged = (field: BaseFieldDef) =>
     isRangeType(field.type) && !field.options;
   const rangeFields = def.fields.filter(ranged).map((field) => field.key);
@@ -146,7 +147,7 @@ export function createMemorySource(
 ): DataSource {
   let rows = initialRows;
   let selected: Selection | null = null;
-  const quickFields = def.quick ?? [];
+  const quickFields = listQuickFields(def);
   const totals = listTotalFields(def).map((field) => field.key);
   const matching = (query: QueryState) =>
     filterRows(def, rows, query, quickFields);

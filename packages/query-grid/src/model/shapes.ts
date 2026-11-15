@@ -1,4 +1,9 @@
-import type { BaseGridDef, Capabilities, QueryState } from "./field-types.ts";
+import {
+  listQuickFields,
+  type BaseGridDef,
+  type Capabilities,
+  type QueryState,
+} from "./field-types.ts";
 
 export interface QueryShape {
   equals: string[];
@@ -110,6 +115,6 @@ export function shapeCapabilities(
 export function gridDefCapabilities(def: ShapedGridDef): Capabilities {
   return shapeCapabilities(def.shapes, {
     facetField: def.facet?.field,
-    quickFields: def.quick,
+    quickFields: listQuickFields(def),
   });
 }

@@ -99,6 +99,10 @@ export function getFacetField<F extends BaseFieldDef>(
   return def.facet ? getField(def, def.facet.field) : null;
 }
 
+export function listQuickFields(def: BaseGridDef): string[] {
+  return def.quick ?? [];
+}
+
 export function listTotalFields<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
 ): F[] {

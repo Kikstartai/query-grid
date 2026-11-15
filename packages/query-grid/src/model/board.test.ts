@@ -121,6 +121,20 @@ describe("the board", () => {
     expect(calls.transitions).toBe(1);
   });
 
+  test("transitions given to the board replace the source's", async () => {
+    const calls: Calls = { transitions: 0, moves: [] };
+    const source = createSource(calls);
+    const queries = getLaneQueries(TEST_DEF, BASE, source.capabilities);
+    const board = createBoard(TEST_DEF, source, queries ?? new Map(), [
+      ["done", "open"],
+    ]);
+    board.subscribe(() => undefined);
+    await settle();
+    expect(calls.transitions).toBe(0);
+    expect(board.canMove("done", "open")).toBe(true);
+    expect(board.canMove("open", "done")).toBe(false);
+  });
+
   test("a move is allowed only along a transition", async () => {
     const board = await openBoard(createSource({ transitions: 0, moves: [] }));
     expect(board.canMove("open", "done")).toBe(true);
