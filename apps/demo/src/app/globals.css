@@ -216,6 +216,44 @@ pre {
   border-top: 0;
 }
 
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  }
+
+  .workspace-head,
+  .workspace-tools {
+    flex-wrap: wrap;
+  }
+
+  .workspace-tools {
+    grid-area: 2 / 1;
+    margin-top: 10px;
+    padding-inline-start: 0;
+  }
+
+  .workspace-note {
+    grid-area: 3 / 1;
+  }
+
+  .workspace-body {
+    grid-area: 4 / 1;
+  }
+
+  .workspace-total {
+    grid-area: 5 / 1;
+  }
+
+  .workspace-foot {
+    grid-area: 6 / 1;
+    min-height: 0;
+    margin-top: 6px;
+    padding-inline-start: 0;
+    border-top: 0;
+  }
+}
+
 .skeleton {
   display: block;
   border-radius: 4px;

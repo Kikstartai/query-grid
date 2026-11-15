@@ -43,6 +43,19 @@ function render(element: ReactElement): string {
   return renderToStaticMarkup(element);
 }
 
+function DisabledSort() {
+  return (
+    <SortControl
+      options={[{ value: "total", label: "Total" }]}
+      value="total"
+      direction="asc"
+      onSortChange={noop}
+      disabled
+      reason="Not now"
+    />
+  );
+}
+
 describe("each base component mounts alone, with plain props and no provider", () => {
   test("DataGrid", () => {
     const html = render(<DataGrid fields={TEST_FIELDS} {...ROW_WINDOW} />);
@@ -195,23 +208,15 @@ describe("each base component mounts alone, with plain props and no provider", (
   });
 
   test("a disabled control carries its reason", () => {
-    const control = (
-      <SortControl
-        options={[{ value: "total", label: "Total" }]}
-        value="total"
-        direction="asc"
-        onSortChange={noop}
-        disabled
-        reason="Not now"
-      />
-    );
-    const html = render(control);
+    const html = render(<DisabledSort />);
     expect(html).toContain("data-unavailable");
     expect(html).toContain('title="Not now"');
     expect(html).not.toContain("data-field-reason");
     expect(
       render(
-        <ReasonDisplayContext value={true}>{control}</ReasonDisplayContext>,
+        <ReasonDisplayContext value={true}>
+          <DisabledSort />
+        </ReasonDisplayContext>,
       ),
     ).toContain("data-field-reason");
   });

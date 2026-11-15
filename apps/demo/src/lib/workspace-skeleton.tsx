@@ -59,6 +59,28 @@ export function SkeletonGrid() {
   );
 }
 
+export function WorkspaceSkeleton() {
+  return (
+    <>
+      <SkeletonTools />
+      <div
+        className="workspace-body"
+        data-skeleton="workspace"
+        role="status"
+        aria-label="The grid is on its way"
+      >
+        <SkeletonFilters />
+        <SkeletonChips />
+        <div className="workspace-main">
+          <SkeletonFacets />
+          <SkeletonGrid />
+        </div>
+      </div>
+      <SkeletonTotal />
+    </>
+  );
+}
+
 export function SkeletonTotal() {
   return (
     <div className="workspace-total" aria-hidden="true">

@@ -93,14 +93,21 @@ export interface RangeFilterProps extends FilterProps {
   format?: GridFormat;
 }
 
-interface FilterFrameProps extends FilterProps {
+interface FilterFrameProps {
+  filter: FilterProps;
   kind: "equals" | "range";
   children: ReactNode;
 }
 
-function FilterFrame({ field, kind, children, ...state }: FilterFrameProps) {
+function FilterFrame({ filter, kind, children }: FilterFrameProps) {
   return (
-    <FieldFrame name={field.key} kind={kind} label={field.label} {...state}>
+    <FieldFrame
+      name={filter.field.key}
+      kind={kind}
+      label={filter.field.label}
+      disabled={filter.disabled}
+      reason={filter.reason}
+    >
       {children}
     </FieldFrame>
   );
@@ -474,12 +481,7 @@ function RangeControl(props: RangeFilterProps) {
 
 export function EqualsSelect(props: EqualsSelectProps) {
   return (
-    <FilterFrame
-      field={props.field}
-      kind="equals"
-      disabled={props.disabled}
-      reason={props.reason}
-    >
+    <FilterFrame filter={props} kind="equals">
       <EqualsControl {...props} />
     </FilterFrame>
   );
@@ -487,12 +489,7 @@ export function EqualsSelect(props: EqualsSelectProps) {
 
 export function LookupFilter(props: LookupFilterProps) {
   return (
-    <FilterFrame
-      field={props.field}
-      kind="equals"
-      disabled={props.disabled}
-      reason={props.reason}
-    >
+    <FilterFrame filter={props} kind="equals">
       <LookupControl {...props} />
     </FilterFrame>
   );
@@ -500,12 +497,7 @@ export function LookupFilter(props: LookupFilterProps) {
 
 export function RangeFilter(props: RangeFilterProps) {
   return (
-    <FilterFrame
-      field={props.field}
-      kind="range"
-      disabled={props.disabled}
-      reason={props.reason}
-    >
+    <FilterFrame filter={props} kind="range">
       <RangeControl {...props} />
     </FilterFrame>
   );

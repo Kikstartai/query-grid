@@ -22,7 +22,12 @@ export function RestyledSkeleton() {
   return (
     <>
       <SkeletonTools />
-      <div className="workspace-body" data-skeleton="restyled">
+      <div
+        className="workspace-body"
+        data-skeleton="restyled"
+        role="status"
+        aria-label="The grid is on its way"
+      >
         <SkeletonFilters />
         <SkeletonChips />
         <SkeletonGrid />

@@ -4,9 +4,12 @@ import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  createBoard,
   createQueryStore,
   defaultQuery,
+  getLaneQueries,
   encodeQuery,
+  type DataSource,
   type GridDef,
   type QueryState,
   type QueryStore,
@@ -19,7 +22,9 @@ import {
   QueryGridProvider,
   StaticQueryGridProvider,
   useGridView,
+  useQueryGridActions,
   useQueryState,
+  type QueryGridActions,
 } from "./query-grid-provider.tsx";
 import {
   buildUrlParsers,
@@ -247,6 +252,57 @@ describe("two grids on one page", () => {
     first.store.dispatch({ type: "setQuick", value: "acme" });
     second.sync.follow(toSearch(DEF, url));
     expect(second.store.getQuery().quick).toBe("acme");
+  });
+});
+
+describe("the actions", () => {
+  test("moveRow moves through the board, then reloads the facets, the count and the total", async () => {
+    const calls: string[] = [];
+    const counting: DataSource = {
+      ...source,
+      fetchFacets: (query, signal) => {
+        calls.push("facets");
+        return source.fetchFacets(query, signal);
+      },
+      fetchCount: (query, exact, signal) => {
+        calls.push("count");
+        return source.fetchCount(query, exact, signal);
+      },
+      fetchTotal: (query, signal) => {
+        calls.push("total");
+        return source.fetchTotal(query, signal);
+      },
+      changeFacetValue: async (id, to) => {
+        calls.push(`move ${id} ${to}`);
+        return { ...TEST_ROWS[0], id, status: to };
+      },
+    };
+    const captured: QueryGridActions[] = [];
+    function Capture() {
+      captured.push(useQueryGridActions());
+      return null;
+    }
+    renderToStaticMarkup(
+      <StaticQueryGridProvider
+        def={DEF}
+        source={counting}
+        search=""
+        columnPersistence={NO_PERSISTENCE}
+      >
+        <Capture />
+      </StaticQueryGridProvider>,
+    );
+    const lanes = getLaneQueries(DEF, BASE, counting.capabilities);
+    const board = createBoard(DEF, counting, lanes ?? new Map());
+    const id = TEST_ROWS[0].id;
+    const moved = await captured[0].moveRow(board, {
+      id,
+      from: "open",
+      to: "done",
+      index: 0,
+    });
+    expect(moved.status).toBe("done");
+    expect(calls).toEqual([`move ${id} done`, "facets", "count", "total"]);
   });
 });
 

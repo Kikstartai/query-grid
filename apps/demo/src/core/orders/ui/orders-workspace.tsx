@@ -13,14 +13,7 @@ import {
 import { AtRequest } from "@/lib/at-request";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
-import {
-  SkeletonChips,
-  SkeletonFacets,
-  SkeletonFilters,
-  SkeletonGrid,
-  SkeletonTools,
-  SkeletonTotal,
-} from "@/lib/workspace-skeleton";
+import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
 import { OrdersQueryProvider } from "../orders-provider";
 import { OrdersView } from "./orders-view";
@@ -28,23 +21,6 @@ import { OrdersView } from "./orders-view";
 interface OrdersWorkspaceProps {
   title: string;
   dir?: "rtl";
-}
-
-export function OrdersSkeleton() {
-  return (
-    <>
-      <SkeletonTools />
-      <div className="workspace-body" data-skeleton="orders">
-        <SkeletonFilters />
-        <SkeletonChips />
-        <div className="workspace-main">
-          <SkeletonFacets />
-          <SkeletonGrid />
-        </div>
-      </div>
-      <SkeletonTotal />
-    </>
-  );
 }
 
 function OrdersGrid() {
@@ -80,7 +56,7 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
         <SiteBrand />
         <h1>{title}</h1>
       </header>
-      <Suspense fallback={<OrdersSkeleton />}>
+      <Suspense fallback={<WorkspaceSkeleton />}>
         <AtRequest>
           <OrdersGrid />
         </AtRequest>

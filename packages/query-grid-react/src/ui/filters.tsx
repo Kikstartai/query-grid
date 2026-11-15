@@ -231,8 +231,8 @@ export interface FilterBarProps {
   children?: ReactNode;
 }
 
-export function FilterBar({ children = <DefaultFilters /> }: FilterBarProps) {
-  return <BaseFilterBar>{children}</BaseFilterBar>;
+export function FilterBar({ children }: FilterBarProps) {
+  return <BaseFilterBar>{children ?? <DefaultFilters />}</BaseFilterBar>;
 }
 
 export interface FilterSidebarProps {
@@ -241,11 +241,7 @@ export interface FilterSidebarProps {
   children?: ReactNode;
 }
 
-export function FilterSidebar({
-  side,
-  label,
-  children = <DefaultFilters />,
-}: FilterSidebarProps) {
+export function FilterSidebar({ side, label, children }: FilterSidebarProps) {
   const dispatch = useQueryDispatch();
   const chips = useFilterChips();
   return (
@@ -255,7 +251,7 @@ export function FilterSidebar({
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      {children}
+      {children ?? <DefaultFilters />}
     </BaseFilterSidebar>
   );
 }

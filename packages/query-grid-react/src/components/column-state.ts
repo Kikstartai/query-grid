@@ -216,7 +216,7 @@ export function createColumnStore(
   let timer: ReturnType<typeof setTimeout> | null = null;
   const set = (next: ColumnState[]) => {
     store.set(next);
-    if (!restored) {
+    if (!restored || persistence === NO_PERSISTENCE) {
       return;
     }
     if (timer) {

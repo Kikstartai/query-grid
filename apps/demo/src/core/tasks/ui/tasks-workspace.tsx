@@ -13,35 +13,11 @@ import {
 import { AtRequest } from "@/lib/at-request";
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
-import {
-  SkeletonChips,
-  SkeletonFacets,
-  SkeletonFilters,
-  SkeletonGrid,
-  SkeletonTools,
-  SkeletonTotal,
-} from "@/lib/workspace-skeleton";
+import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
 import { TASK_COUNT } from "../tasks-grid-def";
 import { TasksQueryProvider } from "../tasks-provider";
 import { TasksView } from "./tasks-view";
-
-export function TasksSkeleton() {
-  return (
-    <>
-      <SkeletonTools />
-      <div className="workspace-body" data-skeleton="tasks">
-        <SkeletonFilters />
-        <SkeletonChips />
-        <div className="workspace-main">
-          <SkeletonFacets />
-          <SkeletonGrid />
-        </div>
-      </div>
-      <SkeletonTotal />
-    </>
-  );
-}
 
 function TasksGrid() {
   return (
@@ -81,7 +57,7 @@ export function TasksWorkspace() {
         declared filter and sort is offered in any combination, and filtering,
         sorting, counting and totalling run in JavaScript.
       </p>
-      <Suspense fallback={<TasksSkeleton />}>
+      <Suspense fallback={<WorkspaceSkeleton />}>
         <AtRequest>
           <TasksGrid />
         </AtRequest>
