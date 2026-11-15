@@ -3,7 +3,7 @@ import {
   isDefaultSort,
   resolveMaxValues,
   type BaseGridDef,
-  type QueryRules,
+  type OfferContext,
   type QueryState,
   type SortDirection,
 } from "./field-types.ts";
@@ -114,10 +114,10 @@ function proposeAction(
   def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
-  rules: QueryRules,
+  context: OfferContext,
 ): QueryState[] {
   const top = { ...query, cursor: null };
-  const memory = rules.capabilities.mode === "memory";
+  const memory = context.runnable.mode === "memory";
   switch (action.type) {
     case "setEquals":
       return proposeEquals(def, query, action.field, action.values);
@@ -147,7 +147,7 @@ function proposeAction(
       return [{ ...top, range: null }];
     case "setSort": {
       const unordered =
-        !memory && query.search !== null && !rules.searchComplete;
+        !memory && query.search !== null && !context.allSearchMatchesLoaded;
       if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
@@ -171,10 +171,10 @@ export function applyAction(
   def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
-  rules: QueryRules,
+  context: OfferContext,
 ): QueryState {
-  const next = proposeAction(def, query, action, rules).find((candidate) =>
-    rules.capabilities.isAnswerable(candidate),
+  const next = proposeAction(def, query, action, context).find((candidate) =>
+    context.runnable.canRun(candidate),
   );
   return next ?? query;
 }
@@ -183,41 +183,41 @@ function isOffered(
   def: BaseGridDef,
   query: QueryState,
   action: QueryAction,
-  rules: QueryRules,
+  context: OfferContext,
 ): boolean {
-  const [first] = proposeAction(def, query, action, rules);
-  return first !== undefined && rules.capabilities.isAnswerable(first);
+  const [first] = proposeAction(def, query, action, context);
+  return first !== undefined && context.runnable.canRun(first);
 }
 
 export function listOffers(
   def: BaseGridDef,
   query: QueryState,
-  rules: QueryRules,
+  context: OfferContext,
 ): Offers {
   const offersEquals = (values: string[]) =>
-    rules.capabilities.equalsFields.filter((field) =>
-      isOffered(def, query, { type: "setEquals", field, values }, rules),
+    context.runnable.equalsFields.filter((field) =>
+      isOffered(def, query, { type: "setEquals", field, values }, context),
     );
   return {
     equals: offersEquals(PROBE.slice(0, 1)),
     multi: offersEquals(PROBE),
-    sorts: rules.capabilities.sortFields.filter((field) =>
+    sorts: context.runnable.sortFields.filter((field) =>
       isOffered(
         def,
         query,
         { type: "setSort", field, direction: "asc" },
-        rules,
+        context,
       ),
     ),
-    ranges: rules.capabilities.rangeFields.filter((field) =>
+    ranges: context.runnable.rangeFields.filter((field) =>
       isOffered(
         def,
         query,
         { type: "setRange", field, min: "x", max: null },
-        rules,
+        context,
       ),
     ),
-    search: isOffered(def, query, { type: "setSearch", value: "xxx" }, rules),
+    search: isOffered(def, query, { type: "setSearch", value: "xxx" }, context),
   };
 }
 
@@ -239,7 +239,7 @@ function describeQuery(
 export function explainUnavailable(
   query: QueryState,
   target: OfferTarget,
-  rules: QueryRules,
+  context: OfferContext,
 ): UnavailableReason {
   if (target.kind === "search") {
     return describeQuery(query, "search_alone", null);
@@ -247,7 +247,7 @@ export function explainUnavailable(
   if (query.search !== null && target.kind === "sort") {
     return describeQuery(
       query,
-      rules.searchComplete ? "no_sort_index" : "search_unordered",
+      context.allSearchMatchesLoaded ? "no_sort_index" : "search_unordered",
       target.field,
     );
   }
@@ -285,9 +285,9 @@ function stateKey(query: QueryState): string {
 export function listControlActions(
   def: BaseGridDef,
   query: QueryState,
-  rules: QueryRules,
+  context: OfferContext,
 ): QueryAction[] {
-  const offers = listOffers(def, query, rules);
+  const offers = listOffers(def, query, context);
   const actions: QueryAction[] = [{ type: "reset" }];
   for (const field of offers.equals) {
     actions.push({ type: "setEquals", field, values: PROBE.slice(0, 1) });
@@ -320,15 +320,15 @@ export function listControlActions(
 
 export function enumerateReachableStates(
   def: BaseGridDef,
-  rules: QueryRules,
+  context: OfferContext,
 ): QueryState[] {
   const start = defaultQuery(def);
   const seen = new Map<string, QueryState>([[stateKey(start), start]]);
   const queue = [start];
   while (queue.length > 0) {
     const query = queue.shift() as QueryState;
-    for (const action of listControlActions(def, query, rules)) {
-      const next = applyAction(def, query, action, rules);
+    for (const action of listControlActions(def, query, context)) {
+      const next = applyAction(def, query, action, context);
       const key = stateKey(next);
       if (!seen.has(key)) {
         seen.set(key, next);

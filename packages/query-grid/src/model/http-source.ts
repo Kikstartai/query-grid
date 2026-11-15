@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { encodeQuery } from "./query-url.ts";
-import { gridDefCapabilities, type IndexedGridDef } from "./indexes.ts";
+import { gridDefRunnable, type IndexedGridDef } from "./indexes.ts";
 import type {
   CountResult,
   FacetCount,
@@ -52,12 +52,12 @@ export function createHttpSource(
   def: IndexedGridDef,
   basePath: string,
 ): DataSource {
-  const capabilities = gridDefCapabilities(def);
+  const runnable = gridDefRunnable(def);
   const filterParams = (query: QueryState) =>
     encodeQuery(def, { ...query, cursor: null });
   const route = (name: SubRoute) => `${basePath}/${name}`;
   return {
-    capabilities,
+    runnable,
     fetchPage: (query, limit, signal) => {
       const params = encodeQuery(def, query);
       params.set(LIMIT_PARAM, String(limit));

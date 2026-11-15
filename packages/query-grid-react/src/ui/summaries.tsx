@@ -24,7 +24,7 @@ import {
   useGridView,
   useQueryGrid,
   useQueryGridActions,
-  useQueryRules,
+  useOfferContext,
   useQueryState,
   useTotalState,
 } from "../react/query-grid-provider.tsx";
@@ -64,7 +64,7 @@ export function FacetPanel() {
   const { def } = useQueryGrid();
   const messages = useMessages();
   const query = useQueryState();
-  const { capabilities } = useQueryRules();
+  const { runnable } = useOfferContext();
   const facets = useFacetState();
   const key = def.facet?.field ?? "";
   const equals = useEqualsFilter(key);
@@ -73,7 +73,7 @@ export function FacetPanel() {
   if (!field?.options) {
     return null;
   }
-  const counted = capabilities.isFacetCountShown(query);
+  const counted = runnable.isFacetCountExact(query);
   const showCounts = counted && facets.loaded;
   const countOf = (value: string) =>
     facets.result.find((item) => item.value === value)?.count ?? 0;
@@ -91,9 +91,7 @@ export function FacetPanel() {
           ? facets.result.reduce((sum, facet) => sum + facet.count, 0)
           : null
       }
-      note={
-        messages.facetNotes[capabilities.mode === "memory" ? "memory" : shown]
-      }
+      note={messages.facetNotes[runnable.mode === "memory" ? "memory" : shown]}
       {...offer}
     />
   );

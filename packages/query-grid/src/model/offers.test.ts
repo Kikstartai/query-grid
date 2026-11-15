@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { QueryRules, QueryState } from "./field-types.ts";
+import type { OfferContext, QueryState } from "./field-types.ts";
 import {
   TEST_DEF,
   TEST_SEARCH_FIELDS,
@@ -15,19 +15,25 @@ import {
 import {
   isQueryIndexed,
   getIndex,
-  indexCapabilities,
+  indexRunnable,
   indexId,
   type IndexDef,
 } from "./indexes.ts";
 
 const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);
-const CAPS = indexCapabilities(INDEXES, {
+const RUNNABLE = indexRunnable(INDEXES, {
   facetField: "status",
   searchFields: TEST_SEARCH_FIELDS,
 });
-const CAPPED: QueryRules = { capabilities: CAPS, searchComplete: false };
-const COMPLETE: QueryRules = { capabilities: CAPS, searchComplete: true };
+const CAPPED: OfferContext = {
+  runnable: RUNNABLE,
+  allSearchMatchesLoaded: false,
+};
+const COMPLETE: OfferContext = {
+  runnable: RUNNABLE,
+  allSearchMatchesLoaded: true,
+};
 
 describe("offers from declared indexes", () => {
   test("a sort narrows the filters an index answers", () => {
@@ -121,11 +127,11 @@ describe("offers from declared indexes", () => {
     const single: IndexDef[] = INDEXES.map((index) =>
       index.equals.includes("region") ? { ...index, multi: false } : index,
     );
-    const rules: QueryRules = {
-      capabilities: indexCapabilities(single),
-      searchComplete: false,
+    const context: OfferContext = {
+      runnable: indexRunnable(single),
+      allSearchMatchesLoaded: false,
     };
-    const offers = listOffers(TEST_DEF, BASE, rules);
+    const offers = listOffers(TEST_DEF, BASE, context);
     expect(offers.equals).toEqual(["status", "region"]);
     expect(offers.multi).toEqual(["status"]);
     const one: QueryState = { ...BASE, equals: { region: ["north"] } };
@@ -134,7 +140,7 @@ describe("offers from declared indexes", () => {
         TEST_DEF,
         one,
         { type: "setEquals", field: "region", values: ["north", "south"] },
-        rules,
+        context,
       ),
     ).toBe(one);
   });
@@ -142,9 +148,9 @@ describe("offers from declared indexes", () => {
 
 describe("reachable states", () => {
   test("every reachable control state is a declared index and every index is reached", () => {
-    for (const rules of [CAPPED, COMPLETE]) {
+    for (const context of [CAPPED, COMPLETE]) {
       const reached = new Set<string>();
-      const states = enumerateReachableStates(TEST_DEF, rules);
+      const states = enumerateReachableStates(TEST_DEF, context);
       for (const state of states) {
         expect(isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, state)).toBe(true);
         if (state.search === null) {

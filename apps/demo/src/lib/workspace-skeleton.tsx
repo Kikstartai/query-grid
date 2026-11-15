@@ -2,7 +2,7 @@ import {
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
-  type Capabilities,
+  type RunnableQueries,
 } from "@kikstart/query-grid";
 
 const GRID_ROWS = Array.from({ length: 14 }, (_, index) => index);
@@ -13,7 +13,7 @@ interface SkeletonProps {
 }
 
 interface SkeletonFiltersProps extends SkeletonProps {
-  capabilities: Capabilities;
+  runnable: RunnableQueries;
   fields?: string[];
 }
 
@@ -29,17 +29,17 @@ export function SkeletonTools() {
 
 export function SkeletonFilters({
   def,
-  capabilities,
+  runnable,
   fields,
 }: SkeletonFiltersProps) {
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />
-      {listFilterFields(def, capabilities, fields).map((field) => (
+      {listFilterFields(def, runnable, fields).map((field) => (
         <span
           key={field.key}
           className="skeleton skeleton-control"
-          data-kind={resolveFilterKind(field, capabilities)}
+          data-kind={resolveFilterKind(field, runnable)}
         />
       ))}
       <span className="skeleton skeleton-control" data-kind="sort" />
@@ -96,7 +96,7 @@ function SkeletonTotal({ def }: SkeletonProps) {
 
 export function WorkspaceSkeleton({
   def,
-  capabilities,
+  runnable,
   fields,
 }: SkeletonFiltersProps) {
   return (
@@ -108,11 +108,7 @@ export function WorkspaceSkeleton({
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters
-          def={def}
-          capabilities={capabilities}
-          fields={fields}
-        />
+        <SkeletonFilters def={def} runnable={runnable} fields={fields} />
         <SkeletonChips />
         <div className="workspace-main">
           <SkeletonFacets def={def} />

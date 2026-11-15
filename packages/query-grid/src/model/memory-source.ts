@@ -5,7 +5,7 @@ import {
   isRangeType,
   listSearchFields,
   listTotalFields,
-  type Capabilities,
+  type RunnableQueries,
   type BaseFieldDef,
   type FieldOption,
   type BaseGridDef,
@@ -19,7 +19,7 @@ import { sortRows, toComparable } from "./sort-rows.ts";
 
 const OPTION_LIMIT = 50;
 
-export function memoryCapabilities(def: BaseGridDef): Capabilities {
+export function memoryRunnable(def: BaseGridDef): RunnableQueries {
   const searchFields = listSearchFields(def);
   const ranged = (field: BaseFieldDef) =>
     isRangeType(field.type) && !field.options;
@@ -29,7 +29,7 @@ export function memoryCapabilities(def: BaseGridDef): Capabilities {
     .map((field) => field.key);
   return {
     mode: "memory",
-    isAnswerable: (query) =>
+    canRun: (query) =>
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       (query.range === null || rangeFields.includes(query.range.field)) &&
       (query.search === null || searchFields.length > 0) &&
@@ -38,7 +38,7 @@ export function memoryCapabilities(def: BaseGridDef): Capabilities {
     rangeFields,
     sortFields: def.fields.map((field) => field.key),
     searchFields,
-    isFacetCountShown: () => true,
+    isFacetCountExact: () => true,
   };
 }
 
@@ -171,7 +171,7 @@ export function createMemorySource(
     return (selected as Selection).rows;
   };
   return {
-    capabilities: memoryCapabilities(def),
+    runnable: memoryRunnable(def),
     fetchPage: async (query, limit) => {
       const offset = Number(query.cursor ?? 0) || 0;
       const found = select(query);

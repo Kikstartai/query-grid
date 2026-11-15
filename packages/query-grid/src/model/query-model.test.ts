@@ -4,12 +4,12 @@ import { listFilterChips } from "./chips.ts";
 import {
   listFilterFields,
   resolveFilterKind,
-  type Capabilities,
-  type QueryRules,
+  type RunnableQueries,
+  type OfferContext,
   type QueryState,
 } from "./field-types.ts";
 import { TEST_DEF, TEST_SEARCH_FIELDS } from "./grid-def.fixture.ts";
-import { memoryCapabilities } from "./memory-source.ts";
+import { memoryRunnable } from "./memory-source.ts";
 import {
   applyAction,
   defaultQuery,
@@ -23,34 +23,40 @@ import { validateQueryValues } from "./query-validate.ts";
 
 const BASE = defaultQuery(TEST_DEF);
 
-const SERVER: Capabilities = {
+const SERVER: RunnableQueries = {
   mode: "server",
-  isAnswerable: (query) =>
+  canRun: (query) =>
     Object.keys(query.equals).every((key) => key === "status") &&
     (query.equals.status?.length ?? 1) === 1,
   equalsFields: ["status", "region"],
   rangeFields: ["created_at", "total"],
   sortFields: ["created_at", "total"],
   searchFields: TEST_SEARCH_FIELDS,
-  isFacetCountShown: () => true,
+  isFacetCountExact: () => true,
 };
-const CAPPED: QueryRules = { capabilities: SERVER, searchComplete: false };
-const COMPLETE: QueryRules = { capabilities: SERVER, searchComplete: true };
-const MEMORY: QueryRules = {
-  capabilities: memoryCapabilities(TEST_DEF),
-  searchComplete: false,
+const CAPPED: OfferContext = {
+  runnable: SERVER,
+  allSearchMatchesLoaded: false,
+};
+const COMPLETE: OfferContext = {
+  runnable: SERVER,
+  allSearchMatchesLoaded: true,
+};
+const MEMORY: OfferContext = {
+  runnable: memoryRunnable(TEST_DEF),
+  allSearchMatchesLoaded: false,
 };
 
 describe("filter kinds", () => {
-  const kindsOf = (capabilities: Capabilities) =>
+  const kindsOf = (runnable: RunnableQueries) =>
     Object.fromEntries(
-      listFilterFields(TEST_DEF, capabilities).map((field) => [
+      listFilterFields(TEST_DEF, runnable).map((field) => [
         field.key,
-        resolveFilterKind(field, capabilities),
+        resolveFilterKind(field, runnable),
       ]),
     );
 
-  test("on a server grid the allowed filters are the ones the capabilities name", () => {
+  test("on a server grid the allowed filters are the ones the runnable queries name", () => {
     expect(kindsOf(SERVER)).toEqual({
       created_at: "range",
       total: "range",
@@ -71,7 +77,7 @@ describe("filter kinds", () => {
   });
 
   test("on a client grid every field is filterable, by its type and options", () => {
-    expect(kindsOf(memoryCapabilities(TEST_DEF))).toEqual({
+    expect(kindsOf(memoryRunnable(TEST_DEF))).toEqual({
       id: "lookup",
       number: "range",
       created_at: "range",
@@ -85,7 +91,7 @@ describe("filter kinds", () => {
 });
 
 describe("actions", () => {
-  test("an action the capabilities refuse leaves the query alone", () => {
+  test("an action the runnable queries refuse leaves the query alone", () => {
     expect(
       applyAction(
         TEST_DEF,
@@ -127,19 +133,19 @@ describe("actions", () => {
         field.key === "status" ? { ...field, maxValues: 1 } : field,
       ),
     };
-    const rules: QueryRules = {
-      capabilities: memoryCapabilities(capped),
-      searchComplete: false,
+    const context: OfferContext = {
+      runnable: memoryRunnable(capped),
+      allSearchMatchesLoaded: false,
     };
     expect(
       applyAction(
         capped,
         BASE,
         { type: "setEquals", field: "status", values: ["open", "done"] },
-        rules,
+        context,
       ),
     ).toBe(BASE);
-    expect(listOffers(capped, BASE, rules).multi).toEqual([
+    expect(listOffers(capped, BASE, context).multi).toEqual([
       "id",
       "region",
       "name",
@@ -159,7 +165,7 @@ describe("actions", () => {
     ).toEqual({});
   });
 
-  test("several values are offered only where the capabilities answer them", () => {
+  test("several values are offered only where the runnable queries answer them", () => {
     expect(listOffers(TEST_DEF, BASE, CAPPED)).toMatchObject({
       equals: ["status"],
       multi: [],
@@ -248,7 +254,7 @@ describe("memory mode", () => {
       search: "abc",
       sort: { field: "name", direction: "asc" },
     };
-    expect(MEMORY.capabilities.isAnswerable(busy)).toBe(true);
+    expect(MEMORY.runnable.canRun(busy)).toBe(true);
     const offers = listOffers(TEST_DEF, busy, MEMORY);
     expect(offers.equals).toEqual(["id", "status", "region", "name", "note"]);
     expect(offers.ranges).toEqual(["number", "created_at", "total"]);
@@ -257,21 +263,21 @@ describe("memory mode", () => {
   });
 
   test("no search fields means no search", () => {
-    const bare = memoryCapabilities({ ...TEST_DEF, search: undefined });
-    expect(bare.isAnswerable({ ...BASE, search: "abc" })).toBe(false);
+    const bare = memoryRunnable({ ...TEST_DEF, search: undefined });
+    expect(bare.canRun({ ...BASE, search: "abc" })).toBe(false);
     expect(bare.searchFields).toEqual([]);
   });
 
   test("every reachable state is answerable, with several values included", () => {
     const states = enumerateReachableStates(TEST_DEF, MEMORY);
-    expect(states.every(MEMORY.capabilities.isAnswerable)).toBe(true);
+    expect(states.every(MEMORY.runnable.canRun)).toBe(true);
     expect(states.some((state) => (state.equals.status?.length ?? 0) > 1)).toBe(
       true,
     );
   });
 
-  test("the store applies its capabilities", () => {
-    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+  test("the store applies its runnable queries", () => {
+    const store = createQueryStore(TEST_DEF, MEMORY.runnable, BASE);
     store.dispatch({ type: "setSort", field: "name", direction: "asc" });
     store.dispatch({ type: "setEquals", field: "region", values: ["north"] });
     store.dispatch({ type: "setRange", field: "total", min: "5", max: "9" });
@@ -285,7 +291,7 @@ describe("memory mode", () => {
 
 describe("the store and browser history", () => {
   test("a filter, sort or view change asks for a new history entry", () => {
-    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    const store = createQueryStore(TEST_DEF, MEMORY.runnable, BASE);
     expect(store.getHistoryWrite()).toBe("replace");
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
     expect(store.getHistoryWrite()).toBe("push");
@@ -300,7 +306,7 @@ describe("the store and browser history", () => {
   });
 
   test("replace loads a query and a view from the URL without a new entry", () => {
-    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    const store = createQueryStore(TEST_DEF, MEMORY.runnable, BASE);
     let emitted = 0;
     store.subscribe(() => {
       emitted += 1;
@@ -317,7 +323,7 @@ describe("the store and browser history", () => {
   });
 
   test("replace keeps what did not change, so nothing refetches for it", () => {
-    const store = createQueryStore(TEST_DEF, MEMORY.capabilities, BASE);
+    const store = createQueryStore(TEST_DEF, MEMORY.runnable, BASE);
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
     const before = store.getQuery();
     store.replace({ ...before, equals: { status: ["open"] } }, "board");
@@ -384,7 +390,7 @@ describe("the URL", () => {
     ).toEqual({ status: ["open"] });
   });
 
-  test("the keys a grid can put in the URL are the ones its capabilities allow", () => {
+  test("the keys a grid can put in the URL are the ones its runnable queries allow", () => {
     const keys = listQueryKeys(SERVER);
     expect(keys.map((key) => key.name)).toEqual([
       "f.status",
@@ -525,10 +531,13 @@ describe("chips", () => {
 });
 
 describe("the sort under an unordered search", () => {
-  const open: Capabilities = { ...SERVER, isAnswerable: () => true };
+  const open: RunnableQueries = { ...SERVER, canRun: () => true };
 
   test("only a return to the default sort is accepted", () => {
-    const rules: QueryRules = { capabilities: open, searchComplete: false };
+    const context: OfferContext = {
+      runnable: open,
+      allSearchMatchesLoaded: false,
+    };
     const stuck: QueryState = {
       ...BASE,
       search: "abc",
@@ -539,7 +548,7 @@ describe("the sort under an unordered search", () => {
         TEST_DEF,
         stuck,
         { type: "setSort", field: "total", direction: "asc" },
-        rules,
+        context,
       ),
     ).toBe(stuck);
     expect(
@@ -547,13 +556,15 @@ describe("the sort under an unordered search", () => {
         TEST_DEF,
         stuck,
         { type: "setSort", ...TEST_DEF.defaultSort },
-        rules,
+        context,
       ).sort,
     ).toEqual(TEST_DEF.defaultSort);
-    expect(listOffers(TEST_DEF, stuck, rules).sorts).toEqual([]);
+    expect(listOffers(TEST_DEF, stuck, context).sorts).toEqual([]);
     expect(
-      listOffers(TEST_DEF, stuck, { capabilities: open, searchComplete: true })
-        .sorts,
+      listOffers(TEST_DEF, stuck, {
+        runnable: open,
+        allSearchMatchesLoaded: true,
+      }).sorts,
     ).toEqual(["created_at", "total"]);
   });
 });

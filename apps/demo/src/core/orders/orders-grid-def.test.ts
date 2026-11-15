@@ -9,7 +9,7 @@ import {
   isQueryIndexed,
   getIndex,
   indexId,
-  type QueryRules,
+  type OfferContext,
 } from "@kikstart/query-grid";
 import { createHttpSource } from "@kikstart/query-grid/http";
 import {
@@ -21,11 +21,11 @@ import { GRID_DEFS, resolveMigrationFile } from "../grid-defs";
 import { ORDERS_API, ORDERS_GRID_DEF } from "./orders-grid-def";
 
 const INDEXES = ORDERS_GRID_DEF.indexes;
-const CAPABILITIES = createHttpSource(ORDERS_GRID_DEF, ORDERS_API).capabilities;
+const RUNNABLE = createHttpSource(ORDERS_GRID_DEF, ORDERS_API).runnable;
 
-const RULES: QueryRules[] = [
-  { capabilities: CAPABILITIES, searchComplete: false },
-  { capabilities: CAPABILITIES, searchComplete: true },
+const CONTEXTS: OfferContext[] = [
+  { runnable: RUNNABLE, allSearchMatchesLoaded: false },
+  { runnable: RUNNABLE, allSearchMatchesLoaded: true },
 ];
 
 describe("orders grid def", () => {
@@ -33,12 +33,9 @@ describe("orders grid def", () => {
     expect(validateGridDefs(GRID_DEFS)).toEqual([]);
   });
 
-  test("the one def gives the client its capabilities and its cells", () => {
-    expect(CAPABILITIES.searchFields).toEqual([
-      "customer_name",
-      "order_number",
-    ]);
-    expect(CAPABILITIES.isFacetCountShown(defaultQuery(ORDERS_GRID_DEF))).toBe(
+  test("the one def gives the client its runnable queries and its cells", () => {
+    expect(RUNNABLE.searchFields).toEqual(["customer_name", "order_number"]);
+    expect(RUNNABLE.isFacetCountExact(defaultQuery(ORDERS_GRID_DEF))).toBe(
       true,
     );
     expect(ORDERS_GRID_DEF.fields.filter((field) => field.cell)).toHaveLength(
@@ -47,9 +44,9 @@ describe("orders grid def", () => {
   });
 
   test("every reachable control state is a declared index and every index is reached", () => {
-    for (const rules of RULES) {
+    for (const context of CONTEXTS) {
       const reached = new Set<string>();
-      const states = enumerateReachableStates(ORDERS_GRID_DEF, rules);
+      const states = enumerateReachableStates(ORDERS_GRID_DEF, context);
       for (const state of states) {
         expect(isQueryIndexed(INDEXES, ORDERS_GRID_DEF.search, state)).toBe(
           true,

@@ -1,7 +1,7 @@
 import {
   listSearchFields,
   type BaseGridDef,
-  type Capabilities,
+  type RunnableQueries,
   type QueryState,
 } from "./field-types.ts";
 
@@ -16,7 +16,7 @@ export interface IndexedGridDef extends BaseGridDef {
   indexes: IndexDef[];
 }
 
-export interface IndexCapabilityOptions {
+export interface IndexRunnableOptions {
   facetField?: string;
   searchFields?: string[];
 }
@@ -96,24 +96,24 @@ export function isFacetOnlyQuery(
   );
 }
 
-export function indexCapabilities(
+export function indexRunnable(
   indexes: IndexDef[],
-  options: IndexCapabilityOptions = {},
-): Capabilities {
+  options: IndexRunnableOptions = {},
+): RunnableQueries {
   const searchFields = options.searchFields ?? [];
   return {
     mode: "server",
-    isAnswerable: (query) => isQueryIndexed(indexes, searchFields, query),
+    canRun: (query) => isQueryIndexed(indexes, searchFields, query),
     equalsFields: listEqualsFields(indexes),
     rangeFields: listRangeFields(indexes),
     sortFields: listSortFields(indexes),
     searchFields,
-    isFacetCountShown: (query) => isFacetOnlyQuery(options.facetField, query),
+    isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),
   };
 }
 
-export function gridDefCapabilities(def: IndexedGridDef): Capabilities {
-  return indexCapabilities(def.indexes, {
+export function gridDefRunnable(def: IndexedGridDef): RunnableQueries {
+  return indexRunnable(def.indexes, {
     facetField: def.facet?.field,
     searchFields: listSearchFields(def),
   });

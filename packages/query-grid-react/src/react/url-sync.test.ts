@@ -28,7 +28,7 @@ interface Harness {
 
 function createHarness(): Harness {
   const source = createMemorySource(DEF, []);
-  const store = createQueryStore(DEF, source.capabilities, defaultQuery(DEF));
+  const store = createQueryStore(DEF, source.runnable, defaultQuery(DEF));
   const written: Written[] = [];
   const clock = { now: 0 };
   const sync = createUrlSync(
@@ -36,7 +36,7 @@ function createHarness(): Harness {
     encodeStore(store),
     (state: UrlState, history) =>
       written.push({
-        search: encodeUrlState(DEF, source.capabilities, state),
+        search: encodeUrlState(DEF, source.runnable, state),
         history,
       }),
     () => clock.now,

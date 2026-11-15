@@ -2,12 +2,12 @@
 
 A bun workspace of three published packages and one demo. The README holds the usage, the decisions, the benchmarks and the verification record; `docs/DESIGN.md` holds the current design.
 
-| Path                           | Package                         | Holds                                                                                                                 |
-| ------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, indexes and capabilities, stores, feeds, the board, data sources. No React, DOM or `pg` |
-| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css`                   |
-| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: def validation, SQL, DDL, `createGridHandler`. No React or `pg`                                           |
-| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                                                 |
+| Path                           | Package                         | Holds                                                                                                                     |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `packages/query-grid`          | `@kikstart/query-grid`          | the core: the query contract, indexes and runnable queries, stores, feeds, the board, data sources. No React, DOM or `pg` |
+| `packages/query-grid-react`    | `@kikstart/query-grid-react`    | base components (`./components`), provider and hooks (`.`), bound wrappers (`./ui`), `./styles.css`                       |
+| `packages/query-grid-postgres` | `@kikstart/query-grid-postgres` | the server: def validation, SQL, DDL, `createGridHandler`. No React or `pg`                                               |
+| `apps/demo`                    | `demo`                          | the Next.js demo site                                                                                                     |
 
 ## Commands
 

@@ -108,7 +108,7 @@ export function StatusBoard(props: StatusBoardProps) {
   const { def, source } = useQueryGrid();
   const messages = useMessages();
   const query = useQueryState();
-  const queries = getLaneQueries(def, query, source.capabilities);
+  const queries = getLaneQueries(def, query, source.runnable);
   if (!queries) {
     return (
       <p className="qg-notice" data-board-state="unavailable">
@@ -120,7 +120,7 @@ export function StatusBoard(props: StatusBoardProps) {
     <BoardLanes
       key={JSON.stringify([...queries.values()])}
       queries={queries}
-      showCounts={source.capabilities.isFacetCountShown(query)}
+      showCounts={source.runnable.isFacetCountExact(query)}
       {...props}
     />
   );

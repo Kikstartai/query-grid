@@ -37,7 +37,7 @@ import { createUrlSync, type UrlSync } from "./url-sync.ts";
 const DEF = TEST_GRID_DEF;
 const BASE = defaultQuery(DEF);
 const source = createMemorySource(DEF, TEST_ROWS);
-const CAPS = source.capabilities;
+const RUNNABLE = source.runnable;
 
 function Readout() {
   const query = useQueryState();
@@ -77,8 +77,8 @@ function renderAt(search: string) {
 
 describe("the URL parsers", () => {
   test("the key map is built from the def at runtime, on core's keys", () => {
-    expect(Object.keys(buildUrlParsers(CAPS))).toEqual([
-      ...CAPS.equalsFields.map((key) => `f.${key}`),
+    expect(Object.keys(buildUrlParsers(RUNNABLE))).toEqual([
+      ...RUNNABLE.equalsFields.map((key) => `f.${key}`),
       "r.number",
       "r.created_at",
       "r.total",
@@ -99,9 +99,11 @@ describe("the URL parsers", () => {
       },
       view: "list" as const,
     };
-    const values = toUrlValues(DEF, CAPS, state);
+    const values = toUrlValues(DEF, RUNNABLE, state);
     expect(values).toEqual({
-      ...Object.fromEntries(CAPS.equalsFields.map((key) => [`f.${key}`, []])),
+      ...Object.fromEntries(
+        RUNNABLE.equalsFields.map((key) => [`f.${key}`, []]),
+      ),
       "f.status": ["open", "done"],
       "f.region": ["north"],
       "r.number": null,
@@ -112,13 +114,13 @@ describe("the URL parsers", () => {
       cursor: null,
       view: "list",
     });
-    const search = toSearch(CAPS, values);
+    const search = toSearch(RUNNABLE, values);
     const core = encodeQuery(DEF, state.query);
     for (const [name, value] of core) {
       expect(new URLSearchParams(search).getAll(name)).toContain(value);
     }
     expect([...new URLSearchParams(search)]).toHaveLength([...core].length + 1);
-    expect(readUrlState(DEF, source.capabilities, search)).toEqual(state);
+    expect(readUrlState(DEF, source.runnable, search)).toEqual(state);
   });
 });
 
@@ -173,9 +175,9 @@ interface PrefixedGrid {
 }
 
 function connectGrid(url: UrlValues, prefix: string): PrefixedGrid {
-  const store = createQueryStore(DEF, source.capabilities, BASE);
+  const store = createQueryStore(DEF, source.runnable, BASE);
   const sync = createUrlSync(store, "", (state) =>
-    Object.assign(url, toUrlValues(DEF, CAPS, state, prefix)),
+    Object.assign(url, toUrlValues(DEF, RUNNABLE, state, prefix)),
   );
   sync.connect();
   return { store, sync };
@@ -183,8 +185,8 @@ function connectGrid(url: UrlValues, prefix: string): PrefixedGrid {
 
 describe("two grids on one page", () => {
   test("a prefix puts every key of a grid under its own name", () => {
-    expect(Object.keys(buildUrlParsers(CAPS, "a"))).toEqual(
-      Object.keys(buildUrlParsers(CAPS)).map((key) => `a.${key}`),
+    expect(Object.keys(buildUrlParsers(RUNNABLE, "a"))).toEqual(
+      Object.keys(buildUrlParsers(RUNNABLE)).map((key) => `a.${key}`),
     );
   });
 
@@ -225,7 +227,7 @@ describe("two grids on one page", () => {
     const second = connectGrid(url, "b");
     first.store.dispatch({ type: "setSearch", value: "acme" });
     first.store.setView("board");
-    second.sync.follow(toSearch(CAPS, url, "b"));
+    second.sync.follow(toSearch(RUNNABLE, url, "b"));
     expect(second.store.getQuery()).toEqual(BASE);
     expect(second.store.getView()).toBe("grid");
     second.store.dispatch({
@@ -233,10 +235,10 @@ describe("two grids on one page", () => {
       field: "status",
       values: ["done"],
     });
-    first.sync.follow(toSearch(CAPS, url, "a"));
+    first.sync.follow(toSearch(RUNNABLE, url, "a"));
     expect(first.store.getQuery()).toEqual({ ...BASE, search: "acme" });
-    expect(toSearch(CAPS, url, "a")).toBe("q=acme&view=board");
-    expect(toSearch(CAPS, url, "b")).toBe("f.status=done");
+    expect(toSearch(RUNNABLE, url, "a")).toBe("q=acme&view=board");
+    expect(toSearch(RUNNABLE, url, "b")).toBe("f.status=done");
     expect(url["a.q"]).toBe("acme");
     expect(url["b.f.status"]).toEqual(["done"]);
     expect(url.q).toBeUndefined();
@@ -280,7 +282,7 @@ describe("the actions", () => {
         <Capture />
       </StaticQueryGridProvider>,
     );
-    const lanes = getLaneQueries(DEF, BASE, counting.capabilities);
+    const lanes = getLaneQueries(DEF, BASE, counting.runnable);
     const board = createBoard(DEF, counting, lanes ?? new Map());
     const id = TEST_ROWS[0].id;
     const moved = await captured[0].moveRow(board, {

@@ -14,7 +14,7 @@ export {
   useOffers,
   useOfferState,
   useQueryGridActions,
-  useQueryRules,
+  useOfferContext,
   useQueryState,
   useTotalState,
   type ColumnsModel,

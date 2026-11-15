@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 const QUERY_LAYER =
-  /query-grid-provider|url-state|@kikstart\/query-grid\/(http|memory)|\b(useQueryGrid|useQueryGridActions|useQueryState|useQueryRules|useOffers|useOfferState|useFeedState|useCountState|useTotalState|useFacetState|useFieldLabels|useFilterChips|useColumns|useGridView|createFeed|createQueryStore|DataSource|Capabilities|encodeQuery|decodeQuery|applyAction|listOffers)\b/;
+  /query-grid-provider|url-state|@kikstart\/query-grid\/(http|memory)|\b(useQueryGrid|useQueryGridActions|useQueryState|useOfferContext|useOffers|useOfferState|useFeedState|useCountState|useTotalState|useFacetState|useFieldLabels|useFilterChips|useColumns|useGridView|createFeed|createQueryStore|DataSource|RunnableQueries|encodeQuery|decodeQuery|applyAction|listOffers)\b/;
 const JSX_TEXT = /[\w"}]>\s*[A-Za-z][A-Za-z ,.:…]{2,}\s*<\//;
 const LITERAL_LABEL = /(aria-label|placeholder|title|alt)="[^"]+"/;
 

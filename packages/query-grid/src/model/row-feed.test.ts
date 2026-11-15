@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DataSource } from "./data-source.ts";
-import type { Capabilities, GridRow, QueryState } from "./field-types.ts";
+import type { RunnableQueries, GridRow, QueryState } from "./field-types.ts";
 import {
   createTestSource,
   settle,
@@ -13,14 +13,14 @@ import { createQueryStore } from "./query-store.ts";
 import { createFeed } from "./row-feed.ts";
 import { createCountStore } from "./summary-stores.ts";
 
-const SERVER: Capabilities = {
+const SERVER: RunnableQueries = {
   mode: "server",
-  isAnswerable: () => true,
+  canRun: () => true,
   equalsFields: [],
   rangeFields: [],
   sortFields: ["created_at", "total"],
   searchFields: TEST_SEARCH_FIELDS,
-  isFacetCountShown: () => true,
+  isFacetCountExact: () => true,
 };
 
 const ROWS: GridRow[] = [
@@ -58,7 +58,7 @@ describe("the row feed", () => {
     feed.subscribe(() => undefined);
     await settle();
     expect(calls.pages).toHaveLength(1);
-    expect(store.getRules().searchComplete).toBe(true);
+    expect(store.getOfferContext().allSearchMatchesLoaded).toBe(true);
     store.dispatch({ type: "clearSearch" });
     await settle();
     expect(calls.pages).toHaveLength(2);

@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import {
   getFacetField,
-  type Capabilities,
+  type RunnableQueries,
   type BaseGridDef,
   type GridRow,
   type QueryState,
@@ -70,13 +70,13 @@ function loadTransitions(source: DataSource): TransitionLoad {
 export function getLaneQueries(
   def: BaseGridDef,
   query: QueryState,
-  capabilities: Capabilities,
+  runnable: RunnableQueries,
 ): Map<string, QueryState> | null {
   const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }
-  const memory = capabilities.mode === "memory";
+  const memory = runnable.mode === "memory";
   const selected = query.equals[field.key];
   const statuses = field.options
     .map((option) => option.value)
@@ -91,8 +91,7 @@ export function getLaneQueries(
     ]),
   );
   const combinable = memory || (query.search === null && query.range === null);
-  const answerable =
-    combinable && [...queries.values()].every(capabilities.isAnswerable);
+  const answerable = combinable && [...queries.values()].every(runnable.canRun);
   return answerable ? queries : null;
 }
 
@@ -116,7 +115,7 @@ export function createBoard(
     [...laneQueries].map(([lane, query]) => [
       lane,
       createFeed(
-        createQueryStore(def, source.capabilities, query, "board"),
+        createQueryStore(def, source.runnable, query, "board"),
         source,
         LANE_PAGE_SIZE,
       ),

@@ -1,7 +1,7 @@
 import {
   isDefaultSort,
   type BaseGridDef,
-  type Capabilities,
+  type RunnableQueries,
   type QueryState,
   type RangeState,
   type SortDirection,
@@ -19,11 +19,9 @@ export interface QueryKey {
   repeated: boolean;
 }
 
-export function listQueryKeys(capabilities: Capabilities): QueryKey[] {
-  const equals = capabilities.equalsFields.map(
-    (key) => `${EQUALS_PREFIX}${key}`,
-  );
-  const ranges = capabilities.rangeFields.map((key) => `${RANGE_PREFIX}${key}`);
+export function listQueryKeys(runnable: RunnableQueries): QueryKey[] {
+  const equals = runnable.equalsFields.map((key) => `${EQUALS_PREFIX}${key}`);
+  const ranges = runnable.rangeFields.map((key) => `${RANGE_PREFIX}${key}`);
   return [
     ...equals.map((name) => ({ name, repeated: true })),
     ...[...ranges, SEARCH_PARAM, SORT_PARAM, CURSOR_PARAM].map((name) => ({

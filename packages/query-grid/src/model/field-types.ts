@@ -68,19 +68,19 @@ export interface QueryState {
   cursor: string | null;
 }
 
-export interface Capabilities {
+export interface RunnableQueries {
   mode: QueryMode;
-  isAnswerable: (query: QueryState) => boolean;
+  canRun: (query: QueryState) => boolean;
   equalsFields: string[];
   rangeFields: string[];
   sortFields: string[];
   searchFields: string[];
-  isFacetCountShown: (query: QueryState) => boolean;
+  isFacetCountExact: (query: QueryState) => boolean;
 }
 
-export interface QueryRules {
-  capabilities: Capabilities;
-  searchComplete: boolean;
+export interface OfferContext {
+  runnable: RunnableQueries;
+  allSearchMatchesLoaded: boolean;
 }
 
 export const KEY_FIELD = "id";
@@ -123,12 +123,12 @@ export type FilterKind = "lookup" | "equals" | "range";
 
 export function resolveFilterKind(
   field: BaseFieldDef,
-  capabilities: Capabilities,
+  runnable: RunnableQueries,
 ): FilterKind | null {
-  if (capabilities.equalsFields.includes(field.key)) {
+  if (runnable.equalsFields.includes(field.key)) {
     return field.options ? "equals" : "lookup";
   }
-  if (capabilities.rangeFields.includes(field.key)) {
+  if (runnable.rangeFields.includes(field.key)) {
     return "range";
   }
   return null;
@@ -136,15 +136,13 @@ export function resolveFilterKind(
 
 export function listFilterFields<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
-  capabilities: Capabilities,
+  runnable: RunnableQueries,
   keys?: string[],
 ): F[] {
   const fields = keys
     ? keys.flatMap((key) => getField(def, key) ?? [])
     : def.fields;
-  return fields.filter(
-    (field) => resolveFilterKind(field, capabilities) !== null,
-  );
+  return fields.filter((field) => resolveFilterKind(field, runnable) !== null);
 }
 
 export function isDefaultSort(def: BaseGridDef, sort: SortState): boolean {

@@ -1,5 +1,5 @@
 export {
   createMemorySource,
   filterRows,
-  memoryCapabilities,
+  memoryRunnable,
 } from "./model/memory-source.ts";

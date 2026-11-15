@@ -30,11 +30,11 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid`
 
-| Export     | Holds                                                                                                                                                                                                                                                                                                                                                      |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`        | field and grid def types, `QueryState`, `Capabilities`, indexes and `indexCapabilities`, the URL codec, value validation, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet and label stores, the board model, chips, formatting, the `DataSource` contract, the wire result types and limits, problems as codes |
-| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                    |
-| `./memory` | `createMemorySource`, `memoryCapabilities`, `filterRows`                                                                                                                                                                                                                                                                                                   |
+| Export     | Holds                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`        | field and grid def types, `QueryState`, `RunnableQueries`, indexes and `indexRunnable`, the URL codec, value validation, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet and label stores, the board model, chips, formatting, the `DataSource` contract, the wire result types and limits, problems as codes |
+| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                   |
+| `./memory` | `createMemorySource`, `memoryRunnable`, `filterRows`                                                                                                                                                                                                                                                                                                      |
 
 - The stores are plain objects with `subscribe` and a getter, built on one emitter. There is no store library.
 - The count, totals and facet counts are one kind of resource: it follows the query store, starts on its first subscriber and aborts the request it replaces.
@@ -54,7 +54,7 @@ Three npm packages in one repo, released together at one version.
 - `DataGrid` is a compound: `Root`, `Toolbar`, `Status`, `ColumnsMenu` and `Body`, with `<DataGrid />` as the default composition. It takes a row window: `rows`, `hasNext`, `onEndReached` and `loading`.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
-- The filter controls are `EqualsSelect`, `LookupFilter` and `RangeFilter`. The bound `FieldFilter` picks one from the capabilities, the field's `type` and its `options`.
+- The filter controls are `EqualsSelect`, `LookupFilter` and `RangeFilter`. The bound `FieldFilter` picks one from the runnable queries, the field's `type` and its `options`.
 - The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then the sort. Without it they show every filterable field. `children` replaces everything.
 - `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `search` string and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
 - `styles.css` styles only the package's own elements, reads the `--ui-*` tokens of `@ui-sdk/core/web.css` and defines none.
@@ -88,29 +88,29 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 - An index's equality fields take several values each unless it sets `multi: false`.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
-## Capability contract
+## Runnable queries
 
-Capabilities are what a data source can answer. Every control reads them; nothing reads indexes or indexes directly.
+Runnable queries are what a data source can answer. Every control reads them; nothing reads the indexes directly.
 
 ```ts
-interface Capabilities {
+interface RunnableQueries {
   mode: "server" | "memory";
-  isAnswerable: (query: QueryState) => boolean;
+  canRun: (query: QueryState) => boolean;
   equalsFields: string[];
   rangeFields: string[];
   sortFields: string[];
   searchFields: string[];
-  isFacetCountShown: (query: QueryState) => boolean;
+  isFacetCountExact: (query: QueryState) => boolean;
 }
 ```
 
-- `indexCapabilities(indexes, { facetField, searchFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `searchFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
-- `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
-- `isAnswerable` is the answer for one query. The field lists are what could ever be asked.
-- `QueryRules` is the capabilities plus whether a search result is complete.
-- `listOffers(def, query, rules)` says what the next action may be. `applyAction` refuses an action whose result the capabilities do not answer. `explainUnavailable(query, target, rules)` gives the reason as a code.
-- The control for a field follows from the capabilities, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
-- The URL keys a provider owns are the capabilities' fields. Any other parameter is left alone.
+- `indexRunnable(indexes, { facetField, searchFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `searchFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `memoryRunnable(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
+- `canRun` is the answer for one query. The field lists are what could ever be asked.
+- `OfferContext` is the runnable queries plus whether every search match is loaded.
+- `listOffers(def, query, context)` says what the next action may be. `applyAction` refuses an action whose result the runnable queries do not answer. `explainUnavailable(query, target, context)` gives the reason as a code.
+- The control for a field follows from the runnable queries, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
+- The URL keys a provider owns are the runnable queries' fields. Any other parameter is left alone.
 
 ## Query state
 
@@ -187,7 +187,7 @@ interface QueryState {
 
 ## Scale
 
-- **Nothing grows with a tenant count.** This is library code. Capabilities are computed once per def.
+- **Nothing grows with a tenant count.** This is library code. Runnable queries are computed once per def.
 - **Request path.** One interaction is one indexed page read, one capped count and one statement for every total. Each is bounded by the page size, the cap or a time budget.
 - **Storage per index.** Every declared index is a real index on its table. Indexes are declared deliberately, per grid, and never generated per column.
 - **Write amplification.** Each insert writes every index. Write cost is proportional to the index count.

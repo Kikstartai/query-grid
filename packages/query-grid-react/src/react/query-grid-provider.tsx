@@ -31,7 +31,7 @@ import {
   type Offers,
   type OfferTarget,
   type QueryAction,
-  type QueryRules,
+  type OfferContext,
   type QueryState,
   type QueryStore,
   type TotalState,
@@ -135,10 +135,10 @@ function createValue(
   search: string,
 ): QueryGridContextValue {
   const { def, source } = props;
-  const initial = readUrlState(def, source.capabilities, search);
+  const initial = readUrlState(def, source.runnable, search);
   const store = createQueryStore(
     def,
-    source.capabilities,
+    source.runnable,
     initial.query,
     initial.view,
   );
@@ -182,16 +182,16 @@ function createValue(
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
-  const { capabilities } = props.source;
-  const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
+  const { runnable } = props.source;
+  const [parsers] = useState(() => buildUrlParsers(runnable, prefix));
   const [values, setValues] = useQueryStates(parsers);
-  const search = toSearch(capabilities, values as UrlValues, prefix);
+  const search = toSearch(runnable, values as UrlValues, prefix);
   const [value] = useState(() => createValue(props, search));
   const setter = useLatest(setValues);
   const [sync] = useState(() =>
     createUrlSync(value.store, search, (state, history) => {
       void setter.current(
-        toUrlValues(value.def, capabilities, state, prefix),
+        toUrlValues(value.def, runnable, state, prefix),
         history === "push"
           ? { history }
           : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
@@ -217,7 +217,7 @@ function ignoreWrite(): void {
 
 export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   const search = normalizeSearch(
-    props.source.capabilities,
+    props.source.runnable,
     props.search,
     props.urlPrefix ?? "",
   );
@@ -259,28 +259,29 @@ export function useGridView(): GridView {
   return useStoreValue(store.subscribe, store.getView);
 }
 
-export function useQueryRules(): QueryRules {
+export function useOfferContext(): OfferContext {
   const { store } = useQueryGrid();
-  return useStoreValue(store.subscribe, store.getRules);
+  return useStoreValue(store.subscribe, store.getOfferContext);
 }
 
-const offersByQuery = new WeakMap<QueryState, WeakMap<QueryRules, Offers>>();
+const offersByQuery = new WeakMap<QueryState, WeakMap<OfferContext, Offers>>();
 
 function readOffers(
   def: BaseGridDef,
   query: QueryState,
-  rules: QueryRules,
+  context: OfferContext,
 ): Offers {
-  const byRules = offersByQuery.get(query) ?? new WeakMap<QueryRules, Offers>();
-  offersByQuery.set(query, byRules);
-  const offers = byRules.get(rules) ?? listOffers(def, query, rules);
-  byRules.set(rules, offers);
+  const byContext =
+    offersByQuery.get(query) ?? new WeakMap<OfferContext, Offers>();
+  offersByQuery.set(query, byContext);
+  const offers = byContext.get(context) ?? listOffers(def, query, context);
+  byContext.set(context, offers);
   return offers;
 }
 
 export function useOffers(): Offers {
   const { def } = useQueryGrid();
-  return readOffers(def, useQueryState(), useQueryRules());
+  return readOffers(def, useQueryState(), useOfferContext());
 }
 
 export function useFeedState(): FeedState {
@@ -344,7 +345,7 @@ export function useOfferState(target: OfferTarget): OfferState {
   const messages = useMessages();
   const locale = useLocale();
   const query = useQueryState();
-  const rules = useQueryRules();
+  const context = useOfferContext();
   const offered = isOffered(useOffers(), target);
   return {
     offered,
@@ -353,7 +354,7 @@ export function useOfferState(target: OfferTarget): OfferState {
       : formatReason(
           messages,
           def,
-          explainUnavailable(query, target, rules),
+          explainUnavailable(query, target, context),
           locale,
         ),
   };

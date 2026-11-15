@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { gridDefCapabilities } from "@kikstart/query-grid";
+import { gridDefRunnable } from "@kikstart/query-grid";
 
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
@@ -26,7 +26,7 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
         fallback={
           <WorkspaceSkeleton
             def={ORDERS_GRID_DEF}
-            capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
+            runnable={gridDefRunnable(ORDERS_GRID_DEF)}
           />
         }
       >

@@ -1,5 +1,5 @@
 import type { DataSource } from "./data-source.ts";
-import type { Capabilities, BaseGridDef } from "./field-types.ts";
+import type { RunnableQueries, BaseGridDef } from "./field-types.ts";
 import type { IndexDef } from "./indexes.ts";
 
 export const TEST_SEARCH_FIELDS = ["name", "number"];
@@ -56,12 +56,12 @@ export const TEST_DEF: BaseGridDef = {
 };
 
 export function createTestSource(
-  capabilities: Capabilities,
+  runnable: RunnableQueries,
   overrides: Partial<DataSource> = {},
 ): DataSource {
   const none = async () => [];
   return {
-    capabilities,
+    runnable,
     fetchPage: async () => ({ rows: [], nextCursor: null, hasNext: false }),
     fetchCount: async () => ({ count: 0, capped: false, source: "exact" }),
     fetchTotals: none,

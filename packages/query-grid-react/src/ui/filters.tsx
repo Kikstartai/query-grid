@@ -35,7 +35,7 @@ import {
   useOfferState,
   useQueryGrid,
   useQueryGridActions,
-  useQueryRules,
+  useOfferContext,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
 
@@ -114,7 +114,7 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
 
 export function FieldFilter(props: FieldFilterProps) {
   const { source } = useQueryGrid();
-  switch (resolveFilterKind(props.field, source.capabilities)) {
+  switch (resolveFilterKind(props.field, source.runnable)) {
     case "lookup":
       return <BoundLookupFilter {...props} />;
     case "equals":
@@ -131,13 +131,13 @@ export function SortControl() {
   const messages = useMessages();
   const locale = useLocale();
   const query = useQueryState();
-  const rules = useQueryRules();
+  const context = useOfferContext();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
   const offered = offers.sorts.length > 0;
   return (
     <BaseSortControl
-      options={rules.capabilities.sortFields.map((key) => ({
+      options={context.runnable.sortFields.map((key) => ({
         value: key,
         label: getFieldLabel(def, key),
         disabled: !offers.sorts.includes(key),
@@ -157,7 +157,7 @@ export function SortControl() {
               explainUnavailable(
                 query,
                 { kind: "sort", field: query.sort.field },
-                rules,
+                context,
               ),
               locale,
             )
@@ -169,10 +169,10 @@ export function SortControl() {
 export function SearchFilter() {
   const { def } = useQueryGrid();
   const query = useQueryState();
-  const rules = useQueryRules();
+  const context = useOfferContext();
   const { dispatch } = useQueryGridActions();
   const offer = useOfferState({ kind: "search" });
-  const fields = rules.capabilities.searchFields;
+  const fields = context.runnable.searchFields;
   if (fields.length === 0) {
     return null;
   }
@@ -222,7 +222,7 @@ function DefaultFilters({ fields }: DefaultFiltersProps) {
   return (
     <>
       <SearchFilter />
-      {listFilterFields(def, source.capabilities, fields).map((field) => (
+      {listFilterFields(def, source.runnable, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
       <SortControl />

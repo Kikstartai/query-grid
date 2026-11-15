@@ -7,7 +7,7 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
-import { isQueryIndexed, getIndex, indexCapabilities } from "./indexes.ts";
+import { isQueryIndexed, getIndex, indexRunnable } from "./indexes.ts";
 
 const INDEXES = TEST_INDEXES;
 const BASE: QueryState = {
@@ -54,7 +54,7 @@ describe("getIndex", () => {
     expect(
       getIndex(single, { ...BASE, equals: { status: ["open"] } }),
     ).not.toBeNull();
-    expect(indexCapabilities(single).isAnswerable(several)).toBe(false);
+    expect(indexRunnable(single).canRun(several)).toBe(false);
   });
 
   test("a search combines with no other filter", () => {
@@ -71,16 +71,16 @@ describe("getIndex", () => {
 });
 
 describe("the HTTP source", () => {
-  test("it builds its capabilities from the def's own indexes and facet", () => {
+  test("it builds its runnable queries from the def's own indexes and facet", () => {
     const source = createHttpSource(
       { ...TEST_DEF, indexes: INDEXES },
       "/things",
     );
-    expect(source.capabilities.mode).toBe("server");
-    expect(source.capabilities.sortFields).toEqual(["created_at", "total"]);
-    expect(source.capabilities.isFacetCountShown(BASE)).toBe(true);
+    expect(source.runnable.mode).toBe("server");
+    expect(source.runnable.sortFields).toEqual(["created_at", "total"]);
+    expect(source.runnable.isFacetCountExact(BASE)).toBe(true);
     expect(
-      source.capabilities.isAnswerable({
+      source.runnable.canRun({
         ...BASE,
         equals: { region: ["north"] },
         sort: { field: "total", direction: "asc" },
@@ -89,8 +89,8 @@ describe("the HTTP source", () => {
   });
 });
 
-describe("indexCapabilities", () => {
-  const caps = indexCapabilities(INDEXES, {
+describe("indexRunnable", () => {
+  const caps = indexRunnable(INDEXES, {
     facetField: "status",
     searchFields: TEST_SEARCH_FIELDS,
   });
@@ -109,19 +109,19 @@ describe("indexCapabilities", () => {
       equals: { region: ["north"] },
       sort: { field: "total", direction: "asc" },
     };
-    expect(caps.isAnswerable(BASE)).toBe(true);
-    expect(caps.isAnswerable(undeclared)).toBe(false);
+    expect(caps.canRun(BASE)).toBe(true);
+    expect(caps.canRun(undeclared)).toBe(false);
     expect(getIndex(INDEXES, undeclared)).toBeNull();
   });
 
   test("facet counts show only while the facet is the only filter", () => {
-    expect(caps.isFacetCountShown(BASE)).toBe(true);
+    expect(caps.isFacetCountExact(BASE)).toBe(true);
     expect(
-      caps.isFacetCountShown({ ...BASE, equals: { status: ["open"] } }),
+      caps.isFacetCountExact({ ...BASE, equals: { status: ["open"] } }),
     ).toBe(true);
     expect(
-      caps.isFacetCountShown({ ...BASE, equals: { region: ["north"] } }),
+      caps.isFacetCountExact({ ...BASE, equals: { region: ["north"] } }),
     ).toBe(false);
-    expect(indexCapabilities(INDEXES).isFacetCountShown(BASE)).toBe(false);
+    expect(indexRunnable(INDEXES).isFacetCountExact(BASE)).toBe(false);
   });
 });

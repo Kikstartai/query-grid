@@ -50,7 +50,7 @@ export function createFeed(
   pageSize: number,
 ): Feed {
   const def = store.def;
-  const sortsSearchLocally = source.capabilities.mode === "server";
+  const sortsSearchLocally = source.runnable.mode === "server";
   const feed = createStore(initialFeedState(store.getQuery()));
   const begin = createAbortable();
   const insertedIds = new Set<string>();
@@ -60,7 +60,7 @@ export function createFeed(
   const set = (patch: Partial<FeedState>) =>
     feed.set({ ...feed.get(), ...patch });
 
-  const isSearchComplete = () => {
+  const areAllSearchMatchesLoaded = () => {
     const state = feed.get();
     return (
       sortsSearchLocally &&
@@ -99,7 +99,7 @@ export function createFeed(
         capped,
         pages: state.pages + 1,
       });
-      store.setSearchComplete(isSearchComplete());
+      store.setAllSearchMatchesLoaded(areAllSearchMatchesLoaded());
     } catch (error) {
       if (!isAbort(error)) {
         set({ status: "error", error: toProblem(error) });
@@ -112,7 +112,7 @@ export function createFeed(
     insertedIds.clear();
     nextCursor = initial.query.cursor;
     void load(initial);
-    store.setSearchComplete(false);
+    store.setAllSearchMatchesLoaded(false);
   };
 
   const follow = () => {
@@ -121,7 +121,8 @@ export function createFeed(
     if (next === state.query) {
       return;
     }
-    const resort = isSearchComplete() && sameFilters(next, state.query);
+    const resort =
+      areAllSearchMatchesLoaded() && sameFilters(next, state.query);
     if (resort) {
       set({ query: next, rows: sortRows(def, state.rows, next.sort) });
       return;

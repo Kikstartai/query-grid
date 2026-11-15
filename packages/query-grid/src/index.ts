@@ -31,7 +31,7 @@ export {
   listTotalFields,
   resolveFilterKind,
   resolveMaxValues,
-  type Capabilities,
+  type RunnableQueries,
   type FacetDef,
   type BaseFieldDef,
   type FieldLookup,
@@ -41,7 +41,7 @@ export {
   type BaseGridDef,
   type GridRow,
   type QueryMode,
-  type QueryRules,
+  type OfferContext,
   type QueryState,
   type RangeState,
   type SortDirection,
@@ -108,15 +108,15 @@ export {
   toNumberBound,
 } from "./model/range-bounds.ts";
 export {
-  gridDefCapabilities,
+  gridDefRunnable,
   isFacetOnlyQuery,
   isQueryIndexed,
   listSortFields,
   getIndex,
-  indexCapabilities,
+  indexRunnable,
   indexId,
   type IndexDef,
-  type IndexCapabilityOptions,
+  type IndexRunnableOptions,
   type IndexedGridDef,
 } from "./model/indexes.ts";
 export { sortRows } from "./model/sort-rows.ts";
