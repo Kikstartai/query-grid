@@ -3,10 +3,13 @@ import type { Page } from "@playwright/test";
 import {
   apiCount,
   bar,
+  countValue,
   expect,
   expectCount,
+  loaded,
   openGrid,
   pick,
+  search,
   test,
   texts,
 } from "./fixtures";
@@ -300,6 +303,94 @@ test.describe("date presets", () => {
     await pickPeriod(page, "due_at", "this-year");
     await expect(page).toHaveURL(/r\.due_at=this-year/);
     await expect(chip(page, "range:due_at")).toHaveText(/This year/);
+  });
+});
+
+test.describe("search with equality filters", () => {
+  test("a filter narrows the search, the matches sort, and the facet counts hide", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders");
+    await search(page, "mokoena");
+    await expect(countValue(page)).toHaveText(/^500\+ rows$/);
+    await pick(page, "status_code", "failed");
+    await expect(page).toHaveURL(/f\.status_code=failed/);
+    await expect(page).toHaveURL(/q=mokoena/);
+    const matches = await apiCount(page, "q=mokoena&f.status_code=failed");
+    expect(matches).toBeGreaterThan(0);
+    expect(matches).toBeLessThan(500);
+    await expectCount(page, matches, "capped");
+    await expect(loaded(page)).toHaveAttribute("data-value", String(matches));
+    expect(new Set(await cells(page, "status_code"))).toEqual(
+      new Set(["Failed"]),
+    );
+    for (const name of await cells(page, "customer_name")) {
+      expect(name.toLowerCase()).toContain("mokoena");
+    }
+    await expect(
+      page.locator('[data-facet="failed"] [data-facet-count]'),
+    ).toHaveText("");
+
+    await page.locator('[data-header-sort="total"]').click();
+    await expect(page).toHaveURL(/sort=total\.desc/);
+    await expect
+      .poll(async () => {
+        const totals = await page
+          .locator(".qg-cell[data-field=total]")
+          .evaluateAll((list) =>
+            list.map((cell) =>
+              Number(
+                cell.textContent?.replace(/[^\d,]/g, "").replace(",", "."),
+              ),
+            ),
+          );
+        return (
+          totals.length > 1 &&
+          totals.join() === [...totals].sort((a, b) => b - a).join()
+        );
+      })
+      .toBe(true);
+  });
+
+  test("an excluded value and an empty value combine with the search, and a range does not", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders?q=smith&f.status_code=!completed");
+    await expect(chip(page, "eq:status_code")).toContainText("Status ≠");
+    await expect
+      .poll(async () => (await cells(page, "status_code")).length)
+      .toBeGreaterThan(0);
+    expect(await cells(page, "status_code")).not.toContain("Completed");
+
+    await pick(page, "assignee", "_empty");
+    await expect(page).toHaveURL(/q=smith/);
+    await expect
+      .poll(async () => [...new Set(await cells(page, "assignee"))])
+      .toEqual([""]);
+
+    const period = bar(page).locator('[data-field="created_at"]');
+    await expect(period).toHaveAttribute("data-unavailable", "");
+    await expect(period).toHaveAttribute("title", /range/);
+    const refused = await page.request.get(
+      "/api/orders?q=smith&r.created_at=2026-01-01T00:00:00Z..",
+    );
+    expect(refused.status()).toBe(400);
+  });
+
+  test("the search stays offered beside a filter and is held beside a range", async ({
+    page,
+  }) => {
+    await openGrid(page, "/orders?f.region=gauteng");
+    await expect(bar(page).locator("[data-filter=search]")).toBeEnabled();
+    await search(page, "smith");
+    await expect(page).toHaveURL(/f\.region=gauteng/);
+    await expect(page).toHaveURL(/q=smith/);
+    await openGrid(page, "/orders?r.created_at=last-7-days");
+    await expect(bar(page).locator("[data-filter=search]")).toBeDisabled();
+    await expect(bar(page).locator("[data-field=search]")).toHaveAttribute(
+      "title",
+      /range/,
+    );
   });
 });
 

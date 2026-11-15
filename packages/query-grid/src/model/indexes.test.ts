@@ -57,14 +57,26 @@ describe("getIndex", () => {
     expect(indexRunnable(single).canRun(several)).toBe(false);
   });
 
-  test("a search combines with no other filter", () => {
+  test("a search combines with equality filters on indexed fields, and with no range", () => {
     const search = { ...BASE, search: "abc" };
     expect(isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, search)).toBe(true);
     expect(isQueryIndexed(INDEXES, [], search)).toBe(false);
     expect(
       isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
         ...search,
-        equals: { status: ["open"] },
+        equals: { status: ["open", "done"], region: ["north"] },
+      }),
+    ).toBe(true);
+    expect(
+      isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
+        ...search,
+        equals: { name: ["x"] },
+      }),
+    ).toBe(false);
+    expect(
+      isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
+        ...search,
+        ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
       }),
     ).toBe(false);
   });

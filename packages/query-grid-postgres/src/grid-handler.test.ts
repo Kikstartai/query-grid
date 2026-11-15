@@ -662,3 +662,91 @@ describe("intent the browser resolves", () => {
     }
   });
 });
+
+describe("search with equality filters", () => {
+  function recording(rows: object[]) {
+    const seen: SqlQuery[] = [];
+    const settings: (string[] | undefined)[] = [];
+    const execute: SqlExecutor = async <T extends object>(
+      sql: SqlQuery,
+      given?: string[],
+    ) => {
+      seen.push(sql);
+      settings.push(given);
+      return rows as T[];
+    };
+    const handler = createGridHandler({
+      def: TEST_DEF,
+      execute,
+      basePath: BASE_PATH,
+    });
+    return {
+      seen,
+      settings,
+      get: (path: string) =>
+        handler(new Request(`${ORIGIN}${BASE_PATH}${path}`)),
+    };
+  }
+
+  test("the filters AND with the search, under the search budget and limit", async () => {
+    const { get, seen, settings } = recording([ROW]);
+    const response = await get(
+      "?q=smith&f.status=open&f.region=north&f.region=south",
+    );
+    expect(response.status).toBe(200);
+    expect(seen[0].text).toContain(
+      "WHERE t.status = $1::text AND t.region = ANY($2::text[]) AND (t.name || ' ' || t.number::text) ILIKE $3 LIMIT 501",
+    );
+    expect(seen[0].text).not.toContain("ORDER BY");
+    expect(seen[0].values).toEqual(["open", ["north", "south"], "%smith%"]);
+    expect(settings[0]).toContain("statement_timeout = 120");
+  });
+
+  test("the count and the totals are capped at the search limit, never read from the counter", async () => {
+    const { get, seen } = recording([
+      { count: 7, total_sum: 1, number_sum: 2 },
+    ]);
+    const count = await get("/count?q=smith&f.status=open");
+    expect(await count.json()).toEqual({
+      count: 7,
+      capped: false,
+      source: "capped",
+    });
+    expect(seen[0].text).toContain("LIMIT 501");
+    const total = await get("/total?q=smith&f.status=open");
+    expect(((await total.json()) as { source: string }[])[0].source).toBe(
+      "live",
+    );
+    expect(seen[1].text).toContain("LIMIT 501");
+  });
+
+  test("an empty value and several values combine with the search too", async () => {
+    const def = {
+      ...TEST_DEF,
+      indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+    };
+    const seen: SqlQuery[] = [];
+    const handler = createGridHandler({
+      def,
+      execute: async <T extends object>(sql: SqlQuery) => {
+        seen.push(sql);
+        return [] as T[];
+      },
+      basePath: BASE_PATH,
+    });
+    const response = await handler(
+      new Request(`${ORIGIN}${BASE_PATH}?q=smith&f.note=_empty`),
+    );
+    expect(response.status).toBe(200);
+    expect(seen[0].text).toContain("WHERE t.note IS NULL AND (");
+  });
+
+  test("a range beside the search, and a filter on a field no index holds, are refused", async () => {
+    const { get, seen } = recording([]);
+    const ranged = await get("?q=smith&r.created_at=2026-01-01..");
+    expect(ranged.status).toBe(400);
+    const unindexed = await get("?q=smith&f.name=Ann");
+    expect(unindexed.status).toBe(400);
+    expect(seen).toEqual([]);
+  });
+});

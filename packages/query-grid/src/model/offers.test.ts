@@ -89,7 +89,7 @@ describe("offers from declared indexes", () => {
     expect(getIndex(INDEXES, cleared)).not.toBeNull();
   });
 
-  test("a search disables everything until every match is loaded", () => {
+  test("a search keeps the equality filters and holds the sort and the ranges", () => {
     const search = applyAction(
       TEST_DEF,
       BASE,
@@ -98,9 +98,9 @@ describe("offers from declared indexes", () => {
     );
     expect(search.search).toBe("abc");
     expect(listOffers(TEST_DEF, search, CAPPED)).toEqual({
-      equals: [],
-      multi: [],
-      exclude: [],
+      equals: ["status", "region"],
+      multi: ["status", "region"],
+      exclude: ["status", "region"],
       sorts: [],
       ranges: [],
       search: true,
@@ -109,12 +109,33 @@ describe("offers from declared indexes", () => {
       "created_at",
       "total",
     ]);
-    expect(listOffers(TEST_DEF, search, COMPLETE).equals).toEqual([]);
+    const narrowed = applyAction(
+      TEST_DEF,
+      search,
+      { type: "setEquals", field: "status", values: ["open", "done"] },
+      CAPPED,
+    );
+    expect(narrowed).toMatchObject({
+      search: "abc",
+      equals: { status: ["open", "done"] },
+    });
+    expect(
+      applyAction(
+        TEST_DEF,
+        narrowed,
+        { type: "setEquals", field: "region", values: ["north"] },
+        CAPPED,
+      ).equals,
+    ).toEqual({ status: ["open", "done"], region: ["north"] });
   });
 
-  test("a search is not offered beside another filter", () => {
-    const filtered: QueryState = { ...BASE, equals: { status: ["open"] } };
-    expect(listOffers(TEST_DEF, filtered, CAPPED).search).toBe(false);
+  test("a search is offered beside an equality filter and not beside a range", () => {
+    const filtered: QueryState = {
+      ...BASE,
+      equals: { status: ["open"] },
+      sort: { field: "total", direction: "asc" },
+    };
+    expect(listOffers(TEST_DEF, filtered, CAPPED).search).toBe(true);
     expect(
       applyAction(
         TEST_DEF,
@@ -122,7 +143,24 @@ describe("offers from declared indexes", () => {
         { type: "setSearch", value: "abc" },
         CAPPED,
       ),
-    ).toBe(filtered);
+    ).toMatchObject({
+      search: "abc",
+      equals: { status: ["open"] },
+      sort: TEST_DEF.defaultSort,
+    });
+    const ranged: QueryState = {
+      ...BASE,
+      ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
+    };
+    expect(listOffers(TEST_DEF, ranged, CAPPED).search).toBe(false);
+    expect(
+      applyAction(
+        TEST_DEF,
+        ranged,
+        { type: "setSearch", value: "abc" },
+        CAPPED,
+      ),
+    ).toBe(ranged);
   });
 
   test("an index that opts out offers one value only", () => {

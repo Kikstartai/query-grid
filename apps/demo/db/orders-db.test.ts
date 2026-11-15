@@ -175,6 +175,87 @@ describe("search", () => {
   }, 30_000);
 });
 
+describe("search with equality filters", () => {
+  const searching = (
+    search: string,
+    equals: QueryState["equals"],
+  ): QueryState => ({ ...defaultQuery(ORDERS_GRID_DEF), search, equals });
+
+  test("the filters narrow the matches, and the count is the live count under the limit", async () => {
+    const query = searching("mokoena", { status_code: ["failed"] });
+    const page = await listPage(query, 50);
+    expect(page.rows.length).toBeGreaterThan(0);
+    expect(page.hasNext).toBe(false);
+    for (const row of page.rows) {
+      expect(row.status_code).toBe("failed");
+      expect(String(row.customer_name).toLowerCase()).toContain("mokoena");
+    }
+    const real = await client.query<{ rows: number }>(
+      "SELECT count(*)::float8 AS rows FROM orders WHERE status_code = 'failed' AND customer_name ILIKE '%mokoena%'",
+    );
+    expect(page.rows.length).toBe(real.rows[0].rows);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, false);
+    expect(count).toEqual({
+      count: real.rows[0].rows,
+      capped: false,
+      source: "capped",
+    });
+  }, 60_000);
+
+  test("several values, an empty value and two fields no index pairs all combine with the search", async () => {
+    const several = await listPage(
+      searching("smith", { status_code: ["paid", "pending"] }),
+      50,
+    );
+    expect(several.rows.length).toBeGreaterThan(0);
+    for (const row of several.rows) {
+      expect(["paid", "pending"]).toContain(String(row.status_code));
+    }
+    const unassigned = await listPage(
+      searching("smith", { assignee: [EMPTY_VALUE] }),
+      50,
+    );
+    expect(unassigned.rows.length).toBeGreaterThan(0);
+    expect(unassigned.rows.every((row) => row.assignee === null)).toBe(true);
+    const paired = await listPage(
+      searching("smith", { region: ["gauteng"], channel: ["web"] }),
+      50,
+    );
+    expect(paired.rows.length).toBeGreaterThan(0);
+    for (const row of paired.rows) {
+      expect([row.region, row.channel]).toEqual(["gauteng", "web"]);
+    }
+  }, 60_000);
+
+  test("a search over the limit is capped and unordered, with or without a filter", async () => {
+    const page = await listPage(
+      searching("mok", { status_code: ["completed"] }),
+      50,
+    );
+    expect(page.rows).toHaveLength(500);
+    expect(page).toMatchObject({ hasNext: true, nextCursor: null });
+    const totals = await listGridTotals(
+      ORDERS_GRID_DEF,
+      execute,
+      searching("mok", { status_code: ["completed"] }),
+    );
+    expect(totals.every((total) => !total.available)).toBe(true);
+  }, 60_000);
+
+  test("a range beside the search never reaches the database", () => {
+    expect(() =>
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        {
+          ...searching("smith", {}),
+          ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
+        },
+        50,
+      ),
+    ).toThrow(QueryRejected);
+  });
+});
+
 describe("status counters", () => {
   test("the counter table's counts and sums equal a GROUP BY", async () => {
     expect(withoutEmpty(await readCounters())).toEqual(await readGrouped());

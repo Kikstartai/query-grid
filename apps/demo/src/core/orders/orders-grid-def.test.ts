@@ -56,9 +56,17 @@ describe("orders grid def", () => {
         }
       }
       expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
-      const several = states.filter((state) =>
-        Object.values(state.equals).some((values) => values.length > 1),
+      const several = states.filter(
+        (state) =>
+          state.search === null &&
+          Object.values(state.equals).some((values) => values.length > 1),
       );
+      expect(
+        states.some(
+          (state) =>
+            state.search !== null && Object.keys(state.equals).length > 0,
+        ),
+      ).toBe(true);
       const multiIndexes = INDEXES.filter(
         (index) => index.equals.length > 0 && index.multi !== false,
       );

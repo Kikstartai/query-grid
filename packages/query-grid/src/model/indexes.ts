@@ -80,9 +80,10 @@ export function isQueryIndexed(
   if (query.search === null) {
     return getIndex(indexes, query) !== null;
   }
+  const equalsFields = listEqualsFields(indexes);
   return (
     searchFields.length > 0 &&
-    Object.keys(query.equals).length === 0 &&
+    Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
     query.ranges.length === 0 &&
     listSortFields(indexes).includes(query.sort.field)
   );

@@ -259,11 +259,12 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     "No index answers the board with these filters. Clear the filters the board cannot combine with a status.",
   moveFailed: "The move failed",
   reasons: {
-    search_alone: () => "The search runs alone: clear the other filters first.",
+    search_alone: () =>
+      "The search does not combine with a range: clear the range first.",
     search_unordered: () =>
       "A search result is unordered until every match is loaded: narrow it under the cap to sort.",
-    search_no_combine: () =>
-      "No index combines the search with another filter.",
+    search_no_combine: ({ label }) =>
+      `The search does not combine with a ${label} range.`,
     no_sort_index: ({ label }) => `No index sorts by ${label}.`,
     range_needs_sort: ({ label }) =>
       `No index answers a ${label} range unless the sort is ${label}.`,

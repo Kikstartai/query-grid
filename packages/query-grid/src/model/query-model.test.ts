@@ -241,9 +241,8 @@ describe("the reason a control is unavailable", () => {
       "no_sort_index",
     );
     expect(
-      explainUnavailable(search, { kind: "equals", field: "status" }, CAPPED)
-        .code,
-    ).toBe("search_no_combine");
+      explainUnavailable(search, { kind: "range", field: "total" }, CAPPED),
+    ).toMatchObject({ code: "search_no_combine", field: "total" });
   });
 });
 
