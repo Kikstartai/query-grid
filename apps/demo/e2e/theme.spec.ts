@@ -129,6 +129,10 @@ for (const scheme of SCHEMES) {
       await expect(page.locator("[data-option]").first()).toBeVisible();
       await expectAA(page);
       await page.keyboard.press("Escape");
+      await bar(page).locator('[data-filter="created_at.preset"]').click();
+      await expect(page.locator('[data-option="custom"]')).toBeVisible();
+      await expectAA(page);
+      await page.locator('[data-option="custom"]').click();
       await bar(page).locator('[data-filter="created_at.calendar"]').click();
       await expect(
         page.locator("[role=dialog], [role=grid]").first(),
