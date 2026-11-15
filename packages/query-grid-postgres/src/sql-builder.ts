@@ -191,17 +191,13 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
   for (const [key, values] of Object.entries(query.equals)) {
     clauses.push(equalsClause(requireField(def, key), values, params));
   }
-  if (query.range) {
-    const field = requireField(def, query.range.field);
-    if (query.range.min !== null) {
-      clauses.push(
-        `${column(field.key)} >= ${params.add(query.range.min, field)}`,
-      );
+  for (const range of query.ranges) {
+    const field = requireField(def, range.field);
+    if (range.min !== null) {
+      clauses.push(`${column(field.key)} >= ${params.add(range.min, field)}`);
     }
-    if (query.range.max !== null) {
-      clauses.push(
-        `${column(field.key)} <= ${params.add(query.range.max, field)}`,
-      );
+    if (range.max !== null) {
+      clauses.push(`${column(field.key)} <= ${params.add(range.max, field)}`);
     }
   }
   if (query.search !== null) {

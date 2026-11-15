@@ -4,8 +4,14 @@ import type { ReactNode } from "react";
 
 import {
   explainUnavailable,
+  getField,
   getFieldLabel,
+  getRange,
+  getReservedValue,
+  isExcluding,
   labelKey,
+  listSelectedValues,
+  toExcludeValues,
   listFilterFields,
   SEARCH_MAX_LENGTH,
   SEARCH_MIN_LENGTH,
@@ -49,14 +55,33 @@ export function useFieldOffer(key: string, kind: "equals" | "range") {
 }
 
 export function useEqualsFilter(key: string) {
+  const { def } = useQueryGrid();
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   const offers = useOffers();
+  const field = getField(def, key);
+  const chosen = query.equals[key] ?? [];
+  const excluded = field !== null && isExcluding(field, chosen);
+  const values = field ? listSelectedValues(field, chosen) : chosen;
+  const setValues = (next: string[], exclude: boolean) =>
+    dispatch({
+      type: "setEquals",
+      field: key,
+      values: exclude ? toExcludeValues(next) : next,
+    });
   return {
-    values: query.equals[key] ?? [],
-    multiple: offers.multi.includes(key),
-    onValuesChange: (values: string[]) =>
-      dispatch({ type: "setEquals", field: key, values }),
+    values,
+    excluded,
+    canExclude: offers.exclude.includes(key),
+    multiple: excluded || offers.multi.includes(key),
+    onValuesChange: (next: string[]) => setValues(next, excluded),
+    onExcludedChange: (exclude: boolean) =>
+      setValues(
+        values.filter(
+          (value) => !field || getReservedValue(field, value) === null,
+        ),
+        exclude,
+      ),
   };
 }
 
@@ -73,7 +98,8 @@ function BoundEqualsSelect({ field }: FieldFilterProps) {
 function BoundLookupFilter({ field }: FieldFilterProps) {
   const { loadOptions, rememberLabel } = useQueryGridActions();
   const known = useFieldLabels();
-  const equals = useEqualsFilter(field.key);
+  const { values, multiple, onValuesChange } = useEqualsFilter(field.key);
+  const equals = { values, multiple, onValuesChange };
   return (
     <LookupFilter
       field={field}
@@ -99,12 +125,12 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
   return (
     <RangeFilter
       field={field}
-      range={query.range?.field === field.key ? query.range : null}
+      range={getRange(query, field.key)}
       onRangeChange={(next) =>
         dispatch(
           next
             ? { type: "setRange", field: field.key, ...next }
-            : { type: "clearRange" },
+            : { type: "clearRange", field: field.key },
         )
       }
       {...useFieldOffer(field.key, "range")}

@@ -1,8 +1,9 @@
-import type { BaseFieldDef } from "./field-types.ts";
+import { resolveMaxValues, type BaseFieldDef } from "./field-types.ts";
 
 export const EMPTY_VALUE = "_empty";
 export const NOT_EMPTY_VALUE = "_not_empty";
 export const EMPTY_MIXES = true;
+export const EXCLUDE_PREFIX = "!";
 
 export type ReservedValue = "empty" | "not_empty";
 
@@ -65,4 +66,50 @@ export function matchesEquals(
     return values.includes(EMPTY_VALUE);
   }
   return values.includes(NOT_EMPTY_VALUE) || values.includes(String(value));
+}
+
+export function isExcludable(field: BaseFieldDef): boolean {
+  return field.options !== undefined && field.lookup === undefined;
+}
+
+export function isExcluding(field: BaseFieldDef, values: string[]): boolean {
+  return (
+    isExcludable(field) &&
+    values.length > 0 &&
+    values.every((value) => value.startsWith(EXCLUDE_PREFIX))
+  );
+}
+
+export function toExcludeValues(values: string[]): string[] {
+  return values.map((value) => `${EXCLUDE_PREFIX}${value}`);
+}
+
+export function fromExcludeValues(values: string[]): string[] {
+  return values.map((value) => value.slice(EXCLUDE_PREFIX.length));
+}
+
+export function listSelectedValues(
+  field: BaseFieldDef,
+  values: string[],
+): string[] {
+  return isExcluding(field, values) ? fromExcludeValues(values) : values;
+}
+
+export function expandEquals(field: BaseFieldDef, values: string[]): string[] {
+  if (!isExcluding(field, values)) {
+    return values;
+  }
+  const excluded = fromExcludeValues(values);
+  const kept = (field.options ?? [])
+    .map((option) => option.value)
+    .filter((value) => !excluded.includes(value));
+  return field.nullable && EMPTY_MIXES ? [...kept, EMPTY_VALUE] : kept;
+}
+
+export function canExpandEquals(
+  field: BaseFieldDef,
+  values: string[],
+): boolean {
+  const expanded = expandEquals(field, values).length;
+  return expanded > 0 && expanded <= resolveMaxValues(field);
 }

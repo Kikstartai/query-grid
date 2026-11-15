@@ -17,6 +17,13 @@ export {
   type SortChip,
 } from "./model/chips.ts";
 export type { DataSource } from "./model/data-source.ts";
+export {
+  DATE_PRESETS,
+  isDatePreset,
+  resolveDatePreset,
+  type DateBounds,
+  type DatePreset,
+} from "./model/date-presets.ts";
 export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
   DEFAULT_MAX_VALUES,
@@ -24,6 +31,7 @@ export {
   listSearchFields,
   getField,
   getFieldLabel,
+  getRange,
   isDefaultSort,
   isRangeType,
   KEY_FIELD,
@@ -48,13 +56,21 @@ export {
 } from "./model/field-types.ts";
 export {
   canCombineValues,
+  canExpandEquals,
   EMPTY_MIXES,
   EMPTY_VALUE,
+  EXCLUDE_PREFIX,
+  expandEquals,
+  fromExcludeValues,
   getReservedValue,
+  isExcludable,
+  isExcluding,
   listReservedValues,
+  listSelectedValues,
   matchesEquals,
   normalizeEqualsValues,
   NOT_EMPTY_VALUE,
+  toExcludeValues,
   type ReservedValue,
 } from "./model/field-values.ts";
 export {
@@ -89,6 +105,12 @@ export {
   type ReasonCode,
   type UnavailableReason,
 } from "./model/query-actions.ts";
+export {
+  resolveQuery,
+  withQueryResolution,
+  type Clock,
+  type SourceOptions,
+} from "./model/query-resolve.ts";
 export {
   createQueryStore,
   GRID_VIEWS,

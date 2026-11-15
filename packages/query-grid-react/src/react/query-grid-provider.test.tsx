@@ -94,7 +94,7 @@ describe("the URL parsers", () => {
       query: {
         ...BASE,
         equals: { status: ["open", "done"], region: ["north"] },
-        range: { field: "total", min: "100", max: null },
+        ranges: [{ field: "total", min: "100", max: null }],
         sort: { field: "total", direction: "asc" as const },
       },
       view: "list" as const,

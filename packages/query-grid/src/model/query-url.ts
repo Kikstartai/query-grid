@@ -1,3 +1,4 @@
+import { isDatePreset } from "./date-presets.ts";
 import {
   isDefaultSort,
   type BaseGridDef,
@@ -41,10 +42,10 @@ export function encodeQuery(
       params.append(`${EQUALS_PREFIX}${field}`, value);
     }
   }
-  if (query.range) {
+  for (const range of query.ranges) {
     params.set(
-      `${RANGE_PREFIX}${query.range.field}`,
-      `${query.range.min ?? ""}${RANGE_SEPARATOR}${query.range.max ?? ""}`,
+      `${RANGE_PREFIX}${range.field}`,
+      range.preset ?? `${range.min ?? ""}${RANGE_SEPARATOR}${range.max ?? ""}`,
     );
   }
   if (query.search !== null) {
@@ -60,6 +61,9 @@ export function encodeQuery(
 }
 
 function decodeRange(field: string, raw: string): RangeState {
+  if (isDatePreset(raw)) {
+    return { field, min: null, max: null, preset: raw };
+  }
   const at = raw.indexOf(RANGE_SEPARATOR);
   const min = at < 0 ? raw : raw.slice(0, at);
   const max = at < 0 ? "" : raw.slice(at + RANGE_SEPARATOR.length);
@@ -80,7 +84,7 @@ export function decodeQuery(
   params: URLSearchParams,
 ): QueryState {
   const equals = new Map<string, string[]>();
-  let range: RangeState | null = null;
+  const ranges = new Map<string, RangeState>();
   for (const [name, value] of params) {
     if (name.startsWith(EQUALS_PREFIX)) {
       const field = name.slice(EQUALS_PREFIX.length);
@@ -88,12 +92,13 @@ export function decodeQuery(
       equals.set(field, values.includes(value) ? values : [...values, value]);
     }
     if (name.startsWith(RANGE_PREFIX)) {
-      range = decodeRange(name.slice(RANGE_PREFIX.length), value);
+      const field = name.slice(RANGE_PREFIX.length);
+      ranges.set(field, decodeRange(field, value));
     }
   }
   return {
     equals: Object.fromEntries(equals),
-    range,
+    ranges: [...ranges.values()],
     search: params.get(SEARCH_PARAM),
     sort: decodeSort(def, params.get(SORT_PARAM)),
     cursor: params.get(CURSOR_PARAM),

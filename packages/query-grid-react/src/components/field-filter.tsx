@@ -43,9 +43,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
+import { Toggle } from "@ui-sdk/react/toggle";
 import { useState, type ReactNode } from "react";
 
 import {
+  DATE_PRESETS,
   fromDayBound,
   fromNumberBound,
   getReservedValue,
@@ -72,6 +74,7 @@ import { SelectOption } from "./select-option.tsx";
 export interface FieldRange {
   min: string | null;
   max: string | null;
+  preset?: string;
 }
 
 export type LoadOptions = (
@@ -87,6 +90,9 @@ export interface EqualsSelectProps extends FilterProps {
   values: string[];
   onValuesChange: (values: string[]) => void;
   multiple?: boolean;
+  excluded?: boolean;
+  canExclude?: boolean;
+  onExcludedChange?: (excluded: boolean) => void;
 }
 
 export interface LookupFilterProps extends EqualsSelectProps {
@@ -162,9 +168,11 @@ function ReservedOptions({ options }: { options: FieldOption[] }) {
 function EqualsSelectParts({
   field,
   multiple,
-}: Pick<EqualsSelectProps, "field" | "multiple">) {
+  excluded,
+}: Pick<EqualsSelectProps, "field" | "multiple" | "excluded">) {
   const messages = useMessages();
   const label = { label: field.label };
+  const reserved = excluded ? [] : listReservedOptions(field, messages);
   return (
     <>
       <SelectTrigger
@@ -172,7 +180,9 @@ function EqualsSelectParts({
         data-filter={field.key}
         data-multiple={multiple ? "" : undefined}
       >
-        <span className="qg-select-prefix">{field.label}</span>
+        <span className="qg-select-prefix">
+          {excluded ? messages.chipExclude(label) : field.label}
+        </span>
         <SelectValue
           maxLabels={MAX_LABELS}
           getMoreLabel={(count) => messages.moreValues({ count })}
@@ -186,7 +196,7 @@ function EqualsSelectParts({
         <XIcon size={12} />
       </SelectClear>
       <SelectContent>
-        <ReservedOptions options={listReservedOptions(field, messages)} />
+        <ReservedOptions options={reserved} />
         {(field.options ?? []).map((option) => (
           <SelectOption
             key={option.value}
@@ -199,8 +209,35 @@ function EqualsSelectParts({
   );
 }
 
+function ExcludeToggle({
+  field,
+  values,
+  excluded,
+  canExclude,
+  disabled,
+  onExcludedChange,
+}: EqualsSelectProps) {
+  const messages = useMessages();
+  if (!onExcludedChange || (!canExclude && !excluded)) {
+    return null;
+  }
+  return (
+    <Toggle
+      className="qg-exclude"
+      aria-label={messages.excludeField({ label: field.label })}
+      title={messages.excludeField({ label: field.label })}
+      data-filter-exclude={field.key}
+      pressed={excluded ?? false}
+      disabled={disabled || values.length === 0}
+      onPressedChange={(pressed: boolean) => onExcludedChange(pressed)}
+    >
+      {messages.excludeMark}
+    </Toggle>
+  );
+}
+
 function EqualsControl(props: EqualsSelectProps) {
-  const { field, values, disabled, onValuesChange } = props;
+  const { field, values, disabled, onValuesChange, excluded } = props;
   const messages = useMessages();
   const items = [
     ...listReservedOptions(field, messages),
@@ -218,7 +255,7 @@ function EqualsControl(props: EqualsSelectProps) {
           onValuesChange(normalizeEqualsValues(field, values, next))
         }
       >
-        <EqualsSelectParts field={field} multiple />
+        <EqualsSelectParts field={field} multiple excluded={excluded} />
       </Select>
     );
   }
@@ -230,7 +267,7 @@ function EqualsControl(props: EqualsSelectProps) {
       placeholder={messages.any}
       onValueChange={(next: string | null) => onValuesChange(toValues(next))}
     >
-      <EqualsSelectParts field={field} />
+      <EqualsSelectParts field={field} excluded={excluded} />
     </Select>
   );
 }
@@ -397,10 +434,92 @@ function toDateValue(range: FieldRange | null): [string, string] | null {
   return [fromDayBound(range.min), fromDayBound(range.max)];
 }
 
+const CUSTOM_RANGE = "custom";
+
+function resolvePeriod(range: FieldRange | null, custom: boolean) {
+  if (range?.preset) {
+    return range.preset;
+  }
+  return range || custom ? CUSTOM_RANGE : null;
+}
+
 function DateRange(props: RangeFilterProps) {
   const { field, range, disabled, onRangeChange } = props;
   const messages = useMessages();
+  const [custom, setCustom] = useState(false);
   const label = { label: field.label };
+  const periods = [
+    ...DATE_PRESETS.map((preset) => ({
+      value: preset as string,
+      label: messages.datePresets[preset],
+    })),
+    { value: CUSTOM_RANGE, label: messages.customRange },
+  ];
+  const period = resolvePeriod(range, custom);
+  const choose = (next: string | null) => {
+    setCustom(next === CUSTOM_RANGE);
+    if (next === null || next === CUSTOM_RANGE) {
+      if (range?.preset || next === null) {
+        onRangeChange(null);
+      }
+      return;
+    }
+    onRangeChange({ min: null, max: null, preset: next });
+  };
+  return (
+    <>
+      <Select
+        items={periods}
+        value={period}
+        disabled={disabled}
+        placeholder={messages.any}
+        onValueChange={choose}
+      >
+        <SelectTrigger
+          aria-label={messages.presetField(label)}
+          data-filter={`${field.key}.preset`}
+        >
+          <span className="qg-select-prefix">{field.label}</span>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectClear
+          className="qg-clear"
+          aria-label={messages.clearField(label)}
+          data-filter-clear={field.key}
+        >
+          <XIcon size={12} />
+        </SelectClear>
+        <SelectContent>
+          {periods.map((option) => (
+            <SelectOption
+              key={option.value}
+              value={option.value}
+              label={option.label}
+            />
+          ))}
+        </SelectContent>
+      </Select>
+      <CustomDateRange {...props} shown={period === CUSTOM_RANGE} />
+    </>
+  );
+}
+
+interface CustomDateRangeProps extends RangeFilterProps {
+  shown: boolean;
+}
+
+function CustomDateRange({
+  field,
+  range,
+  disabled,
+  onRangeChange,
+  shown,
+}: CustomDateRangeProps) {
+  const messages = useMessages();
+  const label = { label: field.label };
+  if (!shown) {
+    return null;
+  }
   const change = (value: unknown) => {
     if (Array.isArray(value) && value.length === 2) {
       onRangeChange({
@@ -547,6 +666,7 @@ function RangeControl(props: RangeFilterProps) {
 export function EqualsSelect(props: EqualsSelectProps) {
   return (
     <FilterFrame filter={props} kind="equals">
+      <ExcludeToggle {...props} />
       <EqualsControl {...props} />
     </FilterFrame>
   );

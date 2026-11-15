@@ -12,7 +12,7 @@ import { isQueryIndexed, getIndex, indexRunnable } from "./indexes.ts";
 const INDEXES = TEST_INDEXES;
 const BASE: QueryState = {
   equals: {},
-  range: null,
+  ranges: [],
   search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,
@@ -30,16 +30,16 @@ describe("getIndex", () => {
   });
 
   test("a range sits on the sort column of an index that allows it", () => {
-    const range = { field: "created_at", min: "2026-01-01", max: null };
-    expect(getIndex(INDEXES, { ...BASE, range })).not.toBeNull();
+    const ranges = [{ field: "created_at", min: "2026-01-01", max: null }];
+    expect(getIndex(INDEXES, { ...BASE, ranges })).not.toBeNull();
     expect(
-      getIndex(INDEXES, { ...BASE, equals: { status: ["open"] }, range }),
+      getIndex(INDEXES, { ...BASE, equals: { status: ["open"] }, ranges }),
     ).toBeNull();
     expect(
       getIndex(INDEXES, {
         ...BASE,
         sort: { field: "total", direction: "asc" },
-        range,
+        ranges,
       }),
     ).toBeNull();
   });

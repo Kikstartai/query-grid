@@ -342,14 +342,14 @@ async function benchOrdered(
         client,
         index,
         "range, first page desc",
-        buildPageSql(ORDERS_GRID_DEF, { ...base, range }, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, { ...base, ranges: [range] }, PAGE),
         null,
       ),
       await measure(
         client,
         index,
         "range, capped count",
-        buildCappedCountSql(ORDERS_GRID_DEF, { ...base, range }),
+        buildCappedCountSql(ORDERS_GRID_DEF, { ...base, ranges: [range] }),
         null,
       ),
     );

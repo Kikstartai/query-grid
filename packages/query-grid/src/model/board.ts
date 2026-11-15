@@ -7,6 +7,7 @@ import {
   type GridRow,
   type QueryState,
 } from "./field-types.ts";
+import { expandEquals } from "./field-values.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
@@ -77,13 +78,14 @@ export function getLaneQueries(
     return null;
   }
   const holdsAllRows = runnable.holdsAllRows;
-  const selected = query.equals[field.key];
+  const chosen = query.equals[field.key];
+  const selected = chosen ? expandEquals(field, chosen) : undefined;
   const statuses = field.options
     .map((option) => option.value)
     .filter((value) => selected === undefined || selected.includes(value));
   const base: QueryState = holdsAllRows
     ? { ...query, cursor: null }
-    : { ...query, range: null, sort: def.defaultSort, cursor: null };
+    : { ...query, ranges: [], sort: def.defaultSort, cursor: null };
   const queries = new Map<string, QueryState>(
     statuses.map((status) => [
       status,
@@ -91,7 +93,7 @@ export function getLaneQueries(
     ]),
   );
   const combinable =
-    holdsAllRows || (query.search === null && query.range === null);
+    holdsAllRows || (query.search === null && query.ranges.length === 0);
   const answerable = combinable && [...queries.values()].every(runnable.canRun);
   return answerable ? queries : null;
 }

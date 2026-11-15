@@ -207,7 +207,7 @@ describe("the reason a control is unavailable", () => {
       code: "no_filter_with",
       field: "region",
       filters: ["status"],
-      range: null,
+      ranges: [],
       sort: "total",
     });
     expect(
@@ -223,7 +223,7 @@ describe("the reason a control is unavailable", () => {
       code: "no_sort_with",
       field: "name",
       filters: ["status"],
-      range: null,
+      ranges: [],
       sort: "total",
     });
     expect(explainUnavailable(byTotal, { kind: "search" }, CAPPED).code).toBe(
@@ -252,7 +252,7 @@ describe("the memory source", () => {
     const busy: QueryState = {
       ...BASE,
       equals: { status: ["open", "done"], region: ["north"] },
-      range: { field: "total", min: "1", max: null },
+      ranges: [{ field: "total", min: "1", max: null }],
       search: "abc",
       sort: { field: "name", direction: "asc" },
     };
@@ -271,8 +271,16 @@ describe("the memory source", () => {
   });
 
   test("every reachable state is answerable, with several values included", () => {
-    const states = enumerateReachableStates(TEST_DEF, MEMORY);
-    expect(states.every(MEMORY.runnable.canRun)).toBe(true);
+    const keys = ["id", "status", "region", "total", "created_at"];
+    const small = {
+      ...TEST_DEF,
+      search: [],
+      fields: TEST_DEF.fields.filter((field) => keys.includes(field.key)),
+    };
+    const context = { ...MEMORY, runnable: memoryRunnable(small) };
+    const states = enumerateReachableStates(small, context);
+    expect(states.every(context.runnable.canRun)).toBe(true);
+    expect(states.some((state) => state.ranges.length > 1)).toBe(true);
     expect(states.some((state) => (state.equals.status?.length ?? 0) > 1)).toBe(
       true,
     );
@@ -285,7 +293,7 @@ describe("the memory source", () => {
     store.dispatch({ type: "setRange", field: "total", min: "5", max: "9" });
     expect(store.getQuery()).toMatchObject({
       equals: { region: ["north"] },
-      range: { field: "total", min: "5", max: "9" },
+      ranges: [{ field: "total", min: "5", max: "9" }],
       sort: { field: "name", direction: "asc" },
     });
   });
@@ -364,7 +372,7 @@ describe("the URL", () => {
   test("a query round-trips", () => {
     const query: QueryState = {
       equals: { status: ["open"] },
-      range: { field: "total", min: "100", max: null },
+      ranges: [{ field: "total", min: "100", max: null }],
       search: null,
       sort: { field: "total", direction: "asc" },
       cursor: "abc",
@@ -480,7 +488,7 @@ describe("chips", () => {
       ...BASE,
       equals: { status: ["open", "done"] },
       sort: { field: "total", direction: "asc" },
-      range: { field: "total", min: "1000", max: null },
+      ranges: [{ field: "total", min: "1000", max: null }],
     };
     const chips = listFilterChips(TEST_DEF, query);
     expect(chips).toEqual([
@@ -488,6 +496,7 @@ describe("chips", () => {
         id: "eq:status",
         kind: "equals",
         field: "status",
+        excluded: false,
         values: [
           {
             value: "open",
@@ -518,7 +527,8 @@ describe("chips", () => {
         field: "total",
         min: "$10.00",
         max: null,
-        clear: { type: "clearRange" },
+        preset: null,
+        clear: { type: "clearRange", field: "total" },
       },
       {
         id: "sort",

@@ -12,6 +12,7 @@ import {
   createTotalStore,
   explainUnavailable,
   getFieldLabel,
+  isDatePreset,
   listFilterChips,
   listOffers,
   type Board,
@@ -331,9 +332,9 @@ export function formatReason(
     ...reason.filters.map((key) =>
       messages.reasonParts.filter(getFieldLabel(def, key)),
     ),
-    ...(reason.range
-      ? [messages.reasonParts.range(getFieldLabel(def, reason.range))]
-      : []),
+    ...reason.ranges.map((key) =>
+      messages.reasonParts.range(getFieldLabel(def, key)),
+    ),
     messages.reasonParts.sort(getFieldLabel(def, reason.sort)),
   ]);
   return messages.reasons[reason.code]({ label, blockers });
@@ -384,7 +385,9 @@ export function formatChip(
       return {
         id: chip.id,
         kind: chip.kind,
-        label: messages.chipEquals({ label }),
+        label: chip.excluded
+          ? messages.chipExclude({ label })
+          : messages.chipEquals({ label }),
         values: chip.values.map((value) => ({
           id: value.value,
           label: value.reserved
@@ -397,11 +400,17 @@ export function formatChip(
       return {
         id: chip.id,
         kind: chip.kind,
-        label: messages.chipRange({
-          label,
-          min: chip.min ?? messages.openBound,
-          max: chip.max ?? messages.openBound,
-        }),
+        label:
+          chip.preset !== null && isDatePreset(chip.preset)
+            ? messages.chipPreset({
+                label,
+                preset: messages.datePresets[chip.preset],
+              })
+            : messages.chipRange({
+                label,
+                min: chip.min ?? messages.openBound,
+                max: chip.max ?? messages.openBound,
+              }),
         removable,
       };
     case "search":

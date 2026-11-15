@@ -308,7 +308,29 @@ describe("each base component mounts alone, with plain props and no provider", (
     const dates = render(
       <RangeFilter field={CREATED} range={null} onRangeChange={noop} />,
     );
-    expect(dates).toContain('aria-label="Pick Created dates"');
+    expect(dates).toContain('aria-label="Created period"');
+    expect(dates).not.toContain('aria-label="Pick Created dates"');
+    const custom = render(
+      <RangeFilter
+        field={CREATED}
+        range={{
+          min: "2026-01-01T00:00:00.000000Z",
+          max: "2026-01-31T23:59:59.999999Z",
+        }}
+        onRangeChange={noop}
+      />,
+    );
+    expect(custom).toContain('aria-label="Pick Created dates"');
+    expect(custom).toContain("Custom…");
+    const preset = render(
+      <RangeFilter
+        field={CREATED}
+        range={{ min: null, max: null, preset: "last-7-days" }}
+        onRangeChange={noop}
+      />,
+    );
+    expect(preset).toContain("Last 7 days");
+    expect(preset).not.toContain('aria-label="Pick Created dates"');
   });
 
   test("a nullable field words its reserved values through the messages", () => {
@@ -343,6 +365,37 @@ describe("each base component mounts alone, with plain props and no provider", (
       />,
     );
     expect(plain).not.toContain("(empty)");
+  });
+
+  test("an excluding select marks its trigger and offers the toggle only when it may", () => {
+    const excluding = render(
+      <EqualsSelect
+        field={STATUS}
+        values={["open"]}
+        onValuesChange={noop}
+        multiple
+        excluded
+        canExclude
+        onExcludedChange={noop}
+      />,
+    );
+    expect(excluding).toContain("Status ≠");
+    expect(excluding).toContain('data-filter-exclude="status"');
+    expect(excluding).toContain('aria-pressed="true"');
+    const plain = render(
+      <EqualsSelect field={STATUS} values={["open"]} onValuesChange={noop} />,
+    );
+    expect(plain).not.toContain("data-filter-exclude");
+    const idle = render(
+      <EqualsSelect
+        field={STATUS}
+        values={[]}
+        onValuesChange={noop}
+        canExclude
+        onExcludedChange={noop}
+      />,
+    );
+    expect(idle).toMatch(/data-filter-exclude="status"[^>]*disabled/);
   });
 
   test("FilterChips with one chip per field and one remove per value", () => {

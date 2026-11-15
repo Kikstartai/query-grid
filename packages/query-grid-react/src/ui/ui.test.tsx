@@ -8,18 +8,23 @@ import { NO_PERSISTENCE } from "../components/column-state.ts";
 import { TEST_GRID_DEF, TEST_ROWS } from "../components/fields.fixture.ts";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
 import { ColumnsMenu, DataGrid } from "./data-grid.tsx";
-import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
+import {
+  FilterBar,
+  FilterChips,
+  FilterSidebar,
+  SortControl,
+} from "./filters.tsx";
 import { FacetPanel } from "./summaries.tsx";
 
 const DEF = TEST_GRID_DEF;
 const source = createMemorySource(DEF, TEST_ROWS);
 
-function render(element: ReactElement): string {
+function render(element: ReactElement, queryString = ""): string {
   return renderToStaticMarkup(
     <StaticQueryGridProvider
       def={DEF}
       source={source}
-      queryString=""
+      queryString={queryString}
       columnPersistence={NO_PERSISTENCE}
     >
       {element}
@@ -99,5 +104,32 @@ describe("the bound filter containers", () => {
         </FilterSidebar>,
       ),
     ).toContain("data-part");
+  });
+});
+
+describe("exclude and presets, bound", () => {
+  const QUERY = "f.status=!open&r.created_at=last-7-days";
+
+  test("the chips word the intent the URL holds", () => {
+    const html = render(<FilterChips />, QUERY);
+    expect(html).toContain("Status ≠");
+    expect(html).toContain('data-chip-value="open"');
+    expect(html).toContain("Created: Last 7 days");
+  });
+
+  test("the select shows the excluded value with its toggle pressed, and the period its preset", () => {
+    const html = render(<FilterBar fields={["status", "created_at"]} />, QUERY);
+    expect(html).toMatch(
+      /data-filter-exclude="status"[^>]*aria-pressed="true"/,
+    );
+    expect(html).toContain("Status ≠");
+    expect(html).toContain("Last 7 days");
+    expect(html).not.toContain('data-filter="created_at.min"');
+  });
+
+  test("the facet panel presses the values that remain", () => {
+    const html = render(<FacetPanel />, "f.status=!open");
+    expect(html).toMatch(/data-facet="done"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-facet="open"[^>]*aria-pressed="false"/);
   });
 });

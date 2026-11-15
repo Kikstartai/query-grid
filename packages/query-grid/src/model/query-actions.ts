@@ -1,19 +1,26 @@
 import {
   getField,
   isDefaultSort,
-  resolveMaxValues,
   type BaseGridDef,
   type OfferContext,
   type QueryState,
+  type RangeState,
   type SortDirection,
 } from "./field-types.ts";
+import { canExpandEquals, toExcludeValues } from "./field-values.ts";
 
 export type QueryAction =
   | { type: "setEquals"; field: string; values: string[] }
   | { type: "removeEqualsValue"; field: string; value: string }
   | { type: "clearEquals"; field: string }
-  | { type: "setRange"; field?: string; min: string | null; max: string | null }
-  | { type: "clearRange" }
+  | {
+      type: "setRange";
+      field?: string;
+      min: string | null;
+      max: string | null;
+      preset?: string;
+    }
+  | { type: "clearRange"; field?: string }
   | { type: "setSort"; field: string; direction: SortDirection }
   | { type: "setSearch"; value: string }
   | { type: "clearSearch" }
@@ -22,6 +29,7 @@ export type QueryAction =
 export interface Offers {
   equals: string[];
   multi: string[];
+  exclude: string[];
   sorts: string[];
   ranges: string[];
   search: boolean;
@@ -47,7 +55,7 @@ export interface UnavailableReason {
   code: ReasonCode;
   field: string | null;
   filters: string[];
-  range: string | null;
+  ranges: string[];
   sort: string;
 }
 
@@ -56,7 +64,7 @@ const PROBE = ["x", "y"];
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
     equals: {},
-    range: null,
+    ranges: [],
     search: null,
     sort: def.defaultSort,
     cursor: null,
@@ -84,7 +92,7 @@ function proposeClear(
       ...query,
       cursor: null,
       equals,
-      range: null,
+      ranges: [],
       sort: def.defaultSort,
     },
     defaultQuery(def),
@@ -102,12 +110,24 @@ function proposeEquals(
     return proposeClear(def, query, field);
   }
   const target = getField(def, field);
-  if (target && unique.length > resolveMaxValues(target)) {
+  if (target && !canExpandEquals(target, unique)) {
     return [];
   }
   return [
     { ...query, cursor: null, equals: { ...query.equals, [field]: unique } },
   ];
+}
+
+interface RangeInput {
+  min: string | null;
+  max: string | null;
+  preset?: string;
+}
+
+function toRange(field: string, { min, max, preset }: RangeInput): RangeState {
+  return preset === undefined
+    ? { field, min, max }
+    : { field, min: null, max: null, preset };
 }
 
 function proposeAction(
@@ -132,19 +152,24 @@ function proposeAction(
       );
     case "clearEquals":
       return proposeClear(def, query, action.field);
-    case "setRange":
+    case "setRange": {
+      const range = toRange(action.field ?? query.sort.field, action);
+      const others = query.ranges.filter((item) => item.field !== range.field);
+      return [
+        { ...top, ranges: [...others, range] },
+        { ...top, ranges: [range] },
+      ];
+    }
+    case "clearRange":
       return [
         {
           ...top,
-          range: {
-            field: action.field ?? query.sort.field,
-            min: action.min,
-            max: action.max,
-          },
+          ranges: query.ranges.filter(
+            (range) =>
+              action.field !== undefined && range.field !== action.field,
+          ),
         },
       ];
-    case "clearRange":
-      return [{ ...top, range: null }];
     case "setSort": {
       const unordered =
         !searchIsOrdered &&
@@ -203,6 +228,18 @@ export function listOffers(
   return {
     equals: offersEquals(PROBE.slice(0, 1)),
     multi: offersEquals(PROBE),
+    exclude: context.runnable.equalsFields.filter((field) => {
+      const [first] = getField(def, field)?.options ?? [];
+      return (
+        first !== undefined &&
+        isOffered(
+          def,
+          query,
+          { type: "setEquals", field, values: toExcludeValues([first.value]) },
+          context,
+        )
+      );
+    }),
     sorts: context.runnable.sortFields.filter((field) =>
       isOffered(
         def,
@@ -232,8 +269,9 @@ function describeQuery(
     code,
     field,
     filters: Object.keys(query.equals).filter((key) => key !== field),
-    range:
-      query.range && query.range.field !== field ? query.range.field : null,
+    ranges: query.ranges
+      .map((range) => range.field)
+      .filter((key) => key !== field),
     sort: query.sort.field,
   };
 }
@@ -278,7 +316,10 @@ function stateKey(query: QueryState): string {
       .map(([key, values]) => (values.length > 1 ? `${key}*` : key))
       .sort()
       .join("+"),
-    query.range ? `range:${query.range.field}` : "",
+    query.ranges
+      .map((range) => `range:${range.field}`)
+      .sort()
+      .join("+"),
     query.search !== null ? "search" : "",
     query.sort.field,
   ].join("|");
@@ -308,8 +349,8 @@ export function listControlActions(
   for (const field of offers.ranges) {
     actions.push({ type: "setRange", field, min: "x", max: null });
   }
-  if (query.range) {
-    actions.push({ type: "clearRange" });
+  for (const range of query.ranges) {
+    actions.push({ type: "clearRange", field: range.field });
   }
   if (offers.search) {
     actions.push({ type: "setSearch", value: "xxx" });

@@ -92,10 +92,15 @@ export function validateQueryValues(
       return problem;
     }
   }
-  if (query.range) {
-    for (const bound of [query.range.min, query.range.max]) {
+  const ranged = new Set<string>();
+  for (const range of query.ranges) {
+    if (range.preset !== undefined || ranged.has(range.field)) {
+      return { code: "invalid_value", params: { field: range.field } };
+    }
+    ranged.add(range.field);
+    for (const bound of [range.min, range.max]) {
       const problem =
-        bound === null ? null : checkValue(def, query.range.field, bound);
+        bound === null ? null : checkValue(def, range.field, bound);
       if (problem) {
         return problem;
       }

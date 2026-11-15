@@ -59,7 +59,11 @@ export function getIndex(
   if (!ordered) {
     return null;
   }
-  if (query.range && (!ordered.range || query.range.field !== ordered.sort)) {
+  const [range] = query.ranges;
+  if (query.ranges.length > 1) {
+    return null;
+  }
+  if (range && (!ordered.range || range.field !== ordered.sort)) {
     return null;
   }
   const several = Object.values(query.equals).some(
@@ -79,7 +83,7 @@ export function isQueryIndexed(
   return (
     searchFields.length > 0 &&
     Object.keys(query.equals).length === 0 &&
-    query.range === null &&
+    query.ranges.length === 0 &&
     listSortFields(indexes).includes(query.sort.field)
   );
 }
@@ -90,7 +94,7 @@ export function isFacetOnlyQuery(
 ): boolean {
   return (
     facetField !== undefined &&
-    query.range === null &&
+    query.ranges.length === 0 &&
     query.search === null &&
     Object.keys(query.equals).every((key) => key === facetField)
   );

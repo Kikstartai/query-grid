@@ -9,6 +9,7 @@ import {
   defaultQuery,
   type QueryAction,
 } from "./query-actions.ts";
+import { resolveQuery } from "./query-resolve.ts";
 import { validateQueryValues } from "./query-validate.ts";
 import { createStore } from "./store.ts";
 
@@ -37,7 +38,8 @@ export function normalizeQuery(
   query: QueryState,
 ): QueryState {
   const usable =
-    runnable.canRun(query) && validateQueryValues(def, query) === null;
+    runnable.canRun(query) &&
+    validateQueryValues(def, resolveQuery(def, query, null)) === null;
   return usable ? query : defaultQuery(def);
 }
 
@@ -67,7 +69,9 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
     equals: sameJson(current.equals, next.equals)
       ? current.equals
       : next.equals,
-    range: sameJson(current.range, next.range) ? current.range : next.range,
+    ranges: sameJson(current.ranges, next.ranges)
+      ? current.ranges
+      : next.ranges,
     sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
   };
 }

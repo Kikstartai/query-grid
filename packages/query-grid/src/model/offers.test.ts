@@ -46,6 +46,7 @@ describe("offers from declared indexes", () => {
     expect(listOffers(TEST_DEF, byTotal, CAPPED)).toEqual({
       equals: ["status"],
       multi: ["status"],
+      exclude: ["status"],
       sorts: ["created_at", "total"],
       ranges: ["total"],
       search: true,
@@ -76,7 +77,7 @@ describe("offers from declared indexes", () => {
       ...BASE,
       equals: { status: ["open"] },
       sort: { field: "total", direction: "asc" },
-      range: { field: "total", min: "100", max: null },
+      ranges: [{ field: "total", min: "100", max: null }],
     };
     const cleared = applyAction(
       TEST_DEF,
@@ -99,6 +100,7 @@ describe("offers from declared indexes", () => {
     expect(listOffers(TEST_DEF, search, CAPPED)).toEqual({
       equals: [],
       multi: [],
+      exclude: [],
       sorts: [],
       ranges: [],
       search: true,

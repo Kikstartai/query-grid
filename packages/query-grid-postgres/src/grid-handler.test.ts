@@ -183,7 +183,7 @@ describe("the URL codec", () => {
   test("a query encoded by core reaches the SQL through core's decoder", async () => {
     const query: QueryState = {
       equals: { status: ["open", "done"] },
-      range: { field: "total", min: "100", max: null },
+      ranges: [{ field: "total", min: "100", max: null }],
       search: null,
       sort: { field: "total", direction: "asc" },
       cursor: null,
@@ -216,7 +216,7 @@ describe("the URL codec", () => {
       const signal = new AbortController().signal;
       const query: QueryState = {
         equals: { region: ["north", "south"] },
-        range: null,
+        ranges: [],
         search: null,
         sort: TEST_DEF.defaultSort,
         cursor: null,
@@ -593,5 +593,72 @@ describe("limits", () => {
         limits: { narrowLimit: -1 },
       }),
     ).toThrow("narrowLimit");
+  });
+});
+
+describe("intent the browser resolves", () => {
+  async function readError(response: Response): Promise<ErrorBody> {
+    return (await response.json()) as ErrorBody;
+  }
+
+  test("an excluded value is refused: the server sees plain values only", async () => {
+    const { handle, seen } = createHandler([]);
+    const response = await handle("?f.status=!open");
+    expect(response.status).toBe(400);
+    expect(await readError(response)).toMatchObject({
+      error: "invalid_value",
+      params: { field: "status" },
+    });
+    expect(seen).toEqual([]);
+  });
+
+  test("a preset name is refused: the server sees bounds only", async () => {
+    const { handle, seen } = createHandler([]);
+    const response = await handle("?r.created_at=last-7-days");
+    expect(response.status).toBe(400);
+    expect((await readError(response)).error).toBe("invalid_value");
+    expect(seen).toEqual([]);
+  });
+
+  test("the source sends the remaining values and the resolved bounds", async () => {
+    const { handle, seen } = createHandler([{ count: 1 }]);
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL) =>
+      handle(String(input).slice(BASE_PATH.length))) as typeof fetch;
+    try {
+      const source = createHttpSource(TEST_DEF, BASE_PATH, {
+        now: () => new Date(2026, 10, 15, 12),
+      });
+      const signal = new AbortController().signal;
+      const query: QueryState = {
+        equals: { status: ["!open"] },
+        ranges: [],
+        search: null,
+        sort: TEST_DEF.defaultSort,
+        cursor: null,
+      };
+      expect(source.runnable.canRun(query)).toBe(true);
+      await source.fetchPage(query, 10, signal);
+      expect(seen[0].values).toEqual(["done"]);
+      await source.fetchPage(
+        {
+          ...query,
+          equals: {},
+          ranges: [
+            { field: "created_at", min: null, max: null, preset: "today" },
+          ],
+        },
+        10,
+        signal,
+      );
+      expect(seen[1].values).toEqual([
+        new Date(2026, 10, 15).toISOString(),
+        new Date(new Date(2026, 10, 16).getTime() - 1)
+          .toISOString()
+          .replace(".999Z", ".999999Z"),
+      ]);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

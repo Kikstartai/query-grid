@@ -11,10 +11,12 @@ import {
   type BaseGridDef,
   type GridRow,
   type QueryState,
+  type RangeState,
 } from "./field-types.ts";
 import { matchesEquals } from "./field-values.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
+import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
 import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 
@@ -34,7 +36,7 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
     facetCountsFollowFilters: true,
     canRun: (query) =>
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
-      (query.range === null || rangeFields.includes(query.range.field)) &&
+      query.ranges.every((range) => rangeFields.includes(range.field)) &&
       (query.search === null || searchFields.length > 0) &&
       getField(def, query.sort.field) !== null,
     equalsFields,
@@ -48,7 +50,7 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
 function matchesRange(
   def: BaseGridDef,
   row: GridRow,
-  range: NonNullable<QueryState["range"]>,
+  range: RangeState,
 ): boolean {
   const field = getField(def, range.field);
   if (!field) {
@@ -90,7 +92,7 @@ export function filterRows(
       equals.every(([field, key, values]) =>
         matchesEquals(field, values, row[key]),
       ) &&
-      (query.range === null || matchesRange(def, row, query.range)) &&
+      query.ranges.every((range) => matchesRange(def, row, range)) &&
       (needle === null || matchesSearch(row, searchFields, needle)),
   );
 }
@@ -153,6 +155,7 @@ interface Selection {
 export function createMemorySource(
   def: BaseGridDef,
   initialRows: GridRow[],
+  options: SourceOptions = {},
 ): DataSource {
   let rows = initialRows;
   let selected: Selection | null = null;
@@ -175,83 +178,87 @@ export function createMemorySource(
     }
     return (selected as Selection).rows;
   };
-  return {
-    runnable: memoryRunnable(def),
-    fetchPage: async (query, limit) => {
-      const offset = Number(query.cursor ?? 0) || 0;
-      const found = select(query);
-      const end = offset + limit;
-      const hasNext = end < found.length;
-      return {
-        rows: found.slice(offset, end),
-        nextCursor: hasNext ? String(end) : null,
-        hasNext,
-      };
-    },
-    fetchCount: async (query) => ({
-      count: matching(query).length,
-      capped: false,
-      source: "exact",
-    }),
-    fetchTotals: async (query) => {
-      const found = matching(query);
-      const sums = emptySums(totals);
-      for (const row of found) {
-        addToSums(sums, totals, row);
-      }
-      return totals.map((field) => ({
-        field,
-        available: true,
-        sum: sums[field],
-        rows: found.length,
-        source: "live",
-      }));
-    },
-    fetchFacets: async (query) => {
-      const key = def.facet?.field;
-      if (!key) {
-        return [];
-      }
-      const others = withoutKey(query.equals, key);
-      const tallies = new Map<string, FacetTally>();
-      for (const row of matching({ ...query, equals: others })) {
-        const value = String(row[key] ?? "");
-        const tally = tallies.get(value) ?? {
-          value,
-          count: 0,
-          sums: emptySums(totals),
+  return withQueryResolution(
+    def,
+    {
+      runnable: memoryRunnable(def),
+      fetchPage: async (query, limit) => {
+        const offset = Number(query.cursor ?? 0) || 0;
+        const found = select(query);
+        const end = offset + limit;
+        const hasNext = end < found.length;
+        return {
+          rows: found.slice(offset, end),
+          nextCursor: hasNext ? String(end) : null,
+          hasNext,
         };
-        tally.count += 1;
-        addToSums(tally.sums, totals, row);
-        tallies.set(value, tally);
-      }
-      return [...tallies.values()];
+      },
+      fetchCount: async (query) => ({
+        count: matching(query).length,
+        capped: false,
+        source: "exact",
+      }),
+      fetchTotals: async (query) => {
+        const found = matching(query);
+        const sums = emptySums(totals);
+        for (const row of found) {
+          addToSums(sums, totals, row);
+        }
+        return totals.map((field) => ({
+          field,
+          available: true,
+          sum: sums[field],
+          rows: found.length,
+          source: "live",
+        }));
+      },
+      fetchFacets: async (query) => {
+        const key = def.facet?.field;
+        if (!key) {
+          return [];
+        }
+        const others = withoutKey(query.equals, key);
+        const tallies = new Map<string, FacetTally>();
+        for (const row of matching({ ...query, equals: others })) {
+          const value = String(row[key] ?? "");
+          const tally = tallies.get(value) ?? {
+            value,
+            count: 0,
+            sums: emptySums(totals),
+          };
+          tally.count += 1;
+          addToSums(tally.sums, totals, row);
+          tallies.set(value, tally);
+        }
+        return [...tallies.values()];
+      },
+      fetchOptions: async (key, search) => {
+        const field = getField(def, key);
+        if (!field) {
+          return [];
+        }
+        const all = listLookupOptions(field, rows);
+        if (search.value !== undefined) {
+          return all.filter((option) => option.value === search.value);
+        }
+        const needle = (search.query ?? "").trim().toLowerCase();
+        return all
+          .filter((option) => option.label.toLowerCase().includes(needle))
+          .slice(0, OPTION_LIMIT);
+      },
+      fetchLimits: async () => null,
+      fetchTransitions: async () => listAllTransitions(def),
+      changeFacetValue: async (id, to) => {
+        const key = def.facet?.field;
+        const current = rows.find((row) => row.id === id);
+        if (!key || !current) {
+          throw new SourceError("unknown_row", { id });
+        }
+        const updated: GridRow = { ...current, [key]: to };
+        rows = rows.map((row) => (row.id === id ? updated : row));
+        return updated;
+      },
     },
-    fetchOptions: async (key, search) => {
-      const field = getField(def, key);
-      if (!field) {
-        return [];
-      }
-      const all = listLookupOptions(field, rows);
-      if (search.value !== undefined) {
-        return all.filter((option) => option.value === search.value);
-      }
-      const needle = (search.query ?? "").trim().toLowerCase();
-      return all
-        .filter((option) => option.label.toLowerCase().includes(needle))
-        .slice(0, OPTION_LIMIT);
-    },
-    fetchLimits: async () => null,
-    fetchTransitions: async () => listAllTransitions(def),
-    changeFacetValue: async (id, to) => {
-      const key = def.facet?.field;
-      const current = rows.find((row) => row.id === id);
-      if (!key || !current) {
-        throw new SourceError("unknown_row", { id });
-      }
-      const updated: GridRow = { ...current, [key]: to };
-      rows = rows.map((row) => (row.id === id ? updated : row));
-      return updated;
-    },
-  };
+    options,
+  );
 }

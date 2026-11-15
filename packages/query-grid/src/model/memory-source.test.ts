@@ -25,7 +25,7 @@ describe("the in-memory source", () => {
     const query: QueryState = {
       ...BASE,
       equals: { status: ["open"], region: ["south"] },
-      range: { field: "total", min: "500", max: "2000" },
+      ranges: [{ field: "total", min: "500", max: "2000" }],
       sort: { field: "total", direction: "desc" },
     };
     const first = await source.fetchPage(query, 3, signal);

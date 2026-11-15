@@ -5,7 +5,12 @@ import {
   type QueryState,
   type SortDirection,
 } from "./field-types.ts";
-import { getReservedValue, type ReservedValue } from "./field-values.ts";
+import {
+  getReservedValue,
+  isExcluding,
+  listSelectedValues,
+  type ReservedValue,
+} from "./field-values.ts";
 import { formatValue, labelKey } from "./format.ts";
 import type { QueryAction } from "./query-actions.ts";
 import { fromDayBound } from "./range-bounds.ts";
@@ -21,6 +26,7 @@ export interface EqualsChip {
   id: string;
   kind: "equals";
   field: string;
+  excluded: boolean;
   values: ChipValue[];
   clear: QueryAction;
 }
@@ -31,6 +37,7 @@ export interface RangeChip {
   field: string;
   min: string | null;
   max: string | null;
+  preset: string | null;
   clear: QueryAction;
 }
 
@@ -91,6 +98,31 @@ function getChipReserved(
   return field ? getReservedValue(field, value) : null;
 }
 
+function equalsChip(
+  def: BaseGridDef,
+  key: string,
+  values: string[],
+  labels: Record<string, string>,
+  locale: string | undefined,
+): EqualsChip {
+  const field = getField(def, key);
+  const excluded = field !== null && isExcluding(field, values);
+  const shown = field ? listSelectedValues(field, values) : values;
+  return {
+    id: `eq:${key}`,
+    kind: "equals",
+    field: key,
+    excluded,
+    values: shown.map((value, index) => ({
+      value,
+      text: formatEquals(def, key, value, labels, locale),
+      reserved: getChipReserved(def, key, value),
+      clear: { type: "removeEqualsValue", field: key, value: values[index] },
+    })),
+    clear: { type: "clearEquals", field: key },
+  };
+}
+
 export function listFilterChips(
   def: BaseGridDef,
   query: QueryState,
@@ -98,28 +130,17 @@ export function listFilterChips(
   locale?: string,
 ): FilterChip[] {
   const chips: FilterChip[] = Object.entries(query.equals).map(
-    ([field, values]) => ({
-      id: `eq:${field}`,
-      kind: "equals",
-      field,
-      values: values.map((value) => ({
-        value,
-        text: formatEquals(def, field, value, labels, locale),
-        reserved: getChipReserved(def, field, value),
-        clear: { type: "removeEqualsValue", field, value },
-      })),
-      clear: { type: "clearEquals", field },
-    }),
+    ([field, values]) => equalsChip(def, field, values, labels, locale),
   );
-  if (query.range) {
-    const { field, min, max } = query.range;
+  for (const { field, min, max, preset } of query.ranges) {
     chips.push({
       id: `range:${field}`,
       kind: "range",
       field,
       min: formatBound(def, field, min, locale),
       max: formatBound(def, field, max, locale),
-      clear: { type: "clearRange" },
+      preset: preset ?? null,
+      clear: { type: "clearRange", field },
     });
   }
   if (query.search !== null) {

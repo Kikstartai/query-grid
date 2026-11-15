@@ -80,7 +80,7 @@ function DataGridRoot({ children }: DataGridRootProps) {
       )}
       activeFilters={[
         ...Object.keys(query.equals),
-        ...(query.range ? [query.range.field] : []),
+        ...query.ranges.map((range) => range.field),
       ]}
     >
       {children}

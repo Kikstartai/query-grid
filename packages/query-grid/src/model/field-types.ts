@@ -56,11 +56,12 @@ export interface RangeState {
   field: string;
   min: string | null;
   max: string | null;
+  preset?: string;
 }
 
 export interface QueryState {
   equals: Record<string, string[]>;
-  range: RangeState | null;
+  ranges: RangeState[];
   search: string | null;
   sort: SortState;
   cursor: string | null;
@@ -113,6 +114,10 @@ const RANGE_TYPES: FieldType[] = ["integer", "money", "datetime"];
 
 export function isRangeType(type: FieldType): boolean {
   return RANGE_TYPES.includes(type);
+}
+
+export function getRange(query: QueryState, key: string): RangeState | null {
+  return query.ranges.find((range) => range.field === key) ?? null;
 }
 
 export function getFieldLabel(def: BaseGridDef, key: string): string {

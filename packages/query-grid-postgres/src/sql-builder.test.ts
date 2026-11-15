@@ -41,7 +41,7 @@ import type { PostgresGridDef } from "./storage.ts";
 
 const BASE: QueryState = {
   equals: {},
-  range: null,
+  ranges: [],
   search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,
@@ -160,7 +160,7 @@ describe("buildPageSql", () => {
   test("a range bounds the sort column", () => {
     const query: QueryState = {
       ...BASE,
-      range: { field: "created_at", min: "2026-01-01", max: "2026-02-01" },
+      ranges: [{ field: "created_at", min: "2026-01-01", max: "2026-02-01" }],
     };
     expect(buildPageSql(TEST_DEF, query, 10).text).toContain(
       "WHERE t.created_at >= $1::timestamptz AND t.created_at <= $2::timestamptz ORDER BY",

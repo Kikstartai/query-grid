@@ -5,6 +5,7 @@ import { createContext, use, type ReactNode } from "react";
 import {
   DEFAULT_LOCALE,
   formatCount,
+  type DatePreset,
   type Problem,
   type ProblemParams,
   type ReasonCode,
@@ -71,6 +72,8 @@ export interface QueryGridMessages {
   activeFilters: string;
   removeChip: (params: LabelParams) => string;
   chipEquals: (params: LabelParams) => string;
+  chipExclude: (params: LabelParams) => string;
+  chipPreset: (params: { label: string; preset: string }) => string;
   chipRange: (params: { label: string; min: string; max: string }) => string;
   chipSearch: (params: { value: string }) => string;
   chipSort: (params: { label: string; direction: string }) => string;
@@ -78,6 +81,11 @@ export interface QueryGridMessages {
   any: string;
   emptyValue: string;
   notEmptyValue: string;
+  excludeField: (params: LabelParams) => string;
+  excludeMark: string;
+  datePresets: Record<DatePreset, string>;
+  customRange: string;
+  presetField: (params: LabelParams) => string;
   moreValues: (params: { count: number }) => string;
   fieldFilter: (params: LabelParams) => string;
   clearField: (params: LabelParams) => string;
@@ -114,7 +122,12 @@ export interface QueryGridMessages {
   errorFallback: (params: { code: string }) => string;
 }
 
-type NestedKey = "countSources" | "facetNotes" | "reasons" | "reasonParts";
+type NestedKey =
+  | "countSources"
+  | "facetNotes"
+  | "datePresets"
+  | "reasons"
+  | "reasonParts";
 
 export type QueryGridMessageOverrides = Partial<
   Omit<QueryGridMessages, NestedKey | "errors">
@@ -191,6 +204,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   activeFilters: "Active filters and sort",
   removeChip: ({ label }) => `Remove ${label}`,
   chipEquals: ({ label }) => `${label}:`,
+  chipExclude: ({ label }) => `${label} ≠`,
+  chipPreset: ({ label, preset }) => `${label}: ${preset}`,
   chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
   chipSearch: ({ value }) => `Search: “${value}”`,
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
@@ -198,6 +213,19 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   any: "any",
   emptyValue: "(empty)",
   notEmptyValue: "(not empty)",
+  excludeField: ({ label }) => `Exclude the chosen ${label} values`,
+  excludeMark: "≠",
+  datePresets: {
+    today: "Today",
+    yesterday: "Yesterday",
+    "last-7-days": "Last 7 days",
+    "last-30-days": "Last 30 days",
+    "this-month": "This month",
+    "last-month": "Last month",
+    "this-year": "This year",
+  },
+  customRange: "Custom…",
+  presetField: ({ label }) => `${label} period`,
   moreValues: ({ count }) => `${count} more`,
   fieldFilter: ({ label }) => `${label} filter`,
   clearField: ({ label }) => `Clear ${label}`,
@@ -284,6 +312,7 @@ function mergeMessages(
     ...overrides,
     countSources: { ...base.countSources, ...overrides.countSources },
     facetNotes: { ...base.facetNotes, ...overrides.facetNotes },
+    datePresets: { ...base.datePresets, ...overrides.datePresets },
     reasons: { ...base.reasons, ...overrides.reasons },
     reasonParts: { ...base.reasonParts, ...overrides.reasonParts },
     errors: { ...base.errors, ...overrides.errors },

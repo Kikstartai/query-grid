@@ -1,6 +1,10 @@
 "use client";
 
-import { getFacetField, listTotalFields } from "@kikstart/query-grid";
+import {
+  expandEquals,
+  getFacetField,
+  listTotalFields,
+} from "@kikstart/query-grid";
 
 import {
   CountDisplay as BaseCountDisplay,
@@ -67,12 +71,19 @@ export function FacetPanel() {
   const { runnable } = useOfferContext();
   const facets = useFacetState();
   const key = def.facet?.field ?? "";
-  const equals = useEqualsFilter(key);
+  const { multiple } = useEqualsFilter(key);
+  const { dispatch } = useQueryGridActions();
   const offer = useFieldOffer(key, "equals");
   const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }
+  const equals = {
+    values: expandEquals(field, query.equals[key] ?? []),
+    multiple,
+    onValuesChange: (values: string[]) =>
+      dispatch({ type: "setEquals", field: key, values }),
+  };
   const counted = runnable.isFacetCountExact(query);
   const showCounts = counted && facets.loaded;
   const countOf = (value: string) =>
