@@ -152,6 +152,36 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).toContain("6 rows loaded");
   });
 
+  test("CardList renders a field through its cell in the title, the badge and the body", () => {
+    const marked = TEST_FIELDS.map((field) => ({
+      ...field,
+      cell: ["number", "status", "region"].includes(field.key)
+        ? (value: string | number | null) => (
+            <mark data-cell={field.key}>{value}</mark>
+          )
+        : undefined,
+    }));
+    const html = render(
+      <CardList
+        fields={marked}
+        {...ROW_WINDOW}
+        titleField="number"
+        badgeField="status"
+      />,
+    );
+    const first = TEST_ROWS[0];
+    expect(html).toContain(
+      `<bdi>Number</bdi> <mark data-cell="number">${first.number}</mark>`,
+    );
+    expect(html).toContain(
+      `<span class="qg-badge" data-value="${first.status}"><mark data-cell="status">${first.status}</mark></span>`,
+    );
+    expect(html).toContain(
+      `<dd><mark data-cell="region">${first.region}</mark></dd>`,
+    );
+    expect(html).toContain("<dd><bdi>");
+  });
+
   test("StatusBoard over generic lanes", () => {
     const html = render(
       <StatusBoard

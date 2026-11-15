@@ -325,6 +325,7 @@ This is library code with nothing that grows with a tenant count. Each request i
   - The parts hang off the component with `Object.assign`, so `DataGrid.Root` is reached from a client component; a server component can render `<DataGrid />` but cannot read a property of a client reference.
   - The bound `Root` reads the provider; the other four bound parts are the base parts.
   - The select column stays in `Body` in every composition. It is not a part and has no opt-out: making it one changes every grid screenshot and the browser pass for no user gain.
+- **`CardList` takes `ClientFieldDef[]` (Glen, relayed through the 0.2.0 review session)** and renders a field through its `cell` when it has one: after the label in the title, inside the badge pill and in a body detail. The cell replaces the formatted value and the card's frame stays, so the demo's status badge now shows on the cards. The bound wrapper already passed the client fields; only the base type dropped `cell`. A render prop for a whole custom card was not added: with it `titleField` and `badgeField` mean nothing, which is the mode-switching prop union 0.3.0 removed from `FieldFilter`. A compound (`CardList.Root` plus a card part, as `DataGrid` now has) is the form that fits, and is left for when a host needs it.
 - `ui/ui.test.tsx` is new: the bound containers' default and given children, and the bound grid's parts with the columns menu mounted outside it.
 
 ### As built: the demo

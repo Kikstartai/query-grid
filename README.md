@@ -323,6 +323,7 @@ import { DataGrid, FacetPanel } from "@kikstart/query-grid-react/components";
 - **Column state** (order, width, visibility, pin) is internal to `DataGrid` by default and kept nowhere. Pass `columns` and `onColumnsChange` to control it, or a `columnPersistence` (`load` and `save`, sync or async; `createLocalStoragePersistence(key)` is one) to keep the internal state somewhere.
 - **The three filter controls are explicit variants**, each with its own props, so a lookup without `loadOptions` is a type error. The def-driven `FieldFilter`, which picks one from a field's operators and options, exists only in `./ui`.
 - **A control's `reason` is its `title`.** Inside a `FilterSidebar` it is also shown as text: the sidebar sets `ReasonDisplayContext`, which a host's own container can set too.
+- **`CardList` renders a field through its `cell`** when it has one, as the grid rows do: in the title, inside the badge and in the body. The card's own frame stays.
 - **`StatusBoard`** moves a card at once and calls `onMove`. If `onMove` returns a promise that rejects, the board puts the card back.
 - **`./ui` holds one bound wrapper per base component, under the same name.** A wrapper reads the provider and renders the base component; none of the base component files imports a provider hook. The bound `DataGrid` has the same parts, and the bound `FilterBar` and `FilterSidebar` fill themselves with every control unless they are given `children`.
 

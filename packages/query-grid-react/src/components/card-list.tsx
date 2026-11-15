@@ -5,13 +5,12 @@ import { useEffect, useState, type RefObject } from "react";
 
 import {
   formatValue,
-  type FieldDef,
   type GridFormat,
   type GridRow,
 } from "@kikstart/query-grid";
 
 import { FeedNotice, isWindowBlank } from "./feed-notice.tsx";
-import type { RowWindow } from "./fields.ts";
+import type { ClientFieldDef, RowWindow } from "./fields.ts";
 import { formatLoaded, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
@@ -34,12 +33,26 @@ function createListVirtualizer(latest: LatestWindow) {
 
 type ListVirtualizer = ReturnType<typeof createListVirtualizer>;
 
+interface CardValueProps {
+  field: ClientFieldDef;
+  row: GridRow;
+  format?: GridFormat;
+}
+
+function CardValue({ field, row, format }: CardValueProps) {
+  const value = row[field.key] ?? null;
+  if (field.cell) {
+    return field.cell(value, row);
+  }
+  return <bdi>{formatValue(field, value, format)}</bdi>;
+}
+
 interface CardProps {
   virtual: ListVirtualizer;
   index: number;
   start: number;
   row: GridRow;
-  fields: FieldDef[];
+  fields: ClientFieldDef[];
   format?: GridFormat;
 }
 
@@ -64,12 +77,13 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
     >
       <div className="qg-card">
         <div className="qg-card-head">
-          <bdi className="qg-card-title">
-            {title.label} {formatValue(title, row[title.key] ?? null, format)}
-          </bdi>
-          <bdi className="qg-badge" data-value={row[badge.key] ?? ""}>
-            {formatValue(badge, row[badge.key] ?? null, format)}
-          </bdi>
+          <div className="qg-card-title">
+            <bdi>{title.label}</bdi>{" "}
+            <CardValue field={title} row={row} format={format} />
+          </div>
+          <span className="qg-badge" data-value={row[badge.key] ?? ""}>
+            <CardValue field={badge} row={row} format={format} />
+          </span>
         </div>
         <dl className="qg-card-details">
           {rest.flatMap((field) => {
@@ -81,7 +95,7 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
                       <bdi>{field.label}:</bdi>
                     </dt>
                     <dd>
-                      <bdi>{text}</bdi>
+                      <CardValue field={field} row={row} format={format} />
                     </dd>
                   </div>,
                 ]
@@ -94,7 +108,7 @@ function Card({ virtual, index, start, row, fields, format }: CardProps) {
 }
 
 export interface CardListProps extends RowWindow {
-  fields: FieldDef[];
+  fields: ClientFieldDef[];
   titleField: string;
   badgeField: string;
   format?: GridFormat;
