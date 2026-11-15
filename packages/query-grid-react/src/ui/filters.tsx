@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 
 import {
   explainUnavailable,
-  getField,
   getFieldLabel,
   labelKey,
   listFilterFields,
@@ -220,13 +219,10 @@ interface DefaultFiltersProps {
 
 function DefaultFilters({ fields }: DefaultFiltersProps) {
   const { def, source } = useQueryGrid();
-  const shown = fields
-    ? fields.flatMap((key) => getField(def, key) ?? [])
-    : listFilterFields(def, source.capabilities);
   return (
     <>
       <QuickFilter />
-      {shown.map((field) => (
+      {listFilterFields(def, source.capabilities, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
       <SortControl />

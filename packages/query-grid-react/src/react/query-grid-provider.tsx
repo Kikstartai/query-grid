@@ -182,15 +182,16 @@ function createValue(
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
-  const [parsers] = useState(() => buildUrlParsers(props.def, prefix));
+  const { capabilities } = props.source;
+  const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
   const [values, setValues] = useQueryStates(parsers);
-  const search = toSearch(props.def, values as UrlValues, prefix);
+  const search = toSearch(capabilities, values as UrlValues, prefix);
   const [value] = useState(() => createValue(props, search));
   const setter = useLatest(setValues);
   const [sync] = useState(() =>
     createUrlSync(value.store, search, (state, history) => {
       void setter.current(
-        toUrlValues(value.def, state, prefix),
+        toUrlValues(value.def, capabilities, state, prefix),
         history === "push"
           ? { history }
           : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
@@ -216,7 +217,7 @@ function ignoreWrite(): void {
 
 export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   const search = normalizeSearch(
-    props.def,
+    props.source.capabilities,
     props.search,
     props.urlPrefix ?? "",
   );

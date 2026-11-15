@@ -44,13 +44,13 @@ export function listOrderedShapes(shapes: QueryShape[]): OrderedShape[] {
   return shapes.filter((shape): shape is OrderedShape => !isQuickShape(shape));
 }
 
-export function listEqualsFields(shapes: QueryShape[]): string[] {
+function listEqualsFields(shapes: QueryShape[]): string[] {
   return [
     ...new Set(listOrderedShapes(shapes).flatMap((shape) => shape.equals)),
   ];
 }
 
-export function listRangeFields(shapes: QueryShape[]): string[] {
+function listRangeFields(shapes: QueryShape[]): string[] {
   return [
     ...new Set(
       listOrderedShapes(shapes)

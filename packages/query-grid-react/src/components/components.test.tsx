@@ -125,6 +125,12 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(loading).toContain("Loading…");
     expect(loading).not.toContain('data-status="loaded"');
     expect(
+      render(<DataGrid fields={TEST_FIELDS} {...empty} pages={0} />),
+    ).not.toContain('data-status="loaded"');
+    expect(
+      render(<DataGrid fields={TEST_FIELDS} {...empty} pages={1} />),
+    ).toContain('data-status="loaded"');
+    expect(
       render(<DataGrid fields={TEST_FIELDS} {...empty} error="It broke" />),
     ).toContain("It broke");
   });

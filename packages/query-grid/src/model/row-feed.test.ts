@@ -87,8 +87,10 @@ describe("the count store on the shared resource", () => {
     const store = createQueryStore(TEST_DEF, SERVER, defaultQuery(TEST_DEF));
     const counts = createCountStore(store, createSource(calls));
     expect(calls.counts).toEqual([]);
+    expect(counts.getState().loaded).toBe(false);
     counts.subscribe(() => undefined);
     await settle();
+    expect(counts.getState().loaded).toBe(true);
     expect(counts.getState().result).toEqual({
       count: 3,
       capped: true,

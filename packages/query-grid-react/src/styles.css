@@ -328,7 +328,8 @@
   align-items: center;
   justify-content: space-between;
   gap: calc(var(--ui-spacing) * 2);
-  container-type: inline-size;
+  inline-size: 100%;
+  container: qg-grid-toolbar / inline-size;
 }
 
 :where(.qg-status) {
@@ -352,7 +353,7 @@
 }
 
 :where(.qg-status-feed) {
-  flex: 1 1 0%;
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
 }
@@ -361,17 +362,17 @@
   flex: none;
 }
 
-@container (max-width: 44rem) {
+@container qg-grid-toolbar (max-inline-size: 44rem) {
   :where(.qg-grid-toolbar) > :where(.qg-status) {
     flex-direction: column;
     align-items: stretch;
   }
 
-  :where(.qg-status-feed) {
+  :where(.qg-grid-toolbar) > :where(.qg-status) > :where(.qg-status-feed) {
     flex: none;
   }
 
-  :where(.qg-status-sheet) {
+  :where(.qg-grid-toolbar) > :where(.qg-status) > :where(.qg-status-sheet) {
     overflow: hidden;
   }
 }

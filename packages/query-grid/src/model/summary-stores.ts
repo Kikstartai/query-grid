@@ -1,6 +1,6 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
-import { getField, isLookupField } from "./field-types.ts";
+import { getField } from "./field-types.ts";
 import { labelKey } from "./format.ts";
 import {
   createQueryResource,
@@ -117,7 +117,7 @@ export function createLabelStore(
   const requestSelected = () => {
     for (const [key, values] of Object.entries(store.getQuery().equals)) {
       const field = getField(store.def, key);
-      if (field && isLookupField(field)) {
+      if (field && !field.options) {
         values.forEach((value) => request(key, value));
       }
     }

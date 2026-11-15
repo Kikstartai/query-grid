@@ -50,12 +50,9 @@ export function createUrlSync(
       if (echoed >= 0) {
         return;
       }
-      const state = readUrlState(
-        store.def,
-        store.getRules().capabilities,
-        next,
-      );
-      const target = encodeUrlState(store.def, state);
+      const { capabilities } = store.getRules();
+      const state = readUrlState(store.def, capabilities, next);
+      const target = encodeUrlState(store.def, capabilities, state);
       written = target;
       if (target !== encodeStore(store)) {
         store.replace(state.query, state.view);

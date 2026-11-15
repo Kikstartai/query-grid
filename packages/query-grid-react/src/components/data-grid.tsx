@@ -27,7 +27,7 @@ import {
   type GridColumn,
 } from "./column-state.ts";
 import { ColumnsMenu } from "./columns-menu.tsx";
-import { FeedNotice, isWindowBlank } from "./feed-notice.tsx";
+import { FeedNotice, isWindowBlank, LoadedText } from "./feed-notice.tsx";
 import type { FieldDef, RowWindow } from "./fields.ts";
 import {
   GridHeader,
@@ -36,7 +36,7 @@ import {
 } from "./grid-header.tsx";
 import { HEADER_HEIGHT, sheet, type RowView } from "./grid-primitive.ts";
 import { CheckIcon } from "./icons.tsx";
-import { formatLoaded, useMessages } from "./messages.tsx";
+import { useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useColumnState } from "./use-column-state.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -298,20 +298,6 @@ function FeedProgress() {
   return <span data-status="feed" />;
 }
 
-function LoadedText() {
-  const { props } = useDataGrid();
-  const messages = useMessages();
-  const loaded = props.rows.length;
-  if (props.loading && loaded === 0) {
-    return null;
-  }
-  return (
-    <bdi data-status="loaded" data-value={loaded}>
-      {formatLoaded(messages, loaded, props.pages, props.format)}
-    </bdi>
-  );
-}
-
 function SelectAll() {
   const { props, handle } = useDataGrid();
   const messages = useMessages();
@@ -388,7 +374,7 @@ function DataGridToolbar({ children }: DataGridToolbarProps) {
 }
 
 function DataGridStatus() {
-  const { handle } = useDataGrid();
+  const { props, handle } = useDataGrid();
   const messages = useMessages();
   const none = (value: string) => (value === "none" ? messages.none : value);
   return usePart(
@@ -401,7 +387,12 @@ function DataGridStatus() {
         children: (status: SheetStatus) => (
           <>
             <span className="qg-status-feed">
-              <LoadedText />
+              <LoadedText
+                rows={props.rows}
+                loading={props.loading}
+                pages={props.pages}
+                format={props.format}
+              />
               <FeedProgress />
             </span>
             <span className="qg-status-sheet">

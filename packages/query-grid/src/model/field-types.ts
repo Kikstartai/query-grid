@@ -113,10 +113,6 @@ export function isRangeType(type: FieldType): boolean {
   return RANGE_TYPES.includes(type);
 }
 
-export function isLookupField(field: BaseFieldDef): boolean {
-  return !field.options;
-}
-
 export function getFieldLabel(def: BaseGridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }
@@ -128,7 +124,7 @@ export function resolveFilterKind(
   capabilities: Capabilities,
 ): FilterKind | null {
   if (capabilities.equalsFields.includes(field.key)) {
-    return isLookupField(field) ? "lookup" : "equals";
+    return field.options ? "equals" : "lookup";
   }
   if (capabilities.rangeFields.includes(field.key)) {
     return "range";
@@ -139,8 +135,12 @@ export function resolveFilterKind(
 export function listFilterFields<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
   capabilities: Capabilities,
+  keys?: string[],
 ): F[] {
-  return def.fields.filter(
+  const fields = keys
+    ? keys.flatMap((key) => getField(def, key) ?? [])
+    : def.fields;
+  return fields.filter(
     (field) => resolveFilterKind(field, capabilities) !== null,
   );
 }

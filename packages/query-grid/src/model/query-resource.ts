@@ -15,6 +15,7 @@ export interface ResourceState<R> {
   result: R;
   status: LoadStatus;
   error: Problem | null;
+  loaded: boolean;
 }
 
 type ResourceFetch<R> = (query: QueryState, signal: AbortSignal) => Promise<R>;
@@ -42,6 +43,7 @@ export function createQueryResource<R>(
     result: options.initial,
     status: "idle",
     error: null,
+    loaded: false,
   });
   const begin = createAbortable();
   let started = false;
@@ -50,6 +52,7 @@ export function createQueryResource<R>(
     const controller = begin();
     const query = queryStore.getQuery();
     store.set({
+      ...store.get(),
       query,
       result: keepResult ? store.get().result : options.initial,
       status: "loading",
@@ -58,7 +61,7 @@ export function createQueryResource<R>(
     try {
       const result = await run(query, controller.signal);
       if (!controller.signal.aborted) {
-        store.set({ ...store.get(), result, status: "idle" });
+        store.set({ ...store.get(), result, status: "idle", loaded: true });
       }
     } catch (error) {
       if (!isAbort(error)) {

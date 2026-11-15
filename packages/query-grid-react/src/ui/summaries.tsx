@@ -73,7 +73,7 @@ export function FacetPanel() {
     return null;
   }
   const counted = capabilities.isFacetCountShown(query);
-  const showCounts = counted && facets.result.length > 0;
+  const showCounts = counted && facets.loaded;
   const countOf = (value: string) =>
     facets.result.find((item) => item.value === value)?.count ?? 0;
   const shown = counted ? "counter" : "hidden";

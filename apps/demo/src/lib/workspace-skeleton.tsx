@@ -1,5 +1,4 @@
 import {
-  getField,
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
@@ -33,13 +32,10 @@ export function SkeletonFilters({
   capabilities,
   fields,
 }: SkeletonFiltersProps) {
-  const shown = fields
-    ? fields.flatMap((key) => getField(def, key) ?? [])
-    : listFilterFields(def, capabilities);
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="quick" />
-      {shown.map((field) => (
+      {listFilterFields(def, capabilities, fields).map((field) => (
         <span
           key={field.key}
           className="skeleton skeleton-control"

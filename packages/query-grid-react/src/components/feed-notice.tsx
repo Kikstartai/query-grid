@@ -1,12 +1,37 @@
 "use client";
 
+import type { GridFormat } from "@kikstart/query-grid";
+
 import type { RowWindow } from "./fields.ts";
-import { useMessages } from "./messages.tsx";
+import { formatLoaded, useMessages } from "./messages.tsx";
 
 type NoticeProps = Pick<RowWindow, "rows" | "loading" | "error" | "pages">;
 
 export function isWindowBlank(props: NoticeProps): boolean {
   return Boolean(props.error) || props.rows.length === 0;
+}
+
+function isWindowPending(props: Pick<RowWindow, "loading" | "pages">): boolean {
+  return props.loading || props.pages === 0;
+}
+
+interface LoadedTextProps extends Pick<
+  RowWindow,
+  "rows" | "loading" | "pages"
+> {
+  format?: GridFormat;
+}
+
+export function LoadedText({ rows, loading, pages, format }: LoadedTextProps) {
+  const messages = useMessages();
+  if (rows.length === 0 && isWindowPending({ loading, pages })) {
+    return null;
+  }
+  return (
+    <bdi data-status="loaded" data-value={rows.length}>
+      {formatLoaded(messages, rows.length, pages, format)}
+    </bdi>
+  );
 }
 
 export function FeedNotice({ loading, error, pages }: NoticeProps) {
@@ -18,7 +43,7 @@ export function FeedNotice({ loading, error, pages }: NoticeProps) {
       </p>
     );
   }
-  if (loading || pages === 0) {
+  if (isWindowPending({ loading, pages })) {
     return (
       <p className="qg-notice" data-feed-state="loading">
         <bdi>{messages.loading}</bdi>

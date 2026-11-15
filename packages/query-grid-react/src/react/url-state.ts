@@ -23,17 +23,17 @@ export interface UrlState {
   view: GridView;
 }
 
-function listUrlKeys(def: BaseGridDef): QueryKey[] {
-  return [...listQueryKeys(def), VIEW_KEY];
+function listUrlKeys(capabilities: Capabilities): QueryKey[] {
+  return [...listQueryKeys(capabilities), VIEW_KEY];
 }
 
 function urlName(key: QueryKey, prefix: string): string {
   return prefix ? `${prefix}.${key.name}` : key.name;
 }
 
-export function buildUrlParsers(def: BaseGridDef, prefix = "") {
+export function buildUrlParsers(capabilities: Capabilities, prefix = "") {
   return Object.fromEntries(
-    listUrlKeys(def).map((key) => [
+    listUrlKeys(capabilities).map((key) => [
       urlName(key, prefix),
       key.repeated ? parseAsNativeArrayOf(parseAsString) : parseAsString,
     ]),
@@ -41,12 +41,12 @@ export function buildUrlParsers(def: BaseGridDef, prefix = "") {
 }
 
 export function toSearch(
-  def: BaseGridDef,
+  capabilities: Capabilities,
   values: UrlValues,
   prefix = "",
 ): string {
   const params = new URLSearchParams();
-  for (const key of listUrlKeys(def)) {
+  for (const key of listUrlKeys(capabilities)) {
     for (const item of [values[urlName(key, prefix)] ?? []].flat()) {
       params.append(key.name, item);
     }
@@ -55,7 +55,7 @@ export function toSearch(
 }
 
 export function normalizeSearch(
-  def: BaseGridDef,
+  capabilities: Capabilities,
   search: string,
   prefix: string,
 ): string {
@@ -64,12 +64,12 @@ export function normalizeSearch(
   }
   const params = new URLSearchParams(search);
   const values = Object.fromEntries(
-    listUrlKeys(def).map((key) => [
+    listUrlKeys(capabilities).map((key) => [
       urlName(key, prefix),
       params.getAll(urlName(key, prefix)),
     ]),
   );
-  return toSearch(def, values, prefix);
+  return toSearch(capabilities, values, prefix);
 }
 
 export function readUrlState(
@@ -87,6 +87,7 @@ export function readUrlState(
 
 export function toUrlValues(
   def: BaseGridDef,
+  capabilities: Capabilities,
   state: UrlState,
   prefix = "",
 ): UrlValues {
@@ -95,15 +96,19 @@ export function toUrlValues(
     params.set(VIEW_KEY.name, state.view);
   }
   return Object.fromEntries(
-    listUrlKeys(def).map((key) => [
+    listUrlKeys(capabilities).map((key) => [
       urlName(key, prefix),
       key.repeated ? params.getAll(key.name) : params.get(key.name),
     ]),
   );
 }
 
-export function encodeUrlState(def: BaseGridDef, state: UrlState): string {
-  return toSearch(def, toUrlValues(def, state));
+export function encodeUrlState(
+  def: BaseGridDef,
+  capabilities: Capabilities,
+  state: UrlState,
+): string {
+  return toSearch(capabilities, toUrlValues(def, capabilities, state));
 }
 
 export function readStoreState(store: QueryStore): UrlState {
@@ -111,5 +116,9 @@ export function readStoreState(store: QueryStore): UrlState {
 }
 
 export function encodeStore(store: QueryStore): string {
-  return encodeUrlState(store.def, readStoreState(store));
+  return encodeUrlState(
+    store.def,
+    store.getRules().capabilities,
+    readStoreState(store),
+  );
 }

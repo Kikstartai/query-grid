@@ -62,6 +62,14 @@ describe("filter kinds", () => {
     ).toEqual({ name: "lookup" });
   });
 
+  test("a list of keys picks the filters and their order, skipping a field with none", () => {
+    expect(
+      listFilterFields(TEST_DEF, SERVER, ["region", "note", "status"]).map(
+        (field) => field.key,
+      ),
+    ).toEqual(["region", "status"]);
+  });
+
   test("on a client grid every field is filterable, by its type and options", () => {
     expect(kindsOf(memoryCapabilities(TEST_DEF))).toEqual({
       id: "lookup",
@@ -376,20 +384,21 @@ describe("the URL", () => {
     ).toEqual({ status: ["open"] });
   });
 
-  test("the keys a def can put in the URL are known up front", () => {
-    const keys = listQueryKeys(TEST_DEF);
+  test("the keys a grid can put in the URL are the ones its capabilities allow", () => {
+    const keys = listQueryKeys(SERVER);
     expect(keys.map((key) => key.name)).toEqual([
-      ...TEST_DEF.fields.map((field) => `f.${field.key}`),
-      "r.number",
+      "f.status",
+      "f.region",
       "r.created_at",
       "r.total",
       "q",
       "sort",
       "cursor",
     ]);
-    expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual(
-      TEST_DEF.fields.map((field) => `f.${field.key}`),
-    );
+    expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual([
+      "f.status",
+      "f.region",
+    ]);
   });
 
   test("a field named like an object internal is just an unknown field", () => {

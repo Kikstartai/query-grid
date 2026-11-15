@@ -35,7 +35,10 @@ function createHarness(): Harness {
     store,
     encodeStore(store),
     (state: UrlState, history) =>
-      written.push({ search: encodeUrlState(DEF, state), history }),
+      written.push({
+        search: encodeUrlState(DEF, source.capabilities, state),
+        history,
+      }),
     () => clock.now,
   );
   sync.connect();
