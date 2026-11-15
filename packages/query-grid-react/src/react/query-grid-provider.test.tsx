@@ -16,6 +16,7 @@ import { createMemorySource } from "@kikstart/query-grid/memory";
 import { TEST_FIELDS, TEST_ROWS } from "../components/fields.fixture.ts";
 import {
   QueryGridProvider,
+  StaticQueryGridProvider,
   useGridView,
   useQueryState,
 } from "./query-grid-provider.tsx";
@@ -240,20 +241,19 @@ describe("two grids on one page", () => {
   });
 });
 
-describe("the provider with the URL turned off", () => {
+describe("the static provider", () => {
   test("under a prefix it reads its own keys of the search prop", () => {
     expect(
       read(
-        <QueryGridProvider
+        <StaticQueryGridProvider
           def={DEF}
           source={source}
-          syncUrl={false}
           urlPrefix="b"
           search="f.region=north&b.f.region=south&b.view=list"
           columnPersistence={null}
         >
           <Readout />
-        </QueryGridProvider>,
+        </StaticQueryGridProvider>,
       ),
     ).toEqual({
       query: { ...BASE, equals: { region: ["south"] } },
@@ -264,15 +264,14 @@ describe("the provider with the URL turned off", () => {
   test("it needs no adapter and starts from the search prop", () => {
     expect(
       read(
-        <QueryGridProvider
+        <StaticQueryGridProvider
           def={DEF}
           source={source}
-          syncUrl={false}
           search="f.region=south&view=list"
           columnPersistence={null}
         >
           <Readout />
-        </QueryGridProvider>,
+        </StaticQueryGridProvider>,
       ),
     ).toEqual({
       query: { ...BASE, equals: { region: ["south"] } },

@@ -13,7 +13,6 @@ import {
   getFieldLabel,
   listFilterChips,
   listOffers,
-  type Capabilities,
   type CountState,
   type CountStore,
   type DataSource,
@@ -35,7 +34,6 @@ import {
   type TotalStore,
   type UnavailableReason,
 } from "@kikstart/query-grid";
-import { createHttpSource } from "@kikstart/query-grid/http";
 import { throttle, useQueryStates } from "nuqs";
 
 import {
@@ -84,15 +82,15 @@ export interface QueryGridContextValue {
 
 export interface QueryGridProviderProps {
   def: ClientGridDef;
-  search?: string;
-  basePath?: string;
-  capabilities?: Capabilities;
-  source?: DataSource;
+  source: DataSource;
   pageSize?: number;
-  syncUrl?: boolean;
   urlPrefix?: string;
   columnPersistence?: ColumnPersistence | null;
   children: ReactNode;
+}
+
+export interface StaticQueryGridProviderProps extends QueryGridProviderProps {
+  search: string;
 }
 
 export interface ColumnsModel {
@@ -113,22 +111,11 @@ export interface LabelledChip {
 
 const QueryGridContext = createContext<QueryGridContextValue | null>(null);
 
-function resolveSource(props: QueryGridProviderProps): DataSource {
-  if (props.source) {
-    return props.source;
-  }
-  if (!props.capabilities) {
-    throw new Error("QueryGridProvider needs a source or capabilities");
-  }
-  return createHttpSource(props.def, props.basePath ?? "", props.capabilities);
-}
-
 function createValue(
   props: QueryGridProviderProps,
   search: string,
 ): QueryGridContextValue {
-  const { def } = props;
-  const source = resolveSource(props);
+  const { def, source } = props;
   const initial = readUrlState(def, source.capabilities, search);
   const store = createQueryStore(
     def,
@@ -153,7 +140,7 @@ function createValue(
   };
 }
 
-function UrlQueryGridProvider(props: QueryGridProviderProps) {
+export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
   const [parsers] = useState(() => buildUrlParsers(props.def, prefix));
   const [values, setValues] = useQueryStates(parsers);
@@ -187,10 +174,10 @@ function ignoreWrite(): void {
   return;
 }
 
-function StaticQueryGridProvider(props: QueryGridProviderProps) {
+export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   const search = normalizeSearch(
     props.def,
-    props.search ?? "",
+    props.search,
     props.urlPrefix ?? "",
   );
   const [value] = useState(() => createValue(props, search));
@@ -207,13 +194,6 @@ function StaticQueryGridProvider(props: QueryGridProviderProps) {
   }, [sync, search]);
 
   return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
-}
-
-export function QueryGridProvider(props: QueryGridProviderProps) {
-  if (props.syncUrl === false) {
-    return <StaticQueryGridProvider {...props} />;
-  }
-  return <UrlQueryGridProvider {...props} />;
 }
 
 export function useQueryGrid(): QueryGridContextValue {

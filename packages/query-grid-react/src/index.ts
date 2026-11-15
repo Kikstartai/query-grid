@@ -3,6 +3,7 @@ export {
   formatChip,
   formatReason,
   QueryGridProvider,
+  StaticQueryGridProvider,
   useColumns,
   useCountState,
   useFacetState,
@@ -22,4 +23,5 @@ export {
   type OfferState,
   type QueryGridContextValue,
   type QueryGridProviderProps,
+  type StaticQueryGridProviderProps,
 } from "./react/query-grid-provider.tsx";

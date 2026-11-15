@@ -9,7 +9,7 @@ import {
 
 import { SiteBrand } from "@/lib/site-brand";
 
-import { OrdersQueryProvider } from "./orders-workspace";
+import { OrdersQueryProvider } from "../orders-provider";
 
 export function RestyledWorkspace() {
   return (

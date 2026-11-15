@@ -16,11 +16,8 @@ import {
 import { PART_NAMES } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
-import {
-  OrdersBoard,
-  OrdersCardList,
-  OrdersQueryProvider,
-} from "./orders-workspace";
+import { OrdersQueryProvider } from "../orders-provider";
+import { OrdersBoard, OrdersCardList } from "./orders-workspace";
 
 type PartName = (typeof PART_NAMES)[number];
 

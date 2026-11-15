@@ -1,8 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
-
-import { QueryGridProvider, useGridView } from "@kikstart/query-grid-react";
+import { useGridView } from "@kikstart/query-grid-react";
 import {
   CardList,
   CountDisplay,
@@ -19,25 +17,12 @@ import {
 import { VIEWS } from "@/lib/site";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 
-import { ORDERS_API } from "../orders-fields";
-import { ORDERS_CAPABILITIES, ORDERS_GRID } from "../orders-grid-def";
+import { OrdersQueryProvider } from "../orders-provider";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 interface OrdersWorkspaceProps {
   dir?: "rtl";
-}
-
-export function OrdersQueryProvider({ children }: { children: ReactNode }) {
-  return (
-    <QueryGridProvider
-      def={ORDERS_GRID}
-      basePath={ORDERS_API}
-      capabilities={ORDERS_CAPABILITIES}
-    >
-      {children}
-    </QueryGridProvider>
-  );
 }
 
 export function OrdersCardList() {
