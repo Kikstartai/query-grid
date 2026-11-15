@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import {
   explainUnavailable,
   getFieldLabel,
@@ -212,26 +214,38 @@ export function FilterChips() {
   );
 }
 
-export function FilterBar() {
+function DefaultFilters() {
   const { def } = useQueryGrid();
   return (
-    <BaseFilterBar>
+    <>
       <QuickFilter />
       {listFilterFields(def).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
       <SortControl />
-    </BaseFilterBar>
+    </>
   );
+}
+
+export interface FilterBarProps {
+  children?: ReactNode;
+}
+
+export function FilterBar({ children = <DefaultFilters /> }: FilterBarProps) {
+  return <BaseFilterBar>{children}</BaseFilterBar>;
 }
 
 export interface FilterSidebarProps {
   side?: "start" | "end";
   label?: string;
+  children?: ReactNode;
 }
 
-export function FilterSidebar({ side, label }: FilterSidebarProps) {
-  const { def } = useQueryGrid();
+export function FilterSidebar({
+  side,
+  label,
+  children = <DefaultFilters />,
+}: FilterSidebarProps) {
   const dispatch = useQueryDispatch();
   const chips = useFilterChips();
   return (
@@ -241,11 +255,7 @@ export function FilterSidebar({ side, label }: FilterSidebarProps) {
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      <QuickFilter />
-      {listFilterFields(def).map((field) => (
-        <FieldFilter key={field.key} field={field} />
-      ))}
-      <SortControl />
+      {children}
     </BaseFilterSidebar>
   );
 }

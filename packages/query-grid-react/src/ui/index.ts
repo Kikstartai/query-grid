@@ -12,6 +12,7 @@ export {
   QuickFilter,
   SortControl,
   type FieldFilterProps,
+  type FilterBarProps,
   type FilterSidebarProps,
 } from "./filters.tsx";
 export { StatusBoard, type StatusBoardProps } from "./status-board.tsx";
