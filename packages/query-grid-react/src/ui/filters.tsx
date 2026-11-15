@@ -28,6 +28,7 @@ import {
   useOfferState,
   useQueryDispatch,
   useQueryGrid,
+  useQueryGridActions,
   useQueryRules,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
@@ -42,9 +43,9 @@ interface ControlProps {
 }
 
 export function FieldFilter({ field, showReason }: FieldFilterProps) {
-  const { def, source, labels } = useQueryGrid();
+  const { def } = useQueryGrid();
+  const { dispatch, loadOptions, rememberLabel } = useQueryGridActions();
   const query = useQueryState();
-  const dispatch = useQueryDispatch();
   const offers = useOffers();
   const known = useFieldLabels();
   const equality = field.operators.includes("eq");
@@ -72,8 +73,7 @@ export function FieldFilter({ field, showReason }: FieldFilterProps) {
       }
       loadOptions={
         lookup
-          ? (text, signal) =>
-              source.fetchOptions(field.key, { query: text }, signal)
+          ? (text, signal) => loadOptions(field.key, text, signal)
           : undefined
       }
       valueLabels={Object.fromEntries(
@@ -83,7 +83,7 @@ export function FieldFilter({ field, showReason }: FieldFilterProps) {
         }),
       )}
       onOptionPick={(option) =>
-        labels.remember(field.key, option.value, option.label)
+        rememberLabel(field.key, option.value, option.label)
       }
       format={def.format}
       disabled={!offer.offered}

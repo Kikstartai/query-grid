@@ -21,19 +21,21 @@ import {
   useOfferState,
   useQueryDispatch,
   useQueryGrid,
+  useQueryGridActions,
   useQueryRules,
   useQueryState,
   useTotalState,
 } from "../react/query-grid-provider.tsx";
 
 export function CountDisplay() {
-  const { def, counts } = useQueryGrid();
+  const { def } = useQueryGrid();
+  const { requestExact } = useQueryGridActions();
   const state = useCountState();
   return (
     <BaseCountDisplay
       status={state.status}
       value={state.result}
-      onRequestExact={counts.requestExact}
+      onRequestExact={requestExact}
       format={def.format}
     />
   );
@@ -111,12 +113,12 @@ export interface ViewSwitchProps {
 }
 
 export function ViewSwitch({ views }: ViewSwitchProps) {
-  const { store } = useQueryGrid();
+  const { setView } = useQueryGridActions();
   return (
     <BaseViewSwitch
       views={views}
       value={useGridView()}
-      onValueChange={store.setView}
+      onValueChange={setView}
     />
   );
 }

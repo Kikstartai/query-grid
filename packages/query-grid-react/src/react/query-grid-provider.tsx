@@ -20,6 +20,7 @@ import {
   type FacetStore,
   type Feed,
   type FeedState,
+  type FieldOption,
   type FilterChip,
   type GridDef,
   type GridView,
@@ -78,6 +79,20 @@ export interface QueryGridContextValue {
   facets: FacetStore;
   labels: LabelStore;
   columns: ColumnStore;
+  actions: QueryGridActions;
+}
+
+export interface QueryGridActions {
+  dispatch: (action: QueryAction) => void;
+  loadMore: () => void;
+  requestExact: () => void;
+  setView: (view: GridView) => void;
+  rememberLabel: (field: string, value: string, label: string) => void;
+  loadOptions: (
+    field: string,
+    text: string,
+    signal: AbortSignal,
+  ) => Promise<FieldOption[]>;
 }
 
 export interface QueryGridProviderProps {
@@ -126,16 +141,28 @@ function createValue(
   const persistence =
     props.columnPersistence ??
     createLocalStoragePersistence(`query-grid:${def.id}:columns`);
+  const feed = createFeed(store, source, props.pageSize ?? DEFAULT_PAGE_SIZE);
+  const counts = createCountStore(store, source);
+  const labels = createLabelStore(store, source);
   return {
     def,
     store,
     source,
-    feed: createFeed(store, source, props.pageSize ?? DEFAULT_PAGE_SIZE),
-    counts: createCountStore(store, source),
+    feed,
+    counts,
     totals: createTotalStore(store, source),
     facets: createFacetStore(store, source),
-    labels: createLabelStore(store, source),
+    labels,
     columns: createColumnStore(def.fields, persistence),
+    actions: {
+      dispatch: store.dispatch,
+      loadMore: feed.loadMore,
+      requestExact: counts.requestExact,
+      setView: store.setView,
+      rememberLabel: labels.remember,
+      loadOptions: (field, text, signal) =>
+        source.fetchOptions(field, { query: text }, signal),
+    },
   };
 }
 
@@ -203,6 +230,10 @@ export function useQueryGrid(): QueryGridContextValue {
   return value;
 }
 
+export function useQueryGridActions(): QueryGridActions {
+  return useQueryGrid().actions;
+}
+
 export function useQueryState(): QueryState {
   const { store } = useQueryGrid();
   return useStoreValue(store.subscribe, store.getQuery);
@@ -238,7 +269,7 @@ export function useOffers(): Offers {
 }
 
 export function useQueryDispatch(): (action: QueryAction) => void {
-  return useQueryGrid().store.dispatch;
+  return useQueryGridActions().dispatch;
 }
 
 export function useFeedState(): FeedState {

@@ -11,18 +11,20 @@ import {
   useOffers,
   useQueryDispatch,
   useQueryGrid,
+  useQueryGridActions,
   useQueryState,
 } from "../react/query-grid-provider.tsx";
 import { FieldFilter } from "./filters.tsx";
 
 function useRowWindow(): RowWindow {
-  const { def, feed } = useQueryGrid();
+  const { def } = useQueryGrid();
+  const { loadMore } = useQueryGridActions();
   const messages = useMessages();
   const state = useFeedState();
   return {
     rows: state.rows,
     hasNext: state.hasNext,
-    onEndReached: feed.loadMore,
+    onEndReached: loadMore,
     loading: state.status === "loading",
     error: state.error
       ? formatProblemMessage(messages, state.error, def.format)
