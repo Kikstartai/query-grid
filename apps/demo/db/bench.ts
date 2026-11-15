@@ -4,7 +4,9 @@ import { join } from "node:path";
 import {
   DEFAULT_LIMITS,
   defaultQuery,
+  EMPTY_VALUE,
   getField,
+  NOT_EMPTY_VALUE,
   resolveMaxValues,
   type GridRow,
   type IndexDef,
@@ -14,12 +16,14 @@ import {
   buildCappedCountSql,
   buildCappedTotalSql,
   buildFacetSql,
+  buildGroupSql,
   buildPageSql,
   buildRowSql,
   describeSearch,
   describeIndex,
   encodeCursor,
   listSearchSettings,
+  NARROW_SETTINGS,
   QUERY_CANCELED,
   TOTAL_SETTINGS,
   type SqlQuery,
@@ -28,11 +32,24 @@ import { Client } from "pg";
 
 import { ORDERS_GRID_DEF } from "../src/core/orders/orders-grid-def";
 
-const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? 30);
+const QUICK = process.argv.includes("--quick");
+const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? (QUICK ? 5 : 30));
+const NARROW_RUNS = Math.max(3, Math.ceil(RUNS / 2));
+const WARM_UPS = QUICK ? 1 : 3;
 const PAGE = 200;
 const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
+const NARROW_BUDGET_MS = 500;
+const NARROW_LADDER = [10_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
+const NO_MATCH = "zqxjzqxj";
 const MULTI_SIZES = [2, 5];
+const FILTERED_SEARCH_TERMS = [
+  "Smith",
+  "Mokoena",
+  "Zanele Dlam",
+  "mok",
+  "12345",
+];
 const SEARCH_TERMS = [
   "Smith",
   "Mokoena",
@@ -57,7 +74,13 @@ interface Explain {
   "Execution Time": number;
 }
 
-type ResultKind = "single" | "several" | "counter";
+type ResultKind =
+  | "single"
+  | "several"
+  | "counter"
+  | "empty"
+  | "search"
+  | "narrow";
 
 interface Result {
   index: string;
@@ -67,7 +90,17 @@ interface Result {
   p95: number;
   nodes: string;
   ok: boolean;
+  size?: number;
 }
+
+interface Bar {
+  budget: number;
+  runs: number;
+}
+
+const DEFAULT_BAR: Bar = { budget: BUDGET_MS, runs: RUNS };
+const SEARCH_BAR: Bar = { budget: DEFAULT_LIMITS.searchBudgetMs, runs: RUNS };
+const NARROW_BAR: Bar = { budget: NARROW_BUDGET_MS, runs: NARROW_RUNS };
 
 function flatten(node: PlanNode): PlanNode[] {
   return [node, ...(node.Plans ?? []).flatMap(flatten)];
@@ -86,12 +119,13 @@ async function measure(
   sql: SqlQuery,
   settings: string[] | null,
   kind: ResultKind = "single",
+  bar: Bar = DEFAULT_BAR,
 ): Promise<Result> {
   const label = typeof index === "string" ? index : describeIndex(index);
   const times: number[] = [];
   let plan: PlanNode[] = [];
   let refused = 0;
-  for (let run = 0; run < RUNS + 3; run++) {
+  for (let run = 0; run < bar.runs + WARM_UPS; run++) {
     if (settings) {
       await client.query(
         ["BEGIN", ...settings.map((item) => `SET LOCAL ${item}`)].join("; "),
@@ -116,7 +150,7 @@ async function measure(
     }
     const [explain] = explained.rows[0]["QUERY PLAN"];
     plan = flatten(explain.Plan);
-    if (run >= 3) {
+    if (run >= WARM_UPS) {
       times.push(explain["Planning Time"] + explain["Execution Time"]);
     }
   }
@@ -127,7 +161,7 @@ async function measure(
       variant,
       p50: Number.NaN,
       p95: Number.NaN,
-      nodes: `refused by the server in ${refused} of ${RUNS + 3} runs: over the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget`,
+      nodes: `refused by the server in ${refused} of ${bar.runs + WARM_UPS} runs: over the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget`,
       ok: true,
     };
   }
@@ -149,13 +183,22 @@ async function measure(
             : node["Node Type"],
         )
         .join(" → ") + (refused > 0 ? `; refused in ${refused} runs` : ""),
-    ok:
-      p95 < BUDGET_MS &&
-      (kind === "counter" ||
-        (scansByIndex &&
-          !types.includes("Seq Scan") &&
-          (kind === "several" || !types.includes("Sort")))),
+    ok: p95 < bar.budget && isPlanAllowed(kind, types, scansByIndex),
   };
+}
+
+function isPlanAllowed(
+  kind: ResultKind,
+  types: string[],
+  scansByIndex: boolean,
+): boolean {
+  if (kind === "counter" || kind === "empty" || kind === "narrow") {
+    return true;
+  }
+  if (!scansByIndex || types.includes("Seq Scan")) {
+    return false;
+  }
+  return kind !== "single" || !types.includes("Sort");
 }
 
 async function pickEqualsValues(
@@ -328,6 +371,9 @@ async function benchOrdered(
       TOTAL_SETTINGS,
     ),
   );
+  if (QUICK) {
+    return results;
+  }
   if (index.range) {
     const range =
       index.sort === "total"
@@ -365,7 +411,7 @@ async function benchSearch(
   search: string[],
 ): Promise<Result[]> {
   const results: Result[] = [];
-  for (const value of SEARCH_TERMS) {
+  for (const value of QUICK ? SEARCH_TERMS.slice(0, 2) : SEARCH_TERMS) {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID_DEF),
       search: value,
@@ -377,6 +423,8 @@ async function benchSearch(
         `“${value}”, capped page`,
         buildPageSql(ORDERS_GRID_DEF, query, PAGE),
         listSearchSettings(),
+        "single",
+        SEARCH_BAR,
       ),
     );
   }
@@ -397,6 +445,304 @@ async function benchCounters(client: Client): Promise<Result[]> {
       sql,
       null,
       "counter",
+    ),
+  ];
+}
+
+const BASE = defaultQuery(ORDERS_GRID_DEF);
+
+function listNullableIndexes(): IndexDef[] {
+  return ORDERS_GRID_DEF.indexes.filter(
+    (index) =>
+      index.equals.length === 1 &&
+      getField(ORDERS_GRID_DEF, index.equals[0])?.nullable === true,
+  );
+}
+
+async function benchEmpty(client: Client, index: IndexDef): Promise<Result[]> {
+  const [key] = index.equals;
+  const options = getField(ORDERS_GRID_DEF, key)?.options ?? [];
+  const [common] = options;
+  const rare = options[options.length - 1];
+  const everyone = options.map((option) => option.value);
+  const variants: [string, string[]][] = [
+    ["empty", [EMPTY_VALUE]],
+    ["not empty", [NOT_EMPTY_VALUE]],
+    ["empty or the most common value", [EMPTY_VALUE, common.value]],
+    ["empty or the rarest value", [EMPTY_VALUE, rare.value]],
+    ["empty or every value", [EMPTY_VALUE, ...everyone]],
+  ];
+  const picked = QUICK ? variants.slice(2, 3) : variants;
+  const results: Result[] = [];
+  for (const [name, values] of picked) {
+    const query: QueryState = {
+      ...BASE,
+      equals: { [key]: values },
+      sort: { field: index.sort, direction: "desc" },
+    };
+    results.push(
+      await measure(
+        client,
+        index,
+        `${name}: first page desc`,
+        buildPageSql(ORDERS_GRID_DEF, query, PAGE),
+        null,
+        "empty",
+      ),
+      await measure(
+        client,
+        index,
+        `${name}: capped count`,
+        buildCappedCountSql(ORDERS_GRID_DEF, query),
+        null,
+        "empty",
+      ),
+      await measure(
+        client,
+        index,
+        `${name}: capped total`,
+        buildCappedTotalSql(ORDERS_GRID_DEF, query),
+        TOTAL_SETTINGS,
+        "empty",
+      ),
+    );
+  }
+  return results;
+}
+
+function listSearchFilters(): [string, QueryState["equals"]][] {
+  const statuses = (
+    getField(ORDERS_GRID_DEF, "status_code")?.options ?? []
+  ).map((option) => option.value);
+  const [largest] = statuses;
+  const smallest = statuses[statuses.length - 1];
+  const filters: [string, QueryState["equals"]][] = [
+    [`status_code = ${largest}`, { status_code: [largest] }],
+    [`status_code = ${smallest}`, { status_code: [smallest] }],
+    [
+      `status_code ≠ ${largest}`,
+      { status_code: statuses.filter((value) => value !== largest) },
+    ],
+    [
+      "region and channel, which no index pairs",
+      {
+        region: ["gauteng"],
+        channel: ["web"],
+      },
+    ],
+    ["assignee empty", { assignee: [EMPTY_VALUE] }],
+  ];
+  return QUICK ? filters.slice(1, 2) : filters;
+}
+
+async function benchFilteredSearch(client: Client): Promise<Result[]> {
+  const results: Result[] = [];
+  const terms = QUICK
+    ? FILTERED_SEARCH_TERMS.slice(0, 1)
+    : FILTERED_SEARCH_TERMS;
+  for (const term of terms) {
+    for (const [name, equals] of listSearchFilters()) {
+      results.push(
+        await measure(
+          client,
+          `search with ${name}`,
+          `“${term}”, capped page`,
+          buildPageSql(
+            ORDERS_GRID_DEF,
+            { ...BASE, search: term, equals },
+            PAGE,
+          ),
+          listSearchSettings(),
+          "search",
+          SEARCH_BAR,
+        ),
+      );
+    }
+  }
+  return results;
+}
+
+async function pickBound(client: Client, size: number): Promise<string> {
+  const { rows } = await client.query<{ bound: string }>(
+    `SELECT to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS bound
+     FROM orders ORDER BY created_at DESC, id DESC OFFSET $1 LIMIT 1`,
+    [size - 1],
+  );
+  return rows[0].bound;
+}
+
+async function benchNarrowedSet(
+  client: Client,
+  size: number,
+  facetRows: number,
+): Promise<Result[]> {
+  const core: QueryState = {
+    ...BASE,
+    ranges: [
+      { field: "created_at", min: await pickBound(client, size), max: null },
+    ],
+  };
+  const smallest = (getField(ORDERS_GRID_DEF, "status_code")?.options ?? []).at(
+    -1,
+  );
+  const either: QueryState = {
+    ...BASE,
+    match: "any",
+    sort: { field: "total", direction: "desc" },
+    equals: { status_code: [smallest?.value ?? ""] },
+    ranges: [
+      {
+        field: "created_at",
+        min: await pickBound(client, Math.max(1, size - facetRows)),
+        max: null,
+      },
+    ],
+  };
+  const cases: [string, SqlQuery][] = [
+    [
+      "size probe: capped count of the indexed filters",
+      buildCappedCountSql(ORDERS_GRID_DEF, core, size),
+    ],
+    [
+      "contains, no match: first page",
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        { ...core, contains: { field: "customer_name", value: NO_MATCH } },
+        PAGE,
+      ),
+    ],
+    [
+      "contains, common text: first page",
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        { ...core, contains: { field: "customer_name", value: "mok" } },
+        PAGE,
+      ),
+    ],
+    [
+      "contains, no match: capped count",
+      buildCappedCountSql(ORDERS_GRID_DEF, {
+        ...core,
+        contains: { field: "customer_name", value: NO_MATCH },
+      }),
+    ],
+    [
+      "second range, no match: first page",
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        {
+          ...core,
+          ranges: [
+            ...core.ranges,
+            { field: "total", min: "999999999999", max: null },
+          ],
+        },
+        PAGE,
+      ),
+    ],
+    [
+      "second range, no match: capped count",
+      buildCappedCountSql(ORDERS_GRID_DEF, {
+        ...core,
+        ranges: [
+          ...core.ranges,
+          { field: "total", min: "999999999999", max: null },
+        ],
+      }),
+    ],
+    [
+      "match any, sorted by another field: first page",
+      buildPageSql(ORDERS_GRID_DEF, either, PAGE),
+    ],
+    ["match any: capped count", buildCappedCountSql(ORDERS_GRID_DEF, either)],
+    [
+      "group by region: live GROUP BY with both sums",
+      buildGroupSql(ORDERS_GRID_DEF, { ...core, group: "region" }),
+    ],
+    [
+      "group by customer: live GROUP BY with labels",
+      buildGroupSql(ORDERS_GRID_DEF, { ...core, group: "customer_id" }),
+    ],
+  ];
+  const picked = QUICK
+    ? cases.filter((_, at) => [0, 1, 6, 8].includes(at))
+    : cases;
+  const results: Result[] = [];
+  for (const [variant, sql] of picked) {
+    const result = await measure(
+      client,
+      "narrowed set",
+      variant,
+      sql,
+      NARROW_SETTINGS,
+      "narrow",
+      NARROW_BAR,
+    );
+    const informative = size > DEFAULT_LIMITS.narrowLimit;
+    results.push({ ...result, size, ok: result.ok || informative });
+  }
+  return results;
+}
+
+function listLadder(total: number): number[] {
+  if (QUICK) {
+    return [Math.min(DEFAULT_LIMITS.narrowLimit, total)];
+  }
+  const below = NARROW_LADDER.filter((size) => size < total);
+  return [...below, total];
+}
+
+async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
+  const counters = await client.query<{ rows: string }>(
+    `SELECT min(row_count) AS rows FROM ${ORDERS_GRID_DEF.facet.counterTable}`,
+  );
+  const results: Result[] = [];
+  for (const size of listLadder(total)) {
+    const batch = await benchNarrowedSet(
+      client,
+      size,
+      Number(counters.rows[0].rows),
+    );
+    results.push(...batch);
+    console.log(
+      `narrowed set of ${size.toLocaleString("en-US")}: ${batch.length} queries`,
+    );
+  }
+  return results;
+}
+
+function resolveNarrowLimit(results: Result[]): number {
+  const sizes = [...new Set(results.map((result) => result.size ?? 0))].sort(
+    (a, b) => a - b,
+  );
+  let limit = 0;
+  for (const size of sizes) {
+    const within = results
+      .filter((result) => result.size === size)
+      .every((result) => result.p95 < NARROW_BUDGET_MS);
+    if (!within) {
+      break;
+    }
+    limit = size;
+  }
+  return limit;
+}
+
+function toNarrowTable(results: Result[]): string[] {
+  const sizes = [...new Set(results.map((result) => result.size ?? 0))];
+  const variants = [...new Set(results.map((result) => result.variant))];
+  const cell = (variant: string, size: number) => {
+    const result = results.find(
+      (item) => item.variant === variant && item.size === size,
+    );
+    return result ? `${formatMs(result.p50)} / ${formatMs(result.p95)}` : "–";
+  };
+  return [
+    `| Operation | ${sizes.map((size) => size.toLocaleString("en-US")).join(" | ")} |`,
+    `| --- | ${sizes.map(() => "---:").join(" | ")} |`,
+    ...variants.map(
+      (variant) =>
+        `| ${variant} | ${sizes.map((size) => cell(variant, size)).join(" | ")} |`,
     ),
   ];
 }
@@ -425,11 +771,15 @@ function toMarkdown(results: Result[], total: number): string {
   const single = results.filter((result) => result.kind === "single");
   const several = results.filter((result) => result.kind === "several");
   const counters = results.filter((result) => result.kind === "counter");
+  const empty = results.filter((result) => result.kind === "empty");
+  const searched = results.filter((result) => result.kind === "search");
+  const narrowed = results.filter((result) => result.kind === "narrow");
+  const narrowLimit = resolveNarrowLimit(narrowed);
   const optedOut = ORDERS_GRID_DEF.indexes
     .filter((index) => index.multi === false)
     .map(describeIndex);
   const lines = [
-    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after 3 warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
+    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after ${WARM_UPS} warm-ups (${NARROW_RUNS} runs for the narrowed-set ladder); time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
     "",
     `## One value per field: ${summarize(single)}`,
     "",
@@ -450,6 +800,26 @@ function toMarkdown(results: Result[], total: number): string {
     optedOut.length > 0
       ? `Indexes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
       : "No index is declared `multi: false`.",
+    "",
+    `## Empty values: ${summarize(empty)}`,
+    "",
+    "Each index on a nullable field, with empty, not empty, and empty beside real values, as a first page, a capped count and a capped total. The bar is the p95 budget alone: a mixed list reads through whichever plan stops first, and the plan is shown.",
+    "",
+    ...toTable(empty),
+    "",
+    `## Search with equality filters: ${summarize(searched)}`,
+    "",
+    `Each term beside each filter, under the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget. The bar is that budget and an index scan; a run the server refuses at the budget is counted in the plan column.`,
+    "",
+    ...toTable(searched),
+    "",
+    `## Narrowed set: ${summarize(narrowed)}`,
+    "",
+    `Each expensive operation over a set of rows the indexed filters leave, for a ladder of set sizes, as p50 / p95. The set is the newest orders, bounded on \`created_at\`. The bar is a p95 under ${NARROW_BUDGET_MS} ms at every size up to \`narrowLimit\`; larger sizes are measured to place the limit.`,
+    "",
+    ...toNarrowTable(narrowed),
+    "",
+    `Largest set size where every operation's p95 is under ${NARROW_BUDGET_MS} ms: ${narrowLimit.toLocaleString("en-US")}. \`DEFAULT_LIMITS.narrowLimit\` is ${DEFAULT_LIMITS.narrowLimit.toLocaleString("en-US")}.`,
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -462,12 +832,25 @@ async function main(): Promise<void> {
   const count = await client.query<{ count: string }>(
     "SELECT sum(row_count) AS count FROM order_status_counts",
   );
+  const total = Number(count.rows[0].count);
   const results: Result[] = [];
-  for (const index of ORDERS_GRID_DEF.indexes) {
+  const indexes = QUICK
+    ? ORDERS_GRID_DEF.indexes.slice(0, 3)
+    : ORDERS_GRID_DEF.indexes;
+  for (const index of indexes) {
     const batch = await benchOrdered(client, index);
     results.push(...batch);
     console.log(`${describeIndex(index)}: ${batch.length} queries`);
   }
+  for (const index of listNullableIndexes()) {
+    const batch = await benchEmpty(client, index);
+    results.push(...batch);
+    console.log(`empty values on ${index.equals[0]}: ${batch.length} queries`);
+  }
+  const filtered = await benchFilteredSearch(client);
+  results.push(...filtered);
+  console.log(`search with equality filters: ${filtered.length} queries`);
+  results.push(...(await benchNarrowed(client, total)));
   const search = await benchSearch(client, ORDERS_GRID_DEF.search);
   results.push(...search);
   console.log(
@@ -477,10 +860,16 @@ async function main(): Promise<void> {
   results.push(...counters);
   console.log(`counter table: ${counters.length} queries`);
   await client.end();
-  const markdown = toMarkdown(results, Number(count.rows[0].count));
-  writeFileSync(join(import.meta.dir, "bench-results.md"), markdown);
-  console.log(markdown);
-  if (results.some((result) => !result.ok)) {
+  const failed = results.filter((result) => !result.ok);
+  if (QUICK) {
+    console.log(toTable(results).join("\n"));
+    console.log(`quick check: ${summarize(results)}`);
+  } else {
+    const markdown = toMarkdown(results, total);
+    writeFileSync(join(import.meta.dir, "bench-results.md"), markdown);
+    console.log(markdown);
+  }
+  if (failed.length > 0) {
     process.exit(1);
   }
 }

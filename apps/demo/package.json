@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "db:bench": "bun --env-file=.env.local db/bench.ts",
+    "db:bench:quick": "bun --env-file=.env.local db/bench.ts --quick",
     "db:check": "bun db/generate-migration.ts --check",
     "db:generate": "bun db/generate-migration.ts",
     "db:migrate": "bun --env-file=.env.local db/setup.ts --migrate-only",
