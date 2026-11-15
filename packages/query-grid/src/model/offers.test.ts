@@ -119,9 +119,7 @@ describe("offers from declared indexes", () => {
 
   test("an index that opts out offers one value only", () => {
     const single: IndexDef[] = INDEXES.map((index) =>
-      "equals" in index && index.equals.includes("region")
-        ? { ...index, multi: false }
-        : index,
+      index.equals.includes("region") ? { ...index, multi: false } : index,
     );
     const rules: QueryRules = {
       capabilities: indexCapabilities(single),

@@ -32,7 +32,7 @@ export {
   type IndexDdl,
   type TableMigration,
 } from "./schema-ddl.ts";
-export { describeQuick, describeIndex, validateGridDef } from "./indexes.ts";
+export { describeQuick, describeIndex, validateGridDef } from "./index-defs.ts";
 export {
   assertDeclared,
   buildCappedCountSql,

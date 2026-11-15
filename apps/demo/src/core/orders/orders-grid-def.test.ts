@@ -60,13 +60,12 @@ describe("orders grid def", () => {
         Object.values(state.equals).some((values) => values.length > 1),
       );
       const multiIndexes = INDEXES.filter(
-        (index) =>
-          "equals" in index && index.equals.length > 0 && index.multi !== false,
+        (index) => index.equals.length > 0 && index.multi !== false,
       );
       expect(several.length > 0).toBe(multiIndexes.length > 0);
       for (const state of several) {
         const index = getIndex(INDEXES, state);
-        expect(index !== null && "equals" in index).toBe(true);
+        expect(index).not.toBeNull();
       }
     }
   });

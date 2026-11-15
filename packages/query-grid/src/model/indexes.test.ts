@@ -48,9 +48,7 @@ describe("getIndex", () => {
     const several = { ...BASE, equals: { status: ["open", "done"] } };
     expect(getIndex(INDEXES, several)).toEqual(INDEXES[2]);
     const single = INDEXES.map((index) =>
-      "equals" in index && index.equals.includes("status")
-        ? { ...index, multi: false }
-        : index,
+      index.equals.includes("status") ? { ...index, multi: false } : index,
     );
     expect(getIndex(single, several)).toBeNull();
     expect(

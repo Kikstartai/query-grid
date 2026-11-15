@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TEST_DEF } from "./grid-def.fixture.ts";
-import { validateGridDef } from "./indexes.ts";
+import { validateGridDef } from "./index-defs.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
 describe("validateGridDef", () => {

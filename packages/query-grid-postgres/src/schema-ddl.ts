@@ -4,7 +4,7 @@ import {
   type IndexDef,
 } from "@kikstart/query-grid";
 
-import { describeQuick, describeIndex, validateGridDef } from "./indexes.ts";
+import { describeQuick, describeIndex, validateGridDef } from "./index-defs.ts";
 import {
   identifier,
   quickExpression,
@@ -86,7 +86,7 @@ function indexDdl(
   const create = createIndex(concurrently);
   const columns = [...index.equals, index.sort, KEY_FIELD]
     .map(identifier)
-    .filter((column, index, all) => all.indexOf(column) === index);
+    .filter((column, position, all) => all.indexOf(column) === position);
   const name = shortenIdentifier(
     `${table}_qs_${[...index.equals, index.sort].join("__")}`,
   );
