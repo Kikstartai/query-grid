@@ -298,6 +298,20 @@ function FeedProgress() {
   return <span data-status="feed" />;
 }
 
+function LoadedText() {
+  const { props } = useDataGrid();
+  const messages = useMessages();
+  const loaded = props.rows.length;
+  if (props.loading && loaded === 0) {
+    return null;
+  }
+  return (
+    <bdi data-status="loaded" data-value={loaded}>
+      {formatLoaded(messages, loaded, props.pages, props.format)}
+    </bdi>
+  );
+}
+
 function SelectAll() {
   const { props, handle } = useDataGrid();
   const messages = useMessages();
@@ -374,11 +388,9 @@ function DataGridToolbar({ children }: DataGridToolbarProps) {
 }
 
 function DataGridStatus() {
-  const { props, handle } = useDataGrid();
+  const { handle } = useDataGrid();
   const messages = useMessages();
   const none = (value: string) => (value === "none" ? messages.none : value);
-  const loaded = props.rows.length;
-  const loadedText = formatLoaded(messages, loaded, props.pages, props.format);
   return usePart(
     handle,
     "status",
@@ -388,19 +400,21 @@ function DataGridStatus() {
         className: "qg-status",
         children: (status: SheetStatus) => (
           <>
-            <bdi data-status="loaded" data-value={loaded}>
-              {loadedText}
-            </bdi>
-            <FeedProgress />
-            <bdi data-status="selected" data-value={status.selectedCount}>
-              {messages.selected({ count: status.selectedCount })}
-            </bdi>
-            <bdi data-status="active" data-value={status.active}>
-              {messages.activeCell({ cell: none(status.active) })}
-            </bdi>
-            <bdi data-status="range" data-value={status.range}>
-              {messages.cellRange({ range: none(status.range) })}
-            </bdi>
+            <span className="qg-status-feed">
+              <LoadedText />
+              <FeedProgress />
+            </span>
+            <span className="qg-status-sheet">
+              <bdi data-status="selected" data-value={status.selectedCount}>
+                {messages.selected({ count: status.selectedCount })}
+              </bdi>
+              <bdi data-status="active" data-value={status.active}>
+                {messages.activeCell({ cell: none(status.active) })}
+              </bdi>
+              <bdi data-status="range" data-value={status.range}>
+                {messages.cellRange({ range: none(status.range) })}
+              </bdi>
+            </span>
             <pre data-status="copied" hidden>
               {status.copied}
             </pre>

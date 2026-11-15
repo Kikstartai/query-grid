@@ -119,9 +119,11 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(render(<DataGrid fields={TEST_FIELDS} {...empty} />)).toContain(
       "No rows match.",
     );
-    expect(
-      render(<DataGrid fields={TEST_FIELDS} {...empty} loading />),
-    ).toContain("Loading…");
+    const loading = render(
+      <DataGrid fields={TEST_FIELDS} {...empty} loading />,
+    );
+    expect(loading).toContain("Loading…");
+    expect(loading).not.toContain('data-status="loaded"');
     expect(
       render(<DataGrid fields={TEST_FIELDS} {...empty} error="It broke" />),
     ).toContain("It broke");
@@ -366,6 +368,7 @@ describe("each base component mounts alone, with plain props and no provider", (
     );
     expect(html).toContain('data-view="list"');
     expect(html).toContain('aria-label="View"');
+    expect(html).not.toContain("segmented-control-indicator");
   });
 
   test("CountDisplay", () => {

@@ -72,10 +72,11 @@ export function FacetPanel() {
   if (!field?.options) {
     return null;
   }
-  const showCounts = capabilities.isFacetCountShown(query);
+  const counted = capabilities.isFacetCountShown(query);
+  const showCounts = counted && facets.result.length > 0;
   const countOf = (value: string) =>
     facets.result.find((item) => item.value === value)?.count ?? 0;
-  const shown = showCounts ? "counter" : "hidden";
+  const shown = counted ? "counter" : "hidden";
   return (
     <BaseFacetPanel
       label={field.label}

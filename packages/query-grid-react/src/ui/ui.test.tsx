@@ -9,6 +9,7 @@ import { TEST_GRID_DEF, TEST_ROWS } from "../components/fields.fixture.ts";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
 import { ColumnsMenu, DataGrid } from "./data-grid.tsx";
 import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
+import { FacetPanel } from "./summaries.tsx";
 
 const DEF = TEST_GRID_DEF;
 const source = createMemorySource(DEF, TEST_ROWS, { quick: ["name"] });
@@ -45,6 +46,14 @@ describe("the bound DataGrid", () => {
     expect(html).not.toContain("qg-grid-toolbar");
     expect(html).toContain('data-part="grid-scroller"');
     expect(html.match(/columns-menu-trigger/g)).toHaveLength(1);
+  });
+});
+
+describe("the bound FacetPanel", () => {
+  test("it shows no count before the facet counts have loaded", () => {
+    const html = render(<FacetPanel />);
+    expect(html).toContain('data-facet="open"');
+    expect(html.match(/data-facet-count="true"><\/bdi>/g)).toHaveLength(3);
   });
 });
 

@@ -419,11 +419,11 @@ run_shift() {
   done
 
   say "Layout shift"
-  local shift="new Promise((resolve) => { let total = 0; new PerformanceObserver((list) => { for (const entry of list.getEntries()) { if (!entry.hadRecentInput) { total += entry.value; } } }).observe({ type: 'layout-shift', buffered: true }); setTimeout(() => resolve(total.toFixed(4)), 300); })"
+  local shift="new Promise((resolve) => { let total = 0; new PerformanceObserver((list) => { for (const entry of list.getEntries()) { total += entry.value; } }).observe({ type: 'layout-shift', buffered: true }); setTimeout(() => resolve(total.toFixed(4)), 300); })"
   go "/orders" 4; reset_columns
   for size in "1500 900" "800 900"; do
     ab set viewport $size >/dev/null
-    for path in "/orders" "/orders?f.status_code=paid&sort=total.desc" "/orders?view=list" "/orders?view=board" "/memory" "/restyled" "/rtl" "/parts/grid" "/components"; do
+    for path in "/orders" "/orders?f.status_code=paid&sort=total.desc" "/orders?view=list" "/orders?view=board" "/memory" "/memory?view=board" "/restyled" "/rtl" "/rtl?view=list" "/parts/grid" "/parts/facets" "/components"; do
       go "$path" 6
       note "$size $path" "cumulative layout shift $(js "$shift")"
     done
