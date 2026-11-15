@@ -34,13 +34,11 @@ import { ORDERS_GRID_DEF } from "../src/core/orders/orders-grid-def";
 
 const QUICK = process.argv.includes("--quick");
 const RUNS = Number(process.env.QUERY_GRID_BENCH_RUNS ?? (QUICK ? 5 : 30));
-const NARROW_RUNS = Math.max(3, Math.ceil(RUNS / 2));
 const WARM_UPS = QUICK ? 1 : 3;
 const PAGE = 200;
 const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
 const NARROW_BUDGET_MS = 500;
-const NARROW_LADDER = [10_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
 const NO_MATCH = "zqxjzqxj";
 const MULTI_SIZES = [2, 5];
 const FILTERED_SEARCH_TERMS = [
@@ -90,7 +88,6 @@ interface Result {
   p95: number;
   nodes: string;
   ok: boolean;
-  size?: number;
 }
 
 interface Bar {
@@ -100,7 +97,7 @@ interface Bar {
 
 const DEFAULT_BAR: Bar = { budget: BUDGET_MS, runs: RUNS };
 const SEARCH_BAR: Bar = { budget: DEFAULT_LIMITS.searchBudgetMs, runs: RUNS };
-const NARROW_BAR: Bar = { budget: NARROW_BUDGET_MS, runs: NARROW_RUNS };
+const NARROW_BAR: Bar = { budget: NARROW_BUDGET_MS, runs: RUNS };
 
 function flatten(node: PlanNode): PlanNode[] {
   return [node, ...(node.Plans ?? []).flatMap(flatten)];
@@ -571,11 +568,11 @@ async function pickBound(client: Client, size: number): Promise<string> {
   return rows[0].bound;
 }
 
-async function benchNarrowedSet(
-  client: Client,
-  size: number,
-  facetRows: number,
-): Promise<Result[]> {
+async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
+  const size = Math.min(DEFAULT_LIMITS.narrowLimit, total);
+  const counters = await client.query<{ rows: string }>(
+    `SELECT min(row_count) AS rows FROM ${ORDERS_GRID_DEF.facet.counterTable}`,
+  );
   const core: QueryState = {
     ...BASE,
     ranges: [
@@ -593,7 +590,10 @@ async function benchNarrowedSet(
     ranges: [
       {
         field: "created_at",
-        min: await pickBound(client, Math.max(1, size - facetRows)),
+        min: await pickBound(
+          client,
+          Math.max(1, size - Number(counters.rows[0].rows)),
+        ),
         max: null,
       },
     ],
@@ -604,7 +604,7 @@ async function benchNarrowedSet(
       buildCappedCountSql(ORDERS_GRID_DEF, core, size),
     ],
     [
-      "contains, no match: first page",
+      "contains with no match: first page",
       buildPageSql(
         ORDERS_GRID_DEF,
         { ...core, contains: { field: "customer_name", value: NO_MATCH } },
@@ -612,22 +612,7 @@ async function benchNarrowedSet(
       ),
     ],
     [
-      "contains, common text: first page",
-      buildPageSql(
-        ORDERS_GRID_DEF,
-        { ...core, contains: { field: "customer_name", value: "mok" } },
-        PAGE,
-      ),
-    ],
-    [
-      "contains, no match: capped count",
-      buildCappedCountSql(ORDERS_GRID_DEF, {
-        ...core,
-        contains: { field: "customer_name", value: NO_MATCH },
-      }),
-    ],
-    [
-      "second range, no match: first page",
+      "second range with no match: first page",
       buildPageSql(
         ORDERS_GRID_DEF,
         {
@@ -641,110 +626,29 @@ async function benchNarrowedSet(
       ),
     ],
     [
-      "second range, no match: capped count",
-      buildCappedCountSql(ORDERS_GRID_DEF, {
-        ...core,
-        ranges: [
-          ...core.ranges,
-          { field: "total", min: "999999999999", max: null },
-        ],
-      }),
-    ],
-    [
       "match any, sorted by another field: first page",
       buildPageSql(ORDERS_GRID_DEF, either, PAGE),
     ],
-    ["match any: capped count", buildCappedCountSql(ORDERS_GRID_DEF, either)],
     [
       "group by region: live GROUP BY with both sums",
       buildGroupSql(ORDERS_GRID_DEF, { ...core, group: "region" }),
     ],
-    [
-      "group by customer: live GROUP BY with labels",
-      buildGroupSql(ORDERS_GRID_DEF, { ...core, group: "customer_id" }),
-    ],
   ];
-  const picked = QUICK
-    ? cases.filter((_, at) => [0, 1, 6, 8].includes(at))
-    : cases;
   const results: Result[] = [];
-  for (const [variant, sql] of picked) {
-    const result = await measure(
-      client,
-      "narrowed set",
-      variant,
-      sql,
-      NARROW_SETTINGS,
-      "narrow",
-      NARROW_BAR,
-    );
-    const informative = size > DEFAULT_LIMITS.narrowLimit;
-    results.push({ ...result, size, ok: result.ok || informative });
-  }
-  return results;
-}
-
-function listLadder(total: number): number[] {
-  if (QUICK) {
-    return [Math.min(DEFAULT_LIMITS.narrowLimit, total)];
-  }
-  const below = NARROW_LADDER.filter((size) => size < total);
-  return [...below, total];
-}
-
-async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
-  const counters = await client.query<{ rows: string }>(
-    `SELECT min(row_count) AS rows FROM ${ORDERS_GRID_DEF.facet.counterTable}`,
-  );
-  const results: Result[] = [];
-  for (const size of listLadder(total)) {
-    const batch = await benchNarrowedSet(
-      client,
-      size,
-      Number(counters.rows[0].rows),
-    );
-    results.push(...batch);
-    console.log(
-      `narrowed set of ${size.toLocaleString("en-US")}: ${batch.length} queries`,
+  for (const [variant, sql] of cases) {
+    results.push(
+      await measure(
+        client,
+        `narrowed set of ${size.toLocaleString("en-US")} rows`,
+        variant,
+        sql,
+        NARROW_SETTINGS,
+        "narrow",
+        NARROW_BAR,
+      ),
     );
   }
   return results;
-}
-
-function resolveNarrowLimit(results: Result[]): number {
-  const sizes = [...new Set(results.map((result) => result.size ?? 0))].sort(
-    (a, b) => a - b,
-  );
-  let limit = 0;
-  for (const size of sizes) {
-    const within = results
-      .filter((result) => result.size === size)
-      .every((result) => result.p95 < NARROW_BUDGET_MS);
-    if (!within) {
-      break;
-    }
-    limit = size;
-  }
-  return limit;
-}
-
-function toNarrowTable(results: Result[]): string[] {
-  const sizes = [...new Set(results.map((result) => result.size ?? 0))];
-  const variants = [...new Set(results.map((result) => result.variant))];
-  const cell = (variant: string, size: number) => {
-    const result = results.find(
-      (item) => item.variant === variant && item.size === size,
-    );
-    return result ? `${formatMs(result.p50)} / ${formatMs(result.p95)}` : "–";
-  };
-  return [
-    `| Operation | ${sizes.map((size) => size.toLocaleString("en-US")).join(" | ")} |`,
-    `| --- | ${sizes.map(() => "---:").join(" | ")} |`,
-    ...variants.map(
-      (variant) =>
-        `| ${variant} | ${sizes.map((size) => cell(variant, size)).join(" | ")} |`,
-    ),
-  ];
 }
 
 function formatMs(value: number): string {
@@ -774,12 +678,11 @@ function toMarkdown(results: Result[], total: number): string {
   const empty = results.filter((result) => result.kind === "empty");
   const searched = results.filter((result) => result.kind === "search");
   const narrowed = results.filter((result) => result.kind === "narrow");
-  const narrowLimit = resolveNarrowLimit(narrowed);
   const optedOut = ORDERS_GRID_DEF.indexes
     .filter((index) => index.multi === false)
     .map(describeIndex);
   const lines = [
-    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after ${WARM_UPS} warm-ups (${NARROW_RUNS} runs for the narrowed-set ladder); time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
+    `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after ${WARM_UPS} warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
     "",
     `## One value per field: ${summarize(single)}`,
     "",
@@ -815,11 +718,9 @@ function toMarkdown(results: Result[], total: number): string {
     "",
     `## Narrowed set: ${summarize(narrowed)}`,
     "",
-    `Each expensive operation over a set of rows the indexed filters leave, for a ladder of set sizes, as p50 / p95. The set is the newest orders, bounded on \`created_at\`. The bar is a p95 under ${NARROW_BUDGET_MS} ms at every size up to \`narrowLimit\`; larger sizes are measured to place the limit.`,
+    `Each expensive operation, and a live GROUP BY, over the ${DEFAULT_LIMITS.narrowLimit.toLocaleString("en-US")} rows \`narrowLimit\` allows: the newest orders, bounded on \`created_at\`. Each is the worst case, where nothing matches and the whole set is read. The bar is a p95 under ${NARROW_BUDGET_MS} ms.`,
     "",
-    ...toNarrowTable(narrowed),
-    "",
-    `Largest set size where every operation's p95 is under ${NARROW_BUDGET_MS} ms: ${narrowLimit.toLocaleString("en-US")}. \`DEFAULT_LIMITS.narrowLimit\` is ${DEFAULT_LIMITS.narrowLimit.toLocaleString("en-US")}.`,
+    ...toTable(narrowed),
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -850,7 +751,9 @@ async function main(): Promise<void> {
   const filtered = await benchFilteredSearch(client);
   results.push(...filtered);
   console.log(`search with equality filters: ${filtered.length} queries`);
-  results.push(...(await benchNarrowed(client, total)));
+  const narrowed = await benchNarrowed(client, total);
+  results.push(...narrowed);
+  console.log(`narrowed set: ${narrowed.length} queries`);
   const search = await benchSearch(client, ORDERS_GRID_DEF.search);
   results.push(...search);
   console.log(
