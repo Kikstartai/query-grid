@@ -2,6 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import {
   getFacetField,
   getField,
+  isRangeType,
   type Capabilities,
   type BaseFieldDef,
   type FieldOption,
@@ -26,15 +27,21 @@ export function memoryCapabilities(
   def: BaseGridDef,
   quickFields: string[] = [],
 ): Capabilities {
-  const offers = (key: string, operator: "eq" | "range") =>
-    getField(def, key)?.operators.includes(operator) === true;
+  const ranged = (field: BaseFieldDef) =>
+    isRangeType(field.type) && !field.options;
+  const rangeFields = def.fields.filter(ranged).map((field) => field.key);
+  const equalsFields = def.fields
+    .filter((field) => !ranged(field))
+    .map((field) => field.key);
   return {
     mode: "memory",
     isAnswerable: (query) =>
-      Object.keys(query.equals).every((key) => offers(key, "eq")) &&
-      (query.range === null || offers(query.range.field, "range")) &&
+      Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
+      (query.range === null || rangeFields.includes(query.range.field)) &&
       (query.quick === null || quickFields.length > 0) &&
       getField(def, query.sort.field) !== null,
+    equalsFields,
+    rangeFields,
     sortFields: def.fields.map((field) => field.key),
     quickFields,
     isFacetCountShown: () => true,

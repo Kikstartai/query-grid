@@ -44,6 +44,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 ## Library rules
 
 - The library has no domain names. A host passes its defs in; nothing in `packages/` imports one.
+- What may be filtered comes from the data alone: the shapes on a server grid, every field on a client grid. A field def carries no operators. Which filters show is a layout prop (`fields` on the bound `FilterBar` and `FilterSidebar`), never part of a def.
 - One def per grid; each package reads its slice. The types are layers with unique names: core `BaseGridDef` and `BaseFieldDef`, react `GridDef` and `FieldDef` (plus `cell`), postgres `PostgresGridDef` (plus `table`, `shapes`, `facet.counterTable`). A grid def constant ends in `_GRID_DEF`.
 - There is one query contract, in core. The other two packages import it and never copy it.
 - Core imports no React, no DOM global and no `pg`. The postgres package imports no React and no `pg`.

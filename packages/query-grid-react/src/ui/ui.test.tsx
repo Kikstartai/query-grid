@@ -76,6 +76,21 @@ describe("the bound filter containers", () => {
     expect(html).not.toContain('data-field="status"');
   });
 
+  test("fields picks the filters a container shows, in that order", () => {
+    const html = render(<FilterBar fields={["region", "status"]} />);
+    const shown = [...html.matchAll(/data-field="([a-z_]+)"/g)].map(
+      (match) => match[1],
+    );
+    expect(shown).toEqual(["quick", "region", "status", "sort"]);
+  });
+
+  test("without fields a client grid shows a filter for every field", () => {
+    const html = render(<FilterBar />);
+    for (const field of DEF.fields) {
+      expect(html).toContain(`data-field="${field.key}"`);
+    }
+  });
+
   test("FilterSidebar takes children the same way", () => {
     expect(
       render(

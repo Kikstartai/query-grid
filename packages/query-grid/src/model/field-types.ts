@@ -6,8 +6,6 @@ export type FieldType =
   | "money"
   | "datetime";
 
-export type FilterOperator = "eq" | "range";
-
 export type SortDirection = "asc" | "desc";
 
 export type QueryMode = "server" | "memory";
@@ -27,7 +25,6 @@ export interface BaseFieldDef {
   key: string;
   label: string;
   type: FieldType;
-  operators: FilterOperator[];
   nullable?: boolean;
   options?: FieldOption[];
   lookup?: FieldLookup;
@@ -82,6 +79,8 @@ export interface QueryState {
 export interface Capabilities {
   mode: QueryMode;
   isAnswerable: (query: QueryState) => boolean;
+  equalsFields: string[];
+  rangeFields: string[];
   sortFields: string[];
   quickFields: string[];
   isFacetCountShown: (query: QueryState) => boolean;
@@ -108,8 +107,14 @@ export function getFacetField<F extends BaseFieldDef>(
   return def.facet ? getField(def, def.facet.field) : null;
 }
 
+const RANGE_TYPES: FieldType[] = ["integer", "money", "datetime"];
+
+export function isRangeType(type: FieldType): boolean {
+  return RANGE_TYPES.includes(type);
+}
+
 export function isLookupField(field: BaseFieldDef): boolean {
-  return field.operators.includes("eq") && !field.options;
+  return !field.options;
 }
 
 export function getFieldLabel(def: BaseGridDef, key: string): string {
@@ -118,14 +123,14 @@ export function getFieldLabel(def: BaseGridDef, key: string): string {
 
 export type FilterKind = "lookup" | "equals" | "range";
 
-export function resolveFilterKind(field: BaseFieldDef): FilterKind | null {
-  if (isLookupField(field)) {
-    return "lookup";
+export function resolveFilterKind(
+  field: BaseFieldDef,
+  capabilities: Capabilities,
+): FilterKind | null {
+  if (capabilities.equalsFields.includes(field.key)) {
+    return isLookupField(field) ? "lookup" : "equals";
   }
-  if (field.operators.includes("eq")) {
-    return "equals";
-  }
-  if (field.operators.includes("range")) {
+  if (capabilities.rangeFields.includes(field.key)) {
     return "range";
   }
   return null;
@@ -133,8 +138,11 @@ export function resolveFilterKind(field: BaseFieldDef): FilterKind | null {
 
 export function listFilterFields<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
+  capabilities: Capabilities,
 ): F[] {
-  return def.fields.filter((field) => resolveFilterKind(field) !== null);
+  return def.fields.filter(
+    (field) => resolveFilterKind(field, capabilities) !== null,
+  );
 }
 
 export function isDefaultSort(def: BaseGridDef, sort: SortState): boolean {

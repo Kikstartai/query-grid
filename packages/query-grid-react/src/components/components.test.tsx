@@ -31,7 +31,7 @@ const noop = () => undefined;
 const STATUS = TEST_FIELDS.find((field) => field.key === "status")!;
 const TOTAL = TEST_FIELDS.find((field) => field.key === "total")!;
 const CREATED = TEST_FIELDS.find((field) => field.key === "created_at")!;
-const NAME = { ...TEST_FIELDS[6], operators: ["eq" as const] };
+const NAME = { ...TEST_FIELDS[6] };
 const ROW_WINDOW = {
   rows: TEST_ROWS,
   hasNext: false,

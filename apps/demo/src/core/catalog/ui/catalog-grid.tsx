@@ -18,18 +18,17 @@ const KINDS = [
 ];
 
 const FIELDS: BaseFieldDef[] = [
-  { key: "name", label: "Name", type: "text", operators: [], width: 220 },
+  { key: "name", label: "Name", type: "text", width: 220 },
   {
     key: "kind",
     label: "Kind",
     type: "enum",
-    operators: [],
     options: KINDS,
     width: 140,
   },
-  { key: "price", label: "Price", type: "money", operators: [], width: 120 },
-  { key: "stock", label: "Stock", type: "integer", operators: [], width: 100 },
-  { key: "id", label: "ID", type: "text", operators: [], hidden: true },
+  { key: "price", label: "Price", type: "money", width: 120 },
+  { key: "stock", label: "Stock", type: "integer", width: 100 },
+  { key: "id", label: "ID", type: "text", hidden: true },
 ];
 
 const NAMES = [

@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 
+import { gridDefCapabilities } from "@kikstart/query-grid";
+
 import {
   CountDisplay,
   DataGrid,
@@ -29,7 +31,10 @@ function RestyledSkeleton() {
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters def={ORDERS_GRID_DEF} />
+        <SkeletonFilters
+          def={ORDERS_GRID_DEF}
+          capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
+        />
         <SkeletonChips />
         <SkeletonGrid />
       </div>

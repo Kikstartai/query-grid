@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import {
   explainUnavailable,
+  getField,
   getFieldLabel,
   labelKey,
   listFilterFields,
@@ -115,7 +116,8 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
 }
 
 export function FieldFilter(props: FieldFilterProps) {
-  switch (resolveFilterKind(props.field)) {
+  const { source } = useQueryGrid();
+  switch (resolveFilterKind(props.field, source.capabilities)) {
     case "lookup":
       return <BoundLookupFilter {...props} />;
     case "equals":
@@ -212,12 +214,19 @@ export function FilterChips() {
   );
 }
 
-function DefaultFilters() {
-  const { def } = useQueryGrid();
+interface DefaultFiltersProps {
+  fields?: string[];
+}
+
+function DefaultFilters({ fields }: DefaultFiltersProps) {
+  const { def, source } = useQueryGrid();
+  const shown = fields
+    ? fields.flatMap((key) => getField(def, key) ?? [])
+    : listFilterFields(def, source.capabilities);
   return (
     <>
       <QuickFilter />
-      {listFilterFields(def).map((field) => (
+      {shown.map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
       <SortControl />
@@ -226,20 +235,31 @@ function DefaultFilters() {
 }
 
 export interface FilterBarProps {
+  fields?: string[];
   children?: ReactNode;
 }
 
-export function FilterBar({ children }: FilterBarProps) {
-  return <BaseFilterBar>{children ?? <DefaultFilters />}</BaseFilterBar>;
+export function FilterBar({ fields, children }: FilterBarProps) {
+  return (
+    <BaseFilterBar>
+      {children ?? <DefaultFilters fields={fields} />}
+    </BaseFilterBar>
+  );
 }
 
 export interface FilterSidebarProps {
   side?: "start" | "end";
   label?: string;
+  fields?: string[];
   children?: ReactNode;
 }
 
-export function FilterSidebar({ side, label, children }: FilterSidebarProps) {
+export function FilterSidebar({
+  side,
+  label,
+  fields,
+  children,
+}: FilterSidebarProps) {
   const { dispatch } = useQueryGridActions();
   const chips = useFilterChips();
   return (
@@ -249,7 +269,7 @@ export function FilterSidebar({ side, label, children }: FilterSidebarProps) {
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      {children ?? <DefaultFilters />}
+      {children ?? <DefaultFilters fields={fields} />}
     </BaseFilterSidebar>
   );
 }

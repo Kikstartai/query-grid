@@ -63,7 +63,7 @@ There is **one query contract**, in core. `-react` and `-postgres` both import i
 
 - **Persistence key:** the client GridDef gets an explicit `id`, which replaces `def.table` in the column persistence key (`react/query-grid-provider.tsx:112`).
 - **What the client def drops:** the client def carries no `table`, `shapes` or `counterTable`. What the client needs from shapes arrives as **capabilities**.
-- **One field description type** (Q2) drives the grid and the filters: key, label, type, operators, options, lookup, width, pinned, hidden, wrap, nullable. The React-free type lives in core, and `-react` extends it with `cell`.
+- **One field description type** (Q2) drives the grid and the filters: key, label, type, operators (dropped in 0.3.0), options, lookup, width, pinned, hidden, wrap, nullable. The React-free type lives in core, and `-react` extends it with `cell`.
   - The host declared its fields once, in a React-free module. Since 0.3.0 the rule is one def per grid, and each package reads its slice (see the 0.3.0 section).
   - The server def is those fields plus storage.
   - The client def is those fields plus cells.
@@ -145,6 +145,7 @@ Filters stay AND-combined, and there is still no cross-field OR. Within one fiel
 ## Deferred
 
 - a separate components npm package
+- runtime add and remove of filters (a "+ Add filter" menu over the allowed fields): model it on `ColumnsMenu` and the column state, with the bound containers' `fields` as the initial list and the user's list kept through the same persistence
 - a migration CLI (the demo keeps `db/generate-migration.ts`)
 - generic status moves on the server beyond the `moves` hook
 - `createGridHandler` in core: its page, count, total and facet routes call the Postgres runner directly, so moving it needs an executor interface between the handler and a backend
@@ -306,6 +307,18 @@ This replaces the 0.2.0 rule that a host declares its fields once in a React-fre
 - **What it costs, accepted:** the table and counter-table names are in the browser bundle, and the def file is a `.tsx` that the API route, the migration generator, the benchmark and the DB tests import. The 0.2.0 line "the client def carries no `table`, `shapes` or `counterTable`" now describes what the client parts read, not what the object holds.
 - It went in as two commits: the type renames, then the capabilities, the demo and the docs. An intermediate two-file split (`orders-def.ts` and `orders-grid.tsx`) existed for a few commits and was replaced.
 
+### Allowed and displayed filters (Glen, during the work)
+
+`operators` on a field did three jobs: it declared what a client grid may filter, chose the control and decided which filters render. On a server grid it also repeated the shapes. It is gone.
+
+- **Allowed comes from the data alone.** `Capabilities` gained `equalsFields` and `rangeFields`. `shapeCapabilities` fills them from the shapes (every field in a shape's `equals`; the sort of every shape with `range`). `memoryCapabilities` fills them from every field: a number or a date without options takes a range, anything else an equality. `isAnswerable` stays the per-query answer, so an allowed filter the current query cannot use is disabled with its reason, never hidden.
+- **The control comes from the capabilities, `type` and `options`.** `resolveFilterKind(field, capabilities)`: an equality field with options is `equals`, one without is `lookup`, a range field is `range`. `listFilterFields(def, capabilities)` is every field with a kind. `listOffers` reads its candidates from the capabilities.
+- **The URL names every field.** `listQueryKeys(def)` gives an `f.` key per field and an `r.` key per number or date field, so it still needs only the def; what a query may hold is `normalizeQuery`'s call, with the capabilities.
+- **`validateGridDef`** now refuses a range on a field whose type has none and an unknown equality field; "does not offer eq" and "does not offer range" went with the operators.
+- **Displayed is a layout prop.** The bound `FilterBar` and `FilterSidebar` take `fields?: string[]`: the quick filter, the default control of each named field in that order, then the sort. Without it they show `listFilterFields`. `children` still replaces everything. The list is never on the def, so one grid can show three filters in its bar and eight in its sidebar, and an app that keeps the list in a settings row passes it in.
+- **Demo.** The orders grid shows the same six filters as before, now because its shapes name them. The tasks grid is a client grid, so every field is allowed; its bar and sidebar pass `fields={TASK_FILTER_FIELDS}` to keep the seven they had, and every column header now offers a filter. Core's `gridDefCapabilities(def)` is what `createHttpSource` calls, and the server-rendered skeleton calls it too, to lay out the same controls.
+- **Not built:** runtime add and remove (see Deferred).
+
 ### As built: core
 
 - `model/shapes.ts` holds `OrderedShape`, `QuickShape`, `QueryShape`, `isQuickShape`, `listQuickFields`, `shapeId`, `listOrderedShapes`, `listSortFields`, `matchShape`, `isFacetOnlyQuery`, and `shapeCapabilities(shapes, options)` with `ShapeCapabilityOptions`. It imports `field-types.ts` only. The name is `shapeCapabilities` because core already exports the `Capabilities` type and `memoryCapabilities`.
@@ -369,6 +382,38 @@ The grid pages load with no layout shift: the browser reports no `layout-shift` 
 
 - Renaming `http.ts` and `memory.ts` to `index.ts`: zero-logic barrels, naming only.
 
+### Review passes over the 0.3.0 branch
+
+- `/code-review` (high): nine findings, eight fixed (`6b1ffb6`): an unknown part answered 200 where it now answers 404, the workspace header overflowed under 900 px, the skeleton had no accessible status, JSX sat in a default parameter, two skeletons and three filter frames were copies, and `moveRow` had no test. One was left as designed: transitions are kept per source (see core, above).
+- `/security-review`: nothing at confidence 8 or above. The moved shape helpers are byte-identical, `assertDeclared` still runs before any SQL exists, and the pg pool stays behind `server-only`.
+- `/simplify`: fixed (`503b444`) the grid internals reading the grid context where they were handed its fields as props, one `resolveFilterKind` rule in core, `dispatch` in one hook, a lane state of `rows` and `hasNext` only, one source stub and one def for the tests, the workspace parts shared by orders and tasks, a skeleton derived from the def, named grid areas, and a `shift` check that probes by hook. Skipped: a shared workspace shell component (four workspaces differ in note, footer and boundary), releasing a dead board's lane subscriptions and splitting the grid context in two (both measured as negligible).
+
+### Definition of done (0.3.0)
+
+1. Typecheck, lint and unit tests pass in the three packages and the demo; the purity tests pass, with `matchShape` and `QueryShape` in the `-postgres` copy check.
+2. `test:db`, `db:check` and `db:bench` at 72 of 72 single-value and 80 of 80 multi-value.
+3. The scripted browser pass is green on `next start` at port 3040, with `/rtl`, `/components` and `/parts/*`, and no layout shift on the grid pages.
+4. All 24 screenshots are retaken.
+5. `npm pack --dry-run` succeeds for the three packages at 0.3.0.
+6. The root README, the package READMEs, AGENTS.md and this file are updated.
+7. `/code-review`, `/security-review` and `/simplify` have run over the change set, their fixes are applied and the gates re-run.
+8. `main` is fast-forwarded to the branch. Nothing is pushed or published.
+
+### Verification record (0.3.0)
+
+Observed 2026-11-15 on the final code, against Neon (620,000 orders). The README's "Verification record" holds the browser pass row by row.
+
+| #   | Item                  | Command                                                                            | Observation                                                                                                                                                                                                                                                                                                                                                    |
+| --- | --------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Unit gates and purity | `bun run typecheck`; `bun run lint`; `bun run test`                                | all exit 0; 63 core, 57 postgres, 60 React and 4 demo tests; core's root now exports the shape types, `matchShape` and `shapeCapabilities` and still no DDL or SQL symbol; `-postgres` defines no copy of `matchShape` or `QueryShape` and has no `./capabilities` subpath; the seven entry points import in plain Node ESM                                    |
+| 2   | Database gates        | `bun run --filter demo test:db`; `db:check`; `db:bench`                            | 26 DB tests in 3 files pass; the migration file matches `GRID_DEFS`; BENCH_RESULT                                                                                                                                                                                                                                                                              |
+| 3   | Browser pass          | `bun run build`; `bun run --filter demo start`; `bash apps/demo/browser/verify.sh` | 19 sections on port 3040 at 1500 by 900, every observation as recorded in the README; each grid route's static shell holds the brand and a skeleton and no grid part; cumulative layout shift 0.0000 on twelve grid pages at 1500 and at 800 px wide, every entry counted; `/parts/nope` is a 404; agent-browser `errors` empty and the `next start` log clean |
+| 4   | Screenshots           | `bash apps/demo/browser/shots.sh`                                                  | 24 PNGs retaken; 23 differ from 0.2.0 and the landing page is identical                                                                                                                                                                                                                                                                                        |
+| 5   | Release prep          | `npm pack --dry-run` in each package                                               | three tarballs at 0.3.0: core 53 files, `-postgres` 19, `-react` 76 with `dist/styles.css`; nothing published                                                                                                                                                                                                                                                  |
+| 6   | Docs                  | read them                                                                          | README (Packages, Quick start on one def, Capabilities, Base components, hooks, Design as built, the record), the three package READMEs, AGENTS.md (the core row, the one-def rule, the `params.then` exception) and this file (the 0.3.0 section, "since 0.3.0" on the changed 0.2.0 lines, Deferred)                                                         |
+| 7   | Review passes         | `/code-review`, `/security-review`, `/simplify`                                    | run over `3e8b8ce...HEAD`; fixes in `6b1ffb6` and `503b444`; every gate above re-run after them and after the one-def and layout-shift commits                                                                                                                                                                                                                 |
+| 8   | Fast-forward          | `git merge --ff-only` in the main checkout                                         | recorded in the final report                                                                                                                                                                                                                                                                                                                                   |
+
 ## Definition of done (0.2.0)
 
 1. **Package layout:** three packages with rev 2's exports. `./server` is gone and core exports no storage type or function. Core has no React, DOM or `pg` import; `-postgres` has no React or `pg`.
@@ -394,7 +439,7 @@ Observed 2026-11-14 on the worktree branch, against Neon (620,000 orders). The R
 
 | #   | Item                         | Command                                                                                                                               | Observation                                                                                                                                                                                                                                                                                                                                                                                                               |
 | --- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Package layout               | `ls packages`; each `package.json`; `bun run test` (`purity.test.ts` × 3); `node -e "import(...)"` × 8                                | `query-grid`, `query-grid-react`, `query-grid-postgres` at 0.2.0 with the spec's exports; no `./server`; core's root exports no shape or DDL symbol; core has no dependency, no React, UI SDK, `pg` or DOM global, and compiles without the DOM lib; `-postgres` depends on core alone; all eight entry points import in plain Node ESM                                                                                   |
+| 1   | Package layout               | `ls packages`; each `package.json`; `bun run test` (`purity.test.ts` × 3); `node -e "import(...)"` × 8                                | `query-grid`, `query-grid-react`, `query-grid-postgres` at 0.2.0 with the spec's exports; no `./server`; core's root exports no DDL or SQL symbol (and, in 0.2.0, no shape symbol; since 0.3.0 the shapes are core's); core has no dependency, no React, UI SDK, `pg` or DOM global, and compiles without the DOM lib; `-postgres` depends on core alone; all eight entry points import in plain Node ESM                 |
 | 2   | Base components              | `bun run test` in `-react` (`components.test.tsx`); `/components` in the browser                                                      | 15 standalone mounts cover all fourteen components with plain props and no provider; `/components` filters, sorts and resizes sixty constant rows with 0 `/api` requests                                                                                                                                                                                                                                                  |
 | 3   | Bound wrappers               | `bun run test` (`components/purity.test.ts`)                                                                                          | no file in `src/components` matches a provider hook, a store factory, `DataSource`, `Capabilities` or the URL codec; `src/ui` holds one wrapper per base component under the same name                                                                                                                                                                                                                                    |
 | 4   | Server handler               | `bun run test` in `-postgres` (`grid-handler.test.ts`, 20 tests); `curl` on the running demo                                          | page, `/count`, `/total`, `/facets`, `/options`, `/transitions`, `POST /status`; 400, 404, 405, 409, 500; `limit=abc`, `1.5`, `-3`, `0`, empty and `1e3` all 400 with no SQL built; body `{ error, message, code, params }`; the demo's `api/orders` is one `[[...route]]/route.ts` and `lib/api-response.ts` is gone                                                                                                     |
@@ -415,5 +460,7 @@ Observed 2026-11-14 on the worktree branch, against Neon (620,000 orders). The R
 
 Nothing closable in development is open.
 
-- **Not run, because it is Glen's:** `npm publish` of the three packages, pushing the branch, and deploying 0.2.0 to Vercel. Until then the deployed demo and the public repository show 0.1.0, and the README's two 0.1.0 rows for them were not re-run.
+- **Not run, because it is Glen's:** `npm publish` of the three packages, pushing the branch, and deploying 0.3.0 to Vercel. Until then the deployed demo and the public repository show 0.1.0, and the README's two 0.1.0 rows for them were not re-run.
 - **Not built:** live search on each keystroke in the quick filter. It applies on Enter, as before.
+- **Not built:** a render prop or a compound for a whole custom card in `CardList` (see the 0.3.0 React section).
+- **Accepted with the one-def design:** the table and counter-table names are in the browser bundle.

@@ -28,6 +28,8 @@ const SERVER: Capabilities = {
   isAnswerable: (query) =>
     Object.keys(query.equals).every((key) => key === "status") &&
     (query.equals.status?.length ?? 1) === 1,
+  equalsFields: ["status", "region"],
+  rangeFields: ["created_at", "total"],
   sortFields: ["created_at", "total"],
   quickFields: TEST_QUICK_FIELDS,
   isFacetCountShown: () => true,
@@ -40,26 +42,37 @@ const MEMORY: QueryRules = {
 };
 
 describe("filter kinds", () => {
-  test("a field is a lookup, an equality, a range or no filter, in that order", () => {
-    const kindOf = (key: string) =>
-      resolveFilterKind(TEST_DEF.fields.find((field) => field.key === key)!);
-    expect(kindOf("status")).toBe("equals");
-    expect(kindOf("total")).toBe("range");
-    expect(kindOf("name")).toBeNull();
+  const kindsOf = (capabilities: Capabilities) =>
+    Object.fromEntries(
+      listFilterFields(TEST_DEF, capabilities).map((field) => [
+        field.key,
+        resolveFilterKind(field, capabilities),
+      ]),
+    );
+
+  test("on a server grid the allowed filters are the ones the capabilities name", () => {
+    expect(kindsOf(SERVER)).toEqual({
+      created_at: "range",
+      total: "range",
+      status: "equals",
+      region: "equals",
+    });
     expect(
-      resolveFilterKind({
-        key: "owner",
-        label: "Owner",
-        type: "id",
-        operators: ["eq", "range"],
-      }),
-    ).toBe("lookup");
-    expect(listFilterFields(TEST_DEF).map((field) => field.key)).toEqual([
-      "created_at",
-      "total",
-      "status",
-      "region",
-    ]);
+      kindsOf({ ...SERVER, equalsFields: ["name"], rangeFields: [] }),
+    ).toEqual({ name: "lookup" });
+  });
+
+  test("on a client grid every field is filterable, by its type and options", () => {
+    expect(kindsOf(memoryCapabilities(TEST_DEF))).toEqual({
+      id: "lookup",
+      number: "range",
+      created_at: "range",
+      total: "range",
+      status: "equals",
+      region: "equals",
+      name: "lookup",
+      note: "lookup",
+    });
   });
 });
 
@@ -118,7 +131,12 @@ describe("actions", () => {
         rules,
       ),
     ).toBe(BASE);
-    expect(listOffers(capped, BASE, rules).multi).toEqual(["region"]);
+    expect(listOffers(capped, BASE, rules).multi).toEqual([
+      "id",
+      "region",
+      "name",
+      "note",
+    ]);
   });
 
   test("an empty value list clears the field", () => {
@@ -139,8 +157,8 @@ describe("actions", () => {
       multi: [],
     });
     expect(listOffers(TEST_DEF, BASE, MEMORY)).toMatchObject({
-      equals: ["status", "region"],
-      multi: ["status", "region"],
+      equals: ["id", "status", "region", "name", "note"],
+      multi: ["id", "status", "region", "name", "note"],
     });
   });
 
@@ -214,7 +232,7 @@ describe("the reason a control is unavailable", () => {
 });
 
 describe("memory mode", () => {
-  test("every declared filter and sort is offered, in any combination", () => {
+  test("every field is a filter and a sort, in any combination", () => {
     const busy: QueryState = {
       ...BASE,
       equals: { status: ["open", "done"], region: ["north"] },
@@ -224,8 +242,8 @@ describe("memory mode", () => {
     };
     expect(MEMORY.capabilities.isAnswerable(busy)).toBe(true);
     const offers = listOffers(TEST_DEF, busy, MEMORY);
-    expect(offers.equals).toEqual(["status", "region"]);
-    expect(offers.ranges).toEqual(["created_at", "total"]);
+    expect(offers.equals).toEqual(["id", "status", "region", "name", "note"]);
+    expect(offers.ranges).toEqual(["number", "created_at", "total"]);
     expect(offers.sorts).toEqual(TEST_DEF.fields.map((field) => field.key));
     expect(offers.quick).toBe(true);
   });
@@ -361,18 +379,17 @@ describe("the URL", () => {
   test("the keys a def can put in the URL are known up front", () => {
     const keys = listQueryKeys(TEST_DEF);
     expect(keys.map((key) => key.name)).toEqual([
-      "f.status",
-      "f.region",
+      ...TEST_DEF.fields.map((field) => `f.${field.key}`),
+      "r.number",
       "r.created_at",
       "r.total",
       "q",
       "sort",
       "cursor",
     ]);
-    expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual([
-      "f.status",
-      "f.region",
-    ]);
+    expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual(
+      TEST_DEF.fields.map((field) => `f.${field.key}`),
+    );
   });
 
   test("a field named like an object internal is just an unknown field", () => {

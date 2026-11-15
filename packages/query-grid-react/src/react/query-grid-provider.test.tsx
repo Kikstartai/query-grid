@@ -77,8 +77,8 @@ function renderAt(search: string) {
 describe("the URL parsers", () => {
   test("the key map is built from the def at runtime, on core's keys", () => {
     expect(Object.keys(buildUrlParsers(DEF))).toEqual([
-      "f.status",
-      "f.region",
+      ...DEF.fields.map((field) => `f.${field.key}`),
+      "r.number",
       "r.created_at",
       "r.total",
       "q",
@@ -100,8 +100,10 @@ describe("the URL parsers", () => {
     };
     const values = toUrlValues(DEF, state);
     expect(values).toEqual({
+      ...Object.fromEntries(DEF.fields.map((field) => [`f.${field.key}`, []])),
       "f.status": ["open", "done"],
       "f.region": ["north"],
+      "r.number": null,
       "r.created_at": null,
       "r.total": "100..",
       q: null,

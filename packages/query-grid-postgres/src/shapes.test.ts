@@ -15,7 +15,8 @@ describe("validateGridDef", () => {
       total: { field: "name" },
       shapes: [
         { equals: [], sort: "note" },
-        { equals: ["total"], sort: "created_at" },
+        { equals: ["missing"], sort: "total" },
+        { equals: [], sort: "name", range: true },
         { equals: [], sort: "created_at" },
         { equals: [], sort: "created_at" },
         { quick: ["created_at", "missing"] },
@@ -23,7 +24,8 @@ describe("validateGridDef", () => {
     };
     const problems = validateGridDef(broken).join("\n");
     expect(problems).toContain("a nullable field cannot be a keyset sort");
-    expect(problems).toContain("total does not offer eq");
+    expect(problems).toContain("unknown equality field missing");
+    expect(problems).toContain("name is a text, which has no range filter");
     expect(problems).toContain("is declared twice");
     expect(problems).toContain("created_at is a datetime");
     expect(problems).toContain("unknown field missing");

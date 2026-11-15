@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { FieldOption, GridRow, QueryState } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { encodeQuery } from "./query-url.ts";
-import { shapeCapabilities, type ShapedGridDef } from "./shapes.ts";
+import { gridDefCapabilities, type ShapedGridDef } from "./shapes.ts";
 import type {
   CountResult,
   FacetCount,
@@ -52,9 +52,7 @@ export function createHttpSource(
   def: ShapedGridDef,
   basePath: string,
 ): DataSource {
-  const capabilities = shapeCapabilities(def.shapes, {
-    facetField: def.facet?.field,
-  });
+  const capabilities = gridDefCapabilities(def);
   const filterParams = (query: QueryState) =>
     encodeQuery(def, { ...query, cursor: null });
   const route = (name: SubRoute) => `${basePath}/${name}`;

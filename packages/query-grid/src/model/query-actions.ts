@@ -193,11 +193,8 @@ export function listOffers(
   query: QueryState,
   rules: QueryRules,
 ): Offers {
-  const equalsFields = def.fields
-    .filter((field) => field.operators.includes("eq"))
-    .map((field) => field.key);
   const offersEquals = (values: string[]) =>
-    equalsFields.filter((field) =>
+    rules.capabilities.equalsFields.filter((field) =>
       isOffered(def, query, { type: "setEquals", field, values }, rules),
     );
   return {
@@ -211,17 +208,14 @@ export function listOffers(
         rules,
       ),
     ),
-    ranges: def.fields
-      .filter((field) => field.operators.includes("range"))
-      .filter((field) =>
-        isOffered(
-          def,
-          query,
-          { type: "setRange", field: field.key, min: "x", max: null },
-          rules,
-        ),
-      )
-      .map((field) => field.key),
+    ranges: rules.capabilities.rangeFields.filter((field) =>
+      isOffered(
+        def,
+        query,
+        { type: "setRange", field, min: "x", max: null },
+        rules,
+      ),
+    ),
     quick: isOffered(def, query, { type: "setQuick", value: "xxx" }, rules),
   };
 }

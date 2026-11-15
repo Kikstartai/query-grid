@@ -90,6 +90,8 @@ describe("shapeCapabilities", () => {
 
   test("they are the shapes, read once", () => {
     expect(caps.mode).toBe("server");
+    expect(caps.equalsFields).toEqual(["status", "region"]);
+    expect(caps.rangeFields).toEqual(["created_at", "total"]);
     expect(caps.sortFields).toEqual(["created_at", "total"]);
     expect(caps.quickFields).toEqual(["name", "number"]);
   });

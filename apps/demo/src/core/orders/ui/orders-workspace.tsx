@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 
+import { gridDefCapabilities } from "@kikstart/query-grid";
+
 import { AtRequest } from "@/lib/at-request";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
@@ -21,7 +23,14 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
         <SiteBrand />
         <h1>{title}</h1>
       </header>
-      <Suspense fallback={<WorkspaceSkeleton def={ORDERS_GRID_DEF} />}>
+      <Suspense
+        fallback={
+          <WorkspaceSkeleton
+            def={ORDERS_GRID_DEF}
+            capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
+          />
+        }
+      >
         <AtRequest>
           <OrdersQueryProvider>
             <WorkspaceParts>

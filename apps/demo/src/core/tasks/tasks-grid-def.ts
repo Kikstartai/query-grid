@@ -2,6 +2,15 @@ import type { FieldOption, BaseGridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
 export const TASK_QUICK_FIELDS = ["title", "assignee", "number"];
+export const TASK_FILTER_FIELDS = [
+  "status",
+  "team",
+  "priority",
+  "assignee",
+  "budget",
+  "estimate",
+  "due_at",
+];
 
 const TASK_STATUSES: FieldOption[] = [
   { value: "todo", label: "To do" },
@@ -76,16 +85,14 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "number",
       label: "Task",
       type: "integer",
-      operators: [],
       width: 90,
       pinned: true,
     },
-    { key: "title", label: "Title", type: "text", operators: [], width: 240 },
+    { key: "title", label: "Title", type: "text", width: 240 },
     {
       key: "status",
       label: "Status",
       type: "enum",
-      operators: ["eq"],
       options: TASK_STATUSES,
       width: 130,
     },
@@ -93,7 +100,6 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "team",
       label: "Team",
       type: "enum",
-      operators: ["eq"],
       options: TEAMS,
       width: 120,
     },
@@ -101,7 +107,6 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "priority",
       label: "Priority",
       type: "enum",
-      operators: ["eq"],
       options: PRIORITIES,
       width: 110,
     },
@@ -109,7 +114,6 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "assignee",
       label: "Assignee",
       type: "text",
-      operators: ["eq"],
       lookup: { labelField: "assignee" },
       width: 170,
     },
@@ -117,24 +121,21 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "budget",
       label: "Budget",
       type: "money",
-      operators: ["range"],
       width: 120,
     },
     {
       key: "estimate",
       label: "Hours",
       type: "integer",
-      operators: ["range"],
       width: 90,
     },
     {
       key: "due_at",
       label: "Due",
       type: "datetime",
-      operators: ["range"],
       width: 180,
     },
-    { key: "id", label: "ID", type: "id", operators: [], hidden: true },
+    { key: "id", label: "ID", type: "id", hidden: true },
   ],
 };
 

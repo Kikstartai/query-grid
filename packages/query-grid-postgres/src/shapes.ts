@@ -1,6 +1,7 @@
 import {
   getField,
   isQuickShape,
+  isRangeType,
   KEY_FIELD,
   listOrderedShapes,
   shapeId,
@@ -63,8 +64,10 @@ function validateOrderedShape(
   if (sort.nullable) {
     problems.push(`shape ${id}: a nullable field cannot be a keyset sort`);
   }
-  if (shape.range && !sort.operators.includes("range")) {
-    problems.push(`shape ${id}: ${shape.sort} does not offer range`);
+  if (shape.range && !isRangeType(sort.type)) {
+    problems.push(
+      `shape ${id}: ${shape.sort} is a ${sort.type}, which has no range filter`,
+    );
   }
   if (shape.equals.includes(shape.sort)) {
     problems.push(
@@ -72,8 +75,8 @@ function validateOrderedShape(
     );
   }
   for (const key of shape.equals) {
-    if (!getField(def, key)?.operators.includes("eq")) {
-      problems.push(`shape ${id}: ${key} does not offer eq`);
+    if (!getField(def, key)) {
+      problems.push(`shape ${id}: unknown equality field ${key}`);
     }
   }
   return problems;

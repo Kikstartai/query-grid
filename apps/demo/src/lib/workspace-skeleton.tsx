@@ -1,7 +1,9 @@
 import {
+  getField,
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
+  type Capabilities,
 } from "@kikstart/query-grid";
 
 const GRID_ROWS = Array.from({ length: 14 }, (_, index) => index);
@@ -9,6 +11,11 @@ const FACET_ROWS = Array.from({ length: 8 }, (_, index) => index);
 
 interface SkeletonProps {
   def: BaseGridDef;
+}
+
+interface SkeletonFiltersProps extends SkeletonProps {
+  capabilities: Capabilities;
+  fields?: string[];
 }
 
 export function SkeletonTools() {
@@ -21,15 +28,22 @@ export function SkeletonTools() {
   );
 }
 
-export function SkeletonFilters({ def }: SkeletonProps) {
+export function SkeletonFilters({
+  def,
+  capabilities,
+  fields,
+}: SkeletonFiltersProps) {
+  const shown = fields
+    ? fields.flatMap((key) => getField(def, key) ?? [])
+    : listFilterFields(def, capabilities);
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="quick" />
-      {listFilterFields(def).map((field) => (
+      {shown.map((field) => (
         <span
           key={field.key}
           className="skeleton skeleton-control"
-          data-kind={resolveFilterKind(field)}
+          data-kind={resolveFilterKind(field, capabilities)}
         />
       ))}
       <span className="skeleton skeleton-control" data-kind="sort" />
@@ -84,7 +98,11 @@ function SkeletonTotal({ def }: SkeletonProps) {
   );
 }
 
-export function WorkspaceSkeleton({ def }: SkeletonProps) {
+export function WorkspaceSkeleton({
+  def,
+  capabilities,
+  fields,
+}: SkeletonFiltersProps) {
   return (
     <>
       <SkeletonTools />
@@ -94,7 +112,11 @@ export function WorkspaceSkeleton({ def }: SkeletonProps) {
         role="status"
         aria-label="The grid is on its way"
       >
-        <SkeletonFilters def={def} />
+        <SkeletonFilters
+          def={def}
+          capabilities={capabilities}
+          fields={fields}
+        />
         <SkeletonChips />
         <div className="workspace-main">
           <SkeletonFacets def={def} />

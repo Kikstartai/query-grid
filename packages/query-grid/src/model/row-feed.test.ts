@@ -16,6 +16,8 @@ import { createCountStore } from "./summary-stores.ts";
 const SERVER: Capabilities = {
   mode: "server",
   isAnswerable: () => true,
+  equalsFields: [],
+  rangeFields: [],
   sortFields: ["created_at", "total"],
   quickFields: TEST_QUICK_FIELDS,
   isFacetCountShown: () => true,

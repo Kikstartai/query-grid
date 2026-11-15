@@ -1,5 +1,6 @@
 import {
   isDefaultSort,
+  isRangeType,
   type BaseGridDef,
   type QueryState,
   type RangeState,
@@ -19,18 +20,16 @@ export interface QueryKey {
 }
 
 export function listQueryKeys(def: BaseGridDef): QueryKey[] {
-  const keysFor = (operator: "eq" | "range", prefix: string) =>
-    def.fields
-      .filter((field) => field.operators.includes(operator))
-      .map((field) => `${prefix}${field.key}`);
+  const equals = def.fields.map((field) => `${EQUALS_PREFIX}${field.key}`);
+  const ranges = def.fields
+    .filter((field) => isRangeType(field.type))
+    .map((field) => `${RANGE_PREFIX}${field.key}`);
   return [
-    ...keysFor("eq", EQUALS_PREFIX).map((name) => ({ name, repeated: true })),
-    ...[
-      ...keysFor("range", RANGE_PREFIX),
-      QUICK_PARAM,
-      SORT_PARAM,
-      CURSOR_PARAM,
-    ].map((name) => ({ name, repeated: false })),
+    ...equals.map((name) => ({ name, repeated: true })),
+    ...[...ranges, QUICK_PARAM, SORT_PARAM, CURSOR_PARAM].map((name) => ({
+      name,
+      repeated: false,
+    })),
   ];
 }
 

@@ -16,16 +16,15 @@ const PROBE: PostgresGridDef = {
   facet: { field: "kind", counterTable: `${TABLE}_counts` },
   total: { field: "amount" },
   fields: [
-    { key: "id", label: "ID", type: "id", operators: [] },
+    { key: "id", label: "ID", type: "id" },
     {
       key: "kind",
       label: "Kind",
       type: "enum",
-      operators: ["eq"],
       options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })),
     },
-    { key: "amount", label: "Amount", type: "money", operators: [] },
-    { key: "created_at", label: "Created", type: "datetime", operators: [] },
+    { key: "amount", label: "Amount", type: "money" },
+    { key: "created_at", label: "Created", type: "datetime" },
   ],
   shapes: [
     { equals: [], sort: "created_at" },

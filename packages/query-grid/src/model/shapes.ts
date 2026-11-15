@@ -44,6 +44,22 @@ export function listOrderedShapes(shapes: QueryShape[]): OrderedShape[] {
   return shapes.filter((shape): shape is OrderedShape => !isQuickShape(shape));
 }
 
+export function listEqualsFields(shapes: QueryShape[]): string[] {
+  return [
+    ...new Set(listOrderedShapes(shapes).flatMap((shape) => shape.equals)),
+  ];
+}
+
+export function listRangeFields(shapes: QueryShape[]): string[] {
+  return [
+    ...new Set(
+      listOrderedShapes(shapes)
+        .filter((shape) => shape.range)
+        .map((shape) => shape.sort),
+    ),
+  ];
+}
+
 export function listSortFields(shapes: QueryShape[]): string[] {
   return [...new Set(listOrderedShapes(shapes).map((shape) => shape.sort))];
 }
@@ -94,8 +110,14 @@ export function shapeCapabilities(
   return {
     mode: "server",
     isAnswerable: (query) => matchShape(shapes, query) !== null,
+    equalsFields: listEqualsFields(shapes),
+    rangeFields: listRangeFields(shapes),
     sortFields: listSortFields(shapes),
     quickFields: listQuickFields(shapes),
     isFacetCountShown: (query) => isFacetOnlyQuery(options.facetField, query),
   };
+}
+
+export function gridDefCapabilities(def: ShapedGridDef): Capabilities {
+  return shapeCapabilities(def.shapes, { facetField: def.facet?.field });
 }

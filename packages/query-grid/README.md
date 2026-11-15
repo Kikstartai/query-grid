@@ -27,18 +27,16 @@ const ORDERS: ShapedGridDef = {
   id: "orders",
   defaultSort: { field: "created_at", direction: "desc" },
   fields: [
-    { key: "id", label: "ID", type: "id", operators: [] },
+    { key: "id", label: "ID", type: "id" },
     {
       key: "created_at",
       label: "Created",
       type: "datetime",
-      operators: ["range"],
     },
     {
       key: "status",
       label: "Status",
       type: "enum",
-      operators: ["eq"],
       options: STATUSES,
     },
   ],
@@ -66,6 +64,7 @@ store.dispatch({
 - **One query contract.** `encodeQuery` and `decodeQuery` are the only codec: the page URL, the request to the server and the server's parser all use them, and `validateQueryValues` checks a query on both sides.
 - **Shapes.** A `QueryShape` is the unit a data layer answers: a set of equality fields and a sort, or the quick-filter columns. `matchShape` decides whether a query is declared, and `shapeCapabilities(shapes, { facetField })` turns the same shapes into the `Capabilities` the client reads, so the controls and the server cannot disagree. `createHttpSource(def, basePath)` reads them from the def.
 - **Defs are layers.** `BaseGridDef` and `BaseFieldDef` are what core reads. The React package adds `cell` (`GridDef`, `FieldDef`) and the Postgres package adds storage (`PostgresGridDef`), so a host writes one object per grid and each package reads its slice.
+- **Allowed filters come from the data.** A field def carries no operators. `capabilities.equalsFields` and `rangeFields` are what a shape names on a server grid and every field on an in-memory one, and `resolveFilterKind(field, capabilities)` says which control a field gets.
 - **Offers.** `listOffers(def, query, rules)` says which filters, sorts and combinations the data source can answer from here, and `explainUnavailable` gives the reason code for one it cannot. A store applies an action only when the result is a query the source can answer.
 - **Stores.** `createQueryStore`, `createFeed` and the count, total, facet and label stores are plain objects with `subscribe` and a getter, ready for `useSyncExternalStore` or any other reader. `createBoard(def, source, getLaneQueries(…))` is the status board's model: one feed per lane, the transitions loaded once per source, and `move`.
 - **Data sources.** `DataSource` is the contract; `createHttpSource` talks to a server that runs [`@kikstart/query-grid-postgres`](https://www.npmjs.com/package/@kikstart/query-grid-postgres), and `createMemorySource` answers from an array.

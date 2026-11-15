@@ -13,10 +13,14 @@ import {
 import { VIEWS } from "./site";
 
 interface WorkspacePartsProps {
+  filterFields?: string[];
   children: ReactNode;
 }
 
-export function WorkspaceParts({ children }: WorkspacePartsProps) {
+export function WorkspaceParts({
+  filterFields,
+  children,
+}: WorkspacePartsProps) {
   return (
     <>
       <div className="workspace-tools">
@@ -25,9 +29,9 @@ export function WorkspaceParts({ children }: WorkspacePartsProps) {
         <ViewSwitch views={VIEWS} />
       </div>
       <div className="workspace-body">
-        <FilterBar />
+        <FilterBar fields={filterFields} />
         <div className="workspace-chips">
-          <FilterSidebar />
+          <FilterSidebar fields={filterFields} />
           <FilterChips />
         </div>
         <div className="workspace-main">

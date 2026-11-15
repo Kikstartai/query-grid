@@ -1,11 +1,18 @@
 import { Suspense } from "react";
 
+import { memoryCapabilities } from "@kikstart/query-grid/memory";
+
 import { AtRequest } from "@/lib/at-request";
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
-import { TASK_COUNT, TASKS_GRID_DEF } from "../tasks-grid-def";
+import {
+  TASK_COUNT,
+  TASK_FILTER_FIELDS,
+  TASK_QUICK_FIELDS,
+  TASKS_GRID_DEF,
+} from "../tasks-grid-def";
 import { TasksQueryProvider } from "../tasks-provider";
 import { TasksView } from "./tasks-view";
 
@@ -21,10 +28,18 @@ export function TasksWorkspace() {
         declared filter and sort is offered in any combination, and filtering,
         sorting, counting and totalling run in JavaScript.
       </p>
-      <Suspense fallback={<WorkspaceSkeleton def={TASKS_GRID_DEF} />}>
+      <Suspense
+        fallback={
+          <WorkspaceSkeleton
+            def={TASKS_GRID_DEF}
+            capabilities={memoryCapabilities(TASKS_GRID_DEF, TASK_QUICK_FIELDS)}
+            fields={TASK_FILTER_FIELDS}
+          />
+        }
+      >
         <AtRequest>
           <TasksQueryProvider>
-            <WorkspaceParts>
+            <WorkspaceParts filterFields={TASK_FILTER_FIELDS}>
               <TasksView />
             </WorkspaceParts>
           </TasksQueryProvider>

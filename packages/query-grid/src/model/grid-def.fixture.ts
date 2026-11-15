@@ -19,20 +19,18 @@ export const TEST_DEF: BaseGridDef = {
   facet: { field: "status" },
   total: { field: "total" },
   fields: [
-    { key: "id", label: "ID", type: "id", operators: [] },
-    { key: "number", label: "Number", type: "integer", operators: [] },
+    { key: "id", label: "ID", type: "id" },
+    { key: "number", label: "Number", type: "integer" },
     {
       key: "created_at",
       label: "Created",
       type: "datetime",
-      operators: ["range"],
     },
-    { key: "total", label: "Total", type: "money", operators: ["range"] },
+    { key: "total", label: "Total", type: "money" },
     {
       key: "status",
       label: "Status",
       type: "enum",
-      operators: ["eq"],
       options: [
         { value: "open", label: "Open" },
         { value: "done", label: "Done" },
@@ -42,18 +40,16 @@ export const TEST_DEF: BaseGridDef = {
       key: "region",
       label: "Region",
       type: "enum",
-      operators: ["eq"],
       options: [
         { value: "north", label: "North" },
         { value: "south", label: "South" },
       ],
     },
-    { key: "name", label: "Name", type: "text", operators: [] },
+    { key: "name", label: "Name", type: "text" },
     {
       key: "note",
       label: "Note",
       type: "text",
-      operators: [],
       nullable: true,
     },
   ],

@@ -51,7 +51,7 @@ const source = createHttpSource(ORDERS_GRID_DEF, "/api/orders");
 
 The provider always takes a `source`; the HTTP one reads its capabilities from the def's shapes. It keeps the query in the URL through [nuqs](https://nuqs.dev), so mount its adapter for your framework; `StaticQueryGridProvider` takes a `search` string, leaves the URL alone and needs no adapter. Two grids on one page each take a `urlPrefix`, which puts their keys under `a.f.status` and `b.f.status`.
 
-`DataGrid` is a compound on both sides: `<DataGrid />` is the default composition of `DataGrid.Root`, `.Toolbar`, `.Status`, `.ColumnsMenu` and `.Body`, and a host that wants a different toolbar composes the parts itself. `useQueryGridActions()` gives the changes a host's own control makes: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions` and `moveRow`.
+The bound `FilterBar` and `FilterSidebar` take `fields`, the keys of the filters to show and their order; without it they show every filterable field, and `children` replaces the lot. `DataGrid` is a compound on both sides: `<DataGrid />` is the default composition of `DataGrid.Root`, `.Toolbar`, `.Status`, `.ColumnsMenu` and `.Body`, and a host that wants a different toolbar composes the parts itself. `useQueryGridActions()` gives the changes a host's own control makes: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions` and `moveRow`.
 
 Every string comes from `QueryGridMessagesProvider`, with English built in, and the components follow the page's direction, right to left included.
 
