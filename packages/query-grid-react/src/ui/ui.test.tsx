@@ -8,6 +8,7 @@ import { createMemorySource } from "@kikstart/query-grid/memory";
 import { NO_PERSISTENCE } from "../components/column-state.ts";
 import { TEST_FIELDS, TEST_ROWS } from "../components/fields.fixture.ts";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
+import { ColumnsMenu, DataGrid } from "./data-grid.tsx";
 import { FilterBar, FilterSidebar, SortControl } from "./filters.tsx";
 
 const DEF: GridDef = {
@@ -30,6 +31,28 @@ function render(element: ReactElement): string {
     </StaticQueryGridProvider>,
   );
 }
+
+describe("the bound DataGrid", () => {
+  test("the default composition has the toolbar and the body", () => {
+    const html = render(<DataGrid />);
+    expect(html).toContain('data-part="grid-status"');
+    expect(html).toContain('data-part="grid-scroller"');
+  });
+
+  test("its parts compose, with the columns menu mounted outside the grid", () => {
+    const html = render(
+      <>
+        <ColumnsMenu />
+        <DataGrid.Root>
+          <DataGrid.Body />
+        </DataGrid.Root>
+      </>,
+    );
+    expect(html).not.toContain("qg-grid-toolbar");
+    expect(html).toContain('data-part="grid-scroller"');
+    expect(html.match(/columns-menu-trigger/g)).toHaveLength(1);
+  });
+});
 
 describe("the bound filter containers", () => {
   test("FilterBar fills itself with every control by default", () => {

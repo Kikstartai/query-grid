@@ -3,6 +3,7 @@ export {
   ColumnsMenu,
   DataGrid,
   type CardListProps,
+  type DataGridRootProps,
 } from "./data-grid.tsx";
 export {
   FieldFilter,

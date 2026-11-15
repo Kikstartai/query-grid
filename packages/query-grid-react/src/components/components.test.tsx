@@ -54,6 +54,30 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).toContain('aria-label="Select all loaded rows"');
   });
 
+  test("DataGrid parts compose under a Root, and a part needs one", () => {
+    const html = render(
+      <DataGrid.Root fields={TEST_FIELDS} {...ROW_WINDOW}>
+        <DataGrid.Body />
+        <DataGrid.Toolbar>
+          <DataGrid.Status />
+        </DataGrid.Toolbar>
+      </DataGrid.Root>,
+    );
+    expect(html).toContain('role="grid"');
+    expect(html).toContain("6 rows loaded");
+    expect(html).not.toContain("columns-menu-trigger");
+    expect(html.indexOf('data-part="grid-scroller"')).toBeLessThan(
+      html.indexOf('data-part="grid-status"'),
+    );
+    const bodyOnly = render(
+      <DataGrid.Root fields={TEST_FIELDS} {...ROW_WINDOW}>
+        <DataGrid.Body />
+      </DataGrid.Root>,
+    );
+    expect(bodyOnly).not.toContain("qg-grid-toolbar");
+    expect(() => render(<DataGrid.Status />)).toThrow("DataGrid.Root");
+  });
+
   test("DataGrid with a sort, a header filter and controlled columns", () => {
     const columns = defaultColumns(TEST_FIELDS).map((column) =>
       column.key === "note" ? { ...column, visible: false } : column,

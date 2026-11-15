@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { CardList as BaseCardList } from "../components/card-list.tsx";
 import { ColumnsMenu as BaseColumnsMenu } from "../components/columns-menu.tsx";
 import { DataGrid as BaseDataGrid } from "../components/data-grid.tsx";
@@ -33,7 +35,11 @@ function useRowWindow(): RowWindow {
   };
 }
 
-export function DataGrid() {
+export interface DataGridRootProps {
+  children: ReactNode;
+}
+
+function DataGridRoot({ children }: DataGridRootProps) {
   const { def } = useQueryGrid();
   const rowWindow = useRowWindow();
   const state = useFeedState();
@@ -42,7 +48,7 @@ export function DataGrid() {
   const dispatch = useQueryDispatch();
   const { state: columns, store } = useColumns();
   return (
-    <BaseDataGrid
+    <BaseDataGrid.Root
       fields={def.fields}
       {...rowWindow}
       capped={state.capped}
@@ -71,9 +77,31 @@ export function DataGrid() {
         ...Object.keys(query.equals),
         ...(query.range ? [query.range.field] : []),
       ]}
-    />
+    >
+      {children}
+    </BaseDataGrid.Root>
   );
 }
+
+function DefaultDataGrid() {
+  return (
+    <DataGridRoot>
+      <BaseDataGrid.Toolbar>
+        <BaseDataGrid.Status />
+        <BaseDataGrid.ColumnsMenu />
+      </BaseDataGrid.Toolbar>
+      <BaseDataGrid.Body />
+    </DataGridRoot>
+  );
+}
+
+export const DataGrid = Object.assign(DefaultDataGrid, {
+  Root: DataGridRoot,
+  Toolbar: BaseDataGrid.Toolbar,
+  Status: BaseDataGrid.Status,
+  ColumnsMenu: BaseDataGrid.ColumnsMenu,
+  Body: BaseDataGrid.Body,
+});
 
 export function ColumnsMenu() {
   const { def } = useQueryGrid();

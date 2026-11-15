@@ -6,7 +6,7 @@ import {
   usePrimitive,
   type PrimitiveHandle,
 } from "@ui-sdk/react/primitive";
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, use, useEffect, useState, type ReactNode } from "react";
 
 import {
   formatValue,
@@ -23,6 +23,7 @@ import {
   reorderColumns,
   type ColumnPersistence,
   type ColumnState,
+  type ColumnUpdate,
   type GridColumn,
 } from "./column-state.ts";
 import { ColumnsMenu } from "./columns-menu.tsx";
@@ -58,11 +59,38 @@ export interface DataGridProps extends RowWindow {
   activeFilters?: string[];
 }
 
+export interface DataGridRootProps extends DataGridProps {
+  children: ReactNode;
+}
+
+export interface DataGridToolbarProps {
+  children: ReactNode;
+}
+
 interface GridLayout {
   columns: Column[];
   totalWidth: number;
   pinnedWidth: number;
   layoutKey: string;
+}
+
+interface DataGridContextValue {
+  props: DataGridProps;
+  handle: SheetHandle;
+  state: ColumnState[];
+  update: (change: ColumnUpdate) => void;
+  layout: GridLayout;
+  setScroller: (element: HTMLDivElement | null) => void;
+}
+
+const DataGridContext = createContext<DataGridContextValue | null>(null);
+
+function useDataGrid(): DataGridContextValue {
+  const value = use(DataGridContext);
+  if (!value) {
+    throw new Error("A DataGrid part needs a DataGrid.Root above it");
+  }
+  return value;
 }
 
 function sumWidths(columns: Column[]): number {
@@ -358,7 +386,7 @@ function SelectAll({ handle, loaded }: SelectAllProps) {
   );
 }
 
-export function DataGrid(props: DataGridProps) {
+function DataGridRoot({ children, ...props }: DataGridRootProps) {
   const { fields, rows, format, resetKey } = props;
   const { columns: state, update } = useColumnState(props);
   const columns = layoutColumns(fields, state);
@@ -394,6 +422,49 @@ export function DataGrid(props: DataGridProps) {
     scroller?.scrollTo({ top: 0 });
   }, [epoch, handle, scroller]);
 
+  return (
+    <div className="qg-grid" data-part="grid" style={FILL_COLUMN_STYLE}>
+      <DataGridContext
+        value={{ props, handle, state, update, layout, setScroller }}
+      >
+        {children}
+      </DataGridContext>
+    </div>
+  );
+}
+
+function DataGridToolbar({ children }: DataGridToolbarProps) {
+  return <div className="qg-grid-toolbar">{children}</div>;
+}
+
+function DataGridStatus() {
+  const { props, handle } = useDataGrid();
+  return (
+    <GridStatus
+      handle={handle}
+      loaded={props.rows.length}
+      pages={props.pages}
+      format={props.format}
+      loading={props.loading}
+      capped={props.capped}
+      hasNext={props.hasNext}
+    />
+  );
+}
+
+function DataGridColumnsMenu() {
+  const { props, state, update } = useDataGrid();
+  return (
+    <ColumnsMenu
+      fields={props.fields}
+      columns={state}
+      onColumnsChange={(next) => update(() => next)}
+    />
+  );
+}
+
+function DataGridBody() {
+  const { props, handle, update, layout, setScroller } = useDataGrid();
   const controls: HeaderControls = {
     sort: props.sort,
     sortableFields: props.sortableFields,
@@ -406,8 +477,7 @@ export function DataGrid(props: DataGridProps) {
       ),
     onReorder: (keys) => update((current) => reorderColumns(current, keys)),
   };
-
-  const root = usePart(
+  return usePart(
     handle,
     "root",
     {},
@@ -426,17 +496,19 @@ export function DataGrid(props: DataGridProps) {
         children: (
           <>
             <GridHeader
-              columns={columns}
+              columns={layout.columns}
               controls={controls}
               totalWidth={layout.totalWidth}
-              selectAll={<SelectAll handle={handle} loaded={rows.length} />}
+              selectAll={
+                <SelectAll handle={handle} loaded={props.rows.length} />
+              }
             />
             <GridBody
               rowWindow={props}
               handle={handle}
               layout={layout}
-              rows={rows}
-              format={format}
+              rows={props.rows}
+              format={props.format}
             />
           </>
         ),
@@ -445,26 +517,24 @@ export function DataGrid(props: DataGridProps) {
     ),
     "div",
   );
+}
 
+function DefaultDataGrid(props: DataGridProps) {
   return (
-    <div className="qg-grid" data-part="grid" style={FILL_COLUMN_STYLE}>
-      <div className="qg-grid-toolbar">
-        <GridStatus
-          handle={handle}
-          loaded={rows.length}
-          pages={props.pages}
-          format={format}
-          loading={props.loading}
-          capped={props.capped}
-          hasNext={props.hasNext}
-        />
-        <ColumnsMenu
-          fields={fields}
-          columns={state}
-          onColumnsChange={(next) => update(() => next)}
-        />
-      </div>
-      {root}
-    </div>
+    <DataGridRoot {...props}>
+      <DataGridToolbar>
+        <DataGridStatus />
+        <DataGridColumnsMenu />
+      </DataGridToolbar>
+      <DataGridBody />
+    </DataGridRoot>
   );
 }
+
+export const DataGrid = Object.assign(DefaultDataGrid, {
+  Root: DataGridRoot,
+  Toolbar: DataGridToolbar,
+  Status: DataGridStatus,
+  ColumnsMenu: DataGridColumnsMenu,
+  Body: DataGridBody,
+});

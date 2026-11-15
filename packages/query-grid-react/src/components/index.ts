@@ -26,7 +26,12 @@ export {
   type TotalFooterProps,
   type TotalValue,
 } from "./count-display.tsx";
-export { DataGrid, type DataGridProps } from "./data-grid.tsx";
+export {
+  DataGrid,
+  type DataGridProps,
+  type DataGridRootProps,
+  type DataGridToolbarProps,
+} from "./data-grid.tsx";
 export {
   FacetPanel,
   type FacetOption,
