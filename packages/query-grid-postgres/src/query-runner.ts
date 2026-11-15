@@ -1,4 +1,8 @@
-import type { GridRow, QueryState } from "@kikstart/query-grid";
+import {
+  isFacetOnlyQuery,
+  type GridRow,
+  type QueryState,
+} from "@kikstart/query-grid";
 import {
   COUNT_CAP,
   QUICK_LIMIT,
@@ -8,7 +12,6 @@ import {
   type TotalResult,
 } from "@kikstart/query-grid/http";
 
-import { isFacetOnlyQuery } from "./shapes.ts";
 import {
   assertDeclared,
   buildCappedCountSql,

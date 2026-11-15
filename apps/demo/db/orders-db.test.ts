@@ -3,6 +3,7 @@ import { Client } from "pg";
 
 import {
   defaultQuery,
+  isQuickShape,
   type GridRow,
   type QueryState,
 } from "@kikstart/query-grid";
@@ -10,7 +11,6 @@ import {
   buildPageSql,
   getGridCount,
   getGridTotal,
-  isQuickShape,
   listCounterObjects,
   listMissingIndexes,
   QueryRejected,

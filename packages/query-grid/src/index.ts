@@ -94,6 +94,20 @@ export {
   toDayBound,
   toNumberBound,
 } from "./model/range-bounds.ts";
+export {
+  isFacetOnlyQuery,
+  isQuickShape,
+  listOrderedShapes,
+  listQuickFields,
+  listSortFields,
+  matchShape,
+  shapeCapabilities,
+  shapeId,
+  type OrderedShape,
+  type QueryShape,
+  type QuickShape,
+  type ShapeCapabilityOptions,
+} from "./model/shapes.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export { createStore, type Store } from "./model/store.ts";
 export {

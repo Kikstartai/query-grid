@@ -1,22 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
+import type { QueryRules, QueryState } from "./field-types.ts";
+import { TEST_DEF, TEST_SHAPES } from "./grid-def.fixture.ts";
 import {
   applyAction,
   defaultQuery,
   enumerateReachableStates,
   listOffers,
-  type QueryRules,
-  type QueryState,
-} from "@kikstart/query-grid";
+} from "./query-actions.ts";
+import {
+  matchShape,
+  shapeCapabilities,
+  shapeId,
+  type QueryShape,
+} from "./shapes.ts";
 
-import { capabilities } from "./capabilities.ts";
-import { TEST_DEF } from "./grid-def.fixture.ts";
-import { matchShape, shapeId } from "./shapes.ts";
-import type { QueryShape } from "./storage.ts";
-
-const SHAPES = TEST_DEF.shapes;
+const SHAPES = TEST_SHAPES;
 const BASE = defaultQuery(TEST_DEF);
-const CAPS = capabilities(SHAPES, { facetField: "status" });
+const CAPS = shapeCapabilities(SHAPES, { facetField: "status" });
 const CAPPED: QueryRules = { capabilities: CAPS, quickComplete: false };
 const COMPLETE: QueryRules = { capabilities: CAPS, quickComplete: true };
 
@@ -115,7 +116,7 @@ describe("offers from declared shapes", () => {
         : shape,
     );
     const rules: QueryRules = {
-      capabilities: capabilities(single),
+      capabilities: shapeCapabilities(single),
       quickComplete: false,
     };
     const offers = listOffers(TEST_DEF, BASE, rules);

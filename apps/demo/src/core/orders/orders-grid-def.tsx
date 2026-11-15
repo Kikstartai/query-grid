@@ -1,5 +1,4 @@
-import { formatValue } from "@kikstart/query-grid";
-import { capabilities } from "@kikstart/query-grid-postgres/capabilities";
+import { formatValue, shapeCapabilities } from "@kikstart/query-grid";
 import type { ClientFieldDef, ClientGridDef } from "@kikstart/query-grid-react";
 
 import {
@@ -27,6 +26,6 @@ export const ORDERS_GRID: ClientGridDef = {
   fields: ORDERS_BASE.fields.map(withStatusBadge),
 };
 
-export const ORDERS_CAPABILITIES = capabilities(ORDERS_SHAPES, {
+export const ORDERS_CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
   facetField: ORDERS_FACET_FIELD,
 });

@@ -1,5 +1,9 @@
-import type { FieldDef, FieldOption, GridDef } from "@kikstart/query-grid";
-import type { QueryShape } from "@kikstart/query-grid-postgres";
+import type {
+  FieldDef,
+  FieldOption,
+  GridDef,
+  QueryShape,
+} from "@kikstart/query-grid";
 
 import {
   ORDER_CHANNELS,

@@ -5,15 +5,15 @@ import { describe, expect, test } from "bun:test";
 
 import {
   enumerateReachableStates,
+  matchShape,
+  shapeCapabilities,
+  shapeId,
   type QueryRules,
 } from "@kikstart/query-grid";
 import {
   listTableMigrations,
-  matchShape,
-  shapeId,
   validateGridDefs,
 } from "@kikstart/query-grid-postgres";
-import { capabilities } from "@kikstart/query-grid-postgres/capabilities";
 
 import {
   ORDERS_BASE,
@@ -23,7 +23,7 @@ import {
 import { resolveMigrationFile, SERVER_GRIDS } from "../server-grids";
 import { ORDERS_SERVER_GRID } from "./orders-server-def";
 
-const CAPABILITIES = capabilities(ORDERS_SHAPES, {
+const CAPABILITIES = shapeCapabilities(ORDERS_SHAPES, {
   facetField: ORDERS_FACET_FIELD,
 });
 

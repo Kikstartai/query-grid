@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 const root = join(import.meta.dir, "..");
 const FORBIDDEN_IMPORT = /from "(react|react-dom|pg|@ui-sdk)[/"]/;
 const CONTRACT_COPY =
-  /export (function|const|interface|type) (decodeQuery|encodeQuery|validateQueryValues|QueryState|FieldDef|PageResult|CountResult)\b/;
+  /export (function|const|interface|type) (decodeQuery|encodeQuery|validateQueryValues|QueryState|FieldDef|PageResult|CountResult|matchShape|QueryShape)\b/;
 
 function listSources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

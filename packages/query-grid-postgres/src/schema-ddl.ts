@@ -1,8 +1,8 @@
-import { KEY_FIELD } from "@kikstart/query-grid";
+import { isQuickShape, KEY_FIELD, type QueryShape } from "@kikstart/query-grid";
 
-import { describeShape, isQuickShape, validateGridDef } from "./shapes.ts";
+import { describeShape, validateGridDef } from "./shapes.ts";
 import { identifier, quickExpression } from "./sql-builder.ts";
-import type { QueryShape, ServerGridDef } from "./storage.ts";
+import type { ServerGridDef } from "./storage.ts";
 
 export const IDENTIFIER_MAX_LENGTH = 63;
 

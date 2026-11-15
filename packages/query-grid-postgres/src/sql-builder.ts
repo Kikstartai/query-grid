@@ -3,6 +3,8 @@ import {
   getField,
   isValidFieldValue,
   KEY_FIELD,
+  listQuickFields,
+  matchShape,
   validateQueryValues,
   type FieldDef,
   type FieldType,
@@ -18,7 +20,6 @@ import {
 } from "@kikstart/query-grid/http";
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
-import { listQuickFields, matchShape } from "./shapes.ts";
 import type { ServerGridDef } from "./storage.ts";
 
 export const DEFAULT_PAGE_LIMIT = 200;

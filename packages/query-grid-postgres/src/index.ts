@@ -1,4 +1,3 @@
-export { capabilities, type CapabilityOptions } from "./capabilities.ts";
 export { decodeCursor, encodeCursor, type Cursor } from "./cursor.ts";
 export {
   createGridHandler,
@@ -35,17 +34,7 @@ export {
   type ShapeIndex,
   type TableMigration,
 } from "./schema-ddl.ts";
-export {
-  describeShape,
-  isFacetOnlyQuery,
-  isQuickShape,
-  listOrderedShapes,
-  listQuickFields,
-  listSortFields,
-  matchShape,
-  shapeId,
-  validateGridDef,
-} from "./shapes.ts";
+export { describeShape, validateGridDef } from "./shapes.ts";
 export {
   assertDeclared,
   buildCappedCountSql,
@@ -63,10 +52,4 @@ export {
   type SqlQuery,
   type SqlValue,
 } from "./sql-builder.ts";
-export type {
-  FacetStorage,
-  OrderedShape,
-  QueryShape,
-  QuickShape,
-  ServerGridDef,
-} from "./storage.ts";
+export type { FacetStorage, ServerGridDef } from "./storage.ts";

@@ -1,16 +1,15 @@
 import {
   getField,
+  isQuickShape,
   KEY_FIELD,
+  listOrderedShapes,
+  shapeId,
   type FieldDef,
-  type QueryState,
+  type OrderedShape,
+  type QueryShape,
 } from "@kikstart/query-grid";
 
-import type {
-  OrderedShape,
-  QueryShape,
-  QuickShape,
-  ServerGridDef,
-} from "./storage.ts";
+import type { ServerGridDef } from "./storage.ts";
 
 const QUICK_TYPES: FieldDef["type"][] = [
   "text",
@@ -19,21 +18,6 @@ const QUICK_TYPES: FieldDef["type"][] = [
   "money",
   "id",
 ];
-
-export function isQuickShape(shape: QueryShape): shape is QuickShape {
-  return "quick" in shape;
-}
-
-export function listQuickFields(shapes: QueryShape[]): string[] {
-  return shapes.find(isQuickShape)?.quick ?? [];
-}
-
-export function shapeId(shape: QueryShape): string {
-  if (isQuickShape(shape)) {
-    return `quick:${shape.quick.join("+")}`;
-  }
-  return `${[...shape.equals].sort().join("+")}|${shape.sort}`;
-}
 
 export function describeShape(shape: QueryShape): string {
   if (isQuickShape(shape)) {
@@ -44,57 +28,6 @@ export function describeShape(shape: QueryShape): string {
     : "no filter";
   const range = shape.range ? ` (range on ${shape.sort})` : "";
   return `${filters}, sort ${shape.sort}${range}`;
-}
-
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value) => b.includes(value));
-}
-
-export function listOrderedShapes(shapes: QueryShape[]): OrderedShape[] {
-  return shapes.filter((shape): shape is OrderedShape => !isQuickShape(shape));
-}
-
-export function listSortFields(shapes: QueryShape[]): string[] {
-  return [...new Set(listOrderedShapes(shapes).map((shape) => shape.sort))];
-}
-
-export function matchShape(
-  shapes: QueryShape[],
-  query: QueryState,
-): QueryShape | null {
-  const equals = Object.keys(query.equals);
-  if (query.quick !== null) {
-    const answerable =
-      equals.length === 0 &&
-      query.range === null &&
-      listSortFields(shapes).includes(query.sort.field);
-    return answerable ? (shapes.find(isQuickShape) ?? null) : null;
-  }
-  const ordered = listOrderedShapes(shapes).find(
-    (shape) => shape.sort === query.sort.field && sameSet(shape.equals, equals),
-  );
-  if (!ordered) {
-    return null;
-  }
-  if (query.range && (!ordered.range || query.range.field !== ordered.sort)) {
-    return null;
-  }
-  const several = Object.values(query.equals).some(
-    (values) => values.length > 1,
-  );
-  return several && ordered.multi === false ? null : ordered;
-}
-
-export function isFacetOnlyQuery(
-  facetField: string | undefined,
-  query: QueryState,
-): boolean {
-  return (
-    facetField !== undefined &&
-    query.range === null &&
-    query.quick === null &&
-    Object.keys(query.equals).every((key) => key === facetField)
-  );
 }
 
 function validateQuickShape(def: ServerGridDef, columns: string[]): string[] {

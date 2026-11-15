@@ -4,8 +4,11 @@ import { join } from "node:path";
 import {
   defaultQuery,
   getField,
+  isQuickShape,
   resolveMaxValues,
   type GridRow,
+  type OrderedShape,
+  type QueryShape,
   type QueryState,
 } from "@kikstart/query-grid";
 import {
@@ -15,13 +18,10 @@ import {
   buildRowSql,
   describeShape,
   encodeCursor,
-  isQuickShape,
   QUERY_CANCELED,
   QUICK_BUDGET_MS,
   QUICK_SETTINGS,
   TOTAL_SETTINGS,
-  type OrderedShape,
-  type QueryShape,
   type SqlQuery,
 } from "@kikstart/query-grid-postgres";
 import { Client } from "pg";

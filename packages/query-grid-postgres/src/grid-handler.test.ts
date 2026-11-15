@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import {
   decodeQuery,
   encodeQuery,
+  shapeCapabilities,
   type GridRow,
   type QueryState,
 } from "@kikstart/query-grid";
 import { createHttpSource, type ErrorBody } from "@kikstart/query-grid/http";
 
-import { capabilities } from "./capabilities.ts";
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import {
   createGridHandler,
@@ -207,7 +207,7 @@ describe("the URL codec", () => {
       const source = createHttpSource(
         TEST_DEF,
         BASE_PATH,
-        capabilities(TEST_DEF.shapes),
+        shapeCapabilities(TEST_DEF.shapes),
       );
       const signal = new AbortController().signal;
       const query: QueryState = {

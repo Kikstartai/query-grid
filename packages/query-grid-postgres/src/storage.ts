@@ -1,17 +1,4 @@
-import type { FacetDef, GridDef } from "@kikstart/query-grid";
-
-export interface OrderedShape {
-  equals: string[];
-  sort: string;
-  range?: boolean;
-  multi?: boolean;
-}
-
-export interface QuickShape {
-  quick: string[];
-}
-
-export type QueryShape = OrderedShape | QuickShape;
+import type { FacetDef, GridDef, QueryShape } from "@kikstart/query-grid";
 
 export interface FacetStorage extends FacetDef {
   counterTable: string;
