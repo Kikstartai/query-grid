@@ -188,16 +188,14 @@ interface GridRowPartProps {
 }
 
 function GridRowPart({ handle, index, start, row, layout }: GridRowPartProps) {
-  const [measure] = useState(
-    () => (el: HTMLDivElement | null) => handle.api.virtual.measure(index, el),
-  );
   return usePart(
     handle,
     "row",
     { row: index, id: String(index) },
     withData(
       {
-        ref: measure,
+        ref: (el: HTMLDivElement | null) =>
+          handle.api.virtual.measure(index, el),
         className: "qg-row",
         style: {
           position: "absolute" as const,
@@ -242,7 +240,7 @@ function GridRows() {
         return row
           ? [
               <GridRowPart
-                key={`${item.key}:${item.index}:${layout.layoutKey}`}
+                key={`${item.key}:${layout.layoutKey}`}
                 handle={handle}
                 index={item.index}
                 start={item.start}

@@ -53,13 +53,10 @@ interface CardProps {
 
 function Card({ virtual, index, start, row, fields }: CardProps) {
   const locale = useLocale();
-  const [measure] = useState(
-    () => (el: HTMLElement | null) => virtual.measure(index, el),
-  );
   const [title, badge, ...rest] = fields;
   return (
     <article
-      ref={measure}
+      ref={(el) => virtual.measure(index, el)}
       data-card={row.id}
       data-index={index}
       className="qg-card-slot"
@@ -148,7 +145,7 @@ export function CardList(props: CardListProps) {
             return row
               ? [
                   <Card
-                    key={`${item.key}:${item.index}`}
+                    key={item.key}
                     virtual={virtual}
                     index={item.index}
                     start={item.start}
