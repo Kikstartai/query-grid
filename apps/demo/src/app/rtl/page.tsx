@@ -8,7 +8,7 @@ export default function RtlPage() {
   return (
     <Suspense fallback={<PageLoading />}>
       <AtRequest>
-        <OrdersWorkspace dir="rtl" />
+        <OrdersWorkspace title="Orders, right to left" dir="rtl" />
       </AtRequest>
     </Suspense>
   );

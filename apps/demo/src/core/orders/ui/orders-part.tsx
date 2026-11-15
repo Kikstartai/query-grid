@@ -1,6 +1,6 @@
 "use client";
 
-import { use, type ComponentType } from "react";
+import type { ComponentType } from "react";
 
 import { useQueryState } from "@kikstart/query-grid-react";
 import {
@@ -13,13 +13,11 @@ import {
   TotalFooter,
 } from "@kikstart/query-grid-react/ui";
 
-import { PART_NAMES } from "@/lib/site";
+import type { PartName } from "@/lib/site";
 import { SiteBrand } from "@/lib/site-brand";
 
 import { OrdersQueryProvider } from "../orders-provider";
 import { OrdersBoard, OrdersCardList } from "./orders-workspace";
-
-type PartName = (typeof PART_NAMES)[number];
 
 const PARTS: Record<PartName, ComponentType> = {
   "filter-bar": FilterBar,
@@ -43,15 +41,11 @@ function QueryReadout() {
 }
 
 interface OrdersPartProps {
-  params: Promise<{ part: string }>;
+  part: PartName;
 }
 
-export function OrdersPart({ params }: OrdersPartProps) {
-  const { part } = use(params);
-  const Part = PARTS[part as PartName];
-  if (!Part) {
-    return <p className="part-missing">Unknown part: {part}</p>;
-  }
+export function OrdersPart({ part }: OrdersPartProps) {
+  const Part = PARTS[part];
   return (
     <OrdersQueryProvider>
       <div className="part-page" data-solo-part={part}>

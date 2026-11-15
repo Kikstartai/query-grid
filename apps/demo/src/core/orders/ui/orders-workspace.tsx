@@ -22,6 +22,7 @@ import { OrdersQueryProvider } from "../orders-provider";
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 interface OrdersWorkspaceProps {
+  title: string;
   dir?: "rtl";
 }
 
@@ -46,13 +47,13 @@ function OrdersView() {
   return <DataGrid />;
 }
 
-export function OrdersWorkspace({ dir }: OrdersWorkspaceProps) {
+export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
   return (
     <OrdersQueryProvider>
       <div className="workspace" dir={dir} data-dir={dir}>
         <header className="workspace-head">
           <SiteBrand />
-          <h1>{dir ? "Orders, right to left" : "Orders"}</h1>
+          <h1>{title}</h1>
           <CountDisplay />
           <span className="workspace-spacer" />
           <ViewSwitch views={VIEWS} />

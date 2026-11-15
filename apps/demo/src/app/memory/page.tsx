@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { TasksWorkspace } from "@/core/tasks/tasks-workspace";
+import { TasksWorkspace } from "@/core/tasks/ui/tasks-workspace";
 import { AtRequest } from "@/lib/at-request";
 import { PageLoading } from "@/lib/page-loading";
 

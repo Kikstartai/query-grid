@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 
 import { TOTAL_SETTINGS } from "@kikstart/query-grid-postgres";
 
-import { executeSql } from "../src/lib/db";
+import { executeSql } from "../src/lib/pg-executor";
 
 const SLEEP = { text: "SELECT pg_sleep(20)", values: [] };
 const ONE = { text: "SELECT 1 AS one", values: [] };

@@ -8,7 +8,7 @@ export default function OrdersPage() {
   return (
     <Suspense fallback={<PageLoading />}>
       <AtRequest>
-        <OrdersWorkspace />
+        <OrdersWorkspace title="Orders" />
       </AtRequest>
     </Suspense>
   );

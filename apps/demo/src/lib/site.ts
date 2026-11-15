@@ -71,3 +71,9 @@ export const PART_NAMES = [
   "list",
   "board",
 ] as const;
+
+export type PartName = (typeof PART_NAMES)[number];
+
+export function isPartName(value: string): value is PartName {
+  return (PART_NAMES as readonly string[]).includes(value);
+}

@@ -26,7 +26,7 @@ import {
   TASK_QUICK_FIELDS,
   TASK_TRANSITIONS,
   TASKS_GRID,
-} from "./tasks-grid-def";
+} from "../tasks-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["title", "assignee", "budget"];
 

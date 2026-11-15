@@ -59,9 +59,40 @@ pre {
   font-family: var(--font-mono);
 }
 
-.page-loading,
-.part-missing {
+.page-loading {
   padding: 16px;
+}
+
+.page-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px 16px;
+}
+
+.page-message h1,
+.page-message p {
+  margin: 0;
+}
+
+.page-message h1 {
+  font-size: 20px;
+}
+
+.page-message p {
+  color: var(--muted-foreground);
+}
+
+.page-message-action {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .site-brand {

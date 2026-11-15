@@ -14,7 +14,7 @@
     "start": "next start -p 3040",
     "test": "bun test src",
     "test:db": "bun --env-file=.env.local test ./db",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@kikstart/query-grid": "workspace:*",
@@ -26,7 +26,8 @@
     "nuqs": "^2.10.3",
     "pg": "^8.20.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@types/bun": "latest",
