@@ -49,17 +49,22 @@ function chooseTheme(choice: ThemeChoice) {
   applyTheme(choice);
 }
 
+function onStorage(event: StorageEvent) {
+  if (event.key === THEME_STORAGE_KEY || event.key === null) {
+    applyTheme(normalizeThemeChoice(event.newValue));
+  }
+}
+
 function subscribe(onChange: () => void) {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === THEME_STORAGE_KEY) {
-      applyTheme(normalizeThemeChoice(event.newValue));
-    }
-  };
+  if (listeners.size === 0) {
+    window.addEventListener("storage", onStorage);
+  }
   listeners.add(onChange);
-  window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(onChange);
-    window.removeEventListener("storage", onStorage);
+    if (listeners.size === 0) {
+      window.removeEventListener("storage", onStorage);
+    }
   };
 }
 

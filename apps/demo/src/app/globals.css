@@ -29,7 +29,7 @@
   --ui-border: var(--border);
   --ui-input: light-dark(oklch(0.87 0.004 286.32), oklch(0.52 0.006 286));
   --ui-primary: var(--brand);
-  --ui-primary-foreground: light-dark(oklch(0.985 0 0), oklch(0.17 0.005 285));
+  --ui-primary-foreground: light-dark(oklch(0.985 0 0), var(--background));
   --ui-destructive: var(--destructive);
   --ui-ring: color-mix(in oklab, var(--brand) 25%, transparent);
   --ui-ring-border: var(--brand);
@@ -125,6 +125,7 @@ pre {
   flex-shrink: 0;
   background: linear-gradient(135deg, var(--logo-from), var(--logo-to));
   mask: var(--logo) center / contain no-repeat;
+  forced-color-adjust: none;
 }
 
 .brand-logo[data-logo="mark"] {
