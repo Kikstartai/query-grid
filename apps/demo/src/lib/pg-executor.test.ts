@@ -18,7 +18,11 @@ async function captureFailure(): Promise<unknown> {
 
 describe("the demo executor's connection string", () => {
   afterEach(() => {
-    process.env.QUERY_GRID_DATABASE_URL = saved;
+    if (saved === undefined) {
+      delete process.env.QUERY_GRID_DATABASE_URL;
+    } else {
+      process.env.QUERY_GRID_DATABASE_URL = saved;
+    }
   });
 
   test("a missing one is named and nothing connects", async () => {

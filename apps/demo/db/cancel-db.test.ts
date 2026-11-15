@@ -102,6 +102,15 @@ for (const { name, url } of connections) {
       expect(performance.now() - started).toBeLessThan(ABORT_AFTER_MS);
     });
 
+    test("an abort while the transaction opens runs nothing", async () => {
+      const controller = new AbortController();
+      const started = performance.now();
+      const running = executor.execute(SLEEP, [], controller.signal);
+      setTimeout(() => controller.abort(), 1);
+      await expect(running).rejects.toBeDefined();
+      expect(performance.now() - started).toBeLessThan(ABORT_AFTER_MS);
+    });
+
     test("the pool answers after the cancels", async () => {
       const signal = new AbortController().signal;
       expect(await executor.execute(ONE, [], signal)).toEqual([{ one: 1 }]);

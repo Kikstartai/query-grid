@@ -153,7 +153,7 @@ interface QueryState {
 - `/facets` ignores the query: facet counts are whole-table counts.
 - A total is unavailable per field, as `over_cap` with the cap.
 - Every read runs under `request.signal`, which is the third argument of the host's `execute` and of the hooks.
-- The demo's executor starts each statement with a per-call marker, `/* qg:<uuid> */`, and cancels an aborted one through `pg_stat_activity` by that marker, from one long-lived connection outside the pool. It never names a backend pid, so the cancel is correct behind any transaction pooler. Its 5 s statement budget is a `SET LOCAL` inside each statement's transaction, so a pooler that drops startup parameters still applies it.
+- The demo's executor starts each statement with a per-call marker, `/* qg:<uuid> */`, and cancels an aborted one through `pg_stat_activity` by that marker, from one connection outside the pool that every cancel shares and that closes after 10 s idle. It never names a backend pid, so the cancel is correct behind any transaction pooler. Its 5 s statement budget is a `SET LOCAL` inside each statement's transaction, so a pooler that drops startup parameters still applies it.
 - The server refuses before any SQL exists: `assertDeclared` rejects an undeclared shape, an unknown field, a value outside its type, more values than a field's cap and an undecodable cursor.
 
 ## Storage

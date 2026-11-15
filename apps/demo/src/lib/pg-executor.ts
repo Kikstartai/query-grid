@@ -38,6 +38,7 @@ async function runOnClient<T extends QueryResultRow>(
   client: PoolClient,
   query: SqlQuery,
   settings: string[],
+  signal: AbortSignal | undefined,
 ): Promise<T[]> {
   try {
     await client.query(
@@ -46,6 +47,8 @@ async function runOnClient<T extends QueryResultRow>(
         ...[BUDGET_SETTING, ...settings].map((s) => `SET LOCAL ${s}`),
       ].join("; "),
     );
+    // The cancel can only find the marked statement, so an abort that landed during BEGIN is honoured here.
+    signal?.throwIfAborted();
     const result = await client.query<T>(query.text, query.values);
     await client.query("COMMIT");
     return result.rows;
@@ -98,14 +101,17 @@ export function createPgExecutor(connectionString: string): PgExecutor {
   }
 
   async function cancelStatement(marker: string): Promise<void> {
+    const used = getCanceller();
     try {
-      const client = await getCanceller();
+      const client = await used;
       await client.query(CANCEL_SQL, [marker]);
       clearTimeout(idleTimer);
       idleTimer = setTimeout(dropCanceller, IDLE_MS);
       idleTimer.unref?.();
     } catch {
-      dropCanceller();
+      if (canceller === used) {
+        dropCanceller();
+      }
     }
   }
 
@@ -128,6 +134,7 @@ export function createPgExecutor(connectionString: string): PgExecutor {
         client,
         { text: `${marker} ${query.text}`, values: query.values },
         settings,
+        signal,
       );
     } catch (error) {
       if (error instanceof ConnectionPoisoned) {
