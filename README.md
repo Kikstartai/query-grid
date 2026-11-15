@@ -366,16 +366,16 @@ So a restyle is mostly repointing tokens. This is the whole stylesheet behind th
 
 ```css
 .restyled {
-  --ui-background: #fffbeb;
-  --ui-foreground: #0f172a;
-  --ui-muted: #fde68a;
-  --ui-muted-foreground: #475569;
-  --ui-border: #0f172a;
-  --ui-input: #0f172a;
-  --ui-primary: #0f172a;
-  --ui-primary-foreground: #fffbeb;
-  --ui-ring: #f59e0b;
-  --ui-ring-border: #0f172a;
+  --ui-background: light-dark(#fffbeb, #1c1408);
+  --ui-foreground: light-dark(#0f172a, #fef3c7);
+  --ui-muted: light-dark(#fde68a, #451a03);
+  --ui-muted-foreground: light-dark(#475569, #fcd34d);
+  --ui-border: light-dark(#0f172a, #fef3c7);
+  --ui-input: light-dark(#0f172a, #fef3c7);
+  --ui-primary: light-dark(#0f172a, #fde68a);
+  --ui-primary-foreground: light-dark(#fffbeb, #1c1408);
+  --ui-ring: light-dark(#f59e0b, #92400e);
+  --ui-ring-border: light-dark(#0f172a, #fef3c7);
   --ui-radius: 0;
   --ui-font-size: 0.75rem;
   --ui-font-sans: var(--font-mono);
@@ -407,7 +407,11 @@ To go further than tokens, target the hooks:
 - Every UI SDK part carries its `data-slot` (`select-trigger`, `drawer-content`, `calendar-day`) and state attributes (`data-open`, `data-highlighted`, `data-disabled`, `data-checked`).
 - The package's own elements carry stable `qg-` classes (`qg-row`, `qg-cell`, `qg-header-cell`, `qg-chip`, `qg-facet`, `qg-card`, `qg-board-card`) and the grid's state attributes (`data-active`, `data-selected`, `data-pinned`, `data-unavailable`).
 
-`web.css` follows the system colour scheme. A light-only app sets `color-scheme: light` on `:root`, as the demo does.
+### Dark mode
+
+The package has no theme of its own: it follows the host's `--ui-*` tokens, so it is dark wherever they are. `web.css` already gives every token a light and a dark value with `light-dark()` and `color-scheme: light dark`, so with no tokens of your own it follows the system. A host with its own palette writes its tokens the same way and sets `color-scheme` to pick the theme; a light-only app sets `color-scheme: light` on `:root`.
+
+The demo follows the system and lets a header toggle (System, Light, Dark) override it. Its tokens are `light-dark()` pairs, `:root[data-theme="light"]` and `:root[data-theme="dark"]` each set only `color-scheme`, and a one-line script in `<head>` copies the stored choice onto `<html>` before the first paint. No component carries a dark-mode rule, and the `/restyled` palette above has its own dark pair.
 
 ## Using the hooks alone
 

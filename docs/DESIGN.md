@@ -177,6 +177,12 @@ interface QueryState {
 - **Right to left works.** The stylesheet uses logical properties only, inline layout uses `insetInlineStart`, column resize and drag follow the direction, and every message, count and formatted value sits inside `<bdi>`.
 - **English that stays** is text no user reads: `validateGridDef` problems, `describeShape` and comments in generated SQL.
 
+## Theming
+
+- **The library follows the host's `--ui-*` tokens.** `styles.css` reads them and defines none, and it hard-codes no colour: tints are `color-mix()` of tokens. Dark mode is the host's tokens taking dark values, so it needs nothing from the packages.
+- **`web.css` defaults to the system scheme**, through `light-dark()` and `color-scheme: light dark`. A host picks a theme by setting `color-scheme`, and a host palette uses `light-dark()` pairs the same way.
+- **The demo** overrides the system with `data-theme` on `<html>`, set before paint by an inline `<head>` script from local storage. The server never reads the choice, so the static shell stays request-free.
+
 ## Scale
 
 - **Nothing grows with a tenant count.** This is library code. Capabilities are computed once per def.
