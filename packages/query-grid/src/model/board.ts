@@ -76,12 +76,12 @@ export function getLaneQueries(
   if (!field?.options) {
     return null;
   }
-  const memory = runnable.mode === "memory";
+  const holdsAllRows = runnable.holdsAllRows;
   const selected = query.equals[field.key];
   const statuses = field.options
     .map((option) => option.value)
     .filter((value) => selected === undefined || selected.includes(value));
-  const base: QueryState = memory
+  const base: QueryState = holdsAllRows
     ? { ...query, cursor: null }
     : { ...query, range: null, sort: def.defaultSort, cursor: null };
   const queries = new Map<string, QueryState>(
@@ -90,7 +90,8 @@ export function getLaneQueries(
       { ...base, equals: { ...query.equals, [field.key]: [status] } },
     ]),
   );
-  const combinable = memory || (query.search === null && query.range === null);
+  const combinable =
+    holdsAllRows || (query.search === null && query.range === null);
   const answerable = combinable && [...queries.values()].every(runnable.canRun);
   return answerable ? queries : null;
 }

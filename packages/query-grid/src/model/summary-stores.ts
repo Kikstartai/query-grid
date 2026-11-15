@@ -68,7 +68,7 @@ export function createFacetStore(
     {
       initial: [],
       keepResult: true,
-      followsFilters: source.runnable.mode === "memory",
+      followsFilters: source.runnable.facetCountsFollowFilters,
     },
   );
 }

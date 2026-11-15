@@ -235,7 +235,9 @@ The client parts read no table, no index and no counter table. What they need to
 
 ```ts
 interface RunnableQueries {
-  mode: "server" | "memory";
+  holdsAllRows: boolean;
+  searchIsOrdered: boolean;
+  facetCountsFollowFilters: boolean;
   canRun(query: QueryState): boolean;
   equalsFields: string[];
   rangeFields: string[];
@@ -247,6 +249,7 @@ interface RunnableQueries {
 
 - Core's `indexRunnable(indexes, { facetField })` builds it from the same indexes the server enforces, so the controls offer exactly what the handler accepts. `createHttpSource` calls it with the def's indexes and facet, once per source. The index types and `getIndex` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
 - `memoryRunnable(def)` builds it for the in-memory source, where every field is a filter: a number or a date takes a range, anything else an equality.
+- `holdsAllRows`, `searchIsOrdered` and `facetCountsFollowFilters` say how the source behaves instead of which kind it is: true for the in-memory source, false for an index-backed one.
 - **What may be filtered comes from the data alone.** A field def says nothing about filtering. `equalsFields` and `rangeFields` are the fields an index names on a server grid and every field on a client grid; `canRun` then says, query by query, which of them can be used now. A filter that cannot be used now stays in place, disabled, with its reason.
 - **Which control a field gets** is `resolveFilterKind(field, runnable)`: an equality field with `options` is a select, one without is a lookup, a range field is a date range or two numbers by its `type`.
 - Everything in the client that used to read indexes reads this instead: the provider's URL guard, `applyAction`, `listOffers`, the sort control, the search, the facet panel and the board.

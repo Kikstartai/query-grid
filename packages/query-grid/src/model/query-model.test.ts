@@ -24,7 +24,9 @@ import { validateQueryValues } from "./query-validate.ts";
 const BASE = defaultQuery(TEST_DEF);
 
 const SERVER: RunnableQueries = {
-  mode: "server",
+  holdsAllRows: false,
+  searchIsOrdered: false,
+  facetCountsFollowFilters: false,
   canRun: (query) =>
     Object.keys(query.equals).every((key) => key === "status") &&
     (query.equals.status?.length ?? 1) === 1,

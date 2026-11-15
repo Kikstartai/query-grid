@@ -102,7 +102,9 @@ export function indexRunnable(
 ): RunnableQueries {
   const searchFields = options.searchFields ?? [];
   return {
-    mode: "server",
+    holdsAllRows: false,
+    searchIsOrdered: false,
+    facetCountsFollowFilters: false,
     canRun: (query) => isQueryIndexed(indexes, searchFields, query),
     equalsFields: listEqualsFields(indexes),
     rangeFields: listRangeFields(indexes),

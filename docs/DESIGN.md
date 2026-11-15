@@ -94,7 +94,9 @@ Runnable queries are what a data source can answer. Every control reads them; no
 
 ```ts
 interface RunnableQueries {
-  mode: "server" | "memory";
+  holdsAllRows: boolean;
+  searchIsOrdered: boolean;
+  facetCountsFollowFilters: boolean;
   canRun: (query: QueryState) => boolean;
   equalsFields: string[];
   rangeFields: string[];
@@ -107,6 +109,7 @@ interface RunnableQueries {
 - `indexRunnable(indexes, { facetField, searchFields })` builds them for a server grid: every field in an index's `equals`, the sort of every index with `range`, every index's sort, and `searchFields`. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
 - `memoryRunnable(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, and every field sorts.
 - `canRun` is the answer for one query. The field lists are what could ever be asked.
+- Three flags say how the source behaves, never which kind it is: `holdsAllRows` (every row is in hand, so a board lane keeps the whole query), `searchIsOrdered` (search results sort like any query, rather than arriving as one capped unordered batch the feed sorts itself) and `facetCountsFollowFilters` (facet counts are recounted under the other filters, rather than read from the counter table). All three are true for the memory source and false for an index-backed one.
 - `OfferContext` is the runnable queries plus whether every search match is loaded.
 - `listOffers(def, query, context)` says what the next action may be. `applyAction` refuses an action whose result the runnable queries do not answer. `explainUnavailable(query, target, context)` gives the reason as a code.
 - The control for a field follows from the runnable queries, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.

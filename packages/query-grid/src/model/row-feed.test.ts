@@ -14,7 +14,9 @@ import { createFeed } from "./row-feed.ts";
 import { createCountStore } from "./summary-stores.ts";
 
 const SERVER: RunnableQueries = {
-  mode: "server",
+  holdsAllRows: false,
+  searchIsOrdered: false,
+  facetCountsFollowFilters: false,
   canRun: () => true,
   equalsFields: [],
   rangeFields: [],

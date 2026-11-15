@@ -58,7 +58,7 @@ export interface QueryGridMessages {
   reset: string;
   done: string;
   all: string;
-  facetNotes: Record<"memory" | "counter" | "hidden", string>;
+  facetNotes: Record<"following" | "counter" | "hidden", string>;
   sort: string;
   sortBy: string;
   ascending: string;
@@ -172,7 +172,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   done: "Done",
   all: "All",
   facetNotes: {
-    memory: "Counts follow the other filters.",
+    following: "Counts follow the other filters.",
     counter: "Counts come from a trigger-maintained counter table.",
     hidden:
       "Counts are hidden while another filter is active: no counter answers them.",

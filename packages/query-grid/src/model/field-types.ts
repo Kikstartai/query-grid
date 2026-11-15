@@ -8,8 +8,6 @@ export type FieldType =
 
 export type SortDirection = "asc" | "desc";
 
-export type QueryMode = "server" | "memory";
-
 export type GridRow = Record<string, string | number | null> & { id: string };
 
 export interface FieldOption {
@@ -69,7 +67,9 @@ export interface QueryState {
 }
 
 export interface RunnableQueries {
-  mode: QueryMode;
+  holdsAllRows: boolean;
+  searchIsOrdered: boolean;
+  facetCountsFollowFilters: boolean;
   canRun: (query: QueryState) => boolean;
   equalsFields: string[];
   rangeFields: string[];

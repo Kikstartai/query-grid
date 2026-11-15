@@ -76,7 +76,7 @@ describe("the HTTP source", () => {
       { ...TEST_DEF, indexes: INDEXES },
       "/things",
     );
-    expect(source.runnable.mode).toBe("server");
+    expect(source.runnable.holdsAllRows).toBe(false);
     expect(source.runnable.sortFields).toEqual(["created_at", "total"]);
     expect(source.runnable.isFacetCountExact(BASE)).toBe(true);
     expect(
@@ -96,7 +96,7 @@ describe("indexRunnable", () => {
   });
 
   test("they are the indexes, read once", () => {
-    expect(caps.mode).toBe("server");
+    expect(caps.searchIsOrdered).toBe(false);
     expect(caps.equalsFields).toEqual(["status", "region"]);
     expect(caps.rangeFields).toEqual(["created_at", "total"]);
     expect(caps.sortFields).toEqual(["created_at", "total"]);

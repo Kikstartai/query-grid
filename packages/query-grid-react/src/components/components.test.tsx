@@ -500,7 +500,7 @@ describe("messages", () => {
           selectAll: "Kies alles",
           reset: "Herstel",
           countSources: { exact: "presiese telling" },
-          facetNotes: { memory: "Tellings volg die filters." },
+          facetNotes: { following: "Tellings volg die filters." },
         }}
       >
         <DataGrid fields={TEST_FIELDS} {...ROW_WINDOW} rows={[]} />

@@ -117,7 +117,7 @@ function proposeAction(
   context: OfferContext,
 ): QueryState[] {
   const top = { ...query, cursor: null };
-  const memory = context.runnable.mode === "memory";
+  const searchIsOrdered = context.runnable.searchIsOrdered;
   switch (action.type) {
     case "setEquals":
       return proposeEquals(def, query, action.field, action.values);
@@ -147,7 +147,9 @@ function proposeAction(
       return [{ ...top, range: null }];
     case "setSort": {
       const unordered =
-        !memory && query.search !== null && !context.allSearchMatchesLoaded;
+        !searchIsOrdered &&
+        query.search !== null &&
+        !context.allSearchMatchesLoaded;
       if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
@@ -156,7 +158,7 @@ function proposeAction(
       ];
     }
     case "setSearch":
-      if (memory) {
+      if (searchIsOrdered) {
         return [{ ...top, search: action.value }];
       }
       return [{ ...top, search: action.value, sort: def.defaultSort }];

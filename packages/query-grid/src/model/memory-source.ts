@@ -28,7 +28,9 @@ export function memoryRunnable(def: BaseGridDef): RunnableQueries {
     .filter((field) => !ranged(field))
     .map((field) => field.key);
   return {
-    mode: "memory",
+    holdsAllRows: true,
+    searchIsOrdered: true,
+    facetCountsFollowFilters: true,
     canRun: (query) =>
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       (query.range === null || rangeFields.includes(query.range.field)) &&

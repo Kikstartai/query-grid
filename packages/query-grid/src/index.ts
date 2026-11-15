@@ -40,7 +40,6 @@ export {
   type FilterKind,
   type BaseGridDef,
   type GridRow,
-  type QueryMode,
   type OfferContext,
   type QueryState,
   type RangeState,

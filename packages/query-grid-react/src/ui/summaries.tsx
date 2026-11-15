@@ -78,6 +78,7 @@ export function FacetPanel() {
   const countOf = (value: string) =>
     facets.result.find((item) => item.value === value)?.count ?? 0;
   const shown = counted ? "counter" : "hidden";
+  const note = runnable.facetCountsFollowFilters ? "following" : shown;
   return (
     <BaseFacetPanel
       label={field.label}
@@ -91,7 +92,7 @@ export function FacetPanel() {
           ? facets.result.reduce((sum, facet) => sum + facet.count, 0)
           : null
       }
-      note={messages.facetNotes[runnable.mode === "memory" ? "memory" : shown]}
+      note={messages.facetNotes[note]}
       {...offer}
     />
   );
