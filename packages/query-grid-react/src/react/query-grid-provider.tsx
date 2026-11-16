@@ -11,7 +11,9 @@ import {
   createNarrowedStore,
   createQueryStore,
   createTotalStore,
+  withScope,
   type DataSource,
+  type QueryScope,
 } from "@kikstart/query-grid";
 import { throttle, useQueryStates } from "nuqs";
 
@@ -42,6 +44,7 @@ const REPLACE_THROTTLE_MS = 250;
 export interface QueryGridProviderProps {
   def: GridDef;
   source: DataSource;
+  scope?: QueryScope;
   pageSize?: number;
   urlPrefix?: string;
   columnPersistence?: ColumnPersistence;
@@ -54,9 +57,10 @@ export interface StaticQueryGridProviderProps extends QueryGridProviderProps {
 
 function createValue(
   props: QueryGridProviderProps,
+  source: DataSource,
   queryString: string,
 ): QueryGridContextValue {
-  const { def, source } = props;
+  const { def } = props;
   const initial = readUrlState(def, source.capabilities, queryString);
   const store = createQueryStore(
     def,
@@ -110,12 +114,19 @@ interface GridSession {
   sync: UrlSync;
 }
 
+// The scope is read once, like the def: a grid whose scope changes is a new grid, remounted under a key.
+function useScopedSource(props: QueryGridProviderProps): DataSource {
+  const [source] = useState(() => withScope(props.source, props.scope ?? {}));
+  return source;
+}
+
 function useGridSession(
   props: QueryGridProviderProps,
+  source: DataSource,
   queryString: string,
   write: UrlWriter,
 ): GridSession {
-  const [value] = useState(() => createValue(props, queryString));
+  const [value] = useState(() => createValue(props, source, queryString));
   const [sync] = useState(() =>
     createUrlSync(value.state.store, queryString, write),
   );
@@ -147,7 +158,8 @@ function useGridEffects(
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
-  const { capabilities } = props.source;
+  const source = useScopedSource(props);
+  const { capabilities } = source;
   const [def] = useState(() => props.def);
   const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
   const [urlValues, setUrlValues] = useQueryStates(parsers);
@@ -157,14 +169,19 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
     prefix,
   );
   const setter = useLatest(setUrlValues);
-  const session = useGridSession(props, queryString, (state, history) => {
-    void setter.current(
-      toUrlValues(def, capabilities, state, prefix),
-      history === "push"
-        ? { history }
-        : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
-    );
-  });
+  const session = useGridSession(
+    props,
+    source,
+    queryString,
+    (state, history) => {
+      void setter.current(
+        toUrlValues(def, capabilities, state, prefix),
+        history === "push"
+          ? { history }
+          : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
+      );
+    },
+  );
 
   useEffect(() => session.sync.connect(), [session.sync]);
   useGridEffects(session, queryString);
@@ -179,12 +196,13 @@ function ignoreWrite(): void {
 }
 
 export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
+  const source = useScopedSource(props);
   const queryString = normalizeQueryString(
-    props.source.capabilities,
+    source.capabilities,
     props.queryString,
     props.urlPrefix ?? "",
   );
-  const session = useGridSession(props, queryString, ignoreWrite);
+  const session = useGridSession(props, source, queryString, ignoreWrite);
   useGridEffects(session, queryString);
 
   return (

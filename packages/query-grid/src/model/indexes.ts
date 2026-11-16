@@ -5,6 +5,8 @@ import {
   type BaseGridDef,
   type QueryState,
   type DataSourceCapabilities,
+  type TextOp,
+  type TextState,
 } from "./field-types.ts";
 import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 
@@ -13,28 +15,42 @@ export interface IndexDef {
   sort: string;
   range?: boolean;
   multi?: boolean;
+  empty?: string[];
 }
 
-export interface IndexedGridDef extends BaseGridDef {
+export interface IndexExtras {
+  textIndexes?: string[];
+  arrayIndexes?: string[];
+}
+
+export interface IndexedGridDef extends BaseGridDef, IndexExtras {
   indexes: IndexDef[];
 }
 
-export interface IndexCapabilitiesOptions {
+export interface IndexCapabilitiesOptions extends IndexExtras {
   facetField?: string;
   searchFields?: string[];
   fields?: BaseFieldDef[];
 }
 
 const GROUP_PROBE = ["x"];
+const NO_EXTRAS: IndexExtras = {};
+const INDEXED_TEXT_OPS: TextOp[] = ["contains", "starts_with", "ends_with"];
+
+export const TEXT_INDEX_MIN_LENGTH = 3;
 
 export interface QueryPlan {
   core: QueryState;
   narrowed: boolean;
+  budgeted: boolean;
   terms: QueryState[] | null;
 }
 
 export function indexId(index: IndexDef): string {
-  return `${[...index.equals].sort().join("+")}|${index.sort}`;
+  const id = `${[...index.equals].sort().join("+")}|${index.sort}`;
+  return index.empty?.length
+    ? `${id}|empty:${[...index.empty].sort().join("+")}`
+    : id;
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -42,7 +58,11 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function listEqualsFields(indexes: IndexDef[]): string[] {
-  return [...new Set(indexes.flatMap((index) => index.equals))];
+  return [
+    ...new Set(
+      indexes.flatMap((index) => [...index.equals, ...(index.empty ?? [])]),
+    ),
+  ];
 }
 
 function listRangeFields(indexes: IndexDef[]): string[] {
@@ -76,28 +96,49 @@ export function listGroupFields(
     .map((field) => field.key);
 }
 
-export function isContainsField(field: BaseFieldDef): boolean {
+export function isTextField(field: BaseFieldDef): boolean {
   return field.type === "text" && !field.options;
 }
 
-export function listContainsFields(fields: BaseFieldDef[]): string[] {
-  return fields.filter(isContainsField).map((field) => field.key);
+export function listTextFields(fields: BaseFieldDef[]): string[] {
+  return fields.filter(isTextField).map((field) => field.key);
 }
 
-export function listContainsFilterFields(
+export function listTextFilterFields(
   capabilities: DataSourceCapabilities,
   keys?: string[],
 ): string[] {
-  return capabilities.containsFields.filter(
+  return capabilities.textFields.filter(
     (key) => keys === undefined || keys.includes(key),
   );
+}
+
+export function isOverlapField(field: BaseFieldDef): boolean {
+  return field.type === "array";
+}
+
+export function listOverlapFields(fields: BaseFieldDef[]): string[] {
+  return fields.filter(isOverlapField).map((field) => field.key);
+}
+
+export function isTextIndexed(extras: IndexExtras, text: TextState): boolean {
+  return (
+    (extras.textIndexes ?? []).includes(text.field) &&
+    INDEXED_TEXT_OPS.includes(text.op) &&
+    text.value.trim().length >= TEXT_INDEX_MIN_LENGTH
+  );
+}
+
+export function isOverlapIndexed(extras: IndexExtras, field: string): boolean {
+  return (extras.arrayIndexes ?? []).includes(field);
 }
 
 export function countFilterTerms(query: QueryState): number {
   return (
     Object.keys(query.equals).length +
     query.ranges.length +
-    (query.contains ? 1 : 0)
+    query.texts.length +
+    Object.keys(query.overlaps).length
   );
 }
 
@@ -105,49 +146,83 @@ export function isMatchAny(query: QueryState): boolean {
   return query.match === "any" && countFilterTerms(query) > 1;
 }
 
-function hasNarrowParts(query: QueryState): boolean {
-  return query.contains !== null || isMatchAny(query);
+function hasIndexedParts(query: QueryState): boolean {
+  return query.texts.length > 0 || Object.keys(query.overlaps).length > 0;
+}
+
+function hasUnindexedParts(query: QueryState, extras: IndexExtras): boolean {
+  return (
+    query.texts.some((text) => !isTextIndexed(extras, text)) ||
+    Object.keys(query.overlaps).some((key) => !isOverlapIndexed(extras, key))
+  );
+}
+
+function hasNarrowParts(query: QueryState, extras: IndexExtras): boolean {
+  return (
+    isMatchAny(query) ||
+    hasUnindexedParts(query, extras) ||
+    query.ranges.some((range) => range.exclude)
+  );
+}
+
+function answersEquals(
+  index: IndexDef,
+  equals: Record<string, string[]>,
+): boolean {
+  const empty = index.empty ?? [];
+  const keys = Object.keys(equals).filter((key) => !empty.includes(key));
+  return (
+    sameSet(index.equals, keys) &&
+    empty.every((key) => {
+      const values = equals[key] ?? [];
+      return values.length === 1 && values[0] === EMPTY_VALUE;
+    })
+  );
+}
+
+function answersQuery(index: IndexDef, query: QueryState): boolean {
+  const [range] = query.ranges;
+  if (index.sort !== query.sort.field || !answersEquals(index, query.equals)) {
+    return false;
+  }
+  if (range && (!index.range || range.field !== index.sort)) {
+    return false;
+  }
+  const several = Object.values(query.equals).some(
+    (values) => values.length > 1,
+  );
+  return !(several && index.multi === false);
 }
 
 export function getIndex(
   indexes: IndexDef[],
   query: QueryState,
+  extras: IndexExtras = NO_EXTRAS,
 ): IndexDef | null {
-  const equals = Object.keys(query.equals);
-  if (query.search !== null || hasNarrowParts(query)) {
+  if (
+    query.search !== null ||
+    query.ranges.length > 1 ||
+    hasNarrowParts(query, extras)
+  ) {
     return null;
   }
-  const ordered = indexes.find(
-    (index) => index.sort === query.sort.field && sameSet(index.equals, equals),
-  );
-  if (!ordered) {
-    return null;
-  }
-  const [range] = query.ranges;
-  if (query.ranges.length > 1) {
-    return null;
-  }
-  if (range && (!ordered.range || range.field !== ordered.sort)) {
-    return null;
-  }
-  const several = Object.values(query.equals).some(
-    (values) => values.length > 1,
-  );
-  return several && ordered.multi === false ? null : ordered;
+  return indexes.find((index) => answersQuery(index, query)) ?? null;
 }
 
 export function isQueryIndexed(
   indexes: IndexDef[],
   searchFields: string[],
   query: QueryState,
+  extras: IndexExtras = NO_EXTRAS,
 ): boolean {
   if (query.search === null) {
-    return getIndex(indexes, query) !== null;
+    return getIndex(indexes, query, extras) !== null;
   }
   const equalsFields = listEqualsFields(indexes);
   return (
     searchFields.length > 0 &&
-    !hasNarrowParts(query) &&
+    !isMatchAny(query) &&
+    !hasIndexedParts(query) &&
     Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
     query.ranges.length === 0 &&
     listSortFields(indexes).includes(query.sort.field)
@@ -159,7 +234,8 @@ function bare(query: QueryState): QueryState {
     ...query,
     equals: {},
     ranges: [],
-    contains: null,
+    texts: [],
+    overlaps: {},
     match: "all",
     group: null,
     cursor: null,
@@ -193,62 +269,100 @@ function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
   }
   const terms = listTerms(indexes, query);
   const countable =
-    query.contains === null &&
+    !hasIndexedParts(query) &&
     terms.every((term) => getIndex(indexes, term) !== null);
-  return { core: bare(query), narrowed: true, terms: countable ? terms : null };
+  return {
+    core: bare(query),
+    narrowed: true,
+    budgeted: false,
+    terms: countable ? terms : null,
+  };
 }
 
-function planAll(indexes: IndexDef[], query: QueryState): QueryPlan | null {
+// A text or overlap filter stays in the core only when its own index answers it and nothing else needs the narrowed set: a narrowed core is counted up to the limit, which no trigram scan should be asked to do.
+function planAll(
+  indexes: IndexDef[],
+  query: QueryState,
+  extras: IndexExtras,
+): QueryPlan | null {
   const base: QueryState = {
     ...query,
-    contains: null,
+    texts: [],
+    overlaps: {},
     match: "all",
     group: null,
   };
-  const onSort = query.ranges.filter(
-    (range) => range.field === query.sort.field,
-  );
-  const cores = [
+  const onSort = query.ranges
+    .filter((range) => range.field === query.sort.field && !range.exclude)
+    .slice(0, 1);
+  const indexed =
+    hasIndexedParts(query) &&
+    !hasUnindexedParts(query, extras) &&
+    query.ranges.length === onSort.length;
+  const cores: QueryState[] = [
+    ...(indexed
+      ? [
+          {
+            ...base,
+            texts: query.texts,
+            overlaps: query.overlaps,
+            ranges: onSort,
+          },
+        ]
+      : []),
     { ...base, ranges: onSort },
     { ...base, ranges: [] },
   ];
-  const core = cores.find((candidate) => getIndex(indexes, candidate));
+  const core = cores.find((candidate) => getIndex(indexes, candidate, extras));
   if (!core) {
     return null;
   }
+  const budgeted = hasIndexedParts(core);
   const narrowed =
-    query.contains !== null || query.ranges.length > core.ranges.length;
-  return { core, narrowed, terms: null };
+    (!budgeted && hasIndexedParts(query)) ||
+    query.ranges.length > core.ranges.length;
+  return { core, narrowed, budgeted, terms: null };
 }
 
 export function planQuery(
   indexes: IndexDef[],
   query: QueryState,
+  extras: IndexExtras = NO_EXTRAS,
 ): QueryPlan | null {
   if (query.search !== null) {
     return null;
   }
-  return isMatchAny(query) ? planAny(indexes, query) : planAll(indexes, query);
+  return isMatchAny(query)
+    ? planAny(indexes, query)
+    : planAll(indexes, query, extras);
 }
 
 interface Tier {
   indexes: IndexDef[];
+  extras: IndexExtras;
   searchFields: string[];
   rangeFields: string[];
-  containsFields: string[];
+  textFields: string[];
+  overlapFields: string[];
   groupFields: string[];
 }
 
 function createTier(
   indexes: IndexDef[],
+  extras: IndexExtras,
   searchFields: string[],
   fields: BaseFieldDef[],
 ): Tier {
   return {
     indexes,
+    extras: {
+      textIndexes: extras.textIndexes,
+      arrayIndexes: extras.arrayIndexes,
+    },
     searchFields,
     rangeFields: listNarrowRangeFields(fields),
-    containsFields: listContainsFields(fields),
+    textFields: listTextFields(fields),
+    overlapFields: listOverlapFields(fields),
     groupFields: listGroupFields(fields, listEqualsFields(indexes)),
   };
 }
@@ -267,7 +381,7 @@ function isGroupRunnable(tier: Tier, query: QueryState): boolean {
     query.search === null &&
     !isMatchAny(query) &&
     tier.groupFields.includes(group) &&
-    planQuery(tier.indexes, grouped) !== null
+    planQuery(tier.indexes, grouped, tier.extras) !== null
   );
 }
 
@@ -276,13 +390,15 @@ function isTierRunnable(tier: Tier, query: QueryState): boolean {
     return false;
   }
   if (query.search !== null) {
-    return isQueryIndexed(tier.indexes, tier.searchFields, query);
+    return isQueryIndexed(tier.indexes, tier.searchFields, query, tier.extras);
   }
   return (
     query.ranges.every((range) => tier.rangeFields.includes(range.field)) &&
-    (query.contains === null ||
-      tier.containsFields.includes(query.contains.field)) &&
-    planQuery(tier.indexes, query) !== null
+    query.texts.every((text) => tier.textFields.includes(text.field)) &&
+    Object.keys(query.overlaps).every((key) =>
+      tier.overlapFields.includes(key),
+    ) &&
+    planQuery(tier.indexes, query, tier.extras) !== null
   );
 }
 
@@ -294,9 +410,16 @@ export function isQueryRunnable(
 ): boolean {
   const tier =
     tiers.get(def) ??
-    createTier(def.indexes, listSearchFields(def), def.fields);
+    createTier(def.indexes, def, listSearchFields(def), def.fields);
   tiers.set(def, tier);
   return isTierRunnable(tier, query);
+}
+
+export function isQueryBudgeted(
+  def: IndexedGridDef,
+  query: QueryState,
+): boolean {
+  return planQuery(def.indexes, query, def)?.budgeted ?? false;
 }
 
 export function isGroupNarrowed(
@@ -306,8 +429,12 @@ export function isGroupNarrowed(
   return query.group !== null && query.group !== facetField;
 }
 
-function describeBasis(indexes: IndexDef[], query: QueryState): string {
-  const plan = planQuery(indexes, query);
+function describeBasis(
+  indexes: IndexDef[],
+  query: QueryState,
+  extras: IndexExtras,
+): string {
+  const plan = planQuery(indexes, query, extras);
   if (!plan) {
     return "";
   }
@@ -322,7 +449,8 @@ function describeBasis(indexes: IndexDef[], query: QueryState): string {
     "any",
     Object.entries(query.equals).sort(),
     query.ranges,
-    query.contains,
+    query.texts,
+    Object.entries(query.overlaps).sort(),
   ]);
 }
 
@@ -334,7 +462,8 @@ export function isFacetOnlyQuery(
     facetField !== undefined &&
     query.ranges.length === 0 &&
     query.search === null &&
-    !hasNarrowParts(query) &&
+    !isMatchAny(query) &&
+    !hasIndexedParts(query) &&
     Object.entries(query.equals).every(
       ([key, values]) =>
         key === facetField &&
@@ -350,8 +479,9 @@ export function indexCapabilities(
 ): DataSourceCapabilities {
   const searchFields = options.searchFields ?? [];
   const tier = options.fields
-    ? createTier(indexes, searchFields, options.fields)
+    ? createTier(indexes, options, searchFields, options.fields)
     : null;
+  const extras = tier?.extras ?? NO_EXTRAS;
   return {
     holdsAllRows: false,
     searchIsOrdered: false,
@@ -365,11 +495,12 @@ export function indexCapabilities(
     isNarrowed: (query) =>
       tier !== null &&
       (isGroupNarrowed(options.facetField, query) ||
-        (planQuery(indexes, query)?.narrowed ?? false)),
-    narrowBasis: (query) => describeBasis(indexes, query),
+        (planQuery(indexes, query, extras)?.narrowed ?? false)),
+    narrowBasis: (query) => describeBasis(indexes, query, extras),
     equalsFields: listEqualsFields(indexes),
     rangeFields: tier?.rangeFields ?? listRangeFields(indexes),
-    containsFields: tier?.containsFields ?? [],
+    textFields: tier?.textFields ?? [],
+    overlapFields: tier?.overlapFields ?? [],
     groupFields: tier?.groupFields ?? [],
     sortFields: listSortFields(indexes),
     searchFields,
@@ -384,5 +515,7 @@ export function gridDefCapabilities(
     facetField: def.facet?.field,
     searchFields: listSearchFields(def),
     fields: def.fields,
+    textIndexes: def.textIndexes,
+    arrayIndexes: def.arrayIndexes,
   });
 }

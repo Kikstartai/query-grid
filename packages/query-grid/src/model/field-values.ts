@@ -1,4 +1,8 @@
-import { resolveMaxValues, type BaseFieldDef } from "./field-types.ts";
+import {
+  resolveMaxValues,
+  type BaseFieldDef,
+  type GridValue,
+} from "./field-types.ts";
 
 export const EMPTY_VALUE = "_empty";
 export const NOT_EMPTY_VALUE = "_not_empty";
@@ -55,7 +59,7 @@ export function normalizeEqualsValues(
 export function matchesEquals(
   field: BaseFieldDef | null,
   values: string[],
-  value: string | number | null | undefined,
+  value: GridValue | undefined,
 ): boolean {
   const empty = value === null || value === undefined;
   if (!field?.nullable) {

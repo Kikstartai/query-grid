@@ -19,7 +19,8 @@ export function sameFilters(a: QueryState, b: QueryState): boolean {
   return (
     a.equals === b.equals &&
     a.ranges === b.ranges &&
-    a.contains === b.contains &&
+    a.texts === b.texts &&
+    a.overlaps === b.overlaps &&
     a.match === b.match &&
     a.search === b.search
   );

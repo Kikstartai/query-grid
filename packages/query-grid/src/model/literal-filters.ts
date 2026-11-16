@@ -1,5 +1,9 @@
 import type { DataSource } from "./data-source.ts";
-import { isDatePreset, resolveDatePreset } from "./date-presets.ts";
+import {
+  isDatePreset,
+  resolveDatePreset,
+  resolveDayPreset,
+} from "./date-presets.ts";
 import {
   getField,
   type BaseGridDef,
@@ -37,13 +41,16 @@ function resolveRange(
   if (preset === undefined) {
     return range;
   }
-  if (!isDatePreset(preset) || getField(def, field)?.type !== "datetime") {
+  const type = getField(def, field)?.type;
+  if (!isDatePreset(preset) || (type !== "datetime" && type !== "date")) {
     return range;
   }
   if (now === null) {
     return { field, min: null, max: null };
   }
-  return { field, ...resolveDatePreset(preset, now) };
+  return type === "date"
+    ? { field, ...resolveDayPreset(preset, now) }
+    : { field, ...resolveDatePreset(preset, now) };
 }
 
 function resolveRanges(
@@ -114,7 +121,7 @@ export function withLiteralFilters(
     ranges: query.ranges.map((range) =>
       range.preset === undefined
         ? range
-        : { field: range.field, min: range.preset, max: null },
+        : { ...range, preset: undefined, min: range.preset, max: null },
     ),
   });
   return {

@@ -420,6 +420,8 @@ describe("the URL", () => {
     expect(keys.filter((key) => key.repeated).map((key) => key.name)).toEqual([
       "f.status",
       "f.region",
+      "r.created_at",
+      "r.total",
     ]);
   });
 
@@ -534,7 +536,8 @@ describe("chips", () => {
         min: "$10.00",
         max: null,
         preset: null,
-        clear: { type: "clearRange", field: "total" },
+        op: "gte",
+        clear: { type: "clearRange", field: "total", at: 0 },
       },
       {
         id: "sort",

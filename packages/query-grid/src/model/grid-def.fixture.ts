@@ -60,7 +60,8 @@ export const UNTIERED = {
   matchAny: false,
   isNarrowed: () => false,
   narrowBasis: () => "",
-  containsFields: [],
+  textFields: [],
+  overlapFields: [],
   groupFields: [],
 };
 

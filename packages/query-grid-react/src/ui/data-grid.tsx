@@ -93,7 +93,8 @@ function useGridControls() {
     activeFilters: [
       ...Object.keys(query.equals),
       ...query.ranges.map((range) => range.field),
-      ...(query.contains ? [query.contains.field] : []),
+      ...query.texts.map((text) => text.field),
+      ...Object.keys(query.overlaps),
     ],
   };
 }

@@ -122,7 +122,8 @@ function isOffered(offers: Offers, target: OfferTarget): boolean {
   const fields = {
     equals: offers.equals,
     range: offers.ranges,
-    contains: offers.contains,
+    text: offers.texts,
+    overlap: offers.overlaps,
     group: offers.groups,
     sort: offers.sorts,
   }[target.kind];

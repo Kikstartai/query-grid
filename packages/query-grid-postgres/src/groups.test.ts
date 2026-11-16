@@ -46,7 +46,7 @@ describe("buildGroupSql", () => {
       ...BASE,
       group: "region",
       ranges: [{ field: "total", min: "100", max: null }],
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(sql.text).toBe(
       "SELECT t.region::text AS value, count(*)::float8 AS count, coalesce(sum(t.total), 0)::float8 AS total_sum, coalesce(sum(t.number), 0)::float8 AS number_sum FROM things t WHERE t.total >= $1::bigint AND t.note ILIKE $2 GROUP BY t.region ORDER BY count(*) DESC, t.region LIMIT 201",

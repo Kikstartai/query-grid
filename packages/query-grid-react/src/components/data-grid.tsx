@@ -10,7 +10,6 @@ import {
 import { createContext, use, useEffect, useState, type ReactNode } from "react";
 
 import {
-  formatValue,
   type GridRow,
   type SortDirection,
   type SortState,
@@ -41,7 +40,7 @@ import {
   type SheetLayout,
 } from "./grid-primitive.ts";
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from "./icons.tsx";
-import { useLocale, useMessages } from "./messages.tsx";
+import { formatCell, useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useColumnState } from "./use-column-state.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -233,7 +232,7 @@ function GridCells({ handle, view, row, columns }: GridCellsProps) {
             {column.field.cell ? (
               column.field.cell(value, row)
             ) : (
-              <bdi>{formatValue(column.field, value, locale)}</bdi>
+              <bdi>{formatCell(messages, column.field, value, locale)}</bdi>
             )}
           </div>
         );

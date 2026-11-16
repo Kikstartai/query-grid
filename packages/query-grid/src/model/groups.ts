@@ -5,6 +5,7 @@ import {
   type BaseFieldDef,
   type BaseGridDef,
   type GridRow,
+  type GridValue,
   type QueryState,
 } from "./field-types.ts";
 import { EMPTY_VALUE } from "./field-values.ts";
@@ -57,7 +58,7 @@ export function getGroupQuery(query: QueryState, value: string): QueryState {
 
 export function toGroupValue(
   field: BaseFieldDef | null,
-  value: string | number | null | undefined,
+  value: GridValue | undefined,
 ): string | null {
   if (value !== null && value !== undefined) {
     return String(value);

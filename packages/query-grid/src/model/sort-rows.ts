@@ -1,22 +1,28 @@
 import {
   getField,
+  isDateType,
+  isNumberType,
   type BaseFieldDef,
   type BaseGridDef,
   type GridRow,
+  type GridValue,
   type SortState,
 } from "./field-types.ts";
 
 export function toComparable(
   field: BaseFieldDef,
-  value: string | number | null,
+  value: GridValue,
 ): string | number | null {
   if (value === null || value === "") {
     return null;
   }
-  if (field.type === "integer" || field.type === "money") {
+  if (Array.isArray(value)) {
+    return value.join(" ").toLowerCase();
+  }
+  if (isNumberType(field.type)) {
     return Number(value);
   }
-  if (field.type === "datetime") {
+  if (isDateType(field.type)) {
     return Date.parse(String(value));
   }
   return String(value).toLowerCase();

@@ -1,6 +1,6 @@
 -- Generated from the orders grid def. One CREATE INDEX per declared index, then the counter table and its triggers. Safe to re-run, whole or from the step that failed.
 -- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.
--- The search needs trigram indexes.
+-- The search and the text indexes are trigram indexes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- no filter, sort created_at (range on created_at)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_created_at ON orders USING btree (created_at, id);
@@ -46,6 +46,10 @@ COMMENT ON INDEX auto_orders_status_code__channel__created_at IS 'Auto-created.'
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_search ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
 -- Mark auto_orders_search as auto-created.
 COMMENT ON INDEX auto_orders_search IS 'Auto-created.';
+-- text match on customer_name
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_customer_name_trgm ON orders USING gin (customer_name gin_trgm_ops);
+-- Mark auto_orders_customer_name_trgm as auto-created.
+COMMENT ON INDEX auto_orders_customer_name_trgm IS 'Auto-created.';
 -- Counter table for status_code and the sum of total and the sum of item_count: install the triggers. They keep order_status_counts current and also log each change to order_status_counts_pending. The table lock is taken first, so no write is half way through a trigger while the counter objects change, and is held only for this short step. The pending table starts empty, so a count taken before this step no longer stands: the switch waits for a new one.
 BEGIN;
 LOCK TABLE orders IN SHARE ROW EXCLUSIVE MODE;

@@ -184,7 +184,8 @@ describe("the URL codec", () => {
     const query: QueryState = {
       equals: { status: ["open", "done"] },
       ranges: [{ field: "total", min: "100", max: null }],
-      contains: null,
+      texts: [],
+      overlaps: {},
       group: null,
       match: "all",
       search: null,
@@ -220,7 +221,8 @@ describe("the URL codec", () => {
       const query: QueryState = {
         equals: { region: ["north", "south"] },
         ranges: [],
-        contains: null,
+        texts: [],
+        overlaps: {},
         group: null,
         match: "all",
         search: null,
@@ -638,7 +640,8 @@ describe("intent the browser resolves", () => {
       const query: QueryState = {
         equals: { status: ["!open"] },
         ranges: [],
-        contains: null,
+        texts: [],
+        overlaps: {},
         group: null,
         match: "all",
         search: null,

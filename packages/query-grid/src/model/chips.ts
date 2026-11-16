@@ -1,9 +1,12 @@
 import {
   getField,
+  isDateType,
   isDefaultSort,
   type BaseGridDef,
   type QueryState,
+  type RangeState,
   type SortDirection,
+  type TextOp,
 } from "./field-types.ts";
 import {
   getReservedValue,
@@ -14,7 +17,7 @@ import {
 import { formatValue, labelKey } from "./format.ts";
 import { isMatchAny } from "./indexes.ts";
 import type { QueryAction } from "./query-actions.ts";
-import { fromDayBound } from "./range-bounds.ts";
+import { fromDayBound, toRangeValue, type RangeOp } from "./range-bounds.ts";
 
 export interface ChipValue {
   value: string;
@@ -39,6 +42,7 @@ export interface RangeChip {
   min: string | null;
   max: string | null;
   preset: string | null;
+  op: RangeOp | null;
   clear: QueryAction;
 }
 
@@ -57,11 +61,20 @@ export interface SortChip {
   clear: QueryAction | null;
 }
 
-export interface ContainsChip {
+export interface TextChip {
   id: string;
-  kind: "contains";
+  kind: "text";
   field: string;
+  op: TextOp;
   value: string;
+  clear: QueryAction;
+}
+
+export interface OverlapChip {
+  id: string;
+  kind: "overlap";
+  field: string;
+  values: ChipValue[];
   clear: QueryAction;
 }
 
@@ -82,7 +95,8 @@ export type FilterChip =
   | GroupChip
   | EqualsChip
   | RangeChip
-  | ContainsChip
+  | TextChip
+  | OverlapChip
   | MatchChip
   | SearchChip
   | SortChip;
@@ -97,7 +111,7 @@ function formatBound(
   if (!field || bound === null) {
     return null;
   }
-  if (field.type === "datetime") {
+  if (isDateType(field.type)) {
     return fromDayBound(bound);
   }
   return formatValue(field, bound, locale);
@@ -152,6 +166,49 @@ function equalsChip(
   };
 }
 
+function rangeChip(
+  def: BaseGridDef,
+  query: QueryState,
+  range: RangeState,
+  locale: string | undefined,
+): RangeChip {
+  const { field } = range;
+  const at = query.ranges.filter((item) => item.field === field).indexOf(range);
+  const target = getField(def, field);
+  const value = target ? toRangeValue(target, range) : null;
+  return {
+    id: at === 0 ? `range:${field}` : `range:${field}:${at}`,
+    kind: "range",
+    field,
+    min: formatBound(def, field, value?.first ?? range.min, locale),
+    max: formatBound(def, field, value ? value.second : range.max, locale),
+    preset: range.preset ?? null,
+    op: value?.op ?? null,
+    clear: { type: "clearRange", field, at },
+  };
+}
+
+function overlapChip(
+  def: BaseGridDef,
+  key: string,
+  values: string[],
+  labels: Record<string, string>,
+  locale: string | undefined,
+): OverlapChip {
+  return {
+    id: `overlap:${key}`,
+    kind: "overlap",
+    field: key,
+    values: values.map((value) => ({
+      value,
+      text: formatEquals(def, key, value, labels, locale),
+      reserved: null,
+      clear: { type: "removeOverlapValue", field: key, value },
+    })),
+    clear: { type: "clearOverlap", field: key },
+  };
+}
+
 export function listFilterChips(
   def: BaseGridDef,
   query: QueryState,
@@ -161,26 +218,22 @@ export function listFilterChips(
   const chips: FilterChip[] = Object.entries(query.equals).map(
     ([field, values]) => equalsChip(def, field, values, labels, locale),
   );
-  for (const { field, min, max, preset } of query.ranges) {
-    chips.push({
-      id: `range:${field}`,
-      kind: "range",
-      field,
-      min: formatBound(def, field, min, locale),
-      max: formatBound(def, field, max, locale),
-      preset: preset ?? null,
-      clear: { type: "clearRange", field },
-    });
+  for (const [field, values] of Object.entries(query.overlaps)) {
+    chips.push(overlapChip(def, field, values, labels, locale));
   }
-  if (query.contains) {
-    chips.push({
-      id: "contains",
-      kind: "contains",
-      field: query.contains.field,
-      value: query.contains.value,
-      clear: { type: "clearContains" },
-    });
+  for (const range of query.ranges) {
+    chips.push(rangeChip(def, query, range, locale));
   }
+  query.texts.forEach((text, at) => {
+    chips.push({
+      id: `text:${at}`,
+      kind: "text",
+      field: text.field,
+      op: text.op,
+      value: text.value,
+      clear: { type: "removeText", at },
+    });
+  });
   if (isMatchAny(query)) {
     chips.push({
       id: "match",

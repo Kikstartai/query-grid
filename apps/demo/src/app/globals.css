@@ -319,8 +319,12 @@ pre {
   width: 11rem;
 }
 
-.skeleton-control[data-kind="contains"] {
-  width: 22rem;
+.skeleton-control[data-kind="text"] {
+  width: 32rem;
+}
+
+.skeleton-control[data-kind="overlap"] {
+  width: 9rem;
 }
 
 .skeleton-control[data-kind="match"] {

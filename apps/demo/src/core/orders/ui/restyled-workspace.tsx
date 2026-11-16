@@ -18,7 +18,7 @@ import {
 
 import {
   ORDER_BAR_FIELDS,
-  ORDER_CONTAINS_FIELDS,
+  ORDER_TEXT_FIELDS,
   ORDERS_GRID_DEF,
 } from "../orders-grid-def";
 import { OrdersFilterBar } from "./orders-view";
@@ -38,7 +38,7 @@ function RestyledSkeleton() {
           def={ORDERS_GRID_DEF}
           capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
           fields={ORDER_BAR_FIELDS}
-          contains={ORDER_CONTAINS_FIELDS}
+          texts={ORDER_TEXT_FIELDS}
         />
         <SkeletonChips />
         <SkeletonGrid />

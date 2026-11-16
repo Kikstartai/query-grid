@@ -1,7 +1,9 @@
 import {
   getField,
   isCurrencyCode,
+  isOverlapField,
   isRangeType,
+  isTextField,
   KEY_FIELD,
   indexId,
   type BaseFieldDef,
@@ -27,7 +29,18 @@ export function describeIndex(index: IndexDef): string {
     ? index.equals.map((key) => `${key} =`).join(", ")
     : "no filter";
   const range = index.range ? ` (range on ${index.sort})` : "";
-  return `${filters}, sort ${index.sort}${range}`;
+  const empty = index.empty?.length
+    ? `, where ${index.empty.map((key) => `${key} is empty`).join(" and ")}`
+    : "";
+  return `${filters}, sort ${index.sort}${range}${empty}`;
+}
+
+export function describeTextIndex(column: string): string {
+  return `text match on ${column}`;
+}
+
+export function describeArrayIndex(column: string): string {
+  return `overlap on ${column}`;
 }
 
 function validateSearch(def: PostgresGridDef, columns: string[]): string[] {
@@ -75,11 +88,75 @@ function validateOrderedIndex(def: PostgresGridDef, index: IndexDef): string[] {
       `index ${id}: ${index.sort} is both an equality and the sort`,
     );
   }
+  if (isOverlapField(sort)) {
+    problems.push(`index ${id}: ${index.sort} is an array, which has no order`);
+  }
   for (const key of index.equals) {
-    if (!getField(def, key)) {
+    const field = getField(def, key);
+    if (!field) {
       problems.push(`index ${id}: unknown equality field ${key}`);
+      continue;
+    }
+    if (isOverlapField(field)) {
+      problems.push(
+        `index ${id}: ${key} is an array; its index is declared in arrayIndexes`,
+      );
     }
   }
+  for (const key of index.empty ?? []) {
+    const field = getField(def, key);
+    if (!field) {
+      problems.push(`index ${id}: unknown empty field ${key}`);
+      continue;
+    }
+    if (!field.nullable) {
+      problems.push(`index ${id}: ${key} is never empty`);
+    }
+    if (index.equals.includes(key) || key === index.sort) {
+      problems.push(
+        `index ${id}: ${key} is empty in every row of the index, so it cannot also be an equality or the sort`,
+      );
+    }
+  }
+  return problems;
+}
+
+function validateFieldIndexes(def: PostgresGridDef): string[] {
+  const problems: string[] = [];
+  const check = (
+    name: string,
+    keys: string[],
+    fits: (field: BaseFieldDef) => boolean,
+    needs: string,
+  ) => {
+    for (const key of keys) {
+      const field = getField(def, key);
+      if (!field) {
+        problems.push(`${name}: unknown field ${key}`);
+        continue;
+      }
+      if (!fits(field)) {
+        problems.push(`${name}: ${key} is not ${needs}`);
+      }
+    }
+    for (const key of new Set(
+      keys.filter((key, at) => keys.indexOf(key) !== at),
+    )) {
+      problems.push(`${name}: ${key} is declared twice`);
+    }
+  };
+  check(
+    "textIndexes",
+    def.textIndexes ?? [],
+    isTextField,
+    "a text field without options",
+  );
+  check(
+    "arrayIndexes",
+    def.arrayIndexes ?? [],
+    isOverlapField,
+    "an array field",
+  );
   return problems;
 }
 
@@ -132,6 +209,7 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     problems.push("the default sort with no filter is not a declared index");
   }
   problems.push(...validateTotals(def));
+  problems.push(...validateFieldIndexes(def));
   for (const field of def.fields) {
     if (field.currency !== undefined && !isCurrencyCode(field.currency)) {
       problems.push(`${field.key}: ${field.currency} is not a currency code`);

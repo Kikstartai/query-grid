@@ -607,7 +607,10 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
       "contains with no match: first page",
       buildPageSql(
         ORDERS_GRID_DEF,
-        { ...core, contains: { field: "customer_name", value: NO_MATCH } },
+        {
+          ...core,
+          texts: [{ field: "customer_name", op: "contains", value: NO_MATCH }],
+        },
         PAGE,
       ),
     ],

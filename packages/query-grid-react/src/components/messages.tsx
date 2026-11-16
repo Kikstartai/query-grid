@@ -5,11 +5,16 @@ import { createContext, use, type ReactNode } from "react";
 import {
   DEFAULT_LOCALE,
   formatCount,
+  formatValue,
+  type BaseFieldDef,
   type DatePreset,
+  type GridValue,
   type Problem,
   type ProblemParams,
+  type RangeOp,
   type ReasonCode,
   type ReservedValue,
+  type TextOp,
 } from "@kikstart/query-grid";
 
 type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & {
@@ -34,6 +39,19 @@ export interface ReasonParams {
 }
 
 type MessageParams = Record<string, string | number>;
+
+export type SingleRangeOp = Exclude<RangeOp, "between">;
+
+export interface RangeOpParams {
+  label: string;
+  min: string;
+  max: string;
+}
+
+export interface TextParams {
+  label: string;
+  value: string;
+}
 
 export interface QueryGridMessages {
   loading: string;
@@ -77,8 +95,10 @@ export interface QueryGridMessages {
   chipExclude: (params: LabelParams) => string;
   chipPreset: (params: { label: string; preset: string }) => string;
   chipRange: (params: { label: string; min: string; max: string }) => string;
+  chipRangeOps: Record<SingleRangeOp, (params: RangeOpParams) => string>;
   chipSearch: (params: { value: string }) => string;
-  chipContains: (params: { label: string; value: string }) => string;
+  chipTexts: Record<TextOp, (params: TextParams) => string>;
+  chipOverlap: (params: LabelParams) => string;
   chipMatchAny: string;
   chipSort: (params: { label: string; direction: string }) => string;
   openBound: string;
@@ -90,10 +110,20 @@ export interface QueryGridMessages {
   datePresets: Record<DatePreset, string>;
   customRange: string;
   presetField: (params: LabelParams) => string;
-  containsFilter: string;
-  containsField: string;
-  containsText: (params: LabelParams) => string;
-  containsPlaceholder: string;
+  dateOps: Record<SingleRangeOp, string>;
+  rangeOps: Record<RangeOp, string>;
+  rangeOperator: (params: LabelParams) => string;
+  rangeValue: (params: LabelParams) => string;
+  pickDate: (params: LabelParams) => string;
+  value: string;
+  booleanTrue: string;
+  booleanFalse: string;
+  textFilter: string;
+  textField: string;
+  textOperator: string;
+  textOps: Record<TextOp, string>;
+  textValue: (params: { label: string; op: string }) => string;
+  textPlaceholder: string;
   matchMode: string;
   matchAll: string;
   matchAny: string;
@@ -142,6 +172,11 @@ type NestedKey =
   | "countSources"
   | "facetNotes"
   | "datePresets"
+  | "dateOps"
+  | "rangeOps"
+  | "textOps"
+  | "chipRangeOps"
+  | "chipTexts"
   | "reasons"
   | "reasonParts";
 
@@ -228,8 +263,24 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   chipExclude: ({ label }) => `${label} ≠`,
   chipPreset: ({ label, preset }) => `${label}: ${preset}`,
   chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
+  chipRangeOps: {
+    not_between: ({ label, min, max }) => `${label}: not ${min} – ${max}`,
+    eq: ({ label, min }) => `${label} = ${min}`,
+    neq: ({ label, min }) => `${label} ≠ ${min}`,
+    gt: ({ label, min }) => `${label} > ${min}`,
+    gte: ({ label, min }) => `${label} ≥ ${min}`,
+    lt: ({ label, min }) => `${label} < ${min}`,
+    lte: ({ label, min }) => `${label} ≤ ${min}`,
+  },
   chipSearch: ({ value }) => `Search: “${value}”`,
-  chipContains: ({ label, value }) => `${label} contains “${value}”`,
+  chipTexts: {
+    contains: ({ label, value }) => `${label} contains “${value}”`,
+    not_contains: ({ label, value }) => `${label} does not contain “${value}”`,
+    starts_with: ({ label, value }) => `${label} starts with “${value}”`,
+    ends_with: ({ label, value }) => `${label} ends with “${value}”`,
+    not_equals: ({ label, value }) => `${label} is not “${value}”`,
+  },
+  chipOverlap: ({ label }) => `${label} has:`,
   chipMatchAny: "Match any",
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
   openBound: "…",
@@ -249,10 +300,43 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   },
   customRange: "Custom…",
   presetField: ({ label }) => `${label} period`,
-  containsFilter: "Contains",
-  containsField: "Field to search in",
-  containsText: ({ label }) => `${label} contains`,
-  containsPlaceholder: "text…",
+  dateOps: {
+    not_between: "Not between…",
+    eq: "On…",
+    neq: "Not on…",
+    gt: "After…",
+    gte: "On or after…",
+    lt: "Before…",
+    lte: "On or before…",
+  },
+  rangeOps: {
+    between: "between",
+    not_between: "not between",
+    eq: "=",
+    neq: "≠",
+    gt: ">",
+    gte: "≥",
+    lt: "<",
+    lte: "≤",
+  },
+  rangeOperator: ({ label }) => `${label} comparison`,
+  rangeValue: ({ label }) => `${label} value`,
+  pickDate: ({ label }) => `Pick a ${label} date`,
+  value: "value",
+  booleanTrue: "Yes",
+  booleanFalse: "No",
+  textFilter: "Text",
+  textField: "Field to match",
+  textOperator: "How to match",
+  textOps: {
+    contains: "contains",
+    not_contains: "does not contain",
+    starts_with: "starts with",
+    ends_with: "ends with",
+    not_equals: "is not",
+  },
+  textValue: ({ label, op }) => `${label} ${op}`,
+  textPlaceholder: "text…",
   matchMode: "Match",
   matchAll: "Match all",
   matchAny: "Match any",
@@ -295,7 +379,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   moveFailed: "The move failed",
   reasons: {
     search_alone: () =>
-      "The search combines with equality filters only: clear the range, the contains filter and Match any first.",
+      "The search combines with equality filters only: clear the range, the text filter and Match any first.",
     search_unordered: () =>
       "A search result is unordered until every match is loaded: narrow it under the cap to sort.",
     search_no_combine: () => "The search combines with equality filters only.",
@@ -334,10 +418,11 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     invalid_sort_direction: () => "Invalid sort direction.",
     invalid_cursor: () => "The cursor does not decode.",
     invalid_limit: () => "The page size is not a number.",
+    too_many_filters: ({ max }) => `At most ${max} of these filters at once.`,
     too_broad: () =>
-      "That search matches too much to answer fast. Add more characters.",
+      "That matches too much to answer fast. Add more characters or another filter.",
     narrow_first: ({ limit }) =>
-      `These filters leave more than ${limit} rows. Narrow them first, or clear the range, the contains filter or Match any.`,
+      `These filters leave more than ${limit} rows. Narrow them first, or clear the range, the text filter or Match any.`,
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
     unknown_row: () => "That row no longer exists.",
     over_cap: ({ cap }) =>
@@ -359,6 +444,11 @@ function mergeMessages(
     countSources: { ...base.countSources, ...overrides.countSources },
     facetNotes: { ...base.facetNotes, ...overrides.facetNotes },
     datePresets: { ...base.datePresets, ...overrides.datePresets },
+    dateOps: { ...base.dateOps, ...overrides.dateOps },
+    rangeOps: { ...base.rangeOps, ...overrides.rangeOps },
+    textOps: { ...base.textOps, ...overrides.textOps },
+    chipRangeOps: { ...base.chipRangeOps, ...overrides.chipRangeOps },
+    chipTexts: { ...base.chipTexts, ...overrides.chipTexts },
     reasons: { ...base.reasons, ...overrides.reasons },
     reasonParts: { ...base.reasonParts, ...overrides.reasonParts },
     errors: { ...base.errors, ...overrides.errors },
@@ -412,6 +502,27 @@ export function formatReservedValue(
   reserved: ReservedValue,
 ): string {
   return reserved === "empty" ? messages.emptyValue : messages.notEmptyValue;
+}
+
+export function formatBoolean(
+  messages: QueryGridMessages,
+  value: GridValue,
+): string {
+  return value === true || value === "true"
+    ? messages.booleanTrue
+    : messages.booleanFalse;
+}
+
+export function formatCell(
+  messages: QueryGridMessages,
+  field: BaseFieldDef,
+  value: GridValue,
+  locale: string,
+): string {
+  if (field.type === "boolean" && value !== null) {
+    return formatBoolean(messages, value);
+  }
+  return formatValue(field, value, locale);
 }
 
 export function countParams(count: number, locale: string): CountParams {

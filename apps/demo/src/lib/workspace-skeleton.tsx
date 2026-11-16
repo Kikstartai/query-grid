@@ -1,5 +1,5 @@
 import {
-  listContainsFilterFields,
+  listTextFilterFields,
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
@@ -16,7 +16,7 @@ interface SkeletonProps {
 interface SkeletonFiltersProps extends SkeletonProps {
   capabilities: DataSourceCapabilities;
   fields?: string[];
-  contains?: string[];
+  texts?: string[];
 }
 
 interface SkeletonControlProps {
@@ -45,10 +45,10 @@ export function SkeletonFilters({
   def,
   capabilities,
   fields,
-  contains,
+  texts,
 }: SkeletonFiltersProps) {
   const searchable =
-    listContainsFilterFields(capabilities, contains ?? fields).length > 0;
+    listTextFilterFields(capabilities, texts ?? fields).length > 0;
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />
@@ -59,7 +59,7 @@ export function SkeletonFilters({
           data-kind={resolveFilterKind(field, capabilities)}
         />
       ))}
-      <SkeletonControl kind="contains" shown={searchable} />
+      <SkeletonControl kind="text" shown={searchable} />
       <SkeletonControl kind="match" shown={capabilities.matchAny} />
       <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
@@ -117,7 +117,7 @@ export function WorkspaceSkeleton({
   def,
   capabilities,
   fields,
-  contains,
+  texts,
 }: SkeletonFiltersProps) {
   return (
     <>
@@ -132,7 +132,7 @@ export function WorkspaceSkeleton({
           def={def}
           capabilities={capabilities}
           fields={fields}
-          contains={contains}
+          texts={texts}
         />
         <SkeletonChips />
         <div className="workspace-main">

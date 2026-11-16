@@ -78,10 +78,11 @@ export {
 } from "./filter-bar.tsx";
 export { FilterSidebar, type FilterSidebarProps } from "./filter-sidebar.tsx";
 export {
-  ContainsFilter,
   MatchToggle,
-  type ContainsFilterProps,
+  TextFilter,
   type MatchToggleProps,
+  type TextFilterProps,
+  type TextFilterValue,
 } from "./narrow-filters.tsx";
 export {
   DEFAULT_MESSAGES,

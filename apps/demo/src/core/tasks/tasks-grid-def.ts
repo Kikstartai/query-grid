@@ -1,14 +1,18 @@
 import type { FieldOption, BaseGridDef, GridRow } from "@kikstart/query-grid";
 
 export const TASK_COUNT = 400;
-export const TASK_CONTAINS_FIELDS = ["title"];
+export const TASK_TEXT_FIELDS = ["title"];
 export const TASK_FILTER_FIELDS = [
   "status",
   "team",
   "priority",
   "assignee",
+  "labels",
+  "blocked",
   "budget",
   "estimate",
+  "rate",
+  "start_on",
   "due_at",
 ];
 
@@ -39,6 +43,14 @@ const PRIORITIES: FieldOption[] = [
   { value: "low", label: "Low" },
   { value: "normal", label: "Normal" },
   { value: "high", label: "High" },
+];
+
+const LABELS: FieldOption[] = [
+  { value: "bug", label: "Bug" },
+  { value: "feature", label: "Feature" },
+  { value: "chore", label: "Chore" },
+  { value: "customer", label: "Customer" },
+  { value: "urgent", label: "Urgent" },
 ];
 
 const ASSIGNEES = [
@@ -131,6 +143,33 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       width: 90,
     },
     {
+      key: "rate",
+      label: "Rate",
+      type: "decimal",
+      width: 90,
+    },
+    {
+      key: "blocked",
+      label: "Blocked",
+      type: "boolean",
+      width: 100,
+    },
+    {
+      key: "labels",
+      label: "Labels",
+      type: "array",
+      nullable: true,
+      options: LABELS,
+      width: 180,
+    },
+    {
+      key: "start_on",
+      label: "Start",
+      type: "date",
+      nullable: true,
+      width: 130,
+    },
+    {
       key: "due_at",
       label: "Due",
       type: "datetime",
@@ -152,6 +191,21 @@ function pick<T>(random: () => number, items: T[]): T {
   return items[Math.floor(random() * items.length)];
 }
 
+function pickLabels(random: () => number): string[] | null {
+  const labels = LABELS.filter(() => random() < 0.3).map(
+    (label) => label.value,
+  );
+  return labels.length > 0 ? labels : null;
+}
+
+function pickStart(random: () => number, from: number): string | null {
+  if (random() < 0.2) {
+    return null;
+  }
+  const day = from + Math.floor(random() * 60) * 86_400_000;
+  return new Date(day).toISOString().slice(0, 10);
+}
+
 export function listTaskRows(): GridRow[] {
   const random = createRandom(20261113);
   const start = Date.UTC(2026, 10, 1, 9);
@@ -165,6 +219,10 @@ export function listTaskRows(): GridRow[] {
     assignee: pick(random, ASSIGNEES),
     budget: (5 + Math.floor(random() * 195)) * 1000,
     estimate: 1 + Math.floor(random() * 40),
+    rate: (4000 + Math.floor(random() * 240) * 25) / 100,
+    blocked: random() < 0.15,
+    labels: pickLabels(random),
+    start_on: pickStart(random, start),
     due_at: new Date(
       start + Math.floor(random() * 90 * 24) * 3_600_000,
     ).toISOString(),

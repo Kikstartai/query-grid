@@ -6,7 +6,15 @@ import type { ControlState } from "./fields.ts";
 
 export interface FieldFrameProps extends ControlState {
   name: string;
-  kind: "equals" | "range" | "sort" | "search" | "contains" | "match" | "group";
+  kind:
+    | "equals"
+    | "range"
+    | "overlap"
+    | "sort"
+    | "search"
+    | "text"
+    | "match"
+    | "group";
   label: string;
   children: ReactNode;
 }

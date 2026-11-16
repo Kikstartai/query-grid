@@ -93,7 +93,10 @@ export function getLaneQueries(
       { ...base, equals: { ...query.equals, [field.key]: [status] } },
     ]),
   );
-  const plain = query.contains === null && query.ranges.length === 0;
+  const plain =
+    query.texts.length === 0 &&
+    Object.keys(query.overlaps).length === 0 &&
+    query.ranges.length === 0;
   const combinable =
     !isMatchAny(query) && (holdsAllRows || (query.search === null && plain));
   const answerable =

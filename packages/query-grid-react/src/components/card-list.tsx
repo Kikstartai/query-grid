@@ -3,11 +3,11 @@
 import { createVirtualizer } from "@ui-sdk/core";
 import { useEffect, useState, type RefObject } from "react";
 
-import { formatValue, type GridRow } from "@kikstart/query-grid";
+import type { GridRow } from "@kikstart/query-grid";
 
 import { FeedNotice, isWindowBlank, LoadedText } from "./feed-notice.tsx";
 import type { FieldDef, RowWindow } from "./fields.ts";
-import { useLocale } from "./messages.tsx";
+import { formatCell, useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -35,12 +35,13 @@ interface CardValueProps {
 }
 
 function CardValue({ field, row }: CardValueProps) {
+  const messages = useMessages();
   const locale = useLocale();
   const value = row[field.key] ?? null;
   if (field.cell) {
     return field.cell(value, row);
   }
-  return <bdi>{formatValue(field, value, locale)}</bdi>;
+  return <bdi>{formatCell(messages, field, value, locale)}</bdi>;
 }
 
 interface CardProps {
@@ -52,6 +53,7 @@ interface CardProps {
 }
 
 function Card({ virtual, index, start, row, fields }: CardProps) {
+  const messages = useMessages();
   const locale = useLocale();
   const [title, badge, ...rest] = fields;
   return (
@@ -73,13 +75,18 @@ function Card({ virtual, index, start, row, fields }: CardProps) {
           <div className="qg-card-title">
             <bdi>{title.label}</bdi> <CardValue field={title} row={row} />
           </div>
-          <span className="qg-badge" data-value={row[badge.key] ?? ""}>
+          <span className="qg-badge" data-value={String(row[badge.key] ?? "")}>
             <CardValue field={badge} row={row} />
           </span>
         </div>
         <dl className="qg-card-details">
           {rest.flatMap((field) => {
-            const text = formatValue(field, row[field.key] ?? null, locale);
+            const text = formatCell(
+              messages,
+              field,
+              row[field.key] ?? null,
+              locale,
+            );
             return text
               ? [
                   <div key={field.key} className="qg-card-detail">

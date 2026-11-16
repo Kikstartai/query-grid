@@ -74,9 +74,10 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
     ranges: sameJson(current.ranges, next.ranges)
       ? current.ranges
       : next.ranges,
-    contains: sameJson(current.contains, next.contains)
-      ? current.contains
-      : next.contains,
+    texts: sameJson(current.texts, next.texts) ? current.texts : next.texts,
+    overlaps: sameJson(current.overlaps, next.overlaps)
+      ? current.overlaps
+      : next.overlaps,
     sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
   };
 }

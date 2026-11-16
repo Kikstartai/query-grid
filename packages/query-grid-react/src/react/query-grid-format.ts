@@ -1,13 +1,17 @@
 import {
+  getField,
   getFieldLabel,
   isDatePreset,
   type BaseGridDef,
+  type ChipValue,
   type FilterChip,
+  type RangeChip,
   type UnavailableReason,
 } from "@kikstart/query-grid";
 
 import type { ChipItem } from "../components/filter-bar.tsx";
 import {
+  formatBoolean,
   formatList,
   formatReservedValue,
   formatRows,
@@ -39,6 +43,38 @@ export function formatReason(
   return messages.reasons[reason.code]({ label, blockers, rows, narrowBy });
 }
 
+function formatEqualsValue(
+  messages: QueryGridMessages,
+  value: ChipValue,
+  boolean: boolean,
+): string {
+  if (value.reserved) {
+    return formatReservedValue(messages, value.reserved);
+  }
+  return boolean ? formatBoolean(messages, value.value) : value.text;
+}
+
+function formatRangeChip(
+  messages: QueryGridMessages,
+  chip: RangeChip,
+  label: string,
+): string {
+  if (chip.preset !== null && isDatePreset(chip.preset)) {
+    return messages.chipPreset({
+      label,
+      preset: messages.datePresets[chip.preset],
+    });
+  }
+  const params = {
+    label,
+    min: chip.min ?? messages.openBound,
+    max: chip.max ?? messages.openBound,
+  };
+  return chip.op === null || chip.op === "between"
+    ? messages.chipRange(params)
+    : messages.chipRangeOps[chip.op](params);
+}
+
 export function formatChip(
   messages: QueryGridMessages,
   def: BaseGridDef,
@@ -48,7 +84,8 @@ export function formatChip(
     "field" in chip ? getFieldLabel(def, chip.field) : messages.searchFilter;
   const removable = chip.clear !== null;
   switch (chip.kind) {
-    case "equals":
+    case "equals": {
+      const boolean = getField(def, chip.field)?.type === "boolean";
       return {
         id: chip.id,
         kind: chip.kind,
@@ -57,9 +94,19 @@ export function formatChip(
           : messages.chipEquals({ label }),
         values: chip.values.map((value) => ({
           id: value.value,
-          label: value.reserved
-            ? formatReservedValue(messages, value.reserved)
-            : value.text,
+          label: formatEqualsValue(messages, value, boolean),
+        })),
+        removable,
+      };
+    }
+    case "overlap":
+      return {
+        id: chip.id,
+        kind: chip.kind,
+        label: messages.chipOverlap({ label }),
+        values: chip.values.map((value) => ({
+          id: value.value,
+          label: value.text,
         })),
         removable,
       };
@@ -67,24 +114,14 @@ export function formatChip(
       return {
         id: chip.id,
         kind: chip.kind,
-        label:
-          chip.preset !== null && isDatePreset(chip.preset)
-            ? messages.chipPreset({
-                label,
-                preset: messages.datePresets[chip.preset],
-              })
-            : messages.chipRange({
-                label,
-                min: chip.min ?? messages.openBound,
-                max: chip.max ?? messages.openBound,
-              }),
+        label: formatRangeChip(messages, chip, label),
         removable,
       };
-    case "contains":
+    case "text":
       return {
         id: chip.id,
         kind: chip.kind,
-        label: messages.chipContains({ label, value: chip.value }),
+        label: messages.chipTexts[chip.op]({ label, value: chip.value }),
         removable,
       };
     case "match":

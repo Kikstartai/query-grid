@@ -8,6 +8,7 @@ import {
   toGroupValue,
   isFacetOnlyQuery,
   isMatchAny,
+  isQueryBudgeted,
   planQuery,
   type BaseFieldDef,
   type CountResult,
@@ -65,19 +66,26 @@ function resolveCap(query: QueryState, limits: GridLimits): number {
   return query.search !== null ? limits.searchLimit : limits.countCap;
 }
 
+// The search and a filter answered by a trigram or array index cost what they match, not what the page holds, so they run under the time budget and are refused past it.
 async function runFiltered<T extends object>(
+  def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
   sql: SqlQuery,
   limits: GridLimits,
-  settings?: string[],
+  settings: string[] = [],
   signal?: AbortSignal,
 ): Promise<T[]> {
-  if (query.search === null) {
-    return execute<T>(sql, settings?.length ? settings : undefined, signal);
+  if (query.search === null && !isQueryBudgeted(def, query)) {
+    return execute<T>(sql, settings.length ? settings : undefined, signal);
   }
+  const budget = listSearchSettings(limits);
+  const kept =
+    query.search === null
+      ? settings.filter((setting) => !setting.startsWith("statement_timeout"))
+      : [];
   try {
-    return await execute<T>(sql, listSearchSettings(limits), signal);
+    return await execute<T>(sql, [...new Set([...kept, ...budget])], signal);
   } catch (error) {
     const canceled = (error as { code?: string }).code === QUERY_CANCELED;
     if (canceled && !signal?.aborted) {
@@ -135,7 +143,8 @@ function wholeTable(def: PostgresGridDef, query: QueryState): QueryState {
     ...query,
     equals: {},
     ranges: [],
-    contains: null,
+    texts: [],
+    overlaps: {},
     match: "all",
     search: null,
     sort: def.defaultSort,
@@ -194,10 +203,10 @@ export async function getNarrowedSizes(
     group: null,
     cursor: null,
   };
-  const all = planQuery(def.indexes, { ...filters, match: "all" });
+  const all = planQuery(def.indexes, { ...filters, match: "all" }, def);
   const any =
     countFilterTerms(filters) > 1
-      ? planQuery(def.indexes, { ...filters, match: "any" })
+      ? planQuery(def.indexes, { ...filters, match: "any" }, def)
       : null;
   const [allSize, anySize] = await Promise.all([
     sizeOf(def, execute, all?.core ?? wholeTable(def, filters), limit, signal),
@@ -223,7 +232,7 @@ async function listNarrowSettings(
   signal?: AbortSignal,
 ): Promise<string[]> {
   assertDeclared(def, query);
-  const plan = planQuery(def.indexes, query);
+  const plan = planQuery(def.indexes, query, def);
   if (!plan?.narrowed) {
     return [];
   }
@@ -278,13 +287,14 @@ async function listFacetGroups(
   const cap = limits.countCap;
   const groups = await Promise.all(
     values.map(async (value): Promise<GroupHeader> => {
-      const [row] = await execute<{ count: number }>(
-        buildCappedCountSql(
-          def,
-          { ...query, equals: { ...query.equals, [key]: [value] } },
-          cap,
-        ),
-        narrow.length ? narrow : undefined,
+      const valued = { ...query, equals: { ...query.equals, [key]: [value] } };
+      const [row] = await runFiltered<{ count: number }>(
+        def,
+        execute,
+        valued,
+        buildCappedCountSql(def, valued, cap),
+        limits,
+        narrow,
         signal,
       );
       return {
@@ -326,7 +336,7 @@ export async function listGridGroups(
   if (key === def.facet?.field) {
     return listFacetGroups(def, execute, filters, key, limits, signal);
   }
-  const plan = planQuery(def.indexes, filters);
+  const plan = planQuery(def.indexes, filters, def);
   const limit = limits.narrowLimit;
   assertUnderLimit(
     plan
@@ -375,6 +385,7 @@ export async function listGridPage(
 ): Promise<PageResult> {
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
   const rows = await runFiltered<GridRow>(
+    def,
     execute,
     query,
     buildPageSql(def, query, limit, limits),
@@ -464,6 +475,7 @@ export async function getGridCount(
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
   if (exact) {
     const [row] = await runFiltered<{ count: number }>(
+      def,
       execute,
       query,
       buildExactCountSql(def, query),
@@ -475,6 +487,7 @@ export async function getGridCount(
   }
   const cap = resolveCap(query, limits);
   const [row] = await runFiltered<{ count: number }>(
+    def,
     execute,
     query,
     buildCappedCountSql(def, query, cap),
@@ -515,6 +528,7 @@ export async function listGridTotals(
   const cap = resolveCap(query, limits);
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
   const [row] = await runFiltered<Record<string, number>>(
+    def,
     execute,
     query,
     buildCappedTotalSql(def, query, cap),

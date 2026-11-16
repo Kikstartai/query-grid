@@ -3,12 +3,18 @@ export type FieldType =
   | "text"
   | "enum"
   | "integer"
+  | "decimal"
   | "money"
-  | "datetime";
+  | "boolean"
+  | "date"
+  | "datetime"
+  | "array";
 
 export type SortDirection = "asc" | "desc";
 
-export type GridRow = Record<string, string | number | null> & { id: string };
+export type GridValue = string | number | boolean | string[] | null;
+
+export type GridRow = Record<string, GridValue> & { id: string };
 
 export interface FieldOption {
   value: string;
@@ -57,10 +63,24 @@ export interface RangeState {
   min: string | null;
   max: string | null;
   preset?: string;
+  exclude?: boolean;
+  minExclusive?: boolean;
+  maxExclusive?: boolean;
 }
 
-export interface ContainsState {
+export const TEXT_OPS = [
+  "contains",
+  "not_contains",
+  "starts_with",
+  "ends_with",
+  "not_equals",
+] as const;
+
+export type TextOp = (typeof TEXT_OPS)[number];
+
+export interface TextState {
   field: string;
+  op: TextOp;
   value: string;
 }
 
@@ -69,7 +89,8 @@ export type MatchMode = "all" | "any";
 export interface QueryState {
   equals: Record<string, string[]>;
   ranges: RangeState[];
-  contains: ContainsState | null;
+  texts: TextState[];
+  overlaps: Record<string, string[]>;
   match: MatchMode;
   search: string | null;
   sort: SortState;
@@ -88,7 +109,8 @@ export interface DataSourceCapabilities {
   narrowBasis: (query: QueryState) => string;
   equalsFields: string[];
   rangeFields: string[];
-  containsFields: string[];
+  textFields: string[];
+  overlapFields: string[];
   groupFields: string[];
   sortFields: string[];
   searchFields: string[];
@@ -144,33 +166,59 @@ export function listTotalFields<F extends BaseFieldDef>(
   return (def.totals ?? []).flatMap((key) => getField(def, key) ?? []);
 }
 
-const RANGE_TYPES: FieldType[] = ["integer", "money", "datetime"];
+const RANGE_TYPES: FieldType[] = [
+  "integer",
+  "decimal",
+  "money",
+  "date",
+  "datetime",
+];
+
+const DATE_TYPES: FieldType[] = ["date", "datetime"];
+const NUMBER_TYPES: FieldType[] = ["integer", "decimal", "money"];
 
 export function isRangeType(type: FieldType): boolean {
   return RANGE_TYPES.includes(type);
+}
+
+export function isDateType(type: FieldType): boolean {
+  return DATE_TYPES.includes(type);
+}
+
+export function isNumberType(type: FieldType): boolean {
+  return NUMBER_TYPES.includes(type);
 }
 
 export function getRange(query: QueryState, key: string): RangeState | null {
   return query.ranges.find((range) => range.field === key) ?? null;
 }
 
+export function listRanges(query: QueryState, key: string): RangeState[] {
+  return query.ranges.filter((range) => range.field === key);
+}
+
 export function getFieldLabel(def: BaseGridDef, key: string): string {
   return getField(def, key)?.label ?? key;
 }
 
-export type FilterKind = "lookup" | "equals" | "range";
+export type FilterKind = "lookup" | "equals" | "range" | "overlap";
 
-export const CONTAINS_MAX_LENGTH = 80;
+export const TEXT_MAX_LENGTH = 80;
+export const TEXT_FILTER_MAX = 8;
+export const RANGE_FILTER_MAX = 12;
 
 export function resolveFilterKind(
   field: BaseFieldDef,
   capabilities: DataSourceCapabilities,
 ): FilterKind | null {
   if (capabilities.equalsFields.includes(field.key)) {
-    return field.options ? "equals" : "lookup";
+    return field.options || field.type === "boolean" ? "equals" : "lookup";
   }
   if (capabilities.rangeFields.includes(field.key)) {
     return "range";
+  }
+  if (capabilities.overlapFields.includes(field.key)) {
+    return "overlap";
   }
   return null;
 }

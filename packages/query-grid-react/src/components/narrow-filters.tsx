@@ -14,7 +14,13 @@ import {
 } from "@ui-sdk/react/select";
 import { useState, type FormEvent } from "react";
 
-import { CONTAINS_MAX_LENGTH, type MatchMode } from "@kikstart/query-grid";
+import {
+  TEXT_FILTER_MAX,
+  TEXT_MAX_LENGTH,
+  TEXT_OPS,
+  type MatchMode,
+  type TextOp,
+} from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
 import type { ControlOption, ControlState } from "./fields.ts";
@@ -23,45 +29,62 @@ import { useMessages } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 import { useMounted } from "./use-mounted.ts";
 
-export interface ContainsFilterProps extends ControlState {
-  options: ControlOption[];
-  field: string | null;
+export interface TextFilterValue {
+  field: string;
+  op: TextOp;
   value: string;
-  onContainsChange: (field: string, value: string) => void;
-  maxLength?: number;
 }
 
-function ContainsFilterForm({
+export interface TextFilterProps extends ControlState {
+  options: ControlOption[];
+  filters: TextFilterValue[];
+  onFilterChange: (at: number, filter: TextFilterValue | null) => void;
+  maxLength?: number;
+  maxFilters?: number;
+}
+
+interface TextRowProps extends ControlState {
+  at: number;
+  options: ControlOption[];
+  filter: TextFilterValue | null;
+  maxLength: number;
+  onFilterChange: (at: number, filter: TextFilterValue | null) => void;
+}
+
+function TextRow({
+  at,
   options,
-  field,
-  value,
-  onContainsChange,
-  maxLength = CONTAINS_MAX_LENGTH,
+  filter,
+  maxLength,
+  onFilterChange,
   disabled,
-  reason,
-}: ContainsFilterProps) {
+}: TextRowProps) {
   const messages = useMessages();
-  const [chosen, setChosen] = useState(field ?? options[0]?.value ?? "");
-  const [draft, setDraft] = useState(value);
+  const open = options.find((option) => !option.disabled) ?? options[0];
+  const [chosen, setChosen] = useState(filter?.field ?? open?.value ?? "");
+  const [op, setOp] = useState<TextOp>(filter?.op ?? "contains");
+  const [draft, setDraft] = useState(filter?.value ?? "");
   const label = options.find((option) => option.value === chosen)?.label ?? "";
-  const apply = (target: string, text: string) => {
-    const trimmed = text.trim().slice(0, maxLength);
-    if (target && (trimmed || value)) {
-      onContainsChange(target, trimmed);
+  const ops = TEXT_OPS.map((item) => ({
+    value: item as string,
+    label: messages.textOps[item],
+  }));
+  const apply = (field: string, next: TextOp, text: string) => {
+    const value = text.trim().slice(0, maxLength);
+    if (field && value) {
+      onFilterChange(at, { field, op: next, value });
+      return;
+    }
+    if (filter) {
+      onFilterChange(at, null);
     }
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    apply(chosen, draft);
+    apply(chosen, op, draft);
   };
   return (
-    <FieldFrame
-      name="contains"
-      kind="contains"
-      label={messages.containsFilter}
-      disabled={disabled}
-      reason={reason}
-    >
+    <div className="qg-text-row" data-text-row={at}>
       <Select
         items={options}
         value={chosen}
@@ -69,19 +92,42 @@ function ContainsFilterForm({
         onValueChange={(next: string | null) => {
           if (next) {
             setChosen(next);
-            apply(next, draft);
+            apply(next, op, draft);
           }
         }}
       >
-        <SelectTrigger
-          aria-label={messages.containsField}
-          data-filter="contains.field"
-        >
-          <span className="qg-select-prefix">{messages.containsFilter}</span>
+        <SelectTrigger aria-label={messages.textField} data-filter="text.field">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           {options.map((option) => (
+            <SelectOption
+              key={option.value}
+              value={option.value}
+              label={option.label}
+              disabled={option.disabled}
+              reason={option.reason}
+            />
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
+        items={ops}
+        value={op}
+        disabled={disabled}
+        onValueChange={(next: string | null) => {
+          const picked = TEXT_OPS.find((item) => item === next);
+          if (picked) {
+            setOp(picked);
+            apply(chosen, picked, draft);
+          }
+        }}
+      >
+        <SelectTrigger aria-label={messages.textOperator} data-filter="text.op">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ops.map((option) => (
             <SelectOption
               key={option.value}
               value={option.value}
@@ -95,9 +141,9 @@ function ContainsFilterForm({
           <Input
             className="qg-search-input"
             type="search"
-            aria-label={messages.containsText({ label })}
-            placeholder={messages.containsPlaceholder}
-            data-filter="contains"
+            aria-label={messages.textValue({ label, op: messages.textOps[op] })}
+            placeholder={messages.textPlaceholder}
+            data-filter="text"
             value={draft}
             maxLength={maxLength}
             disabled={disabled}
@@ -105,27 +151,66 @@ function ContainsFilterForm({
           />
           <InputClear
             className="qg-clear"
-            aria-label={messages.clearField({ label: messages.containsFilter })}
-            data-filter-clear="contains"
+            aria-label={messages.clearField({ label: messages.textFilter })}
+            data-filter-clear="text"
             onClick={() => {
               setDraft("");
-              apply(chosen, "");
+              apply(chosen, op, "");
             }}
           >
             <XIcon size={12} />
           </InputClear>
         </InputGroup>
       </form>
-    </FieldFrame>
+    </div>
   );
 }
 
-export function ContainsFilter(props: ContainsFilterProps) {
+function listTextRows(
+  filters: TextFilterValue[],
+  maxFilters: number,
+): (TextFilterValue | null)[] {
+  return filters.length < maxFilters ? [...filters, null] : filters;
+}
+
+function textRowKey(at: number, filter: TextFilterValue | null): string {
+  return filter
+    ? `${at}:${filter.field}:${filter.op}:${filter.value}`
+    : `${at}:`;
+}
+
+export function TextFilter({
+  options,
+  filters,
+  onFilterChange,
+  maxLength = TEXT_MAX_LENGTH,
+  maxFilters = TEXT_FILTER_MAX,
+  disabled,
+  reason,
+}: TextFilterProps) {
+  const messages = useMessages();
   return (
-    <ContainsFilterForm
-      key={`${props.field ?? ""}:${props.value}`}
-      {...props}
-    />
+    <FieldFrame
+      name="text"
+      kind="text"
+      label={messages.textFilter}
+      disabled={disabled}
+      reason={reason}
+    >
+      <div className="qg-text-rows">
+        {listTextRows(filters, maxFilters).map((filter, at) => (
+          <TextRow
+            key={textRowKey(at, filter)}
+            at={at}
+            options={options}
+            filter={filter}
+            maxLength={maxLength}
+            onFilterChange={onFilterChange}
+            disabled={disabled && filter === null}
+          />
+        ))}
+      </div>
+    </FieldFrame>
   );
 }
 

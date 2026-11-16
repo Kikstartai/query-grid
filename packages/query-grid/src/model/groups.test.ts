@@ -189,7 +189,7 @@ describe("review fixes", () => {
     const plan = planQuery(TEST_INDEXES, {
       ...BASE,
       group: "region",
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(plan?.core.group).toBeNull();
     const any = planQuery(TEST_INDEXES, {

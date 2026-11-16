@@ -32,11 +32,14 @@ export {
   type MigrationStep,
   type PgIndexRow,
   type IndexDdl,
+  type IndexKind,
   type TableMigration,
 } from "./schema-ddl.ts";
 export {
+  describeArrayIndex,
   describeSearch,
   describeIndex,
+  describeTextIndex,
   validateGridDef,
 } from "./index-defs.ts";
 export {

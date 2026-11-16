@@ -5,8 +5,10 @@ import {
 } from "@kikstart/query-grid";
 
 import {
+  describeArrayIndex,
   describeSearch,
   describeIndex,
+  describeTextIndex,
   validateGridDef,
 } from "./index-defs.ts";
 import {
@@ -17,11 +19,15 @@ import {
 } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
+export type IndexKind = "ordered" | "search" | "text" | "array";
+
 export interface IndexDdl {
   note: string;
   name: string;
+  kind: IndexKind;
   method: "btree" | "gin";
   columns: string[];
+  empty: string[];
   ddl: string;
 }
 
@@ -76,8 +82,10 @@ function searchIndex(
   return {
     note: describeSearch(search),
     name,
+    kind: "search",
     method: "gin",
     columns: search.map(identifier),
+    empty: [],
     ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin ((${searchExpression(def)}) ${TRGM_OPS});`,
   };
 }
@@ -92,15 +100,61 @@ function indexDdl(
   const columns = [...index.equals, index.sort, KEY_FIELD]
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
+  const empty = [...(index.empty ?? [])].map(identifier).sort();
+  const suffix = empty.length > 0 ? `__empty_${empty.join("_")}` : "";
   const name = shortenIdentifier(
-    `${AUTO_PREFIX}${table}_${[...index.equals, index.sort].join("__")}`,
+    `${AUTO_PREFIX}${table}_${[...index.equals, index.sort].join("__")}${suffix}`,
   );
+  const where =
+    empty.length > 0
+      ? ` WHERE ${empty.map((column) => `${column} IS NULL`).join(" AND ")}`
+      : "";
   return {
     note: describeIndex(index),
     name,
+    kind: "ordered",
     method: "btree",
     columns,
-    ddl: `${create} ${name} ON ${table} USING btree (${columns.join(", ")});`,
+    empty,
+    ddl: `${create} ${name} ON ${table} USING btree (${columns.join(", ")})${where};`,
+  };
+}
+
+function textIndex(
+  def: PostgresGridDef,
+  key: string,
+  concurrently: boolean,
+): IndexDdl {
+  const table = identifier(def.table);
+  const column = identifier(key);
+  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${column}_trgm`);
+  return {
+    note: describeTextIndex(column),
+    name,
+    kind: "text",
+    method: "gin",
+    columns: [column],
+    empty: [],
+    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column} ${TRGM_OPS});`,
+  };
+}
+
+function arrayIndex(
+  def: PostgresGridDef,
+  key: string,
+  concurrently: boolean,
+): IndexDdl {
+  const table = identifier(def.table);
+  const column = identifier(key);
+  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${column}_overlap`);
+  return {
+    note: describeArrayIndex(column),
+    name,
+    kind: "array",
+    method: "gin",
+    columns: [column],
+    empty: [],
+    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column});`,
   };
 }
 
@@ -113,9 +167,14 @@ export function listIndexDdl(
     indexDdl(def, index, concurrently),
   );
   const search = listSearchFields(def);
-  return search.length > 0
-    ? [...ordered, searchIndex(def, search, concurrently)]
-    : ordered;
+  return [
+    ...ordered,
+    ...(search.length > 0 ? [searchIndex(def, search, concurrently)] : []),
+    ...(def.textIndexes ?? []).map((key) => textIndex(def, key, concurrently)),
+    ...(def.arrayIndexes ?? []).map((key) =>
+      arrayIndex(def, key, concurrently),
+    ),
+  ];
 }
 
 export function listCounterObjects(
@@ -284,11 +343,11 @@ function indexSteps(
 ): MigrationStep[] {
   const indexes = listIndexDdl(def, options);
   const extension: MigrationStep[] = indexes.some(
-    (index) => index.method === "gin",
+    (index) => index.kind === "search" || index.kind === "text",
   )
     ? [
         {
-          note: "The search needs trigram indexes.",
+          note: "The search and the text indexes are trigram indexes.",
           sql: "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
           transaction: false,
         },
@@ -406,14 +465,31 @@ export function validateGridDefs(defs: PostgresGridDef[]): string[] {
 interface ParsedIndex {
   method: string;
   body: string;
+  empty: string[] | null;
+}
+
+const WHERE = " WHERE ";
+const IS_NULL = /^\(*([a-z_][a-z0-9_]*) IS NULL\)*$/;
+
+function parseEmpty(predicate: string): string[] | null {
+  const names = predicate.split(" AND ").map((part) => IS_NULL.exec(part)?.[1]);
+  return names.every((name) => name !== undefined)
+    ? (names as string[]).sort()
+    : null;
 }
 
 function parseIndexDef(indexdef: string): ParsedIndex | null {
-  if (indexdef.includes(" WHERE ")) {
+  const at = indexdef.indexOf(WHERE);
+  const head = at < 0 ? indexdef : indexdef.slice(0, at);
+  const match = /USING (\w+) \((.*)\)$/.exec(head);
+  if (!match) {
     return null;
   }
-  const match = /USING (\w+) \((.*)\)$/.exec(indexdef);
-  return match ? { method: match[1], body: match[2] } : null;
+  return {
+    method: match[1],
+    body: match[2],
+    empty: at < 0 ? [] : parseEmpty(indexdef.slice(at + WHERE.length)),
+  };
 }
 
 function answers(index: IndexDdl, row: PgIndexRow): boolean {
@@ -421,7 +497,19 @@ function answers(index: IndexDdl, row: PgIndexRow): boolean {
   if (!parsed || parsed.method !== index.method || row.valid === false) {
     return false;
   }
-  if (index.method === "gin") {
+  if (parsed.empty?.join(",") !== index.empty.join(",")) {
+    return false;
+  }
+  if (index.kind === "text") {
+    return parsed.body === `${index.columns[0]} ${TRGM_OPS}`;
+  }
+  if (index.kind === "array") {
+    return (
+      parsed.body === index.columns[0] ||
+      parsed.body === `${index.columns[0]} array_ops`
+    );
+  }
+  if (index.kind === "search") {
     const names = (parsed.body.match(/[a-z_][a-z0-9_]*/g) ?? []).filter(
       (name) => index.columns.includes(name),
     );

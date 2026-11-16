@@ -94,10 +94,8 @@ describe("the bound filter containers", () => {
       "sort",
       "group",
     ]);
-    const withText = render(
-      <FilterBar fields={["region"]} contains={["note"]} />,
-    );
-    expect(withText).toContain('data-field="contains"');
+    const withText = render(<FilterBar fields={["region"]} texts={["note"]} />);
+    expect(withText).toContain('data-field="text"');
     expect(withText).toContain("Note");
   });
 
@@ -149,7 +147,7 @@ describe("exclude and presets, bound", () => {
 describe("the narrowed-set controls, bound", () => {
   test("a client grid offers Contains and Match any with no limit", () => {
     const html = render(<FilterBar />);
-    expect(html).toContain('data-field="contains"');
+    expect(html).toContain('data-field="text"');
     expect(html).toContain('data-field="match"');
     expect(html).not.toMatch(/data-field="contains"[^>]*data-unavailable/);
     expect(html).not.toMatch(/data-match="any"[^>]*disabled/);

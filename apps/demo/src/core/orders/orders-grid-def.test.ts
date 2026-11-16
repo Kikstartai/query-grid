@@ -51,14 +51,25 @@ describe("orders grid def", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(ORDERS_GRID_DEF, context);
       for (const state of states) {
-        expect(isQueryIndexed(INDEXES, ORDERS_GRID_DEF.search, state)).toBe(
-          true,
-        );
+        expect(
+          isQueryIndexed(
+            INDEXES,
+            ORDERS_GRID_DEF.search,
+            state,
+            ORDERS_GRID_DEF,
+          ),
+        ).toBe(true);
         if (state.search === null) {
-          reached.add(indexId(getIndex(INDEXES, state)!));
+          reached.add(indexId(getIndex(INDEXES, state, ORDERS_GRID_DEF)!));
         }
       }
       expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
+      expect(
+        states.some((state) =>
+          state.texts.some((text) => text.field === "customer_name"),
+        ),
+      ).toBe(true);
+      expect(states.some((state) => state.texts.length > 1)).toBe(false);
       const several = states.filter(
         (state) =>
           state.search === null &&
@@ -75,7 +86,7 @@ describe("orders grid def", () => {
       );
       expect(several.length > 0).toBe(multiIndexes.length > 0);
       for (const state of several) {
-        const index = getIndex(INDEXES, state);
+        const index = getIndex(INDEXES, state, ORDERS_GRID_DEF);
         expect(index).not.toBeNull();
       }
     }

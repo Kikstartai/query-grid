@@ -399,9 +399,11 @@ test.describe("the narrowed-set tier", () => {
     bar(page).locator(`[data-field="${name}"]`);
 
   async function setContains(page: Page, key: string, text: string) {
-    await bar(page).locator('[data-filter="contains.field"]').click();
+    await bar(page)
+      .locator('[data-text-row="0"] [data-filter="text.field"]')
+      .click();
     await page.locator(`[data-option="${key}"]`).click();
-    const input = bar(page).locator('[data-filter="contains"]');
+    const input = bar(page).locator('[data-text-row="0"] [data-filter="text"]');
     await input.fill(text);
     await input.press("Enter");
   }
@@ -410,23 +412,22 @@ test.describe("the narrowed-set tier", () => {
     page,
   }) => {
     await openGrid(page, "/orders");
-    await expect(field(page, "contains")).toHaveAttribute(
+    await expect(field(page, "text")).toHaveAttribute(
       "title",
       /^Narrow by Status or Customer account first: 620.000 rows\.$/,
     );
-    await expect(field(page, "contains")).toHaveAttribute(
-      "data-unavailable",
-      "",
-    );
+    await expect(field(page, "text")).toHaveAttribute("data-unavailable", "");
     await expect(field(page, "total")).toHaveAttribute("data-unavailable", "");
     await expect(field(page, "created_at")).not.toHaveAttribute(
       "data-unavailable",
       "",
     );
-    await expect(bar(page).locator('[data-filter="contains"]')).toBeDisabled();
+    await expect(
+      bar(page).locator('[data-text-row="0"] [data-filter="text"]'),
+    ).toBeDisabled();
 
     await pick(page, "status_code", "failed");
-    await expect(field(page, "contains")).not.toHaveAttribute(
+    await expect(field(page, "text")).not.toHaveAttribute(
       "data-unavailable",
       "",
     );
@@ -436,7 +437,7 @@ test.describe("the narrowed-set tier", () => {
     );
     await setContains(page, "note", "gift");
     await expect(page).toHaveURL(/c\.note=gift/);
-    await expect(chip(page, "contains")).toHaveText(/Note contains “gift”/);
+    await expect(chip(page, "text:0")).toHaveText(/Note contains “gift”/);
     const matches = await apiCount(page, "f.status_code=failed&c.note=gift");
     expect(matches).toBeGreaterThan(0);
     await expectCount(page, matches, "capped");
@@ -455,9 +456,11 @@ test.describe("the narrowed-set tier", () => {
     );
     await expect(page.locator("[data-chip]")).toHaveCount(4);
 
-    await page.locator('[data-chip-remove="contains"]').click();
+    await page.locator('[data-chip-remove="text:0"]').click();
     await expect(page).not.toHaveURL(/c\.note/);
-    await expect(bar(page).locator('[data-filter="contains"]')).toHaveValue("");
+    await expect(
+      bar(page).locator('[data-text-row="0"] [data-filter="text"]'),
+    ).toHaveValue("");
   });
 
   test("match any unions two filters when their rows fit the limit, and is held when they do not", async ({
@@ -529,7 +532,7 @@ test.describe("the narrowed-set tier", () => {
     await page.locator("[data-part=filter-sidebar-trigger]").click();
     const sidebar = page.locator("[data-part=filter-sidebar]");
     await expect(
-      sidebar.locator('[data-field="contains"] [data-field-reason]'),
+      sidebar.locator('[data-field="text"] [data-field-reason]'),
     ).toHaveText(/Narrow by Status or Customer account first/);
     await expect(
       sidebar.locator('[data-field="item_count"] [data-field-reason]'),
@@ -564,11 +567,11 @@ test.describe("the narrowed-set tier", () => {
     page,
   }) => {
     await openGrid(page, "/memory");
-    await expect(field(page, "contains")).not.toHaveAttribute(
+    await expect(field(page, "text")).not.toHaveAttribute(
       "data-unavailable",
       "",
     );
-    const input = bar(page).locator('[data-filter="contains"]');
+    const input = bar(page).locator('[data-text-row="0"] [data-filter="text"]');
     await input.fill("fix");
     await input.press("Enter");
     await expect(page).toHaveURL(/c\.title=fix/);

@@ -10,7 +10,7 @@ import {
   getReservedValue,
   isExcluding,
   labelKey,
-  listContainsFilterFields,
+  listTextFilterFields,
   listSelectedValues,
   toExcludeValues,
   listFilterFields,
@@ -35,10 +35,14 @@ import {
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
 import {
-  ContainsFilter as BaseContainsFilter,
   MatchToggle as BaseMatchToggle,
+  TextFilter as BaseTextFilter,
 } from "../components/narrow-filters.tsx";
-import { useLocale, useMessages } from "../components/messages.tsx";
+import {
+  useLocale,
+  useMessages,
+  type QueryGridMessages,
+} from "../components/messages.tsx";
 import { formatReason } from "../react/query-grid-format.ts";
 import {
   useFieldLabels,
@@ -57,7 +61,10 @@ export interface FieldFilterProps {
   field: BaseFieldDef;
 }
 
-export function useFieldOffer(key: string, kind: "equals" | "range") {
+export function useFieldOffer(
+  key: string,
+  kind: "equals" | "range" | "overlap",
+) {
   const offer = useOfferState({ kind, field: key });
   return { disabled: !offer.offered, reason: offer.reason };
 }
@@ -93,14 +100,75 @@ export function useEqualsFilter(key: string) {
   };
 }
 
+function withBooleanOptions(
+  field: BaseFieldDef,
+  messages: QueryGridMessages,
+): BaseFieldDef {
+  if (field.type !== "boolean" || field.options) {
+    return field;
+  }
+  return {
+    ...field,
+    options: [
+      { value: "true", label: messages.booleanTrue },
+      { value: "false", label: messages.booleanFalse },
+    ],
+  };
+}
+
 function BoundEqualsSelect({ field }: FieldFilterProps) {
+  const messages = useMessages();
   return (
     <EqualsSelect
-      field={field}
+      field={withBooleanOptions(field, messages)}
       {...useEqualsFilter(field.key)}
       {...useFieldOffer(field.key, "equals")}
     />
   );
+}
+
+function useOverlapFilter(key: string) {
+  const { dispatch } = useQueryGridActions();
+  const query = useQueryState();
+  return {
+    values: query.overlaps[key] ?? [],
+    multiple: true,
+    onValuesChange: (values: string[]) =>
+      dispatch({ type: "setOverlap", field: key, values }),
+  };
+}
+
+function BoundOverlapSelect({ field }: FieldFilterProps) {
+  return (
+    <EqualsSelect
+      kind="overlap"
+      field={field}
+      {...useOverlapFilter(field.key)}
+      {...useFieldOffer(field.key, "overlap")}
+    />
+  );
+}
+
+function BoundOverlapLookup({ field }: FieldFilterProps) {
+  const { loadOptions } = useQueryGridActions();
+  return (
+    <LookupFilter
+      kind="overlap"
+      field={field}
+      {...useOverlapFilter(field.key)}
+      {...useFieldOffer(field.key, "overlap")}
+      loadOptions={(text, signal) => loadOptions(field.key, text, signal)}
+    />
+  );
+}
+
+// An array cell is empty or it is not: the (empty) choices belong to equality, so the overlap control never lists them.
+function BoundOverlapFilter({ field }: FieldFilterProps) {
+  const plain = { ...field, nullable: false };
+  if (field.options) {
+    return <BoundOverlapSelect field={plain} />;
+  }
+  return <BoundOverlapLookup field={plain} />;
 }
 
 function BoundLookupFilter({ field }: FieldFilterProps) {
@@ -137,8 +205,8 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
       onRangeChange={(next) =>
         dispatch(
           next
-            ? { type: "setRange", field: field.key, ...next }
-            : { type: "clearRange", field: field.key },
+            ? { type: "setRange", field: field.key, at: 0, ...next }
+            : { type: "clearRange", field: field.key, at: 0 },
         )
       }
       {...useFieldOffer(field.key, "range")}
@@ -155,6 +223,8 @@ export function FieldFilter(props: FieldFilterProps) {
       return <BoundEqualsSelect {...props} />;
     case "range":
       return <BoundRangeFilter {...props} />;
+    case "overlap":
+      return <BoundOverlapFilter {...props} />;
     default:
       return null;
   }
@@ -265,37 +335,39 @@ export function SearchFilter() {
   );
 }
 
-export interface ContainsFilterProps {
+export interface TextFilterProps {
   fields?: string[];
 }
 
-export function ContainsFilter({ fields }: ContainsFilterProps) {
+export function TextFilter({ fields }: TextFilterProps) {
   const { def, source } = useQueryGridMeta();
   const query = useQueryState();
+  const offers = useOffers();
   const { dispatch } = useQueryGridActions();
-  const keys = listContainsFilterFields(source.capabilities, fields);
-  const current = query.contains?.field ?? keys[0] ?? "";
-  const offer = useOfferState({ kind: "contains", field: current });
+  const keys = listTextFilterFields(source.capabilities, fields);
+  const offered = keys.filter((key) => offers.texts.includes(key));
+  const offer = useOfferState({ kind: "text", field: keys[0] ?? "" });
   if (keys.length === 0) {
     return null;
   }
+  const held = offered.length === 0 && query.texts.length === 0;
   return (
-    <BaseContainsFilter
+    <BaseTextFilter
       options={keys.map((key) => ({
         value: key,
         label: getFieldLabel(def, key),
+        disabled: !offered.includes(key),
       }))}
-      field={query.contains?.field ?? null}
-      value={query.contains?.value ?? ""}
-      onContainsChange={(field, value) =>
+      filters={query.texts}
+      onFilterChange={(at, filter) =>
         dispatch(
-          value
-            ? { type: "setContains", field, value }
-            : { type: "clearContains" },
+          filter
+            ? { type: "setText", at, ...filter }
+            : { type: "removeText", at },
         )
       }
-      disabled={!offer.offered && query.contains === null}
-      reason={offer.reason}
+      disabled={held}
+      reason={held ? offer.reason : null}
     />
   );
 }
@@ -327,7 +399,7 @@ export function FilterChips() {
       onRemove={(chipId, valueId) => {
         const chip = chips.find(({ item }) => item.id === chipId)?.chip;
         const value =
-          chip?.kind === "equals"
+          chip?.kind === "equals" || chip?.kind === "overlap"
             ? chip.values.find((item) => item.value === valueId)
             : undefined;
         const clear = value?.clear ?? chip?.clear;
@@ -342,10 +414,10 @@ export function FilterChips() {
 
 interface DefaultFiltersProps {
   fields?: string[];
-  contains?: string[];
+  texts?: string[];
 }
 
-function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
+function DefaultFilters({ fields, texts }: DefaultFiltersProps) {
   const { def, source } = useQueryGridMeta();
   return (
     <>
@@ -353,7 +425,7 @@ function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
       {listFilterFields(def, source.capabilities, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
-      <ContainsFilter fields={contains ?? fields} />
+      <TextFilter fields={texts ?? fields} />
       <MatchToggle />
       <SortControl />
       <GroupControl />
@@ -363,14 +435,14 @@ function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
 
 export interface FilterBarProps {
   fields?: string[];
-  contains?: string[];
+  texts?: string[];
   children?: ReactNode;
 }
 
-export function FilterBar({ fields, contains, children }: FilterBarProps) {
+export function FilterBar({ fields, texts, children }: FilterBarProps) {
   return (
     <BaseFilterBar>
-      {children ?? <DefaultFilters fields={fields} contains={contains} />}
+      {children ?? <DefaultFilters fields={fields} texts={texts} />}
     </BaseFilterBar>
   );
 }
@@ -379,7 +451,7 @@ export interface FilterSidebarProps {
   side?: "start" | "end";
   label?: string;
   fields?: string[];
-  contains?: string[];
+  texts?: string[];
   children?: ReactNode;
 }
 
@@ -387,7 +459,7 @@ export function FilterSidebar({
   side,
   label,
   fields,
-  contains,
+  texts,
   children,
 }: FilterSidebarProps) {
   const { dispatch } = useQueryGridActions();
@@ -399,7 +471,7 @@ export function FilterSidebar({
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      {children ?? <DefaultFilters fields={fields} contains={contains} />}
+      {children ?? <DefaultFilters fields={fields} texts={texts} />}
     </BaseFilterSidebar>
   );
 }

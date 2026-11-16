@@ -279,7 +279,7 @@ describe("the narrowed-set tier", () => {
         { field: "total", min: "20000", max: "90000" },
         { field: "item_count", min: "2", max: null },
       ],
-      contains: { field: "note", value: "GIFT" },
+      texts: [{ field: "note", op: "contains", value: "GIFT" }],
     };
     const page = await listGridPage(ORDERS_GRID_DEF, execute, query, 200);
     expect(page.rows.length).toBeGreaterThan(0);
@@ -365,7 +365,10 @@ describe("the narrowed-set tier", () => {
       return execute<T>(sql);
     };
     const cases: QueryState[] = [
-      { ...base, contains: { field: "customer_name", value: "smith" } },
+      {
+        ...base,
+        texts: [{ field: "customer_name", op: "contains", value: "smith" }],
+      },
       { ...base, ranges: [{ field: "total", min: "20000", max: null }] },
       {
         ...base,
@@ -393,7 +396,7 @@ describe("the narrowed-set tier", () => {
     const query: QueryState = {
       ...base,
       equals: { status_code: ["completed"] },
-      contains: { field: "note", value: "fragile" },
+      texts: [{ field: "note", op: "contains", value: "fragile" }],
     };
     let refusal: unknown = null;
     try {

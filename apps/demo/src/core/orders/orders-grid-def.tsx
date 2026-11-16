@@ -26,7 +26,8 @@ export const ORDER_BAR_FIELDS = [
   "created_at",
   "total",
 ];
-export const ORDER_CONTAINS_FIELDS = ["customer_name", "note"];
+export const ORDER_TEXT_FIELDS = ["customer_name", "note"];
+export const ORDER_TEXT_INDEXES = ["customer_name"];
 
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
@@ -177,6 +178,7 @@ export const ORDERS_GRID_DEF = {
   table: "orders",
   fields: ORDER_FIELDS,
   indexes: ORDER_INDEXES,
+  textIndexes: ORDER_TEXT_INDEXES,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
   totals: ["total", "item_count"],

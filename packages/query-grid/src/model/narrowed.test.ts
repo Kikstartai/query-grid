@@ -80,7 +80,12 @@ const UNKNOWN: OfferContext = {
 describe("the plan of a query", () => {
   test("an indexed query is its own core and is not narrowed", () => {
     const plan = planQuery(TEST_INDEXES, OPEN);
-    expect(plan).toEqual({ core: OPEN, narrowed: false, terms: null });
+    expect(plan).toEqual({
+      core: OPEN,
+      narrowed: false,
+      budgeted: false,
+      terms: null,
+    });
   });
 
   test("a range off the sort, a second range and a contains run over the core's rows", () => {
@@ -96,10 +101,10 @@ describe("the plan of a query", () => {
     expect(two?.core.ranges).toEqual([CREATED_RANGE]);
     const contains = planQuery(TEST_INDEXES, {
       ...OPEN,
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(contains).toMatchObject({ narrowed: true, terms: null });
-    expect(contains?.core.contains).toBeNull();
+    expect(contains?.core.texts).toEqual([]);
   });
 
   test("a range on the sort of an index with no range falls into the narrowed part", () => {
@@ -113,7 +118,7 @@ describe("the plan of a query", () => {
       planQuery(TEST_INDEXES, {
         ...BASE,
         equals: { status: ["open"], region: ["north"] },
-        contains: { field: "note", value: "gift" },
+        texts: [{ field: "note", op: "contains", value: "gift" }],
       }),
     ).toBeNull();
   });
@@ -148,7 +153,7 @@ describe("the plan of a query", () => {
     const plan = planQuery(TEST_INDEXES, {
       ...OPEN,
       match: "any",
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(plan).toMatchObject({ narrowed: true, terms: null });
   });
@@ -162,14 +167,14 @@ describe("the plan of a query", () => {
     expect(
       isQueryRunnable(DEF, {
         ...OPEN,
-        contains: { field: "status", value: "op" },
+        texts: [{ field: "status", op: "contains", value: "op" }],
       }),
     ).toBe(false);
     expect(
       isQueryRunnable(DEF, {
         ...BASE,
         search: "abc",
-        contains: { field: "note", value: "gift" },
+        texts: [{ field: "note", op: "contains", value: "gift" }],
       }),
     ).toBe(false);
     expect(
@@ -181,8 +186,8 @@ describe("the plan of a query", () => {
       }),
     ).toBe(false);
     expect(CAPABILITIES.rangeFields).toEqual(["number", "created_at", "total"]);
-    expect(CAPABILITIES.containsFields).toEqual(["name", "note"]);
-    expect(indexCapabilities(TEST_INDEXES).containsFields).toEqual([]);
+    expect(CAPABILITIES.textFields).toEqual(["name", "note"]);
+    expect(indexCapabilities(TEST_INDEXES).textFields).toEqual([]);
     expect(indexCapabilities(TEST_INDEXES).canRun(ranged)).toBe(false);
   });
 });
@@ -191,7 +196,7 @@ describe("offers under the narrowed-set limit", () => {
   test("within the limit every expensive control is offered", () => {
     const offers = listOffers(DEF, OPEN, contextFor(OPEN));
     expect(offers.ranges).toEqual(["number", "created_at", "total"]);
-    expect(offers.contains).toEqual(["name", "note"]);
+    expect(offers.texts).toEqual(["name", "note"]);
   });
 
   test("over the limit only what the index answers is offered, with the size as the reason", () => {
@@ -200,7 +205,7 @@ describe("offers under the narrowed-set limit", () => {
     });
     const offers = listOffers(DEF, BASE, base);
     expect(offers.ranges).toEqual(["created_at"]);
-    expect(offers.contains).toEqual([]);
+    expect(offers.texts).toEqual([]);
     expect(
       explainUnavailable(BASE, { kind: "range", field: "total" }, base),
     ).toEqual({
@@ -214,13 +219,13 @@ describe("offers under the narrowed-set limit", () => {
       narrowBy: ["status", "region"],
     });
     expect(
-      explainUnavailable(BASE, { kind: "contains", field: "note" }, base).code,
+      explainUnavailable(BASE, { kind: "text", field: "note" }, base).code,
     ).toBe("narrow_first");
     expect(
       applyAction(
         DEF,
         BASE,
-        { type: "setContains", field: "note", value: "gift" },
+        { type: "setText", field: "note", op: "contains", value: "gift" },
         base,
       ),
     ).toBe(BASE);
@@ -229,13 +234,12 @@ describe("offers under the narrowed-set limit", () => {
   test("before the size is known nothing expensive is offered", () => {
     const offers = listOffers(DEF, OPEN, UNKNOWN);
     expect(offers.ranges).toEqual([]);
-    expect(offers.contains).toEqual([]);
+    expect(offers.texts).toEqual([]);
     expect(
-      explainUnavailable(OPEN, { kind: "contains", field: "note" }, UNKNOWN)
-        .code,
+      explainUnavailable(OPEN, { kind: "text", field: "note" }, UNKNOWN).code,
     ).toBe("narrow_counting");
     const stale = contextFor(BASE);
-    expect(listOffers(DEF, OPEN, stale).contains).toEqual([]);
+    expect(listOffers(DEF, OPEN, stale).texts).toEqual([]);
   });
 
   test("match any is gated by the sum of its terms", () => {
@@ -273,7 +277,7 @@ describe("offers under the narrowed-set limit", () => {
   test("a query already over a narrowed set may change its filters: the server decides", () => {
     const narrowed: QueryState = {
       ...OPEN,
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     };
     const context = contextFor(narrowed);
     const wider = applyAction(
@@ -283,7 +287,9 @@ describe("offers under the narrowed-set limit", () => {
       context,
     );
     expect(wider.equals).toEqual({});
-    expect(wider.contains).toEqual({ field: "note", value: "gift" });
+    expect(wider.texts).toEqual([
+      { field: "note", op: "contains", value: "gift" },
+    ]);
     const plain = applyAction(
       DEF,
       OPEN,
@@ -297,18 +303,15 @@ describe("offers under the narrowed-set limit", () => {
     const searching: QueryState = { ...BASE, search: "abc" };
     const context = contextFor(searching);
     const offers = listOffers(DEF, searching, context);
-    expect(offers.contains).toEqual([]);
+    expect(offers.texts).toEqual([]);
     expect(offers.ranges).toEqual([]);
     expect(
-      explainUnavailable(
-        searching,
-        { kind: "contains", field: "note" },
-        context,
-      ).code,
+      explainUnavailable(searching, { kind: "text", field: "note" }, context)
+        .code,
     ).toBe("search_no_combine");
     const narrowed: QueryState = {
       ...OPEN,
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     };
     expect(listOffers(DEF, narrowed, contextFor(narrowed)).search).toBe(false);
   });
@@ -330,7 +333,7 @@ describe("the basis a size is known for", () => {
           { field: "total", min: null, max: null, preset: "today" },
           { field: "number", min: "1", max: null },
         ],
-        contains: { field: "note", value: "gift" },
+        texts: [{ field: "note", op: "contains", value: "gift" }],
       }),
     ).toBe(basis);
     expect(wrapped.narrowBasis(BASE)).not.toBe(basis);
@@ -375,18 +378,18 @@ describe("the narrowed-size store", () => {
       all: { rows: 1, over: false, capped: false },
       allBasis: CAPABILITIES.narrowBasis(BASE),
     });
-    expect(listOffers(DEF, BASE, store.getOfferContext()).contains).toEqual([
+    expect(listOffers(DEF, BASE, store.getOfferContext()).texts).toEqual([
       "name",
       "note",
     ]);
     store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
     expect(
-      listOffers(DEF, store.getQuery(), store.getOfferContext()).contains,
+      listOffers(DEF, store.getQuery(), store.getOfferContext()).texts,
     ).toEqual([]);
     await settle();
     expect(asked).toHaveLength(2);
     expect(
-      listOffers(DEF, store.getQuery(), store.getOfferContext()).contains,
+      listOffers(DEF, store.getQuery(), store.getOfferContext()).texts,
     ).toEqual(["name", "note"]);
     store.dispatch({ type: "setSort", field: "total", direction: "asc" });
     await settle();
@@ -400,7 +403,7 @@ describe("the URL, validation and chips", () => {
     match: "any",
     equals: { status: ["open"] },
     ranges: [TOTAL_RANGE, CREATED_RANGE],
-    contains: { field: "note", value: "gift wrap" },
+    texts: [{ field: "note", op: "contains", value: "gift wrap" }],
   };
 
   test("contains and match round-trip, and a default match is not written", () => {
@@ -416,7 +419,15 @@ describe("the URL, validation and chips", () => {
       "r.created_at",
       "r.total",
       "c.name",
+      "nc.name",
+      "sw.name",
+      "ew.name",
+      "ne.name",
       "c.note",
+      "nc.note",
+      "sw.note",
+      "ew.note",
+      "ne.note",
       "match",
       "group",
       "q",
@@ -427,21 +438,26 @@ describe("the URL, validation and chips", () => {
 
   test("contains takes text on a text field only", () => {
     expect(validateQueryValues(DEF, query)).toBeNull();
-    for (const contains of [
+    for (const text of [
       { field: "note", value: "  " },
       { field: "note", value: "x".repeat(81) },
       { field: "total", value: "12" },
       { field: "status", value: "open" },
     ]) {
-      expect(validateQueryValues(DEF, { ...BASE, contains })).toEqual({
+      expect(
+        validateQueryValues(DEF, {
+          ...BASE,
+          texts: [{ ...text, op: "contains" }],
+        }),
+      ).toEqual({
         code: "invalid_value",
-        params: { field: contains.field },
+        params: { field: text.field },
       });
     }
     expect(
       validateQueryValues(DEF, {
         ...BASE,
-        contains: { field: "nope", value: "x" },
+        texts: [{ field: "nope", op: "contains", value: "x" }],
       })?.code,
     ).toBe("unknown_field");
   });
@@ -452,14 +468,15 @@ describe("the URL, validation and chips", () => {
       "eq:status",
       "range:total",
       "range:created_at",
-      "contains",
+      "text:0",
       "match",
       "sort",
     ]);
-    expect(chips.find((chip) => chip.kind === "contains")).toMatchObject({
+    expect(chips.find((chip) => chip.kind === "text")).toMatchObject({
       field: "note",
       value: "gift wrap",
-      clear: { type: "clearContains" },
+      op: "contains",
+      clear: { type: "removeText", at: 0 },
     });
     expect(chips.find((chip) => chip.kind === "match")?.clear).toEqual({
       type: "setMatch",
@@ -491,10 +508,9 @@ describe("the in-memory source takes all three with no limit", () => {
   };
 
   test("contains ignores case and skips empty values", async () => {
-    expect(await ids({ contains: { field: "note", value: "GIFT" } })).toEqual([
-      "a",
-      "d",
-    ]);
+    expect(
+      await ids({ texts: [{ field: "note", op: "contains", value: "GIFT" }] }),
+    ).toEqual(["a", "d"]);
   });
 
   test("match any is the union across fields; match all the intersection", async () => {
@@ -508,7 +524,7 @@ describe("the in-memory source takes all three with no limit", () => {
       await ids({
         ...filters,
         match: "any",
-        contains: { field: "note", value: "fragile" },
+        texts: [{ field: "note", op: "contains", value: "fragile" }],
         search: null,
       }),
     ).toEqual(["a", "c", "d"]);
@@ -529,7 +545,7 @@ describe("the in-memory source takes all three with no limit", () => {
     };
     const offers = listOffers(TEST_DEF, BASE, context);
     expect(offers.matchAny).toBe(true);
-    expect(offers.contains).toEqual(["name", "note"]);
+    expect(offers.texts).toEqual(["name", "note"]);
     expect(source.capabilities.narrowLimited).toBe(false);
     expect(await source.fetchNarrowed(BASE, signal)).toBeNull();
   });

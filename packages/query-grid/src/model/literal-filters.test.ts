@@ -420,15 +420,17 @@ describe("several ranges", () => {
     expect(next.ranges).toEqual([{ field: "total", min: "7", max: null }]);
   });
 
-  test("the same field twice is refused", () => {
+  test("the same field takes several ranges, up to the cap", () => {
+    const ranges = [
+      { field: "total", min: "1", max: null },
+      { field: "total", min: null, max: "9", exclude: true },
+    ];
+    expect(validateQueryValues(TEST_DEF, { ...BASE, ranges })).toBeNull();
     expect(
       validateQueryValues(TEST_DEF, {
         ...BASE,
-        ranges: [
-          { field: "total", min: "1", max: null },
-          { field: "total", min: "2", max: null },
-        ],
+        ranges: Array.from({ length: 13 }, () => ranges[0]),
       }),
-    ).toEqual({ code: "invalid_value", params: { field: "total" } });
+    ).toEqual({ code: "too_many_filters", params: { max: 12 } });
   });
 });

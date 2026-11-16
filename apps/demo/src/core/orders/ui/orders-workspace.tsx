@@ -8,7 +8,7 @@ import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
 import {
   ORDER_BAR_FIELDS,
-  ORDER_CONTAINS_FIELDS,
+  ORDER_TEXT_FIELDS,
   ORDERS_GRID_DEF,
 } from "../orders-grid-def";
 import { OrdersQueryProvider } from "../orders-provider";
@@ -32,14 +32,14 @@ export function OrdersWorkspace({ title, dir }: OrdersWorkspaceProps) {
             def={ORDERS_GRID_DEF}
             capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
             fields={ORDER_BAR_FIELDS}
-            contains={ORDER_CONTAINS_FIELDS}
+            texts={ORDER_TEXT_FIELDS}
           />
         }
       >
         <OrdersQueryProvider>
           <WorkspaceParts
             barFields={ORDER_BAR_FIELDS}
-            containsFields={ORDER_CONTAINS_FIELDS}
+            textFields={ORDER_TEXT_FIELDS}
           >
             <OrdersView />
           </WorkspaceParts>

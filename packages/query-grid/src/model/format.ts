@@ -1,9 +1,13 @@
-import type { BaseFieldDef } from "./field-types.ts";
+import type { BaseFieldDef, GridValue } from "./field-types.ts";
 
 export const DEFAULT_LOCALE = "en";
 export const DEFAULT_CURRENCY = "USD";
 
 const dateTimes = new Map<string, Intl.DateTimeFormat>();
+const dates = new Map<string, Intl.DateTimeFormat>();
+const decimals = new Map<string, Intl.NumberFormat>();
+const LIST_SEPARATOR = ", ";
+const DECIMAL_DIGITS = 9;
 const integers = new Map<string, Intl.NumberFormat>();
 const moneys = new Map<string, Intl.NumberFormat>();
 
@@ -63,6 +67,30 @@ function formatDateTime(date: Date, locale: string): string {
   ).format(date);
 }
 
+function formatDate(date: Date, locale: string): string {
+  return cached(
+    dates,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }),
+  ).format(date);
+}
+
+function formatDecimal(value: number, locale: string): string {
+  return cached(
+    decimals,
+    locale,
+    () =>
+      new Intl.NumberFormat(locale, { maximumFractionDigits: DECIMAL_DIGITS }),
+  ).format(value);
+}
+
+function formatOption(field: BaseFieldDef, value: string): string {
+  return (
+    field.options?.find((option) => option.value === value)?.label ?? value
+  );
+}
+
 export function formatSum(
   field: BaseFieldDef,
   sum: number,
@@ -75,13 +103,26 @@ export function formatSum(
 
 export function formatValue(
   field: BaseFieldDef,
-  value: string | number | null,
+  value: GridValue,
   locale = DEFAULT_LOCALE,
 ): string {
   if (value === null || value === "") {
     return "";
   }
+  if (Array.isArray(value)) {
+    return value.map((item) => formatOption(field, item)).join(LIST_SEPARATOR);
+  }
   switch (field.type) {
+    case "date": {
+      const date = new Date(String(value));
+      return Number.isNaN(date.getTime())
+        ? String(value)
+        : formatDate(date, locale);
+    }
+    case "decimal":
+      return Number.isNaN(Number(value))
+        ? String(value)
+        : formatDecimal(Number(value), locale);
     case "datetime": {
       const date = new Date(String(value));
       return Number.isNaN(date.getTime())
@@ -93,12 +134,11 @@ export function formatValue(
     case "integer":
       return String(value);
     case "enum":
-      return (
-        field.options?.find((option) => option.value === value)?.label ??
-        String(value)
-      );
+    case "array":
+      return formatOption(field, String(value));
     case "id":
     case "text":
+    case "boolean":
       return String(value);
   }
 }

@@ -83,7 +83,9 @@ describe("the URL parsers", () => {
       "r.number",
       "r.created_at",
       "r.total",
-      ...CAPABILITIES.containsFields.map((key) => `c.${key}`),
+      ...CAPABILITIES.textFields.flatMap((key) =>
+        ["c", "nc", "sw", "ew", "ne"].map((prefix) => `${prefix}.${key}`),
+      ),
       "match",
       "group",
       "q",
@@ -91,7 +93,7 @@ describe("the URL parsers", () => {
       "cursor",
       "view",
     ]);
-    expect(CAPABILITIES.containsFields).toEqual(["name", "note"]);
+    expect(CAPABILITIES.textFields).toEqual(["name", "note"]);
   });
 
   test("a state written for nuqs is the one core encodes, and reads back", () => {
@@ -111,11 +113,17 @@ describe("the URL parsers", () => {
       ),
       "f.status": ["open", "done"],
       "f.region": ["north"],
-      "r.number": null,
-      "r.created_at": null,
-      "r.total": "100..",
-      "c.name": null,
-      "c.note": null,
+      "r.number": [],
+      "r.created_at": [],
+      "r.total": ["100.."],
+      ...Object.fromEntries(
+        CAPABILITIES.textFields.flatMap((key) =>
+          ["c", "nc", "sw", "ew", "ne"].map((prefix) => [
+            `${prefix}.${key}`,
+            [],
+          ]),
+        ),
+      ),
       match: null,
       group: null,
       q: null,

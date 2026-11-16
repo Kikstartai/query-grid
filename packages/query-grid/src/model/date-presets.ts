@@ -27,6 +27,18 @@ function toBounds(first: Date, afterLast: Date): DateBounds {
   };
 }
 
+function toDay(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+// A date field holds no time, so its preset is the viewer's own calendar days, first to last.
+export function resolveDayPreset(preset: DatePreset, now: Date): DateBounds {
+  const { min, max } = resolveDatePreset(preset, now);
+  return { min: toDay(new Date(min)), max: toDay(new Date(max)) };
+}
+
 // The Date constructor reads its parts in the system time zone, so each bound is a whole day where the viewer is, sent as the instant it starts or ends.
 export function resolveDatePreset(preset: DatePreset, now: Date): DateBounds {
   const year = now.getFullYear();

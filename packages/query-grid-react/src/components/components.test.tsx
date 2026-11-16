@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "@kikstart/query-grid";
+import {
+  EMPTY_VALUE,
+  NOT_EMPTY_VALUE,
+  type GridValue,
+} from "@kikstart/query-grid";
 
 import { CardList } from "./card-list.tsx";
 import { defaultColumns } from "./column-state.ts";
@@ -12,7 +16,7 @@ import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
 import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
 import { ReasonDisplayContext } from "./field-frame.tsx";
-import { ContainsFilter, MatchToggle } from "./narrow-filters.tsx";
+import { MatchToggle, TextFilter } from "./narrow-filters.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -248,8 +252,8 @@ describe("each base component mounts alone, with plain props and no provider", (
     const marked = TEST_FIELDS.map((field) => ({
       ...field,
       cell: ["number", "status", "region"].includes(field.key)
-        ? (value: string | number | null) => (
-            <mark data-cell={field.key}>{value}</mark>
+        ? (value: GridValue) => (
+            <mark data-cell={field.key}>{String(value)}</mark>
           )
         : undefined,
     }));
@@ -471,29 +475,33 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(idle).toMatch(/data-filter-exclude="status"[^>]*disabled/);
   });
 
-  test("ContainsFilter names its field and its text, and carries a reason when held", () => {
+  test("TextFilter names each row's field, operator and text, and carries a reason when held", () => {
     const options = [
       { value: "name", label: "Name" },
       { value: "note", label: "Note" },
     ];
     const html = render(
-      <ContainsFilter
+      <TextFilter
         options={options}
-        field="note"
-        value="gift"
-        onContainsChange={noop}
+        filters={[
+          { field: "note", op: "contains", value: "gift" },
+          { field: "name", op: "not_contains", value: "draft" },
+        ]}
+        onFilterChange={noop}
       />,
     );
-    expect(html).toContain('data-field="contains"');
+    expect(html).toContain('data-field="text"');
     expect(html).toContain('aria-label="Note contains"');
     expect(html).toContain('value="gift"');
+    expect(html).toContain('aria-label="Name does not contain"');
+    expect(html).toContain('value="draft"');
+    expect(html.match(/data-text-row=/g)).toHaveLength(3);
     const held = render(
       <ReasonDisplayContext value={true}>
-        <ContainsFilter
+        <TextFilter
           options={options}
-          field={null}
-          value=""
-          onContainsChange={noop}
+          filters={[]}
+          onFilterChange={noop}
           disabled
           reason="Narrow by Status first: 2,300,000+ rows."
         />
@@ -502,6 +510,20 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(held).toContain("data-unavailable");
     expect(held).toContain("Narrow by Status first: 2,300,000+ rows.");
     expect(held).toContain('aria-label="Name contains"');
+    expect(held.match(/data-text-row=/g)).toHaveLength(1);
+  });
+
+  test("TextFilter stops offering a new row at its cap", () => {
+    const html = render(
+      <TextFilter
+        options={[{ value: "name", label: "Name" }]}
+        filters={[{ field: "name", op: "starts_with", value: "a" }]}
+        onFilterChange={noop}
+        maxFilters={1}
+      />,
+    );
+    expect(html.match(/data-text-row=/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Name starts with"');
   });
 
   test("MatchToggle keeps Match all reachable when Match any is held", () => {

@@ -15,14 +15,14 @@ import { VIEWS } from "./site";
 interface WorkspacePartsProps {
   filterFields?: string[];
   barFields?: string[];
-  containsFields?: string[];
+  textFields?: string[];
   children: ReactNode;
 }
 
 export function WorkspaceParts({
   filterFields,
   barFields,
-  containsFields,
+  textFields,
   children,
 }: WorkspacePartsProps) {
   return (
@@ -33,12 +33,9 @@ export function WorkspaceParts({
         <ViewSwitch views={VIEWS} />
       </div>
       <div className="workspace-body">
-        <FilterBar
-          fields={barFields ?? filterFields}
-          contains={containsFields}
-        />
+        <FilterBar fields={barFields ?? filterFields} texts={textFields} />
         <div className="workspace-chips">
-          <FilterSidebar fields={filterFields} contains={containsFields} />
+          <FilterSidebar fields={filterFields} texts={textFields} />
           <FilterChips />
         </div>
         <div className="workspace-main">

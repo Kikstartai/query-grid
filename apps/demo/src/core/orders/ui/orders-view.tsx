@@ -9,18 +9,16 @@ import {
   StatusBoard,
 } from "@kikstart/query-grid-react/ui";
 
-import { ORDER_BAR_FIELDS, ORDER_CONTAINS_FIELDS } from "../orders-grid-def";
+import { ORDER_BAR_FIELDS, ORDER_TEXT_FIELDS } from "../orders-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 export function OrdersFilterBar() {
-  return (
-    <FilterBar fields={ORDER_BAR_FIELDS} contains={ORDER_CONTAINS_FIELDS} />
-  );
+  return <FilterBar fields={ORDER_BAR_FIELDS} texts={ORDER_TEXT_FIELDS} />;
 }
 
 export function OrdersFilterSidebar() {
-  return <FilterSidebar contains={ORDER_CONTAINS_FIELDS} />;
+  return <FilterSidebar texts={ORDER_TEXT_FIELDS} />;
 }
 
 export function OrdersCardList() {

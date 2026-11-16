@@ -6,7 +6,6 @@ export {
   type DataGridRootProps,
 } from "./data-grid.tsx";
 export {
-  ContainsFilter,
   FieldFilter,
   FilterBar,
   FilterChips,
@@ -15,10 +14,11 @@ export {
   MatchToggle,
   SearchFilter,
   SortControl,
-  type ContainsFilterProps,
+  TextFilter,
   type FieldFilterProps,
   type FilterBarProps,
   type FilterSidebarProps,
+  type TextFilterProps,
 } from "./filters.tsx";
 export { StatusBoard, type StatusBoardProps } from "./status-board.tsx";
 export {

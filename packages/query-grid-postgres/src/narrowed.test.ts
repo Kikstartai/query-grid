@@ -74,7 +74,7 @@ describe("the SQL of the expensive operations", () => {
   test("contains is one ILIKE on its own column, with the wildcards of the value escaped", () => {
     const sql = buildCappedCountSql(TEST_DEF, {
       ...OPEN,
-      contains: { field: "note", value: " 50%_off " },
+      texts: [{ field: "note", op: "contains", value: " 50%_off " }],
     });
     expect(sql.text).toContain(
       "WHERE t.status = $1::text AND t.note ILIKE $2 LIMIT",
@@ -118,7 +118,7 @@ describe("the SQL of the expensive operations", () => {
     expect(() =>
       buildPageSql(
         TEST_DEF,
-        { ...OPEN, contains: { field: "status", value: "op" } },
+        { ...OPEN, texts: [{ field: "status", op: "contains", value: "op" }] },
         50,
       ),
     ).toThrow(QueryRejected);
@@ -136,7 +136,7 @@ describe("the narrowed-set limit on the server", () => {
   const narrowed: QueryState = {
     ...OPEN,
     equals: { region: ["north"] },
-    contains: { field: "note", value: "gift" },
+    texts: [{ field: "note", op: "contains", value: "gift" }],
   };
 
   test("a narrowed query first counts its core up to the limit, then runs without a Seq Scan", async () => {
@@ -205,7 +205,10 @@ describe("the narrowed-set limit on the server", () => {
       { value: "open", count: 30, total_sum: 0, number_sum: 0 },
       { value: "done", count: 900, total_sum: 0, number_sum: 0 },
     ]);
-    const query = { ...OPEN, contains: { field: "note", value: "gift" } };
+    const query: QueryState = {
+      ...OPEN,
+      texts: [{ field: "note", op: "contains", value: "gift" }],
+    };
     await listGridPage(TEST_DEF, execute, query, 20, undefined, LIMITS);
     expect(calls[0].sql.text).toContain("FROM thing_status_counts");
     expect(calls).toHaveLength(2);
@@ -247,7 +250,7 @@ describe("the narrowed-set limit on the server", () => {
       ...BASE,
       match: "any",
       equals: { region: ["north"] },
-      contains: { field: "note", value: "gift" },
+      texts: [{ field: "note", op: "contains", value: "gift" }],
     };
     const { calls, execute } = counting(() => [
       { value: "open", count: 30, total_sum: 0, number_sum: 0 },

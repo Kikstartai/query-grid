@@ -48,16 +48,22 @@ import { useState, type ReactNode } from "react";
 
 import {
   DATE_PRESETS,
-  fromDayBound,
   fromNumberBound,
+  fromRangeValue,
   getReservedValue,
+  isDateType,
+  isPairRangeOp,
   listReservedValues,
   normalizeEqualsValues,
+  RANGE_OPS,
   resolveCurrency,
-  toDayBound,
+  resolveRangeValue,
   toNumberBound,
   type BaseFieldDef,
   type FieldOption,
+  type RangeInput,
+  type RangeOp,
+  type RangeValue,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
@@ -68,14 +74,11 @@ import {
   useLocale,
   useMessages,
   type QueryGridMessages,
+  type SingleRangeOp,
 } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 
-export interface FieldRange {
-  min: string | null;
-  max: string | null;
-  preset?: string;
-}
+export type FieldRange = RangeInput;
 
 export type LoadOptions = (
   text: string,
@@ -87,6 +90,7 @@ interface FilterProps extends ControlState {
 }
 
 export interface EqualsSelectProps extends FilterProps {
+  kind?: "equals" | "overlap";
   values: string[];
   onValuesChange: (values: string[]) => void;
   multiple?: boolean;
@@ -108,7 +112,7 @@ export interface RangeFilterProps extends FilterProps {
 
 interface FilterFrameProps {
   filter: FilterProps;
-  kind: "equals" | "range";
+  kind: "equals" | "range" | "overlap";
   children: ReactNode;
 }
 
@@ -441,50 +445,80 @@ function LookupMultiple(props: LookupFilterProps) {
   );
 }
 
-function toDateValue(range: FieldRange | null): [string, string] | null {
-  if (!range?.min || !range.max) {
+const CUSTOM_RANGE = "custom";
+const OP_PREFIX = "op:";
+const SINGLE_OPS: SingleRangeOp[] = [
+  "eq",
+  "neq",
+  "lt",
+  "lte",
+  "gt",
+  "gte",
+  "not_between",
+];
+
+function toPeriod(op: RangeOp | null): string | null {
+  if (op === null) {
     return null;
   }
-  return [fromDayBound(range.min), fromDayBound(range.max)];
+  return op === "between" ? CUSTOM_RANGE : `${OP_PREFIX}${op}`;
 }
 
-const CUSTOM_RANGE = "custom";
-
-function resolvePeriod(range: FieldRange | null, custom: boolean) {
-  if (range?.preset) {
-    return range.preset;
+function fromPeriod(period: string): RangeOp | null {
+  if (period === CUSTOM_RANGE) {
+    return "between";
   }
-  return range || custom ? CUSTOM_RANGE : null;
+  const op = period.slice(OP_PREFIX.length);
+  return RANGE_OPS.find((item) => item === op) ?? null;
+}
+
+interface OpRangeProps extends RangeFilterProps {
+  op: RangeOp;
+  value: RangeValue | null;
 }
 
 function DateRange(props: RangeFilterProps) {
   const { field, range, disabled, onRangeChange } = props;
   const messages = useMessages();
-  const [custom, setCustom] = useState(false);
+  const [picked, setPicked] = useState<RangeOp | null>(null);
   const label = { label: field.label };
+  const value = resolveRangeValue(field, range, picked);
+  const op = range?.preset ? null : (value?.op ?? picked);
   const periods = [
     ...DATE_PRESETS.map((preset) => ({
       value: preset as string,
       label: messages.datePresets[preset],
     })),
     { value: CUSTOM_RANGE, label: messages.customRange },
+    ...SINGLE_OPS.map((item) => ({
+      value: `${OP_PREFIX}${item}`,
+      label: messages.dateOps[item],
+    })),
   ];
-  const period = resolvePeriod(range, custom);
   const choose = (next: string | null) => {
-    setCustom(next === CUSTOM_RANGE);
-    if (next === null || next === CUSTOM_RANGE) {
-      if (range?.preset || next === null) {
-        onRangeChange(null);
-      }
+    const nextOp = next === null ? null : fromPeriod(next);
+    setPicked(nextOp);
+    if (next !== null && nextOp === null) {
+      onRangeChange({ min: null, max: null, preset: next });
       return;
     }
-    onRangeChange({ min: null, max: null, preset: next });
+    const moved =
+      nextOp !== null && value
+        ? fromRangeValue(field, {
+            op: nextOp,
+            first: value.first,
+            second: isPairRangeOp(nextOp) ? value.second : null,
+          })
+        : null;
+    if (moved || range) {
+      onRangeChange(moved);
+    }
   };
   return (
     <>
       <Select
         items={periods}
-        value={period}
+        value={range?.preset ?? toPeriod(op)}
         disabled={disabled}
         placeholder={messages.any}
         onValueChange={choose}
@@ -513,33 +547,67 @@ function DateRange(props: RangeFilterProps) {
           ))}
         </SelectContent>
       </Select>
-      <CustomDateRange {...props} shown={period === CUSTOM_RANGE} />
+      <DateOperand {...props} op={op} value={value} />
     </>
   );
 }
 
-interface CustomDateRangeProps extends RangeFilterProps {
-  shown: boolean;
+interface DateOperandProps extends RangeFilterProps {
+  op: RangeOp | null;
+  value: RangeValue | null;
 }
 
-function CustomDateRange({
+function DateOperand({ op, ...props }: DateOperandProps) {
+  if (op === null) {
+    return null;
+  }
+  if (isPairRangeOp(op)) {
+    return <DatePair {...props} op={op} />;
+  }
+  return <DateSingle {...props} op={op} />;
+}
+
+function CalendarParts() {
+  return (
+    <DatePickerContent>
+      <CalendarPrevious>
+        <ChevronLeftIcon />
+      </CalendarPrevious>
+      <CalendarHeading />
+      <CalendarNext>
+        <ChevronRightIcon />
+      </CalendarNext>
+      <CalendarGrid>
+        <CalendarWeekdays>
+          {(index) => <CalendarWeekday index={index} />}
+        </CalendarWeekdays>
+        <CalendarWeeks>
+          {(cell) => <CalendarDay value={cell.date} />}
+        </CalendarWeeks>
+      </CalendarGrid>
+    </DatePickerContent>
+  );
+}
+
+function DatePair({
   field,
   range,
   disabled,
   onRangeChange,
-  shown,
-}: CustomDateRangeProps) {
+  op,
+  value,
+}: OpRangeProps) {
   const messages = useMessages();
   const label = { label: field.label };
-  if (!shown) {
-    return null;
-  }
-  const change = (value: unknown) => {
-    if (Array.isArray(value) && value.length === 2) {
-      onRangeChange({
-        min: toDayBound(String(value[0]), false),
-        max: toDayBound(String(value[1]), true),
-      });
+  const change = (next: unknown) => {
+    if (Array.isArray(next) && next.length === 2) {
+      onRangeChange(
+        fromRangeValue(field, {
+          op,
+          first: String(next[0]),
+          second: String(next[1]),
+        }),
+      );
       return;
     }
     if (range) {
@@ -549,20 +617,20 @@ function CustomDateRange({
   return (
     <DatePicker
       mode="range"
-      value={toDateValue(range)}
+      value={value?.first && value.second ? [value.first, value.second] : null}
       disabled={disabled}
       onValueChange={change}
     >
       <div className="qg-range">
         <DatePickerInput
           aria-label={messages.rangeFrom(label)}
-          placeholder={range?.min ? fromDayBound(range.min) : messages.from}
+          placeholder={value?.first ?? messages.from}
           data-filter={`${field.key}.min`}
         />
         <span className="qg-range-dash">–</span>
         <DatePickerInput
           end
-          placeholder={range?.max ? fromDayBound(range.max) : messages.to}
+          placeholder={value?.second ?? messages.to}
           aria-label={messages.rangeTo(label)}
           data-filter={`${field.key}.max`}
         />
@@ -571,94 +639,232 @@ function CustomDateRange({
           data-filter={`${field.key}.calendar`}
         />
       </div>
-      <DatePickerContent>
-        <CalendarPrevious>
-          <ChevronLeftIcon />
-        </CalendarPrevious>
-        <CalendarHeading />
-        <CalendarNext>
-          <ChevronRightIcon />
-        </CalendarNext>
-        <CalendarGrid>
-          <CalendarWeekdays>
-            {(index) => <CalendarWeekday index={index} />}
-          </CalendarWeekdays>
-          <CalendarWeeks>
-            {(cell) => <CalendarDay value={cell.date} />}
-          </CalendarWeeks>
-        </CalendarGrid>
-      </DatePickerContent>
+      <CalendarParts />
     </DatePicker>
+  );
+}
+
+function DateSingle({
+  field,
+  range,
+  disabled,
+  onRangeChange,
+  op,
+  value,
+}: OpRangeProps) {
+  const messages = useMessages();
+  const label = { label: field.label };
+  const change = (next: unknown) => {
+    if (typeof next === "string" && next) {
+      onRangeChange(fromRangeValue(field, { op, first: next, second: null }));
+      return;
+    }
+    if (range) {
+      onRangeChange(null);
+    }
+  };
+  return (
+    <DatePicker
+      value={value?.first ?? null}
+      disabled={disabled}
+      onValueChange={change}
+    >
+      <div className="qg-range">
+        <DatePickerInput
+          aria-label={messages.rangeValue(label)}
+          data-filter={`${field.key}.value`}
+        />
+        <DatePickerTrigger
+          aria-label={messages.pickDate(label)}
+          data-filter={`${field.key}.calendar`}
+        />
+      </div>
+      <CalendarParts />
+    </DatePicker>
+  );
+}
+
+interface NumberBoundProps {
+  field: BaseFieldDef;
+  part: "min" | "max" | "value";
+  value: number | null;
+  disabled?: boolean;
+  onValueChange: (value: number | null) => void;
+  onValueCommit: (value: number | null) => void;
+}
+
+function NumberBound({
+  field,
+  part,
+  value,
+  disabled,
+  onValueChange,
+  onValueCommit,
+}: NumberBoundProps) {
+  const messages = useMessages();
+  const locale = useLocale();
+  const label = { label: field.label };
+  const names = {
+    min: messages.rangeFrom(label),
+    max: messages.rangeTo(label),
+    value: messages.rangeValue(label),
+  };
+  const numberFormat: Intl.NumberFormatOptions | undefined =
+    field.type === "money"
+      ? { style: "currency", currency: resolveCurrency(field) }
+      : undefined;
+  return (
+    <NumberInput
+      value={value}
+      min={0}
+      format={numberFormat}
+      locale={locale}
+      disabled={disabled}
+      onValueChange={onValueChange}
+      onValueCommit={onValueCommit}
+    >
+      <NumberInputGroup>
+        <NumberInputControl
+          className="qg-number-input"
+          aria-label={names[part]}
+          placeholder={messages[part]}
+          data-filter={`${field.key}.${part}`}
+        />
+      </NumberInputGroup>
+    </NumberInput>
+  );
+}
+
+interface NumberOperandsProps {
+  field: BaseFieldDef;
+  op: RangeOp;
+  first: number | null;
+  second: number | null;
+  disabled?: boolean;
+  onFirstChange: (value: number | null) => void;
+  onSecondChange: (value: number | null) => void;
+  onCommit: (first: number | null, second: number | null) => void;
+}
+
+function NumberOperands({
+  field,
+  op,
+  first,
+  second,
+  disabled,
+  onFirstChange,
+  onSecondChange,
+  onCommit,
+}: NumberOperandsProps) {
+  if (!isPairRangeOp(op)) {
+    return (
+      <NumberBound
+        field={field}
+        part="value"
+        value={first}
+        disabled={disabled}
+        onValueChange={onFirstChange}
+        onValueCommit={(value) => onCommit(value, null)}
+      />
+    );
+  }
+  return (
+    <>
+      <NumberBound
+        field={field}
+        part="min"
+        value={first}
+        disabled={disabled}
+        onValueChange={onFirstChange}
+        onValueCommit={(value) => onCommit(value, second)}
+      />
+      <span className="qg-range-dash">–</span>
+      <NumberBound
+        field={field}
+        part="max"
+        value={second}
+        disabled={disabled}
+        onValueChange={onSecondChange}
+        onValueCommit={(value) => onCommit(first, value)}
+      />
+    </>
   );
 }
 
 function NumberRange(props: RangeFilterProps) {
   const { field, range, disabled, onRangeChange } = props;
   const messages = useMessages();
-  const locale = useLocale();
-  const rangeKey = `${range?.min ?? ""}|${range?.max ?? ""}`;
+  const [picked, setPicked] = useState<RangeOp>("between");
+  const value = resolveRangeValue(field, range, picked);
+  const op = value?.op ?? picked;
+  const rangeKey = `${op}|${value?.first ?? ""}|${value?.second ?? ""}`;
   const [seen, setSeen] = useState(rangeKey);
-  const [min, setMin] = useState(fromNumberBound(field, range?.min ?? null));
-  const [max, setMax] = useState(fromNumberBound(field, range?.max ?? null));
+  const [first, setFirst] = useState(
+    fromNumberBound(field, value?.first ?? null),
+  );
+  const [second, setSecond] = useState(
+    fromNumberBound(field, value?.second ?? null),
+  );
   if (seen !== rangeKey) {
     setSeen(rangeKey);
-    setMin(fromNumberBound(field, range?.min ?? null));
-    setMax(fromNumberBound(field, range?.max ?? null));
+    setFirst(fromNumberBound(field, value?.first ?? null));
+    setSecond(fromNumberBound(field, value?.second ?? null));
   }
-  const apply = (lower: number | null, upper: number | null) => {
-    if (lower === null && upper === null) {
-      onRangeChange(null);
-      return;
-    }
-    onRangeChange({
-      min: toNumberBound(field, lower),
-      max: toNumberBound(field, upper),
+  const apply = (next: RangeOp, lower: number | null, upper: number | null) => {
+    const changed = fromRangeValue(field, {
+      op: next,
+      first: toNumberBound(field, lower),
+      second: isPairRangeOp(next) ? toNumberBound(field, upper) : null,
     });
+    if (changed || range) {
+      onRangeChange(changed);
+    }
   };
-  const numberFormat: Intl.NumberFormatOptions | undefined =
-    field.type === "money"
-      ? { style: "currency", currency: resolveCurrency(field) }
-      : undefined;
-  const label = { label: field.label };
+  const ops = RANGE_OPS.map((item) => ({
+    value: item as string,
+    label: messages.rangeOps[item],
+  }));
   return (
     <div className="qg-range">
-      <NumberInput
-        value={min}
-        min={0}
-        format={numberFormat}
-        locale={locale}
+      <Select
+        items={ops}
+        value={op}
         disabled={disabled}
-        onValueChange={(value: number | null) => setMin(value)}
-        onValueCommit={(value: number | null) => apply(value, max)}
+        onValueChange={(next: string | null) => {
+          const chosen = RANGE_OPS.find((item) => item === next);
+          if (chosen) {
+            setPicked(chosen);
+            apply(chosen, first, second);
+          }
+        }}
       >
-        <NumberInputGroup>
-          <NumberInputControl
-            className="qg-number-input"
-            aria-label={messages.rangeFrom(label)}
-            placeholder={messages.min}
-            data-filter={`${field.key}.min`}
-          />
-        </NumberInputGroup>
-      </NumberInput>
-      <span className="qg-range-dash">–</span>
-      <NumberInput
-        value={max}
-        min={0}
-        format={numberFormat}
-        locale={locale}
+        <SelectTrigger
+          className="qg-range-op"
+          aria-label={messages.rangeOperator({ label: field.label })}
+          data-filter={`${field.key}.op`}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ops.map((option) => (
+            <SelectOption
+              key={option.value}
+              value={option.value}
+              label={option.label}
+            />
+          ))}
+        </SelectContent>
+      </Select>
+      <NumberOperands
+        field={field}
+        op={op}
+        first={first}
+        second={second}
         disabled={disabled}
-        onValueChange={(value: number | null) => setMax(value)}
-        onValueCommit={(value: number | null) => apply(min, value)}
-      >
-        <NumberInputGroup>
-          <NumberInputControl
-            className="qg-number-input"
-            aria-label={messages.rangeTo(label)}
-            placeholder={messages.max}
-            data-filter={`${field.key}.max`}
-          />
-        </NumberInputGroup>
-      </NumberInput>
+        onFirstChange={setFirst}
+        onSecondChange={setSecond}
+        onCommit={(lower, upper) => apply(op, lower, upper)}
+      />
     </div>
   );
 }
@@ -671,7 +877,7 @@ function LookupControl(props: LookupFilterProps) {
 }
 
 function RangeControl(props: RangeFilterProps) {
-  if (props.field.type === "datetime") {
+  if (isDateType(props.field.type)) {
     return <DateRange {...props} />;
   }
   return <NumberRange {...props} />;
@@ -679,7 +885,7 @@ function RangeControl(props: RangeFilterProps) {
 
 export function EqualsSelect(props: EqualsSelectProps) {
   return (
-    <FilterFrame filter={props} kind="equals">
+    <FilterFrame filter={props} kind={props.kind ?? "equals"}>
       <ExcludeToggle {...props} />
       <EqualsControl {...props} />
     </FilterFrame>
@@ -688,7 +894,7 @@ export function EqualsSelect(props: EqualsSelectProps) {
 
 export function LookupFilter(props: LookupFilterProps) {
   return (
-    <FilterFrame filter={props} kind="equals">
+    <FilterFrame filter={props} kind={props.kind ?? "equals"}>
       <LookupControl {...props} />
     </FilterFrame>
   );

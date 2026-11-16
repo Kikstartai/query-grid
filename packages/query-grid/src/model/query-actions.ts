@@ -7,6 +7,7 @@ import {
   type QueryState,
   type RangeState,
   type SortDirection,
+  type TextOp,
 } from "./field-types.ts";
 import { canExpandEquals, toExcludeValues } from "./field-values.ts";
 
@@ -14,16 +15,15 @@ export type QueryAction =
   | { type: "setEquals"; field: string; values: string[] }
   | { type: "removeEqualsValue"; field: string; value: string }
   | { type: "clearEquals"; field: string }
-  | {
-      type: "setRange";
-      field?: string;
-      min: string | null;
-      max: string | null;
-      preset?: string;
-    }
-  | { type: "clearRange"; field?: string }
-  | { type: "setContains"; field: string; value: string }
-  | { type: "clearContains" }
+  | ({ type: "setRange"; field?: string; at?: number } & RangeInput)
+  | ({ type: "addRange"; field: string } & RangeInput)
+  | { type: "clearRange"; field?: string; at?: number }
+  | { type: "setText"; field: string; op: TextOp; value: string; at?: number }
+  | { type: "removeText"; at: number }
+  | { type: "clearTexts" }
+  | { type: "setOverlap"; field: string; values: string[] }
+  | { type: "removeOverlapValue"; field: string; value: string }
+  | { type: "clearOverlap"; field: string }
   | { type: "setMatch"; mode: MatchMode }
   | { type: "setGroup"; field: string | null }
   | { type: "setSort"; field: string; direction: SortDirection }
@@ -37,7 +37,8 @@ export interface Offers {
   exclude: string[];
   sorts: string[];
   ranges: string[];
-  contains: string[];
+  texts: string[];
+  overlaps: string[];
   matchAny: boolean;
   groups: string[];
   search: boolean;
@@ -46,7 +47,8 @@ export interface Offers {
 export type OfferTarget =
   | { kind: "equals"; field: string }
   | { kind: "range"; field: string }
-  | { kind: "contains"; field: string }
+  | { kind: "text"; field: string }
+  | { kind: "overlap"; field: string }
   | { kind: "sort"; field: string }
   | { kind: "match" }
   | { kind: "group"; field: string }
@@ -78,12 +80,19 @@ export interface UnavailableReason {
 }
 
 const PROBE = ["x", "y"];
+const TEXT_PROBE = {
+  type: "setText",
+  op: "contains",
+  value: "xxx",
+  at: 0,
+} as const;
 
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
     equals: {},
     ranges: [],
-    contains: null,
+    texts: [],
+    overlaps: {},
     match: "all",
     search: null,
     sort: def.defaultSort,
@@ -139,16 +148,69 @@ function proposeEquals(
   ];
 }
 
-interface RangeInput {
+export interface RangeInput {
   min: string | null;
   max: string | null;
   preset?: string;
+  exclude?: boolean;
+  minExclusive?: boolean;
+  maxExclusive?: boolean;
 }
 
-function toRange(field: string, { min, max, preset }: RangeInput): RangeState {
-  return preset === undefined
-    ? { field, min, max }
-    : { field, min: null, max: null, preset };
+function toRange(field: string, input: RangeInput): RangeState {
+  if (input.preset !== undefined) {
+    return { field, min: null, max: null, preset: input.preset };
+  }
+  const range: RangeState = { field, min: input.min, max: input.max };
+  if (input.exclude) {
+    range.exclude = true;
+  }
+  if (input.minExclusive && input.min !== null) {
+    range.minExclusive = true;
+  }
+  if (input.maxExclusive && input.max !== null) {
+    range.maxExclusive = true;
+  }
+  return range;
+}
+
+function proposeOverlap(
+  query: QueryState,
+  field: string,
+  values: string[],
+): QueryState[] {
+  const unique = [...new Set(values)];
+  const overlaps =
+    unique.length === 0
+      ? withoutKey(query.overlaps, field)
+      : { ...query.overlaps, [field]: unique };
+  return [{ ...query, cursor: null, overlaps }];
+}
+
+function replaceRange(
+  ranges: RangeState[],
+  range: RangeState,
+  at: number,
+): RangeState[] {
+  const target = ranges.filter((item) => item.field === range.field)[at];
+  return target
+    ? ranges.map((item) => (item === target ? range : item))
+    : [...ranges, range];
+}
+
+function clearRanges(
+  ranges: RangeState[],
+  field: string | undefined,
+  at: number | undefined,
+): RangeState[] {
+  if (field === undefined) {
+    return [];
+  }
+  if (at === undefined) {
+    return ranges.filter((range) => range.field !== field);
+  }
+  const target = ranges.filter((range) => range.field === field)[at];
+  return ranges.filter((range) => range !== target);
 }
 
 function proposeAction(
@@ -176,27 +238,52 @@ function proposeAction(
     case "setRange": {
       const range = toRange(action.field ?? query.sort.field, action);
       const others = query.ranges.filter((item) => item.field !== range.field);
+      if (action.at !== undefined) {
+        return [
+          { ...top, ranges: replaceRange(query.ranges, range, action.at) },
+          { ...top, ranges: [range] },
+        ];
+      }
       return [
         { ...top, ranges: [...others, range] },
         { ...top, ranges: [range] },
       ];
     }
+    case "addRange":
+      return [
+        { ...top, ranges: [...query.ranges, toRange(action.field, action)] },
+      ];
     case "clearRange":
+      return [
+        { ...top, ranges: clearRanges(query.ranges, action.field, action.at) },
+      ];
+    case "setText": {
+      const text = { field: action.field, op: action.op, value: action.value };
+      const texts = [...query.texts];
+      texts[Math.min(action.at ?? texts.length, texts.length)] = text;
+      return [{ ...top, texts }];
+    }
+    case "removeText":
       return [
         {
           ...top,
-          ranges: query.ranges.filter(
-            (range) =>
-              action.field !== undefined && range.field !== action.field,
-          ),
+          texts: query.texts.filter((_, index) => index !== action.at),
         },
       ];
-    case "setContains":
-      return [
-        { ...top, contains: { field: action.field, value: action.value } },
-      ];
-    case "clearContains":
-      return [{ ...top, contains: null }];
+    case "clearTexts":
+      return [{ ...top, texts: [] }];
+    case "setOverlap":
+      return proposeOverlap(query, action.field, action.values);
+    case "removeOverlapValue":
+      return proposeOverlap(
+        query,
+        action.field,
+        (query.overlaps[action.field] ?? []).filter(
+          (value) => value !== action.value,
+        ),
+      );
+    case "clearOverlap":
+      return proposeOverlap(query, action.field, []);
     case "setMatch":
       return [{ ...top, match: action.mode }];
     case "setGroup":
@@ -323,11 +410,14 @@ export function listOffers(
         context,
       ),
     ),
-    contains: context.capabilities.containsFields.filter((field) =>
+    texts: context.capabilities.textFields.filter((field) =>
+      isOffered(def, query, { ...TEXT_PROBE, field }, context),
+    ),
+    overlaps: context.capabilities.overlapFields.filter((field) =>
       isOffered(
         def,
         query,
-        { type: "setContains", field, value: "xx" },
+        { type: "setOverlap", field, values: PROBE.slice(0, 1) },
         context,
       ),
     ),
@@ -349,7 +439,10 @@ function describeQuery(
   return {
     code,
     field,
-    filters: Object.keys(query.equals).filter((key) => key !== field),
+    filters: [
+      ...Object.keys(query.equals),
+      ...Object.keys(query.overlaps),
+    ].filter((key) => key !== field),
     ranges: query.ranges
       .map((range) => range.field)
       .filter((key) => key !== field),
@@ -372,8 +465,19 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
           { field: target.field, min: "x", max: null },
         ],
       };
-    case "contains":
-      return { ...query, contains: { field: target.field, value: "xx" } };
+    case "text":
+      return {
+        ...query,
+        texts: [
+          ...query.texts,
+          { field: target.field, op: "contains", value: "xxx" },
+        ],
+      };
+    case "overlap":
+      return {
+        ...query,
+        overlaps: { ...query.overlaps, [target.field]: PROBE.slice(0, 1) },
+      };
     case "match":
       return { ...query, match: "any" };
     case "group":
@@ -477,7 +581,13 @@ function stateKey(query: QueryState): string {
       .map((range) => `range:${range.field}`)
       .sort()
       .join("+"),
-    query.contains ? `contains:${query.contains.field}` : "",
+    [...new Set(query.texts.map((text) => `text:${text.field}:${text.op}`))]
+      .sort()
+      .join("+"),
+    Object.keys(query.overlaps)
+      .map((key) => `overlap:${key}`)
+      .sort()
+      .join("+"),
     query.match,
     query.group ?? "",
     query.search !== null ? "search" : "",
@@ -512,11 +622,17 @@ export function listControlActions(
   for (const range of query.ranges) {
     actions.push({ type: "clearRange", field: range.field });
   }
-  for (const field of offers.contains) {
-    actions.push({ type: "setContains", field, value: "xx" });
+  for (const field of offers.texts) {
+    actions.push({ ...TEXT_PROBE, field });
   }
-  if (query.contains) {
-    actions.push({ type: "clearContains" });
+  if (query.texts.length > 0) {
+    actions.push({ type: "clearTexts" });
+  }
+  for (const field of offers.overlaps) {
+    actions.push({ type: "setOverlap", field, values: PROBE.slice(0, 1) });
+  }
+  for (const field of Object.keys(query.overlaps)) {
+    actions.push({ type: "clearOverlap", field });
   }
   if (offers.matchAny) {
     actions.push({ type: "setMatch", mode: "any" });

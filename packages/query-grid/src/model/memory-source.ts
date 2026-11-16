@@ -11,14 +11,16 @@ import {
   type GridRow,
   type QueryState,
   type RangeState,
+  type TextState,
 } from "./field-types.ts";
 import { matchesEquals } from "./field-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {
   isMatchAny,
-  listContainsFields,
   listGroupFields,
   listNarrowRangeFields,
+  listOverlapFields,
+  listTextFields,
 } from "./indexes.ts";
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
@@ -32,10 +34,13 @@ const OPTION_LIMIT = 50;
 export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
   const searchFields = listSearchFields(def);
   const rangeFields = listNarrowRangeFields(def.fields);
+  const overlapFields = listOverlapFields(def.fields);
   const equalsFields = def.fields
     .map((field) => field.key)
-    .filter((key) => !rangeFields.includes(key));
-  const containsFields = listContainsFields(def.fields);
+    .filter(
+      (key) => !rangeFields.includes(key) && !overlapFields.includes(key),
+    );
+  const textFields = listTextFields(def.fields);
   const groupFields = listGroupFields(def.fields, equalsFields);
   return {
     holdsAllRows: true,
@@ -45,15 +50,16 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
     matchAny: true,
     isNarrowed: () => false,
     narrowBasis: () => "",
-    containsFields,
+    textFields,
+    overlapFields,
     groupFields,
     canRun: (query) =>
       (query.group === null ||
         (!isMatchAny(query) && groupFields.includes(query.group))) &&
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
-      (query.contains === null ||
-        containsFields.includes(query.contains.field)) &&
+      query.texts.every((text) => textFields.includes(text.field)) &&
+      Object.keys(query.overlaps).every((key) => overlapFields.includes(key)) &&
       (query.search === null || searchFields.length > 0) &&
       getField(def, query.sort.field) !== null,
     equalsFields,
@@ -75,11 +81,43 @@ function matchesRange(
   }
   const value = toComparable(field, row[field.key] ?? null);
   if (value === null) {
-    return false;
+    return range.exclude === true;
   }
   const min = range.min === null ? null : toComparable(field, range.min);
   const max = range.max === null ? null : toComparable(field, range.max);
-  return (min === null || value >= min) && (max === null || value <= max);
+  const above =
+    min === null || (range.minExclusive ? value > min : value >= min);
+  const below =
+    max === null || (range.maxExclusive ? value < max : value <= max);
+  return (above && below) !== (range.exclude === true);
+}
+
+function matchesText(row: GridRow, text: TextState): boolean {
+  const raw = row[text.field];
+  const part = text.value.trim();
+  if (raw === null || raw === undefined) {
+    return text.op === "not_contains" || text.op === "not_equals";
+  }
+  const cell = String(raw);
+  const lower = cell.toLowerCase();
+  const needle = part.toLowerCase();
+  switch (text.op) {
+    case "contains":
+      return lower.includes(needle);
+    case "not_contains":
+      return !lower.includes(needle);
+    case "starts_with":
+      return lower.startsWith(needle);
+    case "ends_with":
+      return lower.endsWith(needle);
+    case "not_equals":
+      return cell !== part;
+  }
+}
+
+function matchesOverlap(row: GridRow, key: string, values: string[]): boolean {
+  const cell = row[key];
+  return Array.isArray(cell) && values.some((value) => cell.includes(value));
 }
 
 function matchesSearch(
@@ -105,14 +143,11 @@ function listRowTests(def: BaseGridDef, query: QueryState): RowTest[] {
   for (const range of query.ranges) {
     tests.push((row) => matchesRange(def, row, range));
   }
-  if (query.contains) {
-    const { field, value } = query.contains;
-    const part = value.trim().toLowerCase();
-    tests.push((row) =>
-      String(row[field] ?? "")
-        .toLowerCase()
-        .includes(part),
-    );
+  for (const text of query.texts) {
+    tests.push((row) => matchesText(row, text));
+  }
+  for (const [key, values] of Object.entries(query.overlaps)) {
+    tests.push((row) => matchesOverlap(row, key, values));
   }
   return tests;
 }
@@ -146,6 +181,10 @@ function listLookupOptions(
   const labels = new Map<string, string>();
   for (const row of rows) {
     const value = row[field.key];
+    if (Array.isArray(value)) {
+      value.forEach((item) => labels.set(item, item));
+      continue;
+    }
     if (value !== null && value !== undefined) {
       labels.set(String(value), String(row[labelField] ?? value));
     }

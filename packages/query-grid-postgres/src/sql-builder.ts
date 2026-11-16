@@ -5,6 +5,7 @@ import {
   GROUP_LIMIT,
   getReservedValue,
   isMatchAny,
+  isQueryBudgeted,
   isQueryRunnable,
   isValidFieldValue,
   KEY_FIELD,
@@ -19,6 +20,8 @@ import {
   type ProblemParams,
   type QueryState,
   type RangeState,
+  type TextOp,
+  type TextState,
 } from "@kikstart/query-grid";
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
@@ -69,9 +72,15 @@ const SQL_CASTS: Record<FieldType, string> = {
   text: "text",
   enum: "text",
   integer: "bigint",
+  decimal: "numeric",
   money: "bigint",
+  boolean: "boolean",
+  date: "date",
   datetime: "timestamptz",
+  array: "text",
 };
+
+const FLOAT_TYPES: FieldType[] = ["integer", "decimal", "money"];
 
 const TABLE_ALIAS = "t";
 
@@ -117,7 +126,10 @@ function selectExpression(field: BaseFieldDef): string {
   if (field.type === "datetime") {
     return `to_char(${name} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS ${alias}`;
   }
-  if (field.type === "integer" || field.type === "money") {
+  if (field.type === "date") {
+    return `to_char(${name}, 'YYYY-MM-DD') AS ${alias}`;
+  }
+  if (FLOAT_TYPES.includes(field.type)) {
     return `${name}::float8 AS ${alias}`;
   }
   return name;
@@ -188,20 +200,57 @@ interface Filter {
   clauses: string[];
 }
 
+// An excluded range is written as the two sides outside it, never as NOT (…): each side stays a plain comparison, and an empty cell is outside every range.
 function rangeClauses(
   field: BaseFieldDef,
   range: RangeState,
   params: Params,
 ): string[] {
   const name = column(field.key);
+  const outside = range.exclude === true;
   const parts: string[] = [];
   if (range.min !== null) {
-    parts.push(`${name} >= ${params.add(range.min, field)}`);
+    const inside = range.minExclusive ? ">" : ">=";
+    const operator = outside ? (range.minExclusive ? "<=" : "<") : inside;
+    parts.push(`${name} ${operator} ${params.add(range.min, field)}`);
   }
   if (range.max !== null) {
-    parts.push(`${name} <= ${params.add(range.max, field)}`);
+    const inside = range.maxExclusive ? "<" : "<=";
+    const operator = outside ? (range.maxExclusive ? ">=" : ">") : inside;
+    parts.push(`${name} ${operator} ${params.add(range.max, field)}`);
   }
-  return parts;
+  if (!outside) {
+    return parts;
+  }
+  const sides = field.nullable ? [...parts, `${name} IS NULL`] : parts;
+  return [sides.length > 1 ? `(${sides.join(" OR ")})` : sides[0]];
+}
+
+const LIKE_PATTERNS: Record<TextOp, (value: string) => string> = {
+  contains: (value) => `%${value}%`,
+  not_contains: (value) => `%${value}%`,
+  starts_with: (value) => `${value}%`,
+  ends_with: (value) => `%${value}`,
+  not_equals: (value) => value,
+};
+
+function textClause(
+  field: BaseFieldDef,
+  text: TextState,
+  params: Params,
+): string {
+  const name = column(field.key);
+  const value = text.value.trim();
+  if (text.op === "not_equals") {
+    return `${name} IS DISTINCT FROM ${params.addText(value)}`;
+  }
+  const pattern = params.addText(LIKE_PATTERNS[text.op](escapeLike(value)));
+  if (text.op !== "not_contains") {
+    return `${name} ILIKE ${pattern}`;
+  }
+  return field.nullable
+    ? `(${name} NOT ILIKE ${pattern} OR ${name} IS NULL)`
+    : `${name} NOT ILIKE ${pattern}`;
 }
 
 function anyOf(terms: string[][]): string[] {
@@ -221,11 +270,12 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
   for (const range of query.ranges) {
     terms.push(rangeClauses(requireField(def, range.field), range, params));
   }
-  if (query.contains) {
-    const pattern = `%${escapeLike(query.contains.value.trim())}%`;
-    terms.push([
-      `${column(requireField(def, query.contains.field).key)} ILIKE ${params.addText(pattern)}`,
-    ]);
+  for (const text of query.texts) {
+    terms.push([textClause(requireField(def, text.field), text, params)]);
+  }
+  for (const [key, values] of Object.entries(query.overlaps)) {
+    const field = requireField(def, key);
+    terms.push([`${column(field.key)} && ${params.addList(values, field)}`]);
   }
   const clauses = isMatchAny(query) ? anyOf(terms) : terms.flat();
   if (query.search !== null) {
@@ -350,7 +400,7 @@ export function buildExactCountSql(
   };
 }
 
-// Only one plain value per field is read in sort order from its index. Several values, not empty or an OR are capped unordered, like the count: an ordered walk would not stop when few rows match.
+// Only one plain value per field is read in sort order from its index. Several values, not empty, an OR or a filter with an index of its own are capped unordered, like the count: an ordered walk would not stop when few rows match.
 export function isTotalOrdered(
   def: PostgresGridDef,
   query: QueryState,
@@ -358,6 +408,7 @@ export function isTotalOrdered(
   return (
     query.search === null &&
     !isMatchAny(query) &&
+    !isQueryBudgeted(def, query) &&
     Object.entries(query.equals).every(
       ([key, values]) =>
         values.length === 1 &&
