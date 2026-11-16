@@ -86,7 +86,7 @@ describe("GET /export", () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
     expect(new TextDecoder().decode(bytes)).toBe(
-      `Number,Name,Total\r\n3,"Name, 3",3.00\r\n2,'=1+1,2.00\r\n1,"Name, 1",1.00\r\n`,
+      `"Number","Name","Total"\r\n3,"Name, 3",3.00\r\n2,"'=1+1",2.00\r\n1,"Name, 1",1.00\r\n`,
     );
   });
 
@@ -94,9 +94,9 @@ describe("GET /export", () => {
     const handle = createHandler(createFake(1));
     const text = await (await handle("/export")).text();
     expect(text.split("\r\n")[0]).toBe(
-      "ID,Number,Created,Total,Status,Region,Name,Note",
+      '"ID","Number","Created","Total","Status","Region","Name","Note"',
     );
-    expect(text).toContain(",Open,North,");
+    expect(text).toContain(',"Open","North",');
   });
 
   test("an unknown column is refused before anything runs", async () => {
@@ -151,7 +151,7 @@ describe("GET /export", () => {
         { columns: ["number"] },
         signal,
       );
-      expect(csv).toBe(`${CSV_BOM}Number\r\n2\r\n1\r\n`);
+      expect(csv).toBe(`${CSV_BOM}"Number"\r\n2\r\n1\r\n`);
       const refuse = createHandler(createFake(9), 5);
       globalThis.fetch = (async (input: string | URL) =>
         refuse(String(input).slice(BASE_PATH.length))) as typeof fetch;
@@ -165,6 +165,15 @@ describe("GET /export", () => {
     } finally {
       globalThis.fetch = original;
     }
+  });
+});
+
+describe("a host that wants no export", () => {
+  test("sets the limit to zero and the route is not found", async () => {
+    const fake = createFake(1);
+    const response = await createHandler(fake, 0)("/export");
+    expect(response.status).toBe(404);
+    expect(fake.seen).toEqual([]);
   });
 });
 

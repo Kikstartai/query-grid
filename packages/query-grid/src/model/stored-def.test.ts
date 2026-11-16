@@ -552,3 +552,18 @@ describe("normalizeStoredGridDef", () => {
     expect(problems[49]).toEqual(unknownKeyAt("extra_49"));
   });
 });
+
+describe("a host limits the fields a stored def may name", () => {
+  test("a field outside the list is an unknown field, and the def is refused", () => {
+    const allowed = FULL_DEF.fields.map((field) => field.key);
+    expect(normalizeStoredGridDef(FULL_DEF, { fields: allowed }).ok).toBe(true);
+    const result = normalizeStoredGridDef(FULL_DEF, {
+      fields: allowed.filter((key) => key !== "note"),
+    });
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.problems).toContainEqual({
+      code: "stored_unknown_field",
+      params: { path: "fields.7.key", field: "note" },
+    });
+  });
+});

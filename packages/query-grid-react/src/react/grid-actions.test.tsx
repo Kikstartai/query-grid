@@ -271,7 +271,7 @@ describe("fetchExport", () => {
       "f.kind=a&sort=position.desc",
     );
     expect(await actions.fetchExport(["name", "position"])).toBe(
-      `${CSV_BOM}Name,Order\r\nthree,3\r\none,1\r\n`,
+      `${CSV_BOM}"Name","Order"\r\n"three",3\r\n"one",1\r\n`,
     );
   });
 });

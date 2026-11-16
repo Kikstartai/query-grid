@@ -361,7 +361,7 @@ function isCursorValue(
   value: string,
 ): boolean {
   if (field.type === "text") {
-    return value.length <= CURSOR_TEXT_MAX;
+    return value.length <= CURSOR_TEXT_MAX && !value.includes("\u0000");
   }
   if (field.type === "decimal") {
     return CURSOR_NUMBER.test(value);

@@ -27,7 +27,8 @@ export function resolveLimits(overrides: Partial<GridLimits> = {}): GridLimits {
     if (value === undefined) {
       continue;
     }
-    if (!Number.isInteger(value) || value < 1) {
+    const least = key === "exportLimit" ? 0 : 1;
+    if (!Number.isInteger(value) || value < least) {
       throw new Error(`limit ${key} must be a positive integer`);
     }
     limits[key] = value;

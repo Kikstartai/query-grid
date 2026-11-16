@@ -129,6 +129,7 @@ describe("keyset paging", () => {
             ]),
           ),
           sort: { field: index.sort, direction },
+          thenBy: index.then?.map((field) => ({ field, direction })),
         };
         const whole = await listPage(query, 150);
         const paged: string[] = [];

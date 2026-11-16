@@ -31,8 +31,13 @@ type DefExtras = Omit<
   "id" | "fields" | "defaultSort" | "indexes"
 >;
 
+export interface StoredDefOptions {
+  fields?: string[];
+}
+
 interface Run {
   problems: Problem[];
+  allowed: string[] | null;
   declared: boolean;
   keys: Set<string>;
   fields: Map<string, BaseFieldDef>;
@@ -426,6 +431,10 @@ function readFieldKey(value: unknown, path: string, run: Run): string | null {
   if (UNSAFE_KEYS.includes(key)) {
     return invalid(run, path);
   }
+  if (run.allowed && !run.allowed.includes(key)) {
+    report(run, "stored_unknown_field", { path, field: key });
+    return null;
+  }
   if (run.keys.has(key)) {
     report(run, "stored_duplicate", { path, value: key });
     return null;
@@ -662,9 +671,13 @@ function readDef(input: unknown, run: Run): IndexedGridDef | null {
   return { id, fields, defaultSort, indexes, ...extras };
 }
 
-export function normalizeStoredGridDef(input: unknown): StoredDefResult {
+export function normalizeStoredGridDef(
+  input: unknown,
+  options: StoredDefOptions = {},
+): StoredDefResult {
   const run: Run = {
     problems: [],
+    allowed: options.fields ?? null,
     declared: false,
     keys: new Set(),
     fields: new Map(),

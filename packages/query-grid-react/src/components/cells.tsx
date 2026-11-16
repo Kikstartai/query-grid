@@ -69,6 +69,9 @@ export interface LinkCellProps {
 }
 
 export function LinkCell({ href, external = false, children }: LinkCellProps) {
+  if (!isSafeHref(href)) {
+    return <bdi>{children}</bdi>;
+  }
   return (
     <a
       className="qg-link-cell"
@@ -95,11 +98,8 @@ export function createLinkCell(
   return (value, row) => {
     const href = toHref(value, row);
     const text = [value ?? []].flat().map(String).join(" ");
-    if (!isSafeHref(href)) {
-      return <bdi>{text}</bdi>;
-    }
     return (
-      <LinkCell href={href} external={external}>
+      <LinkCell href={href ?? ""} external={external}>
         {text}
       </LinkCell>
     );

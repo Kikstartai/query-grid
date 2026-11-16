@@ -27,26 +27,28 @@ const STATUS = TEST_DEF.fields.find((field) => field.key === "status")!;
 
 describe("a CSV cell", () => {
   test("text that a spreadsheet would run as a formula is led by an apostrophe", () => {
-    expect(encodeCsvCell("=SUM(A1:A9)")).toBe("'=SUM(A1:A9)");
-    expect(encodeCsvCell("+27 82 000")).toBe("'+27 82 000");
-    expect(encodeCsvCell("-cmd|' /C calc'!A0")).toBe("'-cmd|' /C calc'!A0");
-    expect(encodeCsvCell("@import")).toBe("'@import");
-    expect(encodeCsvCell("  =1+1")).toBe("'  =1+1");
-    expect(encodeCsvCell("\tTab")).toBe("'\tTab");
-    expect(encodeCsvCell("\rReturn")).toBe('"\'\rReturn"');
+    expect(encodeCsvCell("=SUM(A1:A9)")).toBe(`"'=SUM(A1:A9)"`);
+    expect(encodeCsvCell("+27 82 000")).toBe(`"'+27 82 000"`);
+    expect(encodeCsvCell("-cmd|' /C calc'!A0")).toBe(`"'-cmd|' /C calc'!A0"`);
+    expect(encodeCsvCell("@import")).toBe(`"'@import"`);
+    expect(encodeCsvCell("  =1+1")).toBe(`"'  =1+1"`);
+    expect(encodeCsvCell("\tTab")).toBe(`"'\tTab"`);
+    expect(encodeCsvCell("\rReturn")).toBe(`"'\rReturn"`);
+    expect(encodeCsvCell("＝1+1")).toBe(`"'＝1+1"`);
     expect(encodeCsvCell('=HYPERLINK("http://x","y")')).toBe(
-      '"\'=HYPERLINK(""http://x"",""y"")"',
+      `"'=HYPERLINK(""http://x"",""y"")"`,
     );
   });
 
   test("a number the encoder wrote keeps its sign", () => {
     expect(encodeCsvCell("-5", true)).toBe("-5");
-    expect(encodeCsvCell("-5")).toBe("'-5");
+    expect(encodeCsvCell("-5")).toBe(`"'-5"`);
   });
 
-  test("a comma, a quote, a line break and outer spaces are quoted", () => {
-    expect(encodeCsvCell("plain")).toBe("plain");
+  test("every text cell is quoted, so no separator of any locale splits it", () => {
+    expect(encodeCsvCell("plain")).toBe('"plain"');
     expect(encodeCsvCell("a,b")).toBe('"a,b"');
+    expect(encodeCsvCell("a;=1+1")).toBe('"a;=1+1"');
     expect(encodeCsvCell('say "hi"')).toBe('"say ""hi"""');
     expect(encodeCsvCell("two\nlines")).toBe('"two\nlines"');
     expect(encodeCsvCell(" padded ")).toBe('" padded "');
@@ -70,13 +72,23 @@ describe("a value in an export", () => {
   test("a negative number stays a number and a negative-looking text does not", () => {
     const rows: GridRow[] = [{ id: "1", name: "-1+1", total: -150, delta: -3 }];
     expect(encodeCsvRows([TEXT, MONEY, COUNT], rows)).toBe(
-      "'-1+1,-1.50,-3\r\n",
+      `"'-1+1",-1.50,-3\r\n`,
     );
   });
 
   test("text held in a number field is still neutralised", () => {
     const rows = [{ id: "1", delta: "=1+1" }] as unknown as GridRow[];
-    expect(encodeCsvRows([COUNT], rows)).toBe("'=1+1\r\n");
+    expect(encodeCsvRows([COUNT], rows)).toBe(`"'=1+1"\r\n`);
+  });
+
+  test("an option label of a number field is text, and is neutralised like any", () => {
+    const rated: BaseFieldDef = {
+      ...COUNT,
+      options: [{ value: "1", label: "=HYPERLINK(1)" }],
+    };
+    expect(encodeCsvRows([rated], [{ id: "1", delta: 1 }])).toBe(
+      `"'=HYPERLINK(1)"\r\n`,
+    );
   });
 });
 
@@ -112,7 +124,9 @@ describe("the columns and the file", () => {
         { id: "2", name: "=Bob", total: 250 },
       ],
     );
-    expect(csv).toBe(`${CSV_BOM}Name,Total\r\nAnn,1.00\r\n'=Bob,2.50\r\n`);
+    expect(csv).toBe(
+      `${CSV_BOM}"Name","Total"\r\n"Ann",1.00\r\n"'=Bob",2.50\r\n`,
+    );
   });
 });
 
@@ -135,12 +149,14 @@ describe("the in-memory source exports what the query matches", () => {
       { columns: ["number", "name", "total"] },
       signal,
     );
-    expect(csv).toBe(`${CSV_BOM}Number,Name,Total\r\n2,x,1.00\r\n3,z,2.00\r\n`);
+    expect(csv).toBe(
+      `${CSV_BOM}"Number","Name","Total"\r\n2,"x",1.00\r\n3,"z",2.00\r\n`,
+    );
   });
 
   test("a scope narrows the export like every other read", async () => {
     const scoped = withScope(source, { equals: { status: ["done"] } });
     const csv = await scoped.fetchExport(sorted, { columns: ["name"] }, signal);
-    expect(csv).toBe(`${CSV_BOM}Name\r\n'=y\r\n`);
+    expect(csv).toBe(`${CSV_BOM}"Name"\r\n"'=y"\r\n`);
   });
 });

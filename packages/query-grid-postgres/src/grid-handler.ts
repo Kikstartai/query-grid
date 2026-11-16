@@ -54,6 +54,7 @@ function isAbortError(error: unknown, signal: AbortSignal): boolean {
 }
 
 const LIMIT = /^\d{1,9}$/;
+const JSON_TYPE = "application/json";
 const CLIENT_CLOSED_REQUEST = 499;
 
 export interface GridMoves {
@@ -134,11 +135,20 @@ function resolveStatus(error: QueryRejected): number {
   return error.error === "not_found" ? 404 : 400;
 }
 
+// Only a JSON body is read: a form post from another site cannot carry that content type without a preflight.
+async function readJson(request: Request): Promise<unknown> {
+  const type = request.headers.get("content-type") ?? "";
+  if (!type.toLowerCase().startsWith(JSON_TYPE)) {
+    return null;
+  }
+  return request.json().catch(() => null);
+}
+
 async function readMove(
   def: PostgresGridDef,
   request: Request,
 ): Promise<MoveBody> {
-  const body = (await request.json().catch(() => null)) as {
+  const body = (await readJson(request)) as {
     id?: unknown;
     to?: unknown;
   } | null;
@@ -169,27 +179,30 @@ async function readReorder(
   def: PostgresGridDef,
   request: Request,
 ): Promise<ReorderBody> {
-  const body = (await request.json().catch(() => null)) as {
+  const body = (await readJson(request)) as {
     id?: unknown;
     after?: unknown;
     before?: unknown;
   } | null;
-  const after = body?.after ?? null;
-  const before = body?.before ?? null;
+  const [id, after, before] = [body?.id, body?.after, body?.before].map(
+    (value) => (isRowId(def, value) ? value.toLowerCase() : null),
+  );
+  const given = [body?.after, body?.before].filter(
+    (value) => value !== undefined && value !== null,
+  );
+  const neighbours = [after, before].filter((value) => value !== null);
   const valid =
-    isRowId(def, body?.id) &&
-    (after === null || isRowId(def, after)) &&
-    (before === null || isRowId(def, before)) &&
-    (after !== null || before !== null) &&
+    id !== null &&
+    neighbours.length > 0 &&
+    neighbours.length === given.length &&
     after !== before &&
-    after !== body?.id &&
-    before !== body?.id;
-  if (!body || !valid) {
+    !neighbours.includes(id);
+  if (!valid) {
     throw new QueryRejected("invalid_value", "invalid_value", {
       field: KEY_FIELD,
     });
   }
-  return { id: body.id as string, after, before } as ReorderBody;
+  return { id, after, before };
 }
 
 function listExportColumns(
@@ -324,6 +337,9 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
       case "limits":
         return limits;
       case "export":
+        if (limits.exportLimit === 0) {
+          throw new QueryRejected("not_found");
+        }
         return exportResponse(
           def,
           listExportColumns(def, params.get(COLUMNS_PARAM)),

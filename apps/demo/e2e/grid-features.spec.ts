@@ -181,11 +181,11 @@ test.describe("export", () => {
     const lines = await download(page);
     expect(lines).toHaveLength(count + 1);
     expect(lines[0].replace(/^﻿/, "")).toMatch(
-      /^Order,Created,Status,Customer,Total,Region,Channel,Items/,
+      /^"Order","Created","Status","Customer","Total","Region","Channel","Items"/,
     );
     expect(lines[0]).not.toContain("Customer account");
-    expect(lines[1]).toContain(",Failed,");
-    expect(lines[1]).toContain(",Phone,");
+    expect(lines[1]).toContain(',"Failed",');
+    expect(lines[1]).toContain(',"Phone",');
     const direct = await page.request.get(
       `/api/orders/export?${NARROW}&columns=order_number`,
     );
@@ -203,8 +203,10 @@ test.describe("export", () => {
     const shown = Number(await loaded(page).getAttribute("data-value"));
     const lines = await download(page);
     expect(lines).toHaveLength(shown + 1);
-    expect(lines[0].replace(/^﻿/, "")).toMatch(/^Task,Title,Status,Team/);
-    expect(lines[1]).toContain(",Growth,");
+    expect(lines[0].replace(/^﻿/, "")).toMatch(
+      /^"Task","Title","Status","Team"/,
+    );
+    expect(lines[1]).toContain(',"Growth",');
   });
 });
 

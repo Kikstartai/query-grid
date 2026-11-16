@@ -26,16 +26,34 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INTEGER = /^-?\d{1,15}$/;
 const DECIMAL = /^-?\d{1,15}(\.\d{1,9})?$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const INSTANT =
+  /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?)?(Z|[+-]\d{2}(:?\d{2})?)?$/;
+const DAY_LENGTH = 10;
+const NUL = "\u0000";
 const TEXT_VALUE_MAX = 200;
 
 function isValidText(value: string): boolean {
-  return value.length > 0 && value.length <= TEXT_VALUE_MAX;
+  return (
+    value.length > 0 && value.length <= TEXT_VALUE_MAX && !value.includes(NUL)
+  );
 }
 
-// Date.parse rolls 02-31 over into March, which Postgres refuses, so a day counts only when it reads back as itself.
+// Date.parse rolls 02-31 over into March and takes a year 0, both of which Postgres refuses, so a day counts only when it reads back as itself in a year Postgres has.
 function isCalendarDay(value: string): boolean {
   const time = Date.parse(value);
-  return !Number.isNaN(time) && new Date(time).toISOString().startsWith(value);
+  return (
+    !value.startsWith("0000") &&
+    !Number.isNaN(time) &&
+    new Date(time).toISOString().startsWith(value)
+  );
+}
+
+function isInstant(value: string): boolean {
+  return (
+    INSTANT.test(value) &&
+    isCalendarDay(value.slice(0, DAY_LENGTH)) &&
+    !Number.isNaN(Date.parse(value))
+  );
 }
 
 function isValidValue(field: BaseFieldDef, value: string): boolean {
@@ -54,7 +72,7 @@ function isValidValue(field: BaseFieldDef, value: string): boolean {
     case "date":
       return DAY.test(value) && isCalendarDay(value);
     case "datetime":
-      return value.length <= 40 && !Number.isNaN(Date.parse(value));
+      return isInstant(value);
     case "text":
     case "array":
       return isValidText(value);

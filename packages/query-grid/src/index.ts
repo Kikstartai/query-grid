@@ -270,6 +270,7 @@ export {
 export { sortRows } from "./model/sort-rows.ts";
 export {
   normalizeStoredGridDef,
+  type StoredDefOptions,
   type StoredDefResult,
 } from "./model/stored-def.ts";
 export { createStore, type Store } from "./model/store.ts";

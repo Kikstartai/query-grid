@@ -781,7 +781,7 @@ describe("an export is the memory source's file", () => {
       "&columns=order_number,total",
     );
     const lines = (await sent.text()).trimEnd().split("\r\n");
-    expect(lines[0]).toBe("Order,Total");
+    expect(lines[0]).toBe('"Order","Total"');
     expect(lines).toHaveLength(count.count + 1);
     expect(new Set(lines.slice(1).map((line) => line.split(",")[0])).size).toBe(
       count.count,

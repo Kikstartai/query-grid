@@ -71,7 +71,9 @@ describe("POST /order", () => {
       { id: A, before: 7 },
       { id: A },
       { id: A, after: A },
+      { id: A, after: A.toUpperCase() },
       { id: A, after: B, before: B },
+      { id: A, after: B, before: "nope" },
       null,
     ];
     for (const body of bodies) {
@@ -79,6 +81,12 @@ describe("POST /order", () => {
       expect(response.status).toBe(400);
       expect(((await response.json()) as ErrorBody).code).toBe("invalid_value");
     }
+    const form = await handle("/order", {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: JSON.stringify({ id: A, after: B }),
+    });
+    expect(form.status).toBe(400);
     expect(calls).toBe(0);
   });
 

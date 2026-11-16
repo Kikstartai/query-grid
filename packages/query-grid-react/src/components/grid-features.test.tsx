@@ -348,6 +348,9 @@ describe("ready-made cells", () => {
         </LinkCell>,
       ),
     ).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(render(<LinkCell href="javascript:alert(1)">Docs</LinkCell>)).toBe(
+      "<bdi>Docs</bdi>",
+    );
   });
 
   test("a list cell shows the first items and counts the rest", () => {
