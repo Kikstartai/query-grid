@@ -205,10 +205,14 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
   const { capabilities } = props.source;
   const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
-  const [values, setValues] = useQueryStates(parsers);
-  const queryString = toQueryString(capabilities, values as UrlValues, prefix);
+  const [urlValues, setUrlValues] = useQueryStates(parsers);
+  const queryString = toQueryString(
+    capabilities,
+    urlValues as UrlValues,
+    prefix,
+  );
   const [value] = useState(() => createValue(props, queryString));
-  const setter = useLatest(setValues);
+  const setter = useLatest(setUrlValues);
   const [sync] = useState(() =>
     createUrlSync(value.store, queryString, (state, history) => {
       void setter.current(
