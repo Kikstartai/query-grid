@@ -11,6 +11,7 @@ import {
   type GridRow,
   type IndexDef,
   type QueryState,
+  type TextOp,
 } from "@kikstart/query-grid";
 import {
   buildCappedCountSql,
@@ -21,6 +22,7 @@ import {
   buildRowSql,
   describeSearch,
   describeIndex,
+  describeTextIndex,
   encodeCursor,
   listSearchSettings,
   NARROW_SETTINGS,
@@ -78,6 +80,7 @@ type ResultKind =
   | "counter"
   | "empty"
   | "search"
+  | "text"
   | "narrow";
 
 interface Result {
@@ -428,6 +431,47 @@ async function benchSearch(
   return results;
 }
 
+const TEXT_CASES: [TextOp, string][] = [
+  ["contains", "Smith"],
+  ["contains", "Mokoena"],
+  ["contains", "mok"],
+  ["starts_with", "Zan"],
+  ["ends_with", "ena"],
+  ["contains", NO_MATCH],
+];
+
+async function benchTextIndexes(client: Client): Promise<Result[]> {
+  const results: Result[] = [];
+  const cases = QUICK ? TEXT_CASES.slice(1, 3) : TEXT_CASES;
+  for (const field of ORDERS_GRID_DEF.textIndexes) {
+    for (const [op, value] of cases) {
+      const query: QueryState = { ...BASE, texts: [{ field, op, value }] };
+      const variant = `${op} “${value}”`;
+      results.push(
+        await measure(
+          client,
+          describeTextIndex(field),
+          `${variant}, first page`,
+          buildPageSql(ORDERS_GRID_DEF, query, PAGE),
+          listSearchSettings(),
+          "text",
+          SEARCH_BAR,
+        ),
+        await measure(
+          client,
+          describeTextIndex(field),
+          `${variant}, capped count`,
+          buildCappedCountSql(ORDERS_GRID_DEF, query),
+          listSearchSettings(),
+          "text",
+          SEARCH_BAR,
+        ),
+      );
+    }
+  }
+  return results;
+}
+
 async function benchCounters(client: Client): Promise<Result[]> {
   const sql = buildFacetSql(ORDERS_GRID_DEF);
   if (!sql) {
@@ -681,6 +725,7 @@ function toMarkdown(results: Result[], total: number): string {
   const empty = results.filter((result) => result.kind === "empty");
   const searched = results.filter((result) => result.kind === "search");
   const narrowed = results.filter((result) => result.kind === "narrow");
+  const texts = results.filter((result) => result.kind === "text");
   const optedOut = ORDERS_GRID_DEF.indexes
     .filter((index) => index.multi === false)
     .map(describeIndex);
@@ -719,6 +764,12 @@ function toMarkdown(results: Result[], total: number): string {
     "",
     ...toTable(searched),
     "",
+    `## Text filters with an index of their own: ${summarize(texts)}`,
+    "",
+    `A contains, a starts-with and an ends-with on a field in \`textIndexes\`, as an ordered first page and a capped count, under the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget. The bar is that budget and an index scan; a run the server refuses at the budget is counted in the plan column.`,
+    "",
+    ...toTable(texts),
+    "",
     `## Narrowed set: ${summarize(narrowed)}`,
     "",
     `Each expensive operation, and a live GROUP BY, over the ${DEFAULT_LIMITS.narrowLimit.toLocaleString("en-US")} rows \`narrowLimit\` allows: the newest orders, bounded on \`created_at\`. Each is the worst case, where nothing matches and the whole set is read. The bar is a p95 under ${NARROW_BUDGET_MS} ms.`,
@@ -754,6 +805,9 @@ async function main(): Promise<void> {
   const filtered = await benchFilteredSearch(client);
   results.push(...filtered);
   console.log(`search with equality filters: ${filtered.length} queries`);
+  const texts = await benchTextIndexes(client);
+  results.push(...texts);
+  console.log(`text indexes: ${texts.length} queries`);
   const narrowed = await benchNarrowed(client, total);
   results.push(...narrowed);
   console.log(`narrowed set: ${narrowed.length} queries`);

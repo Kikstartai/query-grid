@@ -367,7 +367,7 @@ describe("the narrowed-set tier", () => {
     const cases: QueryState[] = [
       {
         ...base,
-        texts: [{ field: "customer_name", op: "contains", value: "smith" }],
+        texts: [{ field: "note", op: "contains", value: "fragile" }],
       },
       { ...base, ranges: [{ field: "total", min: "20000", max: null }] },
       {
