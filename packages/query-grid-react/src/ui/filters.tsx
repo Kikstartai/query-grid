@@ -39,17 +39,19 @@ import {
   MatchToggle as BaseMatchToggle,
 } from "../components/narrow-filters.tsx";
 import { useLocale, useMessages } from "../components/messages.tsx";
+import { formatReason } from "../react/query-grid-format.ts";
 import {
-  formatReason,
   useFieldLabels,
   useFilterChips,
-  useOffers,
-  useOfferState,
-  useQueryGrid,
-  useQueryGridActions,
   useOfferContext,
+  useOfferState,
+  useOffers,
   useQueryState,
-} from "../react/query-grid-provider.tsx";
+} from "../react/query-grid-hooks.ts";
+import {
+  useQueryGridActions,
+  useQueryGridMeta,
+} from "../react/query-grid-context.tsx";
 
 export interface FieldFilterProps {
   field: BaseFieldDef;
@@ -61,7 +63,7 @@ export function useFieldOffer(key: string, kind: "equals" | "range") {
 }
 
 export function useEqualsFilter(key: string) {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   const offers = useOffers();
@@ -145,7 +147,7 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
 }
 
 export function FieldFilter(props: FieldFilterProps) {
-  const { source } = useQueryGrid();
+  const { source } = useQueryGridMeta();
   switch (resolveFilterKind(props.field, source.capabilities)) {
     case "lookup":
       return <BoundLookupFilter {...props} />;
@@ -159,7 +161,7 @@ export function FieldFilter(props: FieldFilterProps) {
 }
 
 export function SortControl() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const messages = useMessages();
   const locale = useLocale();
   const query = useQueryState();
@@ -199,7 +201,7 @@ export function SortControl() {
 }
 
 export function GroupControl() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const messages = useMessages();
   const locale = useLocale();
   const query = useQueryState();
@@ -239,7 +241,7 @@ export function GroupControl() {
 }
 
 export function SearchFilter() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const query = useQueryState();
   const context = useOfferContext();
   const { dispatch } = useQueryGridActions();
@@ -268,7 +270,7 @@ export interface ContainsFilterProps {
 }
 
 export function ContainsFilter({ fields }: ContainsFilterProps) {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
   const keys = listContainsFilterFields(source.capabilities, fields);
@@ -299,7 +301,7 @@ export function ContainsFilter({ fields }: ContainsFilterProps) {
 }
 
 export function MatchToggle() {
-  const { source } = useQueryGrid();
+  const { source } = useQueryGridMeta();
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
   const offer = useOfferState({ kind: "match" });
@@ -344,7 +346,7 @@ interface DefaultFiltersProps {
 }
 
 function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   return (
     <>
       <SearchFilter />

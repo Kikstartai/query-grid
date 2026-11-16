@@ -21,12 +21,11 @@ import {
   type BoardMoveDetails,
 } from "../components/status-board.tsx";
 import { useStoreValue } from "../components/use-store-value.ts";
+import { useFacetState, useQueryState } from "../react/query-grid-hooks.ts";
 import {
-  useFacetState,
-  useQueryGrid,
   useQueryGridActions,
-  useQueryState,
-} from "../react/query-grid-provider.tsx";
+  useQueryGridMeta,
+} from "../react/query-grid-context.tsx";
 
 export interface StatusBoardProps {
   titleField: string;
@@ -46,7 +45,7 @@ function BoardLanes({
   detailFields,
   transitions,
 }: BoardLanesProps) {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   const { moveRow } = useQueryGridActions();
   const messages = useMessages();
   const locale = useLocale();
@@ -105,7 +104,7 @@ function BoardLanes({
 }
 
 export function StatusBoard(props: StatusBoardProps) {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   const messages = useMessages();
   const query = useQueryState();
   const queries = getLaneQueries(def, query, source.capabilities);

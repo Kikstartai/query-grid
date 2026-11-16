@@ -18,12 +18,13 @@ import { createMemorySource } from "@kikstart/query-grid/memory";
 import { NO_PERSISTENCE } from "../components/column-state.ts";
 import { TEST_GRID_DEF, TEST_ROWS } from "../components/fields.fixture.ts";
 import {
+  useQueryGridActions,
+  type QueryGridActions,
+} from "./query-grid-context.tsx";
+import { useGridView, useQueryState } from "./query-grid-hooks.ts";
+import {
   QueryGridProvider,
   StaticQueryGridProvider,
-  useGridView,
-  useQueryGridActions,
-  useQueryState,
-  type QueryGridActions,
 } from "./query-grid-provider.tsx";
 import {
   buildUrlParsers,

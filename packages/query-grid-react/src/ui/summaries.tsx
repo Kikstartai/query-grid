@@ -26,12 +26,14 @@ import {
   useCountState,
   useFacetState,
   useGridView,
-  useQueryGrid,
-  useQueryGridActions,
   useOfferContext,
   useQueryState,
   useTotalState,
-} from "../react/query-grid-provider.tsx";
+} from "../react/query-grid-hooks.ts";
+import {
+  useQueryGridActions,
+  useQueryGridMeta,
+} from "../react/query-grid-context.tsx";
 import { useEqualsFilter, useFieldOffer } from "./filters.tsx";
 
 export function CountDisplay() {
@@ -47,7 +49,7 @@ export function CountDisplay() {
 }
 
 export function TotalFooter() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const messages = useMessages();
   const locale = useLocale();
   const state = useTotalState();
@@ -65,7 +67,7 @@ export function TotalFooter() {
 }
 
 export function FacetPanel() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const messages = useMessages();
   const query = useQueryState();
   const { capabilities } = useOfferContext();

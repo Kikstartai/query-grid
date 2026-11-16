@@ -37,10 +37,12 @@ import {
   useColumns,
   useFeedState,
   useOffers,
-  useQueryGrid,
-  useQueryGridActions,
   useQueryState,
-} from "../react/query-grid-provider.tsx";
+} from "../react/query-grid-hooks.ts";
+import {
+  useQueryGridActions,
+  useQueryGridMeta,
+} from "../react/query-grid-context.tsx";
 import { FieldFilter } from "./filters.tsx";
 
 function useRowWindow(): RowWindow {
@@ -65,7 +67,7 @@ export interface DataGridRootProps {
 }
 
 function useGridControls() {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   const query = useQueryState();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
@@ -153,7 +155,7 @@ function formatGroupSums(
 }
 
 function GroupedRoot({ children }: DataGridRootProps) {
-  const { def, source } = useQueryGrid();
+  const { def, source } = useQueryGridMeta();
   const query = useQueryState();
   const messages = useMessages();
   const locale = useLocale();
@@ -202,7 +204,7 @@ function GroupedRoot({ children }: DataGridRootProps) {
 }
 
 function DataGridRoot({ children }: DataGridRootProps) {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const query = useQueryState();
   if (query.group === null) {
     return <FlatRoot>{children}</FlatRoot>;
@@ -228,7 +230,7 @@ export const DataGrid = Object.assign(DefaultDataGrid, {
 });
 
 export function ColumnsMenu() {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const { state, store } = useColumns();
   return (
     <BaseColumnsMenu
@@ -245,7 +247,7 @@ export interface CardListProps {
 }
 
 export function CardList({ titleField, badgeField }: CardListProps) {
-  const { def } = useQueryGrid();
+  const { def } = useQueryGridMeta();
   const rowWindow = useRowWindow();
   return (
     <BaseCardList
