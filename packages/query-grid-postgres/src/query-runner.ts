@@ -395,7 +395,7 @@ export async function listGridPage(
   return toPageResult(def, query, rows, limit, limits);
 }
 
-// The narrowed set is sized once, before the first page: a walk is one read of the result, and a probe before every page would cost more than the pages.
+// The narrowed set is sized once, before the first page, because a probe before every page of one walk would cost more than the pages.
 export async function* walkGridPages(
   def: PostgresGridDef,
   execute: SqlExecutor,

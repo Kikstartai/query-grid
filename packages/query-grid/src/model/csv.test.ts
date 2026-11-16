@@ -31,6 +31,7 @@ describe("a CSV cell", () => {
     expect(encodeCsvCell("+27 82 000")).toBe("'+27 82 000");
     expect(encodeCsvCell("-cmd|' /C calc'!A0")).toBe("'-cmd|' /C calc'!A0");
     expect(encodeCsvCell("@import")).toBe("'@import");
+    expect(encodeCsvCell("  =1+1")).toBe("\"'  =1+1\"");
     expect(encodeCsvCell("\tTab")).toBe("'\tTab");
     expect(encodeCsvCell("\rReturn")).toBe('"\'\rReturn"');
     expect(encodeCsvCell('=HYPERLINK("http://x","y")')).toBe(

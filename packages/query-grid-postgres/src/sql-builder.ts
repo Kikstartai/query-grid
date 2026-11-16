@@ -367,20 +367,21 @@ function after(key: OrderKey): string {
   return key.direction === "asc" ? ">" : "<";
 }
 
-// Columns that all run one way compare as a row, which an index reads as one range. Mixed directions have no row form: they are spelled out column by column, and run only over a narrowed set.
+// Columns that all run one way compare as a row, which an index reads as one range; mixed directions have no row form, so they are spelled out behind a bound on the first column, which lets its index still start at the cursor.
 function keysetClause(keys: OrderKey[], places: string[]): string {
   const [first] = keys;
   if (keys.every((key) => key.direction === first.direction)) {
     const names = keys.map((key) => column(key.field.key));
     return `(${names.join(", ")}) ${after(first)} (${places.join(", ")})`;
   }
-  return keys.reduceRight((rest, key, at) => {
+  const spelled = keys.reduceRight((rest, key, at) => {
     const name = column(key.field.key);
     const beyond = `${name} ${after(key)} ${places[at]}`;
     return rest === ""
       ? beyond
       : `(${beyond} OR (${name} = ${places[at]} AND ${rest}))`;
   }, "");
+  return `${column(first.field.key)} ${after(first)}= ${places[0]} AND ${spelled}`;
 }
 
 export function buildPageSql(

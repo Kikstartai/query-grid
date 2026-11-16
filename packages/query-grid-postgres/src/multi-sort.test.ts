@@ -133,7 +133,7 @@ describe("a further sort column with no index", () => {
     });
     const sql = buildPageSql(DEF, { ...query, cursor }, 20);
     expect(sql.text).toContain(
-      "WHERE (t.created_at < $1::timestamptz OR (t.created_at = $1::timestamptz AND (t.total > $2::bigint OR (t.total = $2::bigint AND (t.name > $3::text OR (t.name = $3::text AND t.id < $4::uuid))))))",
+      "WHERE t.created_at <= $1::timestamptz AND (t.created_at < $1::timestamptz OR (t.created_at = $1::timestamptz AND (t.total > $2::bigint OR (t.total = $2::bigint AND (t.name > $3::text OR (t.name = $3::text AND t.id < $4::uuid))))))",
     );
     expect(sql.values).toEqual([
       "2026-01-01T00:00:00.000000Z",

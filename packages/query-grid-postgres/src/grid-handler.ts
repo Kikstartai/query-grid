@@ -210,7 +210,7 @@ function toFileName(id: string): string {
   return `${id.replace(/[^a-z0-9_-]/gi, "_")}.csv`;
 }
 
-// The first page is read before the response exists, so a refusal is still a 400 with its code. A failure after that can only end the stream.
+// The first page is read before the response exists, so a refusal is still a 400 with its code and only a later failure has to end the stream.
 async function exportResponse(
   def: PostgresGridDef,
   fields: BaseFieldDef[],

@@ -245,7 +245,7 @@ function HeaderLabel({ field, controls }: HeaderPartProps) {
   return (
     <Button
       className="qg-header-sort"
-      data-no-drag
+      data-no-drag={sortable || addable || undefined}
       data-header-sort={field.key}
       data-sorted={direction ?? undefined}
       data-sort-position={position >= 0 ? position + 1 : undefined}

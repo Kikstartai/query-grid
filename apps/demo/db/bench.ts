@@ -6,8 +6,10 @@ import {
   defaultQuery,
   EMPTY_VALUE,
   getField,
+  listSorts,
   NOT_EMPTY_VALUE,
   resolveMaxValues,
+  withThenBy,
   type GridRow,
   type IndexDef,
   type QueryState,
@@ -42,6 +44,7 @@ const DEEP_OFFSET = 200_000;
 const BUDGET_MS = 150;
 const NARROW_BUDGET_MS = 500;
 const NO_MATCH = "zqxjzqxj";
+const EXPORT_PAGE = 1000;
 const MULTI_SIZES = [2, 5];
 const FILTERED_SEARCH_TERMS = [
   "Smith",
@@ -81,7 +84,8 @@ type ResultKind =
   | "empty"
   | "search"
   | "text"
-  | "narrow";
+  | "narrow"
+  | "export";
 
 interface Result {
   index: string;
@@ -195,6 +199,9 @@ function isPlanAllowed(
   if (kind === "counter" || kind === "empty" || kind === "narrow") {
     return true;
   }
+  if (kind === "export") {
+    return scansByIndex && !types.includes("Seq Scan");
+  }
   if (!scansByIndex || types.includes("Seq Scan")) {
     return false;
   }
@@ -302,17 +309,21 @@ async function pickDeepCursor(
     ? `WHERE ${filters.map((key, index) => `${key} = ANY($${index + 1})`).join(" AND ")}`
     : "";
   const direction = query.sort.direction.toUpperCase();
+  const sorts = listSorts(query).map((sort) => sort.field);
+  const order = [...sorts, "id"]
+    .map((column) => `${column} ${direction}`)
+    .join(", ");
   for (const offset of [DEEP_OFFSET, 20_000, 1000]) {
     const { rows } = await client.query<{ id: string }>(
       `SELECT id FROM orders ${where}
-       ORDER BY ${query.sort.field} ${direction}, id ${direction} OFFSET ${offset} LIMIT 1`,
+       ORDER BY ${order} OFFSET ${offset} LIMIT 1`,
       Object.values(query.equals),
     );
     if (rows[0]) {
       const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
       const row = await client.query<GridRow>(rowSql.text, rowSql.values);
       return encodeCursor({
-        sortValues: [String(row.rows[0][query.sort.field])],
+        sortValues: sorts.map((field) => String(row.rows[0][field])),
         id: rows[0].id,
       });
     }
@@ -326,12 +337,17 @@ async function benchOrdered(
 ): Promise<Result[]> {
   const equals = await pickEqualsValues(client, index);
   const results: Result[] = [];
+  const ordered = (direction: "asc" | "desc"): QueryState =>
+    withThenBy(
+      {
+        ...defaultQuery(ORDERS_GRID_DEF),
+        equals,
+        sort: { field: index.sort, direction },
+      },
+      (index.then ?? []).map((field) => ({ field, direction })),
+    );
   for (const direction of ["desc", "asc"] as const) {
-    const query: QueryState = {
-      ...defaultQuery(ORDERS_GRID_DEF),
-      equals,
-      sort: { field: index.sort, direction },
-    };
+    const query = ordered(direction);
     const cursor = await pickDeepCursor(client, query);
     results.push(
       await measure(
@@ -350,11 +366,7 @@ async function benchOrdered(
       ),
     );
   }
-  const base: QueryState = {
-    ...defaultQuery(ORDERS_GRID_DEF),
-    equals,
-    sort: { field: index.sort, direction: "desc" },
-  };
+  const base = ordered("desc");
   results.push(
     await measure(
       client,
@@ -612,6 +624,67 @@ async function pickBound(client: Client, size: number): Promise<string> {
   return rows[0].bound;
 }
 
+const SECOND_SORT = [{ field: "region", direction: "asc" as const }];
+
+async function pickFarCursor(client: Client, size: number): Promise<string> {
+  const { rows } = await client.query<{ id: string }>(
+    `SELECT id FROM orders ORDER BY created_at DESC, id DESC OFFSET ${size - PAGE - 1} LIMIT 1`,
+  );
+  const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
+  const row = await client.query<GridRow>(rowSql.text, rowSql.values);
+  return encodeCursor({
+    sortValues: [String(row.rows[0].created_at), String(row.rows[0].region)],
+    id: rows[0].id,
+  });
+}
+
+async function benchExport(client: Client, total: number): Promise<Result[]> {
+  const size = Math.min(DEFAULT_LIMITS.exportLimit, total);
+  const query: QueryState = {
+    ...BASE,
+    ranges: [
+      { field: "created_at", min: await pickBound(client, size), max: null },
+    ],
+  };
+  const last = await client.query<{ id: string }>(
+    `SELECT id FROM orders ORDER BY created_at DESC, id DESC OFFSET ${size - EXPORT_PAGE - 1} LIMIT 1`,
+  );
+  const rowSql = buildRowSql(ORDERS_GRID_DEF, last.rows[0].id);
+  const row = await client.query<GridRow>(rowSql.text, rowSql.values);
+  const cursor = encodeCursor({
+    sortValues: [String(row.rows[0].created_at)],
+    id: last.rows[0].id,
+  });
+  const cases: [string, SqlQuery][] = [
+    [
+      "the count that refuses an export over the limit",
+      buildCappedCountSql(ORDERS_GRID_DEF, query, DEFAULT_LIMITS.exportLimit),
+    ],
+    [
+      "first page of 1,000 rows",
+      buildPageSql(ORDERS_GRID_DEF, query, EXPORT_PAGE),
+    ],
+    [
+      "last page of 1,000 rows, by keyset",
+      buildPageSql(ORDERS_GRID_DEF, { ...query, cursor }, EXPORT_PAGE),
+    ],
+  ];
+  const results: Result[] = [];
+  for (const [variant, sql] of cases) {
+    results.push(
+      await measure(
+        client,
+        `export of ${size.toLocaleString("en-US")} rows`,
+        variant,
+        sql,
+        null,
+        "export",
+      ),
+    );
+  }
+  return results;
+}
+
 async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
   const size = Math.min(DEFAULT_LIMITS.narrowLimit, total);
   const counters = await client.query<{ rows: string }>(
@@ -680,6 +753,21 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
       "group by region: live GROUP BY with both sums",
       buildGroupSql(ORDERS_GRID_DEF, { ...core, group: "region" }),
     ],
+    [
+      "a second sort column the other way: first page",
+      buildPageSql(ORDERS_GRID_DEF, withThenBy(core, SECOND_SORT), PAGE),
+    ],
+    [
+      "a second sort column the other way: keyset page from the far end",
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        {
+          ...withThenBy(core, SECOND_SORT),
+          cursor: await pickFarCursor(client, size),
+        },
+        PAGE,
+      ),
+    ],
   ];
   const results: Result[] = [];
   for (const [variant, sql] of cases) {
@@ -726,6 +814,7 @@ function toMarkdown(results: Result[], total: number): string {
   const searched = results.filter((result) => result.kind === "search");
   const narrowed = results.filter((result) => result.kind === "narrow");
   const texts = results.filter((result) => result.kind === "text");
+  const exported = results.filter((result) => result.kind === "export");
   const optedOut = ORDERS_GRID_DEF.indexes
     .filter((index) => index.multi === false)
     .map(describeIndex);
@@ -775,6 +864,12 @@ function toMarkdown(results: Result[], total: number): string {
     `Each expensive operation, and a live GROUP BY, over the ${DEFAULT_LIMITS.narrowLimit.toLocaleString("en-US")} rows \`narrowLimit\` allows: the newest orders, bounded on \`created_at\`. Each is the worst case, where nothing matches and the whole set is read. The bar is a p95 under ${NARROW_BUDGET_MS} ms.`,
     "",
     ...toTable(narrowed),
+    "",
+    `## Export: ${summarize(exported)}`,
+    "",
+    `An export of ${DEFAULT_LIMITS.exportLimit.toLocaleString("en-US")} rows, the most \`exportLimit\` allows: the count that refuses a larger one, then its first and its last keyset page of ${EXPORT_PAGE.toLocaleString("en-US")} rows. The bar is the p95 budget for each statement, read through an index.`,
+    "",
+    ...toTable(exported),
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -790,7 +885,10 @@ async function main(): Promise<void> {
   const total = Number(count.rows[0].count);
   const results: Result[] = [];
   const indexes = QUICK
-    ? ORDERS_GRID_DEF.indexes.slice(0, 3)
+    ? [
+        ...ORDERS_GRID_DEF.indexes.slice(0, 3),
+        ...ORDERS_GRID_DEF.indexes.filter((index) => index.then?.length),
+      ]
     : ORDERS_GRID_DEF.indexes;
   for (const index of indexes) {
     const batch = await benchOrdered(client, index);
@@ -811,6 +909,9 @@ async function main(): Promise<void> {
   const narrowed = await benchNarrowed(client, total);
   results.push(...narrowed);
   console.log(`narrowed set: ${narrowed.length} queries`);
+  const exported = await benchExport(client, total);
+  results.push(...exported);
+  console.log(`export: ${exported.length} queries`);
   const search = await benchSearch(client, ORDERS_GRID_DEF.search);
   results.push(...search);
   console.log(

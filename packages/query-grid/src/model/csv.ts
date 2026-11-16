@@ -13,7 +13,7 @@ export const CSV_TYPE = "text/csv; charset=utf-8";
 const CSV_EOL = "\r\n";
 const LIST_SEPARATOR = ", ";
 const MONEY_DIGITS = 2;
-const FORMULA_START = /^[=+\-@\t\r]/;
+const FORMULA_START = /^(\s*[=+\-@]|[\t\r])/;
 const NEEDS_QUOTES = /[",\r\n]|^\s|\s$/;
 
 export interface ExportRequest {
@@ -42,7 +42,7 @@ export function formatExportValue(
   return field.options ? formatOption(field, String(value)) : String(value);
 }
 
-// A spreadsheet runs a cell that starts like a formula, so text that does is led by an apostrophe. A number the encoder wrote itself is left alone: -5 has to stay a number.
+// A spreadsheet runs a cell that starts like a formula, so text that does is led by an apostrophe, while a number the encoder wrote itself is left alone so that -5 stays a number.
 export function encodeCsvCell(text: string, numeric = false): string {
   const safe = !numeric && FORMULA_START.test(text) ? `'${text}` : text;
   return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;

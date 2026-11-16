@@ -117,11 +117,14 @@ const byRowRange = {
   },
 };
 
+const CELL_CONTROL = "a[href], button";
+
+// A press on a link or a button inside a cell is that control's: starting a range there would take the pointer and the click with it.
 function cellOf(target: EventTarget | null, row: number): GridCell | null {
-  const el =
-    target instanceof Element
-      ? target.closest<HTMLElement>("[data-col]")
-      : null;
+  if (!(target instanceof Element) || target.closest(CELL_CONTROL)) {
+    return null;
+  }
+  const el = target.closest<HTMLElement>("[data-col]");
   return el ? { row, col: Number(el.dataset.col) } : null;
 }
 
