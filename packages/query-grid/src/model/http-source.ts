@@ -6,7 +6,7 @@ import type {
   QueryState,
 } from "./field-types.ts";
 import { SourceError, type Problem } from "./problems.ts";
-import { withQueryResolution, type SourceOptions } from "./query-resolve.ts";
+import { withLiteralFilters } from "./literal-filters.ts";
 import { encodeQuery } from "./query-url.ts";
 import { gridDefRunnable, type IndexedGridDef } from "./indexes.ts";
 import type { GridLimits } from "./limits.ts";
@@ -62,70 +62,61 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
 export function createHttpSource(
   def: IndexedGridDef,
   basePath: string,
-  options: SourceOptions = {},
 ): DataSource {
   const runnable = gridDefRunnable(def);
   const filterParams = (query: QueryState) =>
     encodeQuery(def, { ...query, cursor: null });
   const route = (name: SubRoute) => `${basePath}/${name}`;
-  return withQueryResolution(
-    def,
-    {
-      runnable,
-      fetchPage: (query, limit, signal) => {
-        const params = encodeQuery(def, query);
-        params.set(LIMIT_PARAM, String(limit));
-        return readJson<PageResult>(`${basePath}?${params}`, { signal });
-      },
-      fetchCount: (query, exact, signal) => {
-        const params = filterParams(query);
-        if (exact) {
-          params.set(EXACT_PARAM, "1");
-        }
-        return readJson<CountResult>(`${route("count")}?${params}`, { signal });
-      },
-      fetchTotals: (query, signal) =>
-        readJson<TotalResult[]>(`${route("total")}?${filterParams(query)}`, {
-          signal,
-        }),
-      fetchFacets: (_query, signal) =>
-        readJson<FacetCount[]>(route("facets"), { signal }),
-      fetchOptions: (field, search, signal) => {
-        const params = new URLSearchParams({ field });
-        if (search.query) {
-          params.set("query", search.query);
-        }
-        if (search.value) {
-          params.set("value", search.value);
-        }
-        return readJson<FieldOption[]>(`${route("options")}?${params}`, {
-          signal,
-        });
-      },
-      fetchGroups: (query, signal) =>
-        readJson<GroupsResult>(`${route("groups")}?${filterParams(query)}`, {
-          signal,
-        }),
-      fetchNarrowed: (query, signal) =>
-        readJson<NarrowedResult>(
-          `${route("narrowed")}?${filterParams(query)}`,
-          {
-            signal,
-          },
-        ),
-      fetchLimits: (signal) =>
-        readJson<GridLimits>(route("limits"), { signal }),
-      fetchTransitions: (signal) =>
-        readJson<[string, string][]>(route("transitions"), { signal }),
-      changeFacetValue: (id, to) => {
-        const body: MoveBody = { id, to };
-        return readJson<GridRow>(route("status"), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        });
-      },
+  return withLiteralFilters(def, {
+    runnable,
+    fetchPage: (query, limit, signal) => {
+      const params = encodeQuery(def, query);
+      params.set(LIMIT_PARAM, String(limit));
+      return readJson<PageResult>(`${basePath}?${params}`, { signal });
     },
-    options,
-  );
+    fetchCount: (query, exact, signal) => {
+      const params = filterParams(query);
+      if (exact) {
+        params.set(EXACT_PARAM, "1");
+      }
+      return readJson<CountResult>(`${route("count")}?${params}`, { signal });
+    },
+    fetchTotals: (query, signal) =>
+      readJson<TotalResult[]>(`${route("total")}?${filterParams(query)}`, {
+        signal,
+      }),
+    fetchFacets: (_query, signal) =>
+      readJson<FacetCount[]>(route("facets"), { signal }),
+    fetchOptions: (field, search, signal) => {
+      const params = new URLSearchParams({ field });
+      if (search.query) {
+        params.set("query", search.query);
+      }
+      if (search.value) {
+        params.set("value", search.value);
+      }
+      return readJson<FieldOption[]>(`${route("options")}?${params}`, {
+        signal,
+      });
+    },
+    fetchGroups: (query, signal) =>
+      readJson<GroupsResult>(`${route("groups")}?${filterParams(query)}`, {
+        signal,
+      }),
+    fetchNarrowed: (query, signal) =>
+      readJson<NarrowedResult>(`${route("narrowed")}?${filterParams(query)}`, {
+        signal,
+      }),
+    fetchLimits: (signal) => readJson<GridLimits>(route("limits"), { signal }),
+    fetchTransitions: (signal) =>
+      readJson<[string, string][]>(route("transitions"), { signal }),
+    changeFacetValue: (id, to) => {
+      const body: MoveBody = { id, to };
+      return readJson<GridRow>(route("status"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    },
+  });
 }

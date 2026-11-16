@@ -124,12 +124,7 @@ export {
   type ReasonCode,
   type UnavailableReason,
 } from "./model/query-actions.ts";
-export {
-  resolveQuery,
-  withQueryResolution,
-  type Clock,
-  type SourceOptions,
-} from "./model/query-resolve.ts";
+export { toLiteralQuery, withLiteralFilters } from "./model/literal-filters.ts";
 export {
   createQueryStore,
   GRID_VIEWS,

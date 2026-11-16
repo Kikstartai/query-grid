@@ -372,7 +372,7 @@ Three additions to the filters that cost nothing extra: each is answered by the 
 - **Exclude.** A field with a fixed list of values (an `options` field with no `lookup`) has a `≠` toggle beside its select. With it on, the chosen values are the ones left out, and the chip reads `Status ≠ Cancelled`. The URL keeps the intent, `?f.status_code=!cancelled`; when the query runs it becomes the remaining values, so the server sees an ordinary `= ANY` and an option added to the def later is included. It is not offered when nothing would remain, when the remaining list would pass the field's `maxValues`, or when the index takes one value only.
 - **Date presets.** A date range is a period select: Today, Yesterday, Last 7 days, Last 30 days, This month, Last month, This year and Custom…, which shows the date picker. The URL stores the name, `?r.created_at=last-7-days`, and the bounds are resolved when the query runs, to whole days in the viewer's time zone with both ends included. The labels are `messages.datePresets`.
 
-Exclusion and presets are intent the browser resolves. `resolveQuery(def, query, now)` turns both into plain values and bounds, `withQueryResolution` does it around a data source at fetch time, and both built-in sources are wrapped. The server never sees either form and refuses both.
+Exclusion and presets are intent the browser resolves. `toLiteralQuery(def, query, now)` turns both into literal values and bounds, `withLiteralFilters` does it around a data source at fetch time, and both built-in sources are wrapped. The server never sees either form and refuses both.
 
 ## Limits
 

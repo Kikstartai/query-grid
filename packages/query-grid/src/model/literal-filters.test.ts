@@ -1,4 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
 import { DATE_PRESETS, resolveDatePreset } from "./date-presets.ts";
@@ -19,7 +26,7 @@ import { TEST_DEF, TEST_INDEXES } from "./grid-def.fixture.ts";
 import { indexRunnable } from "./indexes.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { applyAction, defaultQuery, listOffers } from "./query-actions.ts";
-import { resolveQuery, withQueryResolution } from "./query-resolve.ts";
+import { toLiteralQuery, withLiteralFilters } from "./literal-filters.ts";
 import { createQueryStore } from "./query-store.ts";
 import { decodeQuery, encodeQuery } from "./query-url.ts";
 import { validateQueryValues } from "./query-validate.ts";
@@ -48,7 +55,7 @@ const WIDE: BaseGridDef = {
 };
 
 function indexed(def: BaseGridDef, multi: boolean) {
-  return withQueryResolution(def, {
+  return withLiteralFilters(def, {
     ...createMemorySource(def, []),
     runnable: indexRunnable(
       TEST_INDEXES.map((index) => ({ ...index, multi })),
@@ -92,16 +99,16 @@ describe("exclude", () => {
 
   test("the query keeps the intent, and the resolved query holds plain values", () => {
     const query: QueryState = { ...BASE, equals: { status: ["!open"] } };
-    expect(resolveQuery(TEST_DEF, query, null).equals).toEqual({
+    expect(toLiteralQuery(TEST_DEF, query, null).equals).toEqual({
       status: ["done"],
     });
-    expect(resolveQuery(TEST_DEF, BASE, null)).toBe(BASE);
+    expect(toLiteralQuery(TEST_DEF, BASE, null)).toBe(BASE);
     expect(validateQueryValues(TEST_DEF, query)).toEqual({
       code: "invalid_value",
       params: { field: "status" },
     });
     expect(
-      validateQueryValues(TEST_DEF, resolveQuery(TEST_DEF, query, null)),
+      validateQueryValues(TEST_DEF, toLiteralQuery(TEST_DEF, query, null)),
     ).toBeNull();
   });
 
@@ -125,7 +132,7 @@ describe("exclude", () => {
           : field,
       ),
     };
-    expect(resolveQuery(grown, decoded, null).equals).toEqual({
+    expect(toLiteralQuery(grown, decoded, null).equals).toEqual({
       status: ["done", "held"],
     });
   });
@@ -192,6 +199,14 @@ describe("exclude", () => {
 });
 
 describe("date presets", () => {
+  beforeEach(() => {
+    setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
   const local = (iso: string) => new Date(iso);
   const endOf = (afterLast: Date) => afterLast.getTime() - 1;
 
@@ -234,14 +249,14 @@ describe("date presets", () => {
       const params = encodeQuery(TEST_DEF, query);
       expect(params.get("r.created_at")).toBe(preset);
       expect(decodeQuery(TEST_DEF, params).ranges).toEqual(query.ranges);
-      const [range] = resolveQuery(TEST_DEF, query, NOW).ranges;
+      const [range] = toLiteralQuery(TEST_DEF, query, NOW).ranges;
       expect(range).toEqual({
         field: "created_at",
         ...resolveDatePreset(preset, NOW),
       });
       expect(validateQueryValues(TEST_DEF, query)).not.toBeNull();
       expect(
-        validateQueryValues(TEST_DEF, resolveQuery(TEST_DEF, query, NOW)),
+        validateQueryValues(TEST_DEF, toLiteralQuery(TEST_DEF, query, NOW)),
       ).toBeNull();
     }
   });
@@ -251,12 +266,16 @@ describe("date presets", () => {
       ...BASE,
       ranges: [{ field: "total", min: null, max: null, preset: "today" }],
     };
-    expect(resolveQuery(TEST_DEF, onTotal, NOW).ranges[0].preset).toBe("today");
+    expect(toLiteralQuery(TEST_DEF, onTotal, NOW).ranges[0].preset).toBe(
+      "today",
+    );
     const unknown: QueryState = {
       ...BASE,
       ranges: [{ field: "created_at", min: null, max: null, preset: "soon" }],
     };
-    expect(resolveQuery(TEST_DEF, unknown, NOW).ranges[0].preset).toBe("soon");
+    expect(toLiteralQuery(TEST_DEF, unknown, NOW).ranges[0].preset).toBe(
+      "soon",
+    );
     expect(
       decodeQuery(TEST_DEF, new URLSearchParams("r.total=5")).ranges,
     ).toEqual([{ field: "total", min: "5", max: null }]);
@@ -267,7 +286,7 @@ describe("date presets", () => {
       { id: "old", created_at: new Date(2026, 10, 1, 9).toISOString() },
       { id: "new", created_at: new Date(2026, 10, 12, 9).toISOString() },
     ];
-    const source = createMemorySource(TEST_DEF, rows, { now: () => NOW });
+    const source = createMemorySource(TEST_DEF, rows);
     const context = {
       runnable: source.runnable,
       allSearchMatchesLoaded: false,
@@ -309,17 +328,13 @@ describe("date presets", () => {
   test("the resolved parts keep their identity from one fetch to the next", async () => {
     const seen: QueryState[] = [];
     const inner = createMemorySource(TEST_DEF, []);
-    const source = withQueryResolution(
-      TEST_DEF,
-      {
-        ...inner,
-        fetchPage: async (query) => {
-          seen.push(query);
-          return { rows: [], nextCursor: null, hasNext: false };
-        },
+    const source = withLiteralFilters(TEST_DEF, {
+      ...inner,
+      fetchPage: async (query) => {
+        seen.push(query);
+        return { rows: [], nextCursor: null, hasNext: false };
       },
-      { now: () => NOW },
-    );
+    });
     const query: QueryState = {
       ...BASE,
       equals: { status: ["!open"] },

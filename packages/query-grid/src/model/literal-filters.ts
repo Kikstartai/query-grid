@@ -8,12 +8,6 @@ import {
 } from "./field-types.ts";
 import { expandEquals, isExcluding } from "./field-values.ts";
 
-export type Clock = () => Date;
-
-export interface SourceOptions {
-  now?: Clock;
-}
-
 function resolveEquals(
   def: BaseGridDef,
   equals: QueryState["equals"],
@@ -63,7 +57,7 @@ function resolveRanges(
   return ranges.map((range) => resolveRange(def, range, now));
 }
 
-export function resolveQuery(
+export function toLiteralQuery(
   def: BaseGridDef,
   query: QueryState,
   now: Date | null,
@@ -83,13 +77,10 @@ interface Resolved {
   query: QueryState;
 }
 
-function createResolver(
-  def: BaseGridDef,
-  now: Clock,
-): (query: QueryState) => QueryState {
+function createResolver(def: BaseGridDef): (query: QueryState) => QueryState {
   let last: Resolved | null = null;
   return (query) => {
-    const at = now();
+    const at = new Date();
     const day = at.toDateString();
     const fresh =
       last !== null &&
@@ -101,7 +92,7 @@ function createResolver(
         equals: query.equals,
         ranges: query.ranges,
         day,
-        query: resolveQuery(def, query, at),
+        query: toLiteralQuery(def, query, at),
       };
     }
     const { equals, ranges } = (last as Resolved).query;
@@ -111,13 +102,12 @@ function createResolver(
   };
 }
 
-export function withQueryResolution(
+export function withLiteralFilters(
   def: BaseGridDef,
   source: DataSource,
-  options: SourceOptions = {},
 ): DataSource {
-  const resolve = createResolver(def, options.now ?? (() => new Date()));
-  const shape = (query: QueryState) => resolveQuery(def, query, null);
+  const resolve = createResolver(def);
+  const shape = (query: QueryState) => toLiteralQuery(def, query, null);
   // A preset has no bounds until it is resolved, so its name stands in for them where two queries are compared.
   const mark = (query: QueryState): QueryState => ({
     ...shape(query),

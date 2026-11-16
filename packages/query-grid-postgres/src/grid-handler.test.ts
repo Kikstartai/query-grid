@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 
 import {
   DEFAULT_LIMITS,
@@ -631,10 +631,9 @@ describe("intent the browser resolves", () => {
     const original = globalThis.fetch;
     globalThis.fetch = (async (input: string | URL) =>
       handle(String(input).slice(BASE_PATH.length))) as typeof fetch;
+    setSystemTime(new Date(2026, 10, 15, 12));
     try {
-      const source = createHttpSource(TEST_DEF, BASE_PATH, {
-        now: () => new Date(2026, 10, 15, 12),
-      });
+      const source = createHttpSource(TEST_DEF, BASE_PATH);
       const signal = new AbortController().signal;
       const query: QueryState = {
         equals: { status: ["!open"] },
@@ -668,6 +667,7 @@ describe("intent the browser resolves", () => {
       ]);
     } finally {
       globalThis.fetch = original;
+      setSystemTime();
     }
   });
 });

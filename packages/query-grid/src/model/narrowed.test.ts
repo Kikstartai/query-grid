@@ -28,7 +28,7 @@ import {
   explainUnavailable,
   listOffers,
 } from "./query-actions.ts";
-import { withQueryResolution } from "./query-resolve.ts";
+import { withLiteralFilters } from "./literal-filters.ts";
 import { createQueryStore } from "./query-store.ts";
 import { decodeQuery, encodeQuery, listQueryKeys } from "./query-url.ts";
 import { validateQueryValues } from "./query-validate.ts";
@@ -315,7 +315,7 @@ describe("offers under the narrowed-set limit", () => {
 });
 
 describe("the basis a size is known for", () => {
-  const wrapped = withQueryResolution(DEF, createTestSource(RUNNABLE)).runnable;
+  const wrapped = withLiteralFilters(DEF, createTestSource(RUNNABLE)).runnable;
 
   test("an expensive part leaves the basis as it was, so a known size answers it", () => {
     const basis = wrapped.narrowBasis(OPEN);

@@ -10,7 +10,7 @@ import {
   defaultQuery,
   type QueryAction,
 } from "./query-actions.ts";
-import { resolveQuery } from "./query-resolve.ts";
+import { toLiteralQuery } from "./literal-filters.ts";
 import { validateQueryValues } from "./query-validate.ts";
 import { createStore } from "./store.ts";
 
@@ -41,7 +41,7 @@ export function normalizeQuery(
 ): QueryState {
   const usable =
     runnable.canRun(query) &&
-    validateQueryValues(def, resolveQuery(def, query, null)) === null;
+    validateQueryValues(def, toLiteralQuery(def, query, null)) === null;
   return usable ? query : defaultQuery(def);
 }
 

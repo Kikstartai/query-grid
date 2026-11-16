@@ -52,7 +52,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 - The library has no domain names. A host passes its defs in; nothing in `packages/` imports one.
 - What may be filtered comes from the data alone: the indexes on a server grid, every field on a client grid. A field def carries no operators. Which filters show is a layout prop (`fields` on the bound `FilterBar` and `FilterSidebar`), never part of a def.
 - An operation no index answers at any size (an OR across fields, a range the index does not bound, a contains, a group by an uncounted field) runs only over a narrowed set: the rows the indexed filters leave, at most `narrowLimit`. `planQuery` in core makes the split, the server counts and refuses before it runs one, and the control is held with the size as its reason, never hidden.
-- Intent the browser alone understands (an excluded value, a date preset) stays in the query and the URL and is resolved at the data source by `withQueryResolution`. The server never accepts it.
+- Intent the browser alone understands (an excluded value, a date preset) stays in the query and the URL and is turned into literal filters at the data source by `withLiteralFilters`. The server never accepts it.
 - Limits are `GridLimits`, set on the server and read by the browser from its responses. No package hard-codes a cap the handler can override.
 - One def per grid; each package reads its slice. The types are layers with unique names: core `BaseGridDef` and `BaseFieldDef`, react `GridDef` and `FieldDef` (plus `cell`), postgres `PostgresGridDef` (plus `table`, `indexes`, `facet.counterTable`). A grid def constant ends in `_GRID_DEF`.
 - There is one query contract, in core. The other two packages import it and never copy it.
