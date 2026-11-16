@@ -11,10 +11,17 @@
         "source": "github",
         "repo": "vercel/next.js"
       }
+    },
+    "kikstart": {
+      "source": {
+        "source": "github",
+        "repo": "Kikstartai/skills"
+      }
     }
   },
   "enabledPlugins": {
     "neon-postgres@neon": true,
-    "nextjs@nextjs": true
+    "nextjs@nextjs": true,
+    "kikstart@kikstart": true
   }
 }
