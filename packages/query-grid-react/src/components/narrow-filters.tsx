@@ -15,9 +15,7 @@ import {
 import { useState, type FormEvent } from "react";
 
 import {
-  INDEXED_TEXT_OPS,
   TEXT_FILTER_MAX,
-  TEXT_INDEX_MIN_LENGTH,
   TEXT_MAX_LENGTH,
   TEXT_OPS,
   type MatchMode,
@@ -38,7 +36,8 @@ export interface TextFilterValue {
 }
 
 export interface TextFieldOption extends ControlOption {
-  indexOnly?: boolean;
+  ops?: TextOp[];
+  minLength?: number;
 }
 
 export interface TextFilterProps extends ControlState {
@@ -61,21 +60,24 @@ function TextHint({ min, shown }: TextHintProps) {
   }
   return (
     <span className="qg-search-hint" role="status" data-text-hint>
-      {messages.textHint({ min })}
+      <bdi>{messages.textHint({ min })}</bdi>
     </span>
   );
 }
 
-// A field answered only by its own text index takes what that index answers: three characters or more, and no negation.
-function isTextAnswered(
+function takesOp(option: TextFieldOption | undefined, op: TextOp): boolean {
+  return option?.ops === undefined || option.ops.includes(op);
+}
+
+function isLongEnough(
   option: TextFieldOption | undefined,
-  op: TextOp,
   value: string,
 ): boolean {
-  if (!option?.indexOnly) {
-    return true;
-  }
-  return INDEXED_TEXT_OPS.includes(op) && value.length >= TEXT_INDEX_MIN_LENGTH;
+  return value.length >= (option?.minLength ?? 1);
+}
+
+function resolveOp(option: TextFieldOption | undefined, op: TextOp): TextOp {
+  return takesOp(option, op) ? op : (option?.ops?.[0] ?? op);
 }
 
 interface TextRowProps extends ControlState {
@@ -104,15 +106,15 @@ function TextRow({
   const ops = TEXT_OPS.map((item) => ({
     value: item as string,
     label: messages.textOps[item],
-    disabled: option?.indexOnly === true && !INDEXED_TEXT_OPS.includes(item),
+    disabled: !takesOp(option, item),
     reason: option?.reason,
   }));
-  const short =
-    draft.trim().length > 0 && !isTextAnswered(option, op, draft.trim());
+  const short = draft.trim().length > 0 && !isLongEnough(option, draft.trim());
   const apply = (field: string, next: TextOp, text: string) => {
     const value = text.trim().slice(0, maxLength);
     const target = options.find((item) => item.value === field);
-    if (field && value && isTextAnswered(target, next, value)) {
+    const answered = takesOp(target, next) && isLongEnough(target, value);
+    if (field && value && answered) {
       onFilterChange(at, { field, op: next, value });
       return;
     }
@@ -132,8 +134,13 @@ function TextRow({
         disabled={disabled}
         onValueChange={(next: string | null) => {
           if (next) {
+            const taken = resolveOp(
+              options.find((item) => item.value === next),
+              op,
+            );
             setChosen(next);
-            apply(next, op, draft);
+            setOp(taken);
+            apply(next, taken, draft);
           }
         }}
       >
@@ -204,7 +211,7 @@ function TextRow({
             <XIcon size={12} />
           </InputClear>
         </InputGroup>
-        <TextHint min={TEXT_INDEX_MIN_LENGTH} shown={short} />
+        <TextHint min={option?.minLength ?? 1} shown={short} />
       </form>
     </div>
   );

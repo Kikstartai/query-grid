@@ -203,7 +203,9 @@ export function validateGridDef(def: PostgresGridDef): string[] {
   }
   const base = def.indexes.some(
     (index) =>
-      index.equals.length === 0 && index.sort === def.defaultSort.field,
+      index.equals.length === 0 &&
+      !index.empty?.length &&
+      index.sort === def.defaultSort.field,
   );
   if (!base) {
     problems.push("the default sort with no filter is not a declared index");

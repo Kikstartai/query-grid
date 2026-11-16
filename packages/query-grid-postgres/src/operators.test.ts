@@ -429,6 +429,18 @@ describe("the def rules of the new indexes", () => {
     expect(validateGridDef(DEF)).toEqual([]);
   });
 
+  test("a partial index is not the index of the unfiltered grid", () => {
+    expect(
+      validateGridDef({
+        ...DEF,
+        indexes: [
+          { equals: [], sort: "created_at", empty: ["deleted_at"] },
+          ...DEF.indexes.slice(1),
+        ],
+      }),
+    ).toEqual(["the default sort with no filter is not a declared index"]);
+  });
+
   test("an array is neither an equality nor a sort, and its index needs an array", () => {
     expect(
       validateGridDef({

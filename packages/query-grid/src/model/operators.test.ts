@@ -160,6 +160,8 @@ describe("the values of the new field types", () => {
     expect(due("2026-02-28")).toBeNull();
     expect(due("2026-02-28T00:00:00Z")?.code).toBe("invalid_value");
     expect(due("2026-13-01")?.code).toBe("invalid_value");
+    expect(due("2026-02-31")?.code).toBe("invalid_value");
+    expect(due("2028-02-29")).toBeNull();
     const rate = (min: string) =>
       valid({ ranges: [{ field: "rate", min, max: null }] });
     expect(rate("-12.375")).toBeNull();
@@ -308,7 +310,15 @@ describe("the plan of the new filters", () => {
       plan({ equals: { ...live, deleted_at: ["_not_empty"] } }),
     ).toBeNull();
     expect(plan({ equals: { deleted_at: ["_empty"] } })).toBeNull();
-    expect(CAPABILITIES.equalsFields).toContain("deleted_at");
+    expect(CAPABILITIES.equalsFields).not.toContain("deleted_at");
+    expect(CAPABILITIES.groupFields).not.toContain("deleted_at");
+    expect(CAPABILITIES.rangeFields).toContain("deleted_at");
+    expect(
+      isQueryRunnable(
+        { ...DEF, search: ["name"] },
+        { ...BASE, equals: live, search: "invoice" },
+      ),
+    ).toBe(true);
     expect(indexId(DEF.indexes[3])).toBe(
       "folder_id|created_at|empty:deleted_at",
     );

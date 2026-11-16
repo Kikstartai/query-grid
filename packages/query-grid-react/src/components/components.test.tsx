@@ -6,6 +6,7 @@ import {
   EMPTY_VALUE,
   NOT_EMPTY_VALUE,
   type GridValue,
+  type TextOp,
 } from "@kikstart/query-grid";
 
 import { CardList } from "./card-list.tsx";
@@ -518,7 +519,8 @@ describe("each base component mounts alone, with plain props and no provider", (
       {
         value: "name",
         label: "Name",
-        indexOnly: true,
+        ops: ["contains", "starts_with", "ends_with"] as TextOp[],
+        minLength: 3,
         reason: "Narrow by Status first: 620,000+ rows.",
       },
       { value: "note", label: "Note", disabled: true },
@@ -531,7 +533,7 @@ describe("each base component mounts alone, with plain props and no provider", (
       />,
     );
     expect(short).toContain("data-text-hint");
-    expect(short).toContain("3 characters or more");
+    expect(short).toContain("<bdi>3 characters or more</bdi>");
     const long = render(
       <TextFilter
         options={options}

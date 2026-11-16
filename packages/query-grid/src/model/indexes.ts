@@ -62,6 +62,11 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 }
 
 function listEqualsFields(indexes: IndexDef[]): string[] {
+  return [...new Set(indexes.flatMap((index) => index.equals))];
+}
+
+// A partial index's empty fields can be filtered to empty and nothing else, so they are answerable without being fields a control or the URL offers.
+function listAnswerableFields(indexes: IndexDef[]): string[] {
   return [
     ...new Set(
       indexes.flatMap((index) => [...index.equals, ...(index.empty ?? [])]),
@@ -222,7 +227,7 @@ export function isQueryIndexed(
   if (query.search === null) {
     return getIndex(indexes, query, extras) !== null;
   }
-  const equalsFields = listEqualsFields(indexes);
+  const equalsFields = listAnswerableFields(indexes);
   return (
     searchFields.length > 0 &&
     !isMatchAny(query) &&

@@ -6,7 +6,6 @@ import {
   createGrouping,
   encodeQuery,
   formatSum,
-  formatValue,
   getField,
   getReservedValue,
   listTotalFields,
@@ -29,6 +28,7 @@ import {
   formatReservedValue,
   formatRows,
   useLocale,
+  formatCell,
   useMessages,
   type QueryGridMessages,
 } from "../components/messages.tsx";
@@ -132,7 +132,9 @@ function formatGroupLabel(
   if (header.label !== null) {
     return header.label;
   }
-  return field ? formatValue(field, header.value, locale) : header.value;
+  return field
+    ? formatCell(messages, field, header.value, locale)
+    : header.value;
 }
 
 function formatGroupSums(

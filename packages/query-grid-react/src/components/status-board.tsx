@@ -10,7 +10,6 @@ import { useEffect, useState } from "react";
 
 import {
   formatCount,
-  formatValue,
   type BaseFieldDef,
   type GridRow,
 } from "@kikstart/query-grid";
@@ -22,7 +21,7 @@ import {
   type BoardMove,
   type BoardSource,
 } from "./board-primitive.ts";
-import { useLocale, useMessages } from "./messages.tsx";
+import { formatCell, useLocale, useMessages } from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -64,6 +63,7 @@ interface BoardCardBodyProps {
 }
 
 function BoardCardBody({ row, title, details }: BoardCardBodyProps) {
+  const messages = useMessages();
   const locale = useLocale();
   if (!row) {
     return null;
@@ -72,12 +72,15 @@ function BoardCardBody({ row, title, details }: BoardCardBodyProps) {
     <>
       <div className="qg-board-card-title">
         <bdi>
-          {title.label} {formatValue(title, row[title.key] ?? null, locale)}
+          {title.label}{" "}
+          {formatCell(messages, title, row[title.key] ?? null, locale)}
         </bdi>
       </div>
       {details.map((field) => (
         <div key={field.key} className="qg-board-card-detail">
-          <bdi>{formatValue(field, row[field.key] ?? null, locale)}</bdi>
+          <bdi>
+            {formatCell(messages, field, row[field.key] ?? null, locale)}
+          </bdi>
         </div>
       ))}
     </>

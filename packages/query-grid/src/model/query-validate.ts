@@ -28,6 +28,12 @@ function isValidText(value: string): boolean {
   return value.length > 0 && value.length <= TEXT_VALUE_MAX;
 }
 
+// Date.parse rolls 02-31 over into March, which Postgres refuses, so a day counts only when it reads back as itself.
+function isCalendarDay(value: string): boolean {
+  const time = Date.parse(value);
+  return !Number.isNaN(time) && new Date(time).toISOString().startsWith(value);
+}
+
 function isValidValue(field: BaseFieldDef, value: string): boolean {
   switch (field.type) {
     case "id":
@@ -42,7 +48,7 @@ function isValidValue(field: BaseFieldDef, value: string): boolean {
     case "boolean":
       return value === "true" || value === "false";
     case "date":
-      return DAY.test(value) && !Number.isNaN(Date.parse(value));
+      return DAY.test(value) && isCalendarDay(value);
     case "datetime":
       return value.length <= 40 && !Number.isNaN(Date.parse(value));
     case "text":

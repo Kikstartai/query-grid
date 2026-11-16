@@ -6,6 +6,7 @@ import {
   explainNarrowText,
   explainUnavailable,
   getField,
+  INDEXED_TEXT_OPS,
   getFieldLabel,
   getRange,
   getReservedValue,
@@ -17,6 +18,7 @@ import {
   listFilterFields,
   SEARCH_MAX_LENGTH,
   SEARCH_MIN_LENGTH,
+  TEXT_INDEX_MIN_LENGTH,
   resolveFilterKind,
   type BaseFieldDef,
   type FieldOption,
@@ -360,13 +362,16 @@ export function TextFilter({ fields }: TextFilterProps) {
   return (
     <BaseTextFilter
       options={keys.map((key) => {
-        const free = offers.narrowTexts.includes(key);
+        if (offers.narrowTexts.includes(key)) {
+          return { value: key, label: getFieldLabel(def, key) };
+        }
         return {
           value: key,
           label: getFieldLabel(def, key),
           disabled: !offered.includes(key),
-          indexOnly: offered.includes(key) && !free,
-          reason: free ? null : explain(key),
+          ops: INDEXED_TEXT_OPS,
+          minLength: TEXT_INDEX_MIN_LENGTH,
+          reason: explain(key),
         };
       })}
       filters={query.texts}
