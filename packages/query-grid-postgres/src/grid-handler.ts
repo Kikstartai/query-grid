@@ -22,9 +22,11 @@ import {
   COLUMNS_SEPARATOR,
   EXACT_PARAM,
   LIMIT_PARAM,
+  POST_ROUTES,
   SUB_ROUTES,
   type ErrorBody,
   type MoveBody,
+  type ReorderBody,
   type SubRoute,
 } from "@kikstart/query-grid/http";
 
@@ -59,6 +61,10 @@ export interface GridMoves {
   change: (id: string, to: string) => Promise<GridRow>;
 }
 
+export interface GridReorder {
+  move: (move: ReorderBody) => Promise<GridRow[]>;
+}
+
 export interface GridHandlerConfig {
   def: PostgresGridDef;
   execute: SqlExecutor;
@@ -70,6 +76,7 @@ export interface GridHandlerConfig {
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
   moves?: GridMoves;
+  reorder?: GridReorder;
   onError?: (error: unknown) => void;
 }
 
@@ -152,6 +159,34 @@ async function readMove(
     });
   }
   return { id, to };
+}
+
+function isRowId(def: PostgresGridDef, value: unknown): value is string {
+  return typeof value === "string" && isValidFieldValue(def, KEY_FIELD, value);
+}
+
+async function readReorder(
+  def: PostgresGridDef,
+  request: Request,
+): Promise<ReorderBody> {
+  const body = (await request.json().catch(() => null)) as {
+    id?: unknown;
+    after?: unknown;
+    before?: unknown;
+  } | null;
+  const after = body?.after ?? null;
+  const before = body?.before ?? null;
+  const valid =
+    isRowId(def, body?.id) &&
+    (after === null || isRowId(def, after)) &&
+    (before === null || isRowId(def, before)) &&
+    (after !== null || before !== null);
+  if (!body || !valid) {
+    throw new QueryRejected("invalid_value", "invalid_value", {
+      field: KEY_FIELD,
+    });
+  }
+  return { id: body.id as string, after, before } as ReorderBody;
 }
 
 function listExportColumns(
@@ -314,6 +349,11 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
         const move = await readMove(def, request);
         return config.moves.change(move.id, move.to);
       }
+      case "order":
+        if (!config.reorder) {
+          throw new QueryRejected("not_found");
+        }
+        return config.reorder.move(await readReorder(def, request));
     }
   };
 
@@ -322,7 +362,8 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
     if (route === null) {
       return errorResponse(404, "not_found");
     }
-    if (request.method !== (route === "status" ? "POST" : "GET")) {
+    const posts = route !== "page" && POST_ROUTES.includes(route);
+    if (request.method !== (posts ? "POST" : "GET")) {
       return errorResponse(405, "method_not_allowed");
     }
     const started = performance.now();

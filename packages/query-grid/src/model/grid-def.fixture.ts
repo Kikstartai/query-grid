@@ -86,6 +86,7 @@ export function createTestSource(
     fetchExport: async () => "",
     fetchTransitions: none,
     changeFacetValue: async (id) => ({ id }),
+    reorderRow: none,
     ...overrides,
   };
 }

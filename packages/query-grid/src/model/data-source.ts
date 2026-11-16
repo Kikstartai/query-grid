@@ -4,6 +4,7 @@ import type { DataSourceCapabilities, NarrowedResult } from "./capabilities.ts";
 import type { ExportRequest } from "./csv.ts";
 import type { GridLimits } from "./limits.ts";
 import type { Problem } from "./problems.ts";
+import type { RowMove } from "./reorder.ts";
 
 export interface PageResult {
   rows: GridRow[];
@@ -108,6 +109,7 @@ export interface DataSource {
   ) => Promise<string>;
   fetchTransitions: (signal: AbortSignal) => Promise<[string, string][]>;
   changeFacetValue: (id: string, to: string) => Promise<GridRow>;
+  reorderRow: (move: RowMove) => Promise<GridRow[]>;
 }
 
 // Every member that takes a query is listed here once, so a wrapper that rewrites queries cannot miss one.

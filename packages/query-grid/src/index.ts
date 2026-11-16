@@ -257,6 +257,16 @@ export type {
   IndexedGridDef,
   IndexExtras,
 } from "./model/grid-def.ts";
+export {
+  canReorder,
+  explainReorder,
+  REORDER_CODES,
+  reorderRows,
+  resolveRowMove,
+  type ReorderCode,
+  type ReorderWindow,
+  type RowMove,
+} from "./model/reorder.ts";
 export { sortRows } from "./model/sort-rows.ts";
 export {
   normalizeStoredGridDef,

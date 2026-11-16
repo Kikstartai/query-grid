@@ -26,6 +26,7 @@ import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
 import { withoutKey } from "./query-actions.ts";
+import { reorderRows } from "./reorder.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 
 const OPTION_LIMIT = 50;
@@ -371,6 +372,16 @@ export function createMemorySource(
       const updated: GridRow = { ...current, [key]: to };
       rows = rows.map((row) => (row.id === id ? updated : row));
       return updated;
+    },
+    reorderRow: async (move) => {
+      const field = def.orderField;
+      if (!field || !rows.some((row) => row.id === move.id)) {
+        throw new SourceError("unknown_row", { id: move.id });
+      }
+      const changed = reorderRows(field, rows, move);
+      const byId = new Map(changed.map((row) => [row.id, row]));
+      rows = rows.map((row) => byId.get(row.id) ?? row);
+      return changed;
     },
   });
 }

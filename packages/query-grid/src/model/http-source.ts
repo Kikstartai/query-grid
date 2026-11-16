@@ -28,7 +28,10 @@ export const SUB_ROUTES = [
   "export",
   "transitions",
   "status",
+  "order",
 ] as const;
+
+export const POST_ROUTES: readonly SubRoute[] = ["status", "order"];
 
 export type SubRoute = (typeof SUB_ROUTES)[number];
 
@@ -47,6 +50,12 @@ export interface MoveBody {
   to: string;
 }
 
+export interface ReorderBody {
+  id: string;
+  after: string | null;
+  before: string | null;
+}
+
 async function request(url: string, init: RequestInit): Promise<Response> {
   const response = await fetch(url, init);
   if (!response.ok) {
@@ -63,6 +72,14 @@ async function request(url: string, init: RequestInit): Promise<Response> {
 
 async function readJson<T>(url: string, init: RequestInit): Promise<T> {
   return (await (await request(url, init)).json()) as T;
+}
+
+function postJson(body: object): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  };
 }
 
 export function createHttpSource(
@@ -129,11 +146,11 @@ export function createHttpSource(
       readJson<[string, string][]>(route("transitions"), { signal }),
     changeFacetValue: (id, to) => {
       const body: MoveBody = { id, to };
-      return readJson<GridRow>(route("status"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      return readJson<GridRow>(route("status"), postJson(body));
+    },
+    reorderRow: ({ id, after, before }) => {
+      const body: ReorderBody = { id, after, before };
+      return readJson<GridRow[]>(route("order"), postJson(body));
     },
   });
 }

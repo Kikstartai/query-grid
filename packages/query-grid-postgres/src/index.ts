@@ -4,6 +4,7 @@ export {
   type GridHandler,
   type GridHandlerConfig,
   type GridMoves,
+  type GridReorder,
 } from "./grid-handler.ts";
 export {
   getGridCount,
