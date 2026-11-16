@@ -191,6 +191,34 @@ describe("row open and row actions", () => {
       '<a class="qg-row-open" href="/things/row-0" tabindex="-1" data-row-open="row-0">',
     );
     expect(html.match(/data-row-open=/g)).toHaveLength(TEST_ROWS.length);
+    const unsafe = render(
+      <DataGrid
+        fields={TEST_FIELDS}
+        {...ROW_WINDOW}
+        rowHref={() => "javascript:alert(1)"}
+      />,
+    );
+    expect(unsafe).not.toContain("data-row-open");
+    expect(unsafe).not.toContain("javascript:");
+  });
+
+  test("the open target is the first column the grid renders itself, never a host's own cell", () => {
+    const fields = TEST_FIELDS.map((field, at) =>
+      at === 0
+        ? { ...field, cell: createLinkCell((_value, row) => `/x/${row.id}`) }
+        : field,
+    );
+    const html = render(
+      <DataGrid
+        fields={fields}
+        {...ROW_WINDOW}
+        rowHref={(row) => `/things/${row.id}`}
+      />,
+    );
+    expect(html).toContain(
+      'data-col="1" data-field="number" data-type="integer" aria-selected="false" tabindex="-1" style="flex-shrink:0;box-sizing:border-box;width:150px"><a class="qg-row-open"',
+    );
+    expect(html).not.toMatch(/<a [^>]*><a /);
   });
 
   test("with a callback alone it is a button, and without either the cell is plain", () => {
@@ -216,6 +244,10 @@ describe("row open and row actions", () => {
     expect(html.match(/data-row-actions=/g)).toHaveLength(TEST_ROWS.length);
     expect(html).toContain('aria-label="Actions for Name 0"');
     expect(html.match(/qg-header-cell qg-actions-cell/g)).toHaveLength(1);
+    expect(html).toContain('role="columnheader" aria-label="Actions"');
+    expect(html.match(/data-row-actions="[^"]*" tabindex="0"/g)).toHaveLength(
+      1,
+    );
   });
 });
 
@@ -234,6 +266,7 @@ describe("row reorder", () => {
     expect(html).toContain("data-reorder-header");
     expect(html).toContain("Drag a row by its handle");
     expect(html).not.toContain('aria-disabled="true"');
+    expect(html.match(/qg-reorder-handle[^>]*tabindex="0"/g)).toHaveLength(1);
   });
 
   test("held, every handle is disabled with the reason, and a failure is shown", () => {

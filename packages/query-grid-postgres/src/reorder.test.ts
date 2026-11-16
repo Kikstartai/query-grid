@@ -70,6 +70,8 @@ describe("POST /order", () => {
       { id: A, after: "x; DROP TABLE things" },
       { id: A, before: 7 },
       { id: A },
+      { id: A, after: A },
+      { id: A, after: B, before: B },
       null,
     ];
     for (const body of bodies) {

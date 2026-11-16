@@ -157,10 +157,11 @@ export interface QueryGridMessages {
   allMatchingSelected: (params: { rows: string }) => string;
   clearSelection: string;
   rowActions: (params: LabelParams) => string;
+  rowActionsColumn: string;
   reorderRow: (params: LabelParams) => string;
   reorderColumn: string;
   reorderHelp: string;
-  reorderFailed: string;
+  reorderFailed: (params: { reason: string }) => string;
   reorderSteps: Record<
     "grab" | "move" | "drop" | "cancel",
     (params: { label: string; position: number; total: number }) => string
@@ -396,11 +397,12 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   allMatchingSelected: ({ rows }) => `All ${rows} that match are selected.`,
   clearSelection: "Clear selection",
   rowActions: ({ label }) => `Actions for ${label}`,
+  rowActionsColumn: "Actions",
   reorderRow: ({ label }) => `Reorder ${label}`,
   reorderColumn: "Order",
   reorderHelp:
     "Drag a row by its handle, or press Space on the handle and use the arrow keys, to move it. Space drops it and Escape puts it back.",
-  reorderFailed: "The new order was not saved",
+  reorderFailed: ({ reason }) => `The new order was not saved: ${reason}`,
   reorderSteps: {
     grab: ({ label, position, total }) =>
       `${label} picked up, position ${position} of ${total}.`,

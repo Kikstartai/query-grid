@@ -10,7 +10,7 @@ import {
 } from "@kikstart/query-grid";
 
 import type { FieldDef } from "./fields.ts";
-import { formatCell, useLocale, useMessages } from "./messages.tsx";
+import { formatCell, formatList, useLocale, useMessages } from "./messages.tsx";
 
 const LIST_MAX_ITEMS = 3;
 
@@ -48,9 +48,10 @@ function ListMore({ count }: { count: number }) {
 }
 
 export function ListCell({ items, max = LIST_MAX_ITEMS }: ListCellProps) {
+  const locale = useLocale();
   const shown = items.slice(0, max);
   return (
-    <span className="qg-list-cell" title={items.join(", ")}>
+    <span className="qg-list-cell" title={formatList(locale, items, "unit")}>
       {shown.map((item) => (
         <span key={item} className="qg-list-item">
           <bdi>{item}</bdi>
@@ -83,14 +84,18 @@ export function LinkCell({ href, external = false, children }: LinkCellProps) {
 const SAFE_HREF = /^(https?:|mailto:|tel:|\/(?!\/)|#|\?)/i;
 
 // A link built from a row's own value must not become a script: only a web, mail, phone or same-site address is rendered as a link.
+export function isSafeHref(href: string | null | undefined): href is string {
+  return typeof href === "string" && SAFE_HREF.test(href);
+}
+
 export function createLinkCell(
   toHref: (value: GridValue, row: GridRow) => string | null,
   external = false,
 ): NonNullable<FieldDef["cell"]> {
   return (value, row) => {
     const href = toHref(value, row);
-    const text = Array.isArray(value) ? value.join(", ") : String(value ?? "");
-    if (href === null || !SAFE_HREF.test(href)) {
+    const text = [value ?? []].flat().map(String).join(" ");
+    if (!isSafeHref(href)) {
       return <bdi>{text}</bdi>;
     }
     return (

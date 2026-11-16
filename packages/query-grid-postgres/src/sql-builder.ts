@@ -332,6 +332,7 @@ interface OrderKey {
 }
 
 const CURSOR_TEXT_MAX = 2000;
+const CURSOR_NUMBER = /^-?\d{1,40}(\.\d{1,40})?(e[+-]?\d{1,3})?$/i;
 
 // The key follows the first sort column, so one index read forward or backward gives the whole order.
 function listOrderKeys(def: PostgresGridDef, query: QueryState): OrderKey[] {
@@ -353,14 +354,19 @@ function orderBy(keys: OrderKey[]): string {
     .join(", ");
 }
 
+// A cursor holds what the server read from a row, which is wider than what a filter may be given: a float8 prints small and large numbers with an exponent, and a text value may be empty.
 function isCursorValue(
   def: PostgresGridDef,
   field: BaseFieldDef,
   value: string,
 ): boolean {
-  return field.type === "text" && !field.options
-    ? value.length <= CURSOR_TEXT_MAX
-    : isValidFieldValue(def, field.key, value);
+  if (field.type === "text") {
+    return value.length <= CURSOR_TEXT_MAX;
+  }
+  if (field.type === "decimal") {
+    return CURSOR_NUMBER.test(value);
+  }
+  return isValidFieldValue(def, field.key, value);
 }
 
 function after(key: OrderKey): string {

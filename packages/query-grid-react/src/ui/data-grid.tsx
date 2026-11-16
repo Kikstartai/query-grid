@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   createGrouping,
@@ -16,6 +16,7 @@ import {
   toProblem,
   type GroupHeader,
   type Problem,
+  type QueryState,
   type RowMove,
   type SortDirection,
 } from "@kikstart/query-grid";
@@ -86,6 +87,11 @@ export interface DataGridRootProps extends DataGridProps {
 function useGridSelection() {
   const { selection } = useQueryGridState();
   const state = useStoreValue(selection.subscribe, selection.get);
+  useEffect(
+    () => () =>
+      selection.set({ ...selection.get(), ids: [], allMatching: false }),
+    [selection],
+  );
   return {
     onSelectionChange: (next: GridSelection) =>
       selection.set({ ...selection.get(), ...next }),
@@ -94,28 +100,36 @@ function useGridSelection() {
   };
 }
 
+interface ReorderFailure {
+  problem: Problem;
+  query: QueryState;
+}
+
 function useGridReorder() {
   const messages = useMessages();
   const locale = useLocale();
   const offer = useReorderOffer();
+  const query = useQueryState();
   const { reorderRow } = useQueryGridActions();
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [failure, setFailure] = useState<ReorderFailure | null>(null);
   if (!offer) {
     return {};
   }
-  const failure = problem
-    ? `${messages.reorderFailed}: ${formatProblemMessage(messages, problem, locale)}`
-    : null;
+  const problem = failure?.query === query ? failure.problem : null;
   return {
     reorder: {
       disabled: !offer.offered,
       reason: offer.reason,
-      error: failure,
+      error: problem
+        ? messages.reorderFailed({
+            reason: formatProblemMessage(messages, problem, locale),
+          })
+        : null,
     },
     onRowReorder: (move: RowMove) => {
       reorderRow(move).then(
-        () => setProblem(null),
-        (error: unknown) => setProblem(toProblem(error)),
+        () => setFailure(null),
+        (error: unknown) => setFailure({ problem: toProblem(error), query }),
       );
     },
   };

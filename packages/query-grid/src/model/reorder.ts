@@ -87,7 +87,17 @@ function compareOrder(field: string, a: GridRow, b: GridRow): number {
   );
 }
 
-// The moved row takes its place beside its new neighbour and the order values are dealt out again over the same slots, so no value is invented and a row a filter hides keeps a place.
+function listSlotValues(field: string, sorted: GridRow[]): number[] {
+  const values = sorted.map((row) => row[field]);
+  const rising = values.every(
+    (value, at) =>
+      typeof value === "number" &&
+      (at === 0 || value > (values[at - 1] as number)),
+  );
+  return rising ? (values as number[]) : values.map((_, slot) => slot + 1);
+}
+
+// The moved row takes its place beside its new neighbour and the order values are dealt out again over the same slots, so a row a filter hides keeps a place; values that repeat or are missing cannot hold an order, so those lists are numbered afresh.
 export function reorderRows(
   field: string,
   rows: GridRow[],
@@ -106,8 +116,8 @@ export function reorderRows(
   }
   const place = move.after === null ? at : at + 1;
   const next = [...rest.slice(0, place), moved, ...rest.slice(place)];
-  return next.flatMap((row, slot) => {
-    const value = sorted[slot][field] ?? null;
-    return row[field] === value ? [] : [{ ...row, [field]: value }];
-  });
+  const values = listSlotValues(field, sorted);
+  return next.flatMap((row, slot) =>
+    row[field] === values[slot] ? [] : [{ ...row, [field]: values[slot] }],
+  );
 }

@@ -31,7 +31,7 @@ describe("a CSV cell", () => {
     expect(encodeCsvCell("+27 82 000")).toBe("'+27 82 000");
     expect(encodeCsvCell("-cmd|' /C calc'!A0")).toBe("'-cmd|' /C calc'!A0");
     expect(encodeCsvCell("@import")).toBe("'@import");
-    expect(encodeCsvCell("  =1+1")).toBe("\"'  =1+1\"");
+    expect(encodeCsvCell("  =1+1")).toBe("'  =1+1");
     expect(encodeCsvCell("\tTab")).toBe("'\tTab");
     expect(encodeCsvCell("\rReturn")).toBe('"\'\rReturn"');
     expect(encodeCsvCell('=HYPERLINK("http://x","y")')).toBe(
@@ -72,6 +72,11 @@ describe("a value in an export", () => {
     expect(encodeCsvRows([TEXT, MONEY, COUNT], rows)).toBe(
       "'-1+1,-1.50,-3\r\n",
     );
+  });
+
+  test("text held in a number field is still neutralised", () => {
+    const rows = [{ id: "1", delta: "=1+1" }] as unknown as GridRow[];
+    expect(encodeCsvRows([COUNT], rows)).toBe("'=1+1\r\n");
   });
 });
 

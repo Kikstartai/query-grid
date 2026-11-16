@@ -114,6 +114,45 @@ describe("a further sort column with no index", () => {
     expect(CAPABILITIES.canRun(query)).toBe(true);
   });
 
+  test("a text filter with an index joins the narrowed set, so the size probe never reads that index", () => {
+    const extras = { textIndexes: ["name"] };
+    const texted: QueryState = {
+      ...query,
+      texts: [{ field: "name", op: "contains", value: "acme" }],
+    };
+    const plan = planQuery(INDEXES, texted, extras);
+    expect(plan).toMatchObject({ narrowed: true, budgeted: false });
+    expect(plan?.core.texts).toEqual([]);
+    const alone = planQuery(INDEXES, { ...texted, thenBy: undefined }, extras);
+    expect(alone).toMatchObject({ narrowed: false, budgeted: true });
+  });
+
+  test("match any still counts each filter through its own index", () => {
+    const either: QueryState = {
+      ...query,
+      match: "any",
+      equals: { status: ["open"], region: ["north"] },
+    };
+    const plan = planQuery(INDEXES, either);
+    expect(plan?.terms).toHaveLength(2);
+    expect(plan?.terms?.every((term) => term.thenBy === undefined)).toBe(true);
+  });
+
+  test("the core keeps a range on the first column before it keeps the order", () => {
+    const ranged: QueryState = {
+      ...sorted([
+        ["number", "asc"],
+        ["total", "asc"],
+      ]),
+      ranges: [{ field: "number", min: "5", max: "9" }],
+    };
+    const indexes = [...INDEXES, { equals: [], sort: "number", range: true }];
+    const plan = planQuery(indexes, ranged);
+    expect(plan?.narrowed).toBe(true);
+    expect(plan?.core.ranges).toHaveLength(1);
+    expect(plan?.core.thenBy).toBeUndefined();
+  });
+
   test("a nullable, an array or a repeated column is refused", () => {
     expect(
       CAPABILITIES.canRun(

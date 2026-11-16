@@ -42,7 +42,7 @@ export function formatExportValue(
   return field.options ? formatOption(field, String(value)) : String(value);
 }
 
-// A spreadsheet runs a cell that starts like a formula, so text that does is led by an apostrophe, while a number the encoder wrote itself is left alone so that -5 stays a number.
+// A spreadsheet runs a cell that starts like a formula, so text that does is led by an apostrophe, while a number the encoder formatted itself is left alone so that -5 stays a number.
 export function encodeCsvCell(text: string, numeric = false): string {
   const safe = !numeric && FORMULA_START.test(text) ? `'${text}` : text;
   return NEEDS_QUOTES.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
@@ -73,7 +73,7 @@ export function encodeCsvRows(fields: BaseFieldDef[], rows: GridRow[]): string {
         fields.map((field) =>
           encodeCsvCell(
             formatExportValue(field, row[field.key] ?? null),
-            isNumberType(field.type) && !field.options,
+            isNumberType(field.type) && typeof row[field.key] === "number",
           ),
         ),
       ),

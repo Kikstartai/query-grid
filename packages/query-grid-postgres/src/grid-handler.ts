@@ -180,7 +180,10 @@ async function readReorder(
     isRowId(def, body?.id) &&
     (after === null || isRowId(def, after)) &&
     (before === null || isRowId(def, before)) &&
-    (after !== null || before !== null);
+    (after !== null || before !== null) &&
+    after !== before &&
+    after !== body?.id &&
+    before !== body?.id;
   if (!body || !valid) {
     throw new QueryRejected("invalid_value", "invalid_value", {
       field: KEY_FIELD,

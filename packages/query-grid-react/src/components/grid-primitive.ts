@@ -334,7 +334,10 @@ export const sheet = definePrimitive({
       },
       on: {
         keydown: (event, { api, props }) => {
-          if (!api.rowKey(event, props.row)) {
+          const onControl =
+            event.target instanceof Element &&
+            event.target.closest(CELL_CONTROL) !== null;
+          if (!onControl && !api.rowKey(event, props.row)) {
             api.range.keydown(event);
           }
         },

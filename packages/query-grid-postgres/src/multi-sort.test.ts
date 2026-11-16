@@ -89,6 +89,31 @@ describe("a composite order an index declares", () => {
     }
   });
 
+  test("a cursor takes a number as the server printed it", () => {
+    const def: PostgresGridDef = {
+      ...DEF,
+      fields: [...DEF.fields, { key: "rate", label: "Rate", type: "decimal" }],
+    };
+    const byRate = sorted([
+      ["created_at", "desc"],
+      ["rate", "desc"],
+      ["name", "desc"],
+    ]);
+    const cursor = encodeCursor({
+      sortValues: ["2026-01-01T00:00:00.000000Z", "1e-7", ""],
+      id: ID,
+    });
+    const sql = buildPageSql(def, { ...byRate, cursor }, 20);
+    expect(sql.values).toEqual(["2026-01-01T00:00:00.000000Z", "1e-7", "", ID]);
+    const bad = encodeCursor({
+      sortValues: ["2026-01-01T00:00:00.000000Z", "1e-7; DROP", ""],
+      id: ID,
+    });
+    expect(() => buildPageSql(def, { ...byRate, cursor: bad }, 20)).toThrow(
+      QueryRejected,
+    );
+  });
+
   test("runs with no size probe: it is no narrowed query", async () => {
     const seen: SqlQuery[] = [];
     const execute: SqlExecutor = async (sql) => {

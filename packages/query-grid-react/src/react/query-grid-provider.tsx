@@ -58,6 +58,10 @@ export interface StaticQueryGridProviderProps extends QueryGridProviderProps {
   queryString: string;
 }
 
+function ignoreFailure(): void {
+  return;
+}
+
 function createValue(
   props: QueryGridProviderProps,
   source: DataSource,
@@ -85,6 +89,8 @@ function createValue(
     key: 0,
   });
   const scope = props.scope && !isScopeEmpty(props.scope) ? props.scope : null;
+  // Moves are saved one after another, and a failed one reloads the rows: undoing it by hand could not know what a later move or a new query had already changed.
+  let saving: Promise<unknown> = Promise.resolve();
   return {
     state: {
       store,
@@ -127,20 +133,19 @@ function createValue(
           key: selection.get().key + 1,
         }),
       reorderRow: async (move) => {
-        const before = feed.getState().rows;
-        const from = before.findIndex((row) => row.id === move.id);
-        const moved = before[from];
+        const moved = feed.getState().rows.find((row) => row.id === move.id);
         if (!moved) {
           return;
         }
         feed.removeRow(move.id);
         feed.insertRow(move.index, moved);
+        const saved = saving.then(() => source.reorderRow(move));
+        saving = saved.catch(ignoreFailure);
         try {
-          const changed = await source.reorderRow(move);
+          const changed = await saved;
           changed.forEach((row) => feed.patchRow(row.id, row));
         } catch (error) {
-          feed.removeRow(move.id);
-          feed.insertRow(from, moved);
+          feed.reload();
           throw error;
         }
       },

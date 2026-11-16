@@ -33,7 +33,7 @@ import {
   type SortState,
 } from "@kikstart/query-grid";
 
-import { FieldCell } from "./cells.tsx";
+import { FieldCell, isSafeHref } from "./cells.tsx";
 import {
   clampWidth,
   layoutColumns,
@@ -150,6 +150,7 @@ interface GridLayout {
   totalWidth: number;
   pinnedWidth: number;
   lead: number;
+  openColumn: number;
   layoutKey: string;
 }
 
@@ -278,11 +279,15 @@ function SelectCell({ row, view }: SelectCellProps) {
   );
 }
 
-interface ReorderHandleProps extends RowCellProps {
+interface ReachableProps extends RowCellProps {
+  reachable: boolean;
+}
+
+interface ReorderHandleProps extends ReachableProps {
   rail: RailHandle;
 }
 
-function ReorderHandle({ rail, row }: ReorderHandleProps) {
+function ReorderHandle({ rail, row, reachable }: ReorderHandleProps) {
   const { props, labelOf } = useDataGrid();
   const messages = useMessages();
   return usePart(
@@ -295,6 +300,7 @@ function ReorderHandle({ rail, row }: ReorderHandleProps) {
         className: "qg-reorder-handle",
         "aria-label": messages.reorderRow({ label: labelOf(row) }),
         "aria-disabled": props.reorder?.disabled ? true : undefined,
+        tabIndex: reachable ? 0 : -1,
         title: props.reorder?.reason ?? undefined,
         style: { touchAction: "none" as const },
         children: <GripIcon />,
@@ -305,7 +311,7 @@ function ReorderHandle({ rail, row }: ReorderHandleProps) {
   );
 }
 
-function ReorderCell({ row }: RowCellProps) {
+function ReorderCell({ row, reachable }: ReachableProps) {
   const { rail } = useDataGrid();
   if (!rail) {
     return null;
@@ -313,13 +319,14 @@ function ReorderCell({ row }: RowCellProps) {
   return (
     <div
       className="qg-cell qg-reorder-cell"
+      role="gridcell"
       style={{
         ...LEAD_CELL_STYLE,
         insetInlineStart: SELECT_COLUMN_WIDTH,
         width: REORDER_COLUMN_WIDTH,
       }}
     >
-      <ReorderHandle rail={rail} row={row} />
+      <ReorderHandle rail={rail} row={row} reachable={reachable} />
     </div>
   );
 }
@@ -341,8 +348,8 @@ interface OpenTargetProps extends RowCellProps {
 function OpenTarget({ row, children }: OpenTargetProps) {
   const { props } = useDataGrid();
   const { onRowOpen } = props;
-  const href = props.rowHref?.(row) ?? null;
-  if (href !== null) {
+  const href = props.rowHref?.(row);
+  if (isSafeHref(href)) {
     return (
       <a
         className="qg-row-open"
@@ -375,11 +382,7 @@ function OpenTarget({ row, children }: OpenTargetProps) {
   );
 }
 
-interface ActionsCellProps extends RowCellProps {
-  active: boolean;
-}
-
-function ActionsCell({ row, active }: ActionsCellProps) {
+function ActionsCell({ row, reachable }: ReachableProps) {
   const { props, menu, labelOf } = useDataGrid();
   const messages = useMessages();
   if (!props.rowActions) {
@@ -388,6 +391,7 @@ function ActionsCell({ row, active }: ActionsCellProps) {
   return (
     <div
       className="qg-cell qg-actions-cell"
+      role="gridcell"
       style={{
         ...LEAD_CELL_STYLE,
         insetInlineEnd: 0,
@@ -400,7 +404,7 @@ function ActionsCell({ row, active }: ActionsCellProps) {
         className="qg-row-actions"
         aria-label={messages.rowActions({ label: labelOf(row) })}
         data-row-actions={row.id}
-        tabIndex={active ? 0 : -1}
+        tabIndex={reachable ? 0 : -1}
       >
         <MoreIcon />
       </MenuTrigger>
@@ -435,17 +439,15 @@ interface CellContentProps extends RowCellProps {
 }
 
 function CellContent({ column, row, opens }: CellContentProps) {
-  const content = (
-    <FieldCell
-      field={column.field}
-      value={row[column.field.key] ?? null}
-      row={row}
-    />
-  );
+  const value = row[column.field.key] ?? null;
   if (!opens) {
-    return content;
+    return <FieldCell field={column.field} value={value} row={row} />;
   }
-  return <OpenTarget row={row}>{content}</OpenTarget>;
+  return (
+    <OpenTarget row={row}>
+      <FieldCell field={column.field} value={value} row={row} />
+    </OpenTarget>
+  );
 }
 
 interface GridCellsProps {
@@ -456,10 +458,11 @@ interface GridCellsProps {
 
 function GridCells({ view, row, columns }: GridCellsProps) {
   const { layout } = useDataGrid();
+  const reachable = view.cells.some((cell) => cell.tabIndex === 0);
   return (
     <>
       <SelectCell row={row} view={view} />
-      <ReorderCell row={row} />
+      <ReorderCell row={row} reachable={reachable} />
       {columns.map((column, col) => {
         const cell = view.cells[col];
         return (
@@ -487,11 +490,15 @@ function GridCells({ view, row, columns }: GridCellsProps) {
                 : undefined,
             }}
           >
-            <CellContent column={column} row={row} opens={col === 0} />
+            <CellContent
+              column={column}
+              row={row}
+              opens={col === layout.openColumn}
+            />
           </div>
         );
       })}
-      <ActionsCell row={row} active={view.cells.some((cell) => cell.active)} />
+      <ActionsCell row={row} reachable={reachable} />
     </>
   );
 }
@@ -907,7 +914,9 @@ function DataGridSelection({ children }: DataGridSelectionProps) {
             : "qg-selection qg-selection-empty",
         children: (status: SheetStatus) => (
           <>
-            <SelectionSummary count={status.selectedCount} />
+            <span role="status">
+              <SelectionSummary count={status.selectedCount} />
+            </span>
             <MatchingOffer count={status.selectedCount} />
             <Button data-selection-clear onClick={handle.api.clearSelection}>
               <bdi>{messages.clearSelection}</bdi>
@@ -944,10 +953,12 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
   if (seenKey !== resetKey) {
     setSeenKey(resetKey);
     setEpoch(epoch + 1);
+    setAllMatching(false);
   }
   if (seenSelectionKey !== selectionKey) {
     setSeenSelectionKey(selectionKey);
     setSelectionEpoch(selectionEpoch + 1);
+    setAllMatching(false);
   }
   const lead = SELECT_COLUMN_WIDTH + (rail ? REORDER_COLUMN_WIDTH : 0);
   const trail = props.rowActions ? ACTIONS_COLUMN_WIDTH : 0;
@@ -956,6 +967,7 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
     totalWidth: lead + sumWidths(columns) + trail,
     pinnedWidth: sumWidths(columns.filter((column) => column.pinned)),
     lead,
+    openColumn: columns.findIndex((column) => !column.field.cell),
     layoutKey: `${epoch}:${columns.map((column) => column.field.key).join(",")}`,
   };
   const press = (row: number, target: string) =>
@@ -963,6 +975,14 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
       ?.querySelector<HTMLElement>(`[data-row="${row}"] [${target}]`)
       ?.click();
   const opens = Boolean(props.onRowOpen ?? props.rowHref);
+  const openRow = (index: number) => {
+    const row = rows[index];
+    if (row && props.onRowOpen) {
+      props.onRowOpen(row);
+      return;
+    }
+    press(index, "data-row-open");
+  };
   const handle = usePrimitive(sheet, {
     rows,
     columns: columns.map((column) => column.field),
@@ -975,7 +995,7 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
       setAllMatching(all);
       onSelectionChange?.({ ids, allMatching: all });
     },
-    onRowOpen: opens ? (row) => press(row, "data-row-open") : undefined,
+    onRowOpen: opens ? openRow : undefined,
     onRowMenu: props.rowActions
       ? (row) => press(row, "data-row-actions")
       : undefined,
@@ -1006,11 +1026,12 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
     }
   }, [handle, selectionEpoch]);
 
+  const loadedCount = rows.length;
   useEffect(() => {
-    if (allMatching) {
+    if (allMatching && loadedCount > 0) {
       handle.api.selectAll();
     }
-  }, [handle, allMatching, rows]);
+  }, [handle, allMatching, loadedCount]);
 
   return (
     <div className="qg-grid" data-part="grid" style={FILL_COLUMN_STYLE}>
@@ -1196,6 +1217,7 @@ function ReorderHeaderCell() {
 
 function ActionsHeaderCell() {
   const { props } = useDataGrid();
+  const messages = useMessages();
   if (!props.rowActions) {
     return null;
   }
@@ -1203,6 +1225,7 @@ function ActionsHeaderCell() {
     <div
       className="qg-header-cell qg-actions-cell"
       role="columnheader"
+      aria-label={messages.rowActionsColumn}
       style={{
         ...HEADER_CELL_STYLE,
         insetInlineEnd: 0,

@@ -141,6 +141,39 @@ describe("the order values after a move", () => {
     expect(changed.map((row) => row.id)).toEqual(["e", "b", "c", "d"]);
   });
 
+  test("values that repeat or are missing are numbered afresh, so the move still lands", () => {
+    const tied: GridRow[] = [
+      { id: "a", number: 1 },
+      { id: "b", number: 1 },
+      { id: "c", number: 2 },
+    ];
+    const first = reorderRows("number", tied, {
+      id: "b",
+      index: 0,
+      after: null,
+      before: "a",
+    });
+    expect(first.map((row) => [row.id, row.number])).toEqual([
+      ["a", 2],
+      ["c", 3],
+    ]);
+    const empty: GridRow[] = ["x", "y", "z"].map((id) => ({
+      id,
+      number: null,
+    }));
+    const numbered = reorderRows("number", empty, {
+      id: "z",
+      index: 0,
+      after: null,
+      before: "x",
+    });
+    expect(numbered.map((row) => [row.id, row.number])).toEqual([
+      ["z", 1],
+      ["x", 2],
+      ["y", 3],
+    ]);
+  });
+
   test("an unknown row or neighbour changes nothing", () => {
     expect(
       reorderRows("number", rows(), {

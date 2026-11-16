@@ -263,8 +263,30 @@ test.describe("selection for bulk actions", () => {
     await expect(page.locator("[data-selection=rows]")).toHaveText(
       "499 selected",
     );
+    await expect(page.locator("[data-bulk-action]")).toHaveAttribute(
+      "data-selection-kind",
+      "rows",
+    );
     await page.locator("[data-selection-clear]").click();
     await expect(page.locator("[data-part=grid-selection]")).toBeHidden();
+  });
+
+  test("a selection does not outlive the rows it was made on", async ({
+    page,
+  }) => {
+    await openGrid(page, "/memory");
+    await page.locator("[data-select-row]").nth(1).click();
+    await page.locator("[data-select-row]").nth(2).click();
+    const kind = page.locator("[data-bulk-action]");
+    await expect(kind).toHaveAttribute("data-selection-kind", "rows");
+    await page.locator("[data-header-sort=budget]").click();
+    await expect(page).toHaveURL(/sort=budget/);
+    await expect(kind).toHaveAttribute("data-selection-kind", "none");
+    await page.locator("[data-select-row]").nth(1).click();
+    await expect(kind).toHaveAttribute("data-selection-kind", "rows");
+    await page.goto("/memory?group=team");
+    await expect(page.locator("[data-group-toggle]").first()).toBeVisible();
+    await expect(kind).toHaveAttribute("data-selection-kind", "none");
   });
 
   test("a client grid selects its rows by id", async ({ page }) => {
@@ -288,6 +310,12 @@ test.describe("row open and row actions", () => {
     await expect(note(page)).toHaveText(/^Opened /);
     const opened = await note(page).textContent();
     await page.locator('[data-row="2"] [data-field="team"]').click();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("[data-status=active]")).toHaveAttribute(
+      "data-value",
+      /^3:/,
+    );
+    await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Enter");
     await expect(note(page)).not.toHaveText(opened ?? "");
     await expect(note(page)).toHaveText(/^Opened /);
@@ -381,6 +409,11 @@ test.describe("row reorder", () => {
       .toEqual([before[1], before[2], before[0], before[3]]);
     expect(await column(page, "rank", 4)).toEqual(["1", "2", "3", "4"]);
     await expect(handles(page).nth(2)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("[data-status=active]")).toHaveAttribute(
+      "data-value",
+      "none",
+    );
     await page.keyboard.press("Space");
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Escape");

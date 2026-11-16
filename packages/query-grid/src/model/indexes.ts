@@ -289,10 +289,12 @@ export function withoutFilters(query: QueryState): QueryState {
 }
 
 function listTerms(indexes: IndexDef[], query: QueryState): QueryState[] {
-  const base = withoutFilters(query);
+  const base = withThenBy(withoutFilters(query), []);
   const terms: QueryState[] = [];
   for (const [key, values] of Object.entries(query.equals)) {
-    const index = indexes.find((item) => sameSet(item.equals, [key]));
+    const index = indexes.find(
+      (item) => sameSet(item.equals, [key]) && !item.then?.length,
+    );
     terms.push({
       ...base,
       equals: { [key]: values },
@@ -345,24 +347,19 @@ function planAll(
     hasTextOrOverlap(query) &&
     !hasUnindexedParts(query, extras) &&
     query.ranges.length === onSort.length;
-  const filtered: QueryState[] = [
+  const ranged = { ...base, ranges: onSort };
+  const plain = { ...base, ranges: [] };
+  const sorted = listThenBy(query).length > 0;
+  // A core that drops a sort column is a narrowed one, so it never keeps a text or an overlap filter, and it keeps the range before it keeps the order: the range is what bounds the rows.
+  const cores: QueryState[] = [
     ...(indexed
-      ? [
-          {
-            ...base,
-            texts: query.texts,
-            overlaps: query.overlaps,
-            ranges: onSort,
-          },
-        ]
+      ? [{ ...ranged, texts: query.texts, overlaps: query.overlaps }]
       : []),
-    { ...base, ranges: onSort },
-    { ...base, ranges: [] },
+    ranged,
+    ...(sorted ? [withThenBy(ranged, [])] : []),
+    plain,
+    ...(sorted ? [withThenBy(plain, [])] : []),
   ];
-  const cores =
-    listThenBy(query).length > 0
-      ? [...filtered, ...filtered.map((core) => withThenBy(core, []))]
-      : filtered;
   const core = cores.find((candidate) => getIndex(indexes, candidate, extras));
   if (!core) {
     return null;
