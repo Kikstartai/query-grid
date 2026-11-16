@@ -64,7 +64,7 @@ export const QueryGridContext = createContext<QueryGridContextValue | null>(
   null,
 );
 
-export function useQueryGrid(): QueryGridContextValue {
+function useQueryGrid(): QueryGridContextValue {
   const value = use(QueryGridContext);
   if (!value) {
     throw new Error("useQueryGrid needs a QueryGridProvider above it");

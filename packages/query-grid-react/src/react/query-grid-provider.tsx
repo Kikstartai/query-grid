@@ -119,6 +119,13 @@ function useGridSession(
   const [sync] = useState(() =>
     createUrlSync(value.state.store, queryString, write),
   );
+  return { value, sync };
+}
+
+function useGridEffects(
+  { value, sync }: GridSession,
+  queryString: string,
+): void {
   const { source } = value.meta;
   const { narrowed, columns } = value.state;
 
@@ -136,13 +143,12 @@ function useGridSession(
   useEffect(() => {
     sync.follow(queryString);
   }, [sync, queryString]);
-
-  return { value, sync };
 }
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
   const { capabilities } = props.source;
+  const [def] = useState(() => props.def);
   const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
   const [urlValues, setUrlValues] = useQueryStates(parsers);
   const queryString = toQueryString(
@@ -151,22 +157,21 @@ export function QueryGridProvider(props: QueryGridProviderProps) {
     prefix,
   );
   const setter = useLatest(setUrlValues);
-  const { value, sync } = useGridSession(
-    props,
-    queryString,
-    (state, history) => {
-      void setter.current(
-        toUrlValues(props.def, capabilities, state, prefix),
-        history === "push"
-          ? { history }
-          : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
-      );
-    },
+  const session = useGridSession(props, queryString, (state, history) => {
+    void setter.current(
+      toUrlValues(def, capabilities, state, prefix),
+      history === "push"
+        ? { history }
+        : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
+    );
+  });
+
+  useEffect(() => session.sync.connect(), [session.sync]);
+  useGridEffects(session, queryString);
+
+  return (
+    <QueryGridContext value={session.value}>{props.children}</QueryGridContext>
   );
-
-  useEffect(() => sync.connect(), [sync]);
-
-  return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
 }
 
 function ignoreWrite(): void {
@@ -179,7 +184,10 @@ export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
     props.queryString,
     props.urlPrefix ?? "",
   );
-  const { value } = useGridSession(props, queryString, ignoreWrite);
+  const session = useGridSession(props, queryString, ignoreWrite);
+  useGridEffects(session, queryString);
 
-  return <QueryGridContext value={value}>{props.children}</QueryGridContext>;
+  return (
+    <QueryGridContext value={session.value}>{props.children}</QueryGridContext>
+  );
 }
