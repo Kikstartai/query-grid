@@ -47,6 +47,7 @@ export interface QueryGridActions {
     signal: AbortSignal,
   ) => Promise<FieldOption[]>;
   moveRow: (board: Board, move: BoardMove) => Promise<GridRow>;
+  fetchExport: (columns?: string[]) => Promise<string>;
 }
 
 export interface QueryGridMeta {

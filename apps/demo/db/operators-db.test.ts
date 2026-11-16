@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Client } from "pg";
 
 import {
+  CSV_BOM,
   defaultQuery,
   DEFAULT_LIMITS,
+  encodeQuery,
   isQueryBudgeted,
   planQuery,
   type GridRow,
@@ -14,6 +16,7 @@ import {
 import { createMemorySource } from "@kikstart/query-grid/memory";
 import {
   buildPageSql,
+  createGridHandler,
   getGridCount,
   listGridMigrationSteps,
   listGridPage,
@@ -724,6 +727,66 @@ describe("a composite order on the orders table", () => {
     const stamps = page.rows.map((row) => String(row.created_at));
     expect(stamps).toEqual([...stamps].sort().reverse());
   }, 60_000);
+});
+
+describe("an export is the memory source's file", () => {
+  const read = async (def: PostgresGridDef, query: QueryState, path = "") => {
+    const handler = createGridHandler({
+      def,
+      execute,
+      onError: () => undefined,
+    });
+    const params = encodeQuery(def, query);
+    return handler(new Request(`http://grid.test/export?${params}${path}`));
+  };
+
+  test("the same rows, order and cells, for a filter, a text filter and several sort columns", async () => {
+    const cases: Partial<QueryState>[] = [
+      {},
+      { equals: { starred: ["true"] } },
+      { texts: [text("name", "contains", "invoice")] },
+      {
+        sort: { field: "size", direction: "desc" },
+        thenBy: [{ field: "created_at", direction: "asc" }],
+      },
+    ];
+    for (const filters of cases) {
+      const query = { ...BASE, ...filters };
+      const response = await read(DEF, query);
+      expect(response.status).toBe(200);
+      const text = new TextDecoder().decode(await response.arrayBuffer());
+      const expected = await memory.fetchExport(query, {}, signal);
+      expect(`${CSV_BOM}${text}`).toBe(expected);
+    }
+  }, 120_000);
+
+  test("on 620,000 orders the whole table is refused from the counter and a small set is sent whole", async () => {
+    const base = defaultQuery(ORDERS_GRID_DEF);
+    calls.length = 0;
+    const refused = await read(ORDERS_GRID_DEF, base);
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      code: "export_too_large",
+      params: { limit: DEFAULT_LIMITS.exportLimit },
+    });
+    expect(calls).toHaveLength(1);
+    const small: QueryState = {
+      ...base,
+      equals: { status_code: ["failed"], channel: ["phone"] },
+    };
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, small, true);
+    const sent = await read(
+      ORDERS_GRID_DEF,
+      small,
+      "&columns=order_number,total",
+    );
+    const lines = (await sent.text()).trimEnd().split("\r\n");
+    expect(lines[0]).toBe("Order,Total");
+    expect(lines).toHaveLength(count.count + 1);
+    expect(new Set(lines.slice(1).map((line) => line.split(",")[0])).size).toBe(
+      count.count,
+    );
+  }, 120_000);
 });
 
 describe("the text index on the orders table", () => {

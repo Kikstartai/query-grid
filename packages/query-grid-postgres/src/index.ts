@@ -16,6 +16,7 @@ export {
   listSearchSettings,
   NARROW_SETTINGS,
   TOTAL_SETTINGS,
+  walkExportPages,
   walkGridPages,
   type SqlExecutor,
 } from "./query-runner.ts";

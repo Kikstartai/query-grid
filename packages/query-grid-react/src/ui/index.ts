@@ -5,6 +5,7 @@ export {
   type CardListProps,
   type DataGridRootProps,
 } from "./data-grid.tsx";
+export { ExportButton, type ExportButtonProps } from "./export.tsx";
 export {
   FieldFilter,
   FilterBar,

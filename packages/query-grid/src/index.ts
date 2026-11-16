@@ -20,6 +20,18 @@ export {
   type RangeChip,
   type SortChip,
 } from "./model/chips.ts";
+export {
+  CSV_BOM,
+  CSV_TYPE,
+  encodeCsv,
+  encodeCsvCell,
+  encodeCsvHeader,
+  encodeCsvRow,
+  encodeCsvRows,
+  formatExportValue,
+  listExportFields,
+  type ExportRequest,
+} from "./model/csv.ts";
 export { mapSourceQueries } from "./model/data-source.ts";
 export type {
   CountResult,

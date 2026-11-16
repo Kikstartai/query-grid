@@ -126,3 +126,27 @@ export function SlidersIcon(props: IconProps) {
     </Svg>
   );
 }
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+    </Svg>
+  );
+}
+
+export function MoreIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12 5h.01M12 12h.01M12 19h.01" />
+    </Svg>
+  );
+}
+
+export function GripIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+    </Svg>
+  );
+}

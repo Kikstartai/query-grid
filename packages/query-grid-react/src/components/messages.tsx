@@ -164,6 +164,9 @@ export interface QueryGridMessages {
   sortByField: (params: LabelParams) => string;
   filterField: (params: LabelParams) => string;
   resizeColumn: (params: LabelParams) => string;
+  exportCsv: string;
+  exporting: string;
+  exportOverLimit: (params: { limit: string; rows: string }) => string;
   boardHelp: string;
   boardUnavailable: string;
   moveFailed: string;
@@ -383,6 +386,10 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   sortByField: ({ label }) => `Sort by ${label}`,
   filterField: ({ label }) => `Filter ${label}`,
   resizeColumn: ({ label }) => `Resize ${label}`,
+  exportCsv: "Export CSV",
+  exporting: "Exporting…",
+  exportOverLimit: ({ limit, rows }) =>
+    `An export takes at most ${limit}: ${rows} match. Narrow the filters first.`,
   boardHelp:
     "Drag a card, or press Space on it and use the arrow keys, to change its status. A column the card may not move to is skipped, and a drop outside the column it is shown in puts it back.",
   boardUnavailable:
@@ -436,6 +443,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
       "That matches too much to answer fast. Add more characters or another filter.",
     narrow_first: ({ limit }) =>
       `These filters leave more than ${limit} rows. Narrow them first, or clear the range, the text filter or Match any.`,
+    export_too_large: ({ limit }) =>
+      `More than ${limit} rows match. Narrow the filters to export them.`,
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
     unknown_row: () => "That row no longer exists.",
     over_cap: ({ cap }) =>

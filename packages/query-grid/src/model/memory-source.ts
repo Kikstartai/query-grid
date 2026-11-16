@@ -1,3 +1,4 @@
+import { encodeCsv, listExportFields } from "./csv.ts";
 import type { DataSource, GroupHeader } from "./data-source.ts";
 import {
   getFacetField,
@@ -358,6 +359,8 @@ export function createMemorySource(
     },
     fetchNarrowed: async () => null,
     fetchLimits: async () => null,
+    fetchExport: async (query, request) =>
+      encodeCsv(listExportFields(def, request.columns), select(query)),
     fetchTransitions: async () => listAllTransitions(def),
     changeFacetValue: async (id, to) => {
       const key = def.facet?.field;

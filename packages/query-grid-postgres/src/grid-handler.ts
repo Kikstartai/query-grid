@@ -1,9 +1,16 @@
 import {
+  CSV_BOM,
+  CSV_TYPE,
   decodeQuery,
+  encodeCsvHeader,
+  encodeCsvRows,
   formatProblem,
+  getField,
   isValidFieldValue,
   KEY_FIELD,
+  listExportFields,
   resolveLimits,
+  type BaseFieldDef,
   type FieldOption,
   type GridLimits,
   type GridRow,
@@ -11,6 +18,8 @@ import {
   type ProblemParams,
 } from "@kikstart/query-grid";
 import {
+  COLUMNS_PARAM,
+  COLUMNS_SEPARATOR,
   EXACT_PARAM,
   LIMIT_PARAM,
   SUB_ROUTES,
@@ -27,6 +36,7 @@ import {
   listGridPage,
   listGridTotals,
   QUERY_CANCELED,
+  walkExportPages,
   type SqlExecutor,
 } from "./query-runner.ts";
 import { QueryRejected } from "./sql-builder.ts";
@@ -144,6 +154,70 @@ async function readMove(
   return { id, to };
 }
 
+function listExportColumns(
+  def: PostgresGridDef,
+  raw: string | null,
+): BaseFieldDef[] {
+  if (raw === null) {
+    return listExportFields(def);
+  }
+  const keys = raw.split(COLUMNS_SEPARATOR).filter(Boolean);
+  const stray = keys.find((key) => !getField(def, key));
+  if (stray !== undefined || keys.length === 0) {
+    throw new QueryRejected("invalid_value", "unknown_field", {
+      field: stray ?? COLUMNS_PARAM,
+    });
+  }
+  return listExportFields(def, keys);
+}
+
+function toFileName(id: string): string {
+  return `${id.replace(/[^a-z0-9_-]/gi, "_")}.csv`;
+}
+
+// The first page is read before the response exists, so a refusal is still a 400 with its code. A failure after that can only end the stream.
+async function exportResponse(
+  def: PostgresGridDef,
+  fields: BaseFieldDef[],
+  pages: AsyncGenerator<GridRow[]>,
+  report: (error: unknown) => void,
+): Promise<Response> {
+  const encoder = new TextEncoder();
+  const first = await pages.next();
+  const head = `${CSV_BOM}${encodeCsvHeader(fields)}${encodeCsvRows(fields, first.done ? [] : first.value)}`;
+  let sent = false;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!sent) {
+        sent = true;
+        controller.enqueue(encoder.encode(head));
+        return;
+      }
+      try {
+        const next = await pages.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(encodeCsvRows(fields, next.value)));
+      } catch (error) {
+        report(error);
+        controller.error(error);
+      }
+    },
+    cancel: () => {
+      void pages.return(undefined);
+    },
+  });
+  return new Response(body, {
+    headers: {
+      "content-type": CSV_TYPE,
+      "content-disposition": `attachment; filename="${toFileName(def.id)}"`,
+      "cache-control": "no-store",
+    },
+  });
+}
+
 export function createGridHandler(config: GridHandlerConfig): GridHandler {
   const { def, execute } = config;
   const limits = resolveLimits(config.limits);
@@ -211,6 +285,23 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
         );
       case "limits":
         return limits;
+      case "export":
+        return exportResponse(
+          def,
+          listExportColumns(def, params.get(COLUMNS_PARAM)),
+          walkExportPages(
+            def,
+            execute,
+            decodeQuery(def, params),
+            signal,
+            limits,
+          ),
+          (error) => {
+            if (!signal.aborted) {
+              report(error);
+            }
+          },
+        );
       case "transitions":
         if (!config.moves) {
           throw new QueryRejected("not_found");
@@ -237,6 +328,9 @@ export function createGridHandler(config: GridHandlerConfig): GridHandler {
     const started = performance.now();
     try {
       const body = await answer(route, request);
+      if (body instanceof Response) {
+        return body;
+      }
       return Response.json(body, {
         headers: {
           "server-timing": `db;dur=${(performance.now() - started).toFixed(1)}`,

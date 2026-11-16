@@ -1,6 +1,7 @@
 import type { FieldOption, GridRow } from "./grid-def.ts";
 import type { QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities, NarrowedResult } from "./capabilities.ts";
+import type { ExportRequest } from "./csv.ts";
 import type { GridLimits } from "./limits.ts";
 import type { Problem } from "./problems.ts";
 
@@ -100,6 +101,11 @@ export interface DataSource {
     signal: AbortSignal,
   ) => Promise<NarrowedResult | null>;
   fetchLimits: (signal: AbortSignal) => Promise<GridLimits | null>;
+  fetchExport: (
+    query: QueryState,
+    request: ExportRequest,
+    signal: AbortSignal,
+  ) => Promise<string>;
   fetchTransitions: (signal: AbortSignal) => Promise<[string, string][]>;
   changeFacetValue: (id: string, to: string) => Promise<GridRow>;
 }
@@ -129,5 +135,7 @@ export function mapSourceQueries(
     fetchGroups: (query, signal) => source.fetchGroups(fetch(query), signal),
     fetchNarrowed: (query, signal) =>
       source.fetchNarrowed(fetch(query), signal),
+    fetchExport: (query, request, signal) =>
+      source.fetchExport(fetch(query), request, signal),
   };
 }

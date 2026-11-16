@@ -45,6 +45,7 @@ export type RejectionCode =
   | "invalid_limit"
   | "too_broad"
   | "narrow_first"
+  | "export_too_large"
   | "transition_refused"
   | "not_found";
 

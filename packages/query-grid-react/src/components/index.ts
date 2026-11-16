@@ -34,6 +34,7 @@ export {
   type DataGridRootProps,
   type DataGridToolbarProps,
 } from "./data-grid.tsx";
+export { ExportButton, type ExportButtonProps } from "./export-button.tsx";
 export {
   FacetPanel,
   type FacetOption,

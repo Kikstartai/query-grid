@@ -395,6 +395,7 @@ export async function listGridPage(
   return toPageResult(def, query, rows, limit, limits);
 }
 
+// The narrowed set is sized once, before the first page: a walk is one read of the result, and a probe before every page would cost more than the pages.
 export async function* walkGridPages(
   def: PostgresGridDef,
   execute: SqlExecutor,
@@ -402,21 +403,60 @@ export async function* walkGridPages(
   pageSize: number = WALK_PAGE_SIZE,
   signal?: AbortSignal,
   limits: GridLimits = DEFAULT_LIMITS,
+  maxRows: number = Number.POSITIVE_INFINITY,
 ): AsyncGenerator<GridRow[]> {
+  const narrow = await listNarrowSettings(def, execute, query, limits, signal);
   let cursor: string | null = query.cursor;
+  let sent = 0;
   do {
     signal?.throwIfAborted();
-    const page = await listGridPage(
+    const paged = { ...query, cursor };
+    const rows = await runFiltered<GridRow>(
       def,
       execute,
-      { ...query, cursor },
-      pageSize,
-      signal,
+      paged,
+      buildPageSql(def, paged, pageSize, limits),
       limits,
+      narrow,
+      signal,
     );
+    const page = toPageResult(def, paged, rows, pageSize, limits);
+    sent += page.rows.length;
     yield page.rows;
     cursor = page.nextCursor;
-  } while (cursor !== null);
+  } while (cursor !== null && sent < maxRows);
+}
+
+function resolveExportCap(query: QueryState, limits: GridLimits): number {
+  return query.search !== null ? limits.searchLimit : limits.exportLimit;
+}
+
+// The result is counted up to the export limit before the first page is read, so an export too large to send is refused before a byte of it is.
+export async function* walkExportPages(
+  def: PostgresGridDef,
+  execute: SqlExecutor,
+  query: QueryState,
+  signal?: AbortSignal,
+  limits: GridLimits = DEFAULT_LIMITS,
+): AsyncGenerator<GridRow[]> {
+  const whole: QueryState = { ...query, group: null, cursor: null };
+  const limit = resolveExportCap(whole, limits);
+  const size = await getGridCount(def, execute, whole, false, signal, {
+    ...limits,
+    countCap: limit,
+  });
+  if (size.capped || size.count > limit) {
+    throw new QueryRejected("export_too_large", "export_too_large", { limit });
+  }
+  yield* walkGridPages(
+    def,
+    execute,
+    whole,
+    WALK_PAGE_SIZE,
+    signal,
+    limits,
+    limit,
+  );
 }
 
 type CounterRow = Record<string, string | number> & {

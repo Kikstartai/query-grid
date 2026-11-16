@@ -83,6 +83,7 @@ export function createTestSource(
     fetchGroups: async () => ({ groups: [], source: "live", truncated: false }),
     fetchNarrowed: async () => null,
     fetchLimits: async () => null,
+    fetchExport: async () => "",
     fetchTransitions: none,
     changeFacetValue: async (id) => ({ id }),
     ...overrides,

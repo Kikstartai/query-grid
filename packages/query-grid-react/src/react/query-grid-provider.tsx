@@ -104,6 +104,12 @@ function createValue(
         totals.reload();
         return updated;
       },
+      fetchExport: (columns) =>
+        source.fetchExport(
+          store.getQuery(),
+          { columns },
+          new AbortController().signal,
+        ),
     },
     meta: { def, source },
   };

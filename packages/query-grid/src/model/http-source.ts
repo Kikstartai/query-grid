@@ -9,6 +9,7 @@ import type {
 import type { FieldOption, GridRow } from "./grid-def.ts";
 import type { QueryState } from "./query-state.ts";
 import type { NarrowedResult } from "./capabilities.ts";
+import { CSV_BOM } from "./csv.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
 import { encodeQuery } from "./query-url.ts";
@@ -24,6 +25,7 @@ export const SUB_ROUTES = [
   "groups",
   "narrowed",
   "limits",
+  "export",
   "transitions",
   "status",
 ] as const;
@@ -32,6 +34,8 @@ export type SubRoute = (typeof SUB_ROUTES)[number];
 
 export const LIMIT_PARAM = "limit";
 export const EXACT_PARAM = "exact";
+export const COLUMNS_PARAM = "columns";
+export const COLUMNS_SEPARATOR = ",";
 
 export interface ErrorBody extends Problem {
   error: string;
@@ -43,7 +47,7 @@ export interface MoveBody {
   to: string;
 }
 
-async function readJson<T>(url: string, init: RequestInit): Promise<T> {
+async function request(url: string, init: RequestInit): Promise<Response> {
   const response = await fetch(url, init);
   if (!response.ok) {
     const body = (await response
@@ -54,7 +58,11 @@ async function readJson<T>(url: string, init: RequestInit): Promise<T> {
     }
     throw new SourceError(body.code, body.params ?? {});
   }
-  return (await response.json()) as T;
+  return response;
+}
+
+async function readJson<T>(url: string, init: RequestInit): Promise<T> {
+  return (await (await request(url, init)).json()) as T;
 }
 
 export function createHttpSource(
@@ -106,6 +114,17 @@ export function createHttpSource(
         signal,
       }),
     fetchLimits: (signal) => readJson<GridLimits>(route("limits"), { signal }),
+    fetchExport: async (query, { columns }, signal) => {
+      const params = filterParams(query);
+      if (columns) {
+        params.set(COLUMNS_PARAM, columns.join(COLUMNS_SEPARATOR));
+      }
+      const response = await request(`${route("export")}?${params}`, {
+        signal,
+      });
+      const text = await response.text();
+      return text.startsWith(CSV_BOM) ? text : `${CSV_BOM}${text}`;
+    },
     fetchTransitions: (signal) =>
       readJson<[string, string][]>(route("transitions"), { signal }),
     changeFacetValue: (id, to) => {

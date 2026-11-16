@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { DataGrid } from "./data-grid.tsx";
+import { ExportButton } from "./export-button.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import { SortControl } from "./filter-bar.tsx";
 
@@ -117,5 +118,31 @@ describe("several sort columns", () => {
       />,
     );
     expect(plain).not.toContain('data-sort="then"');
+  });
+});
+
+describe("the export button", () => {
+  test("names itself and says so while it runs", () => {
+    const idle = render(<ExportButton onExport={noop} />);
+    expect(idle).toContain("data-export");
+    expect(idle).toContain("<bdi>Export CSV</bdi>");
+    expect(idle).not.toContain("aria-disabled");
+    const busy = render(<ExportButton onExport={noop} exporting />);
+    expect(busy).toContain("<bdi>Exporting…</bdi>");
+    expect(busy).toContain('aria-busy="true"');
+    expect(busy).toContain('aria-disabled="true"');
+  });
+
+  test("held, it carries its reason, and a refusal is shown beside it", () => {
+    const held = render(
+      <ExportButton onExport={noop} disabled reason="Too many rows" />,
+    );
+    expect(held).toContain('title="Too many rows"');
+    expect(held).toContain('aria-disabled="true"');
+    const failed = render(
+      <ExportButton onExport={noop} error="More than 50,000 rows match." />,
+    );
+    expect(failed).toContain('role="alert"');
+    expect(failed).toContain("More than 50,000 rows match.");
   });
 });

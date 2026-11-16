@@ -749,3 +749,18 @@
 :where(.qg-board-card-detail) {
   color: var(--ui-muted-foreground);
 }
+
+:where(.qg-export) {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ui-spacing) * 2);
+  min-inline-size: 0;
+}
+
+:where(.qg-export-error) {
+  overflow: hidden;
+  color: var(--ui-destructive);
+  font-size: calc(var(--ui-font-size) - 0.125rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
