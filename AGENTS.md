@@ -68,6 +68,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 
 ## Demo
 
+- Verify demo changes at runtime with the `nextjs:next-dev-loop` skill (from the `nextjs@nextjs` plugin) against `bun run dev`, and with the Playwright `e2e` suite for board moves.
 - Never force a subtree dynamic to satisfy the framework (`connection()`, `noStore`, `force-dynamic`, an `AtRequest`-style wrapper). A page renders static unless it reads real request data, and if a build complains, fix the cause, not the symptom.
 
 ## House style
