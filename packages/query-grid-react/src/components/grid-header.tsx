@@ -238,14 +238,15 @@ function HeaderLabel({ field, controls }: HeaderPartProps) {
     controls.onSortAdd !== undefined &&
     (position >= 0 || controls.addableSortFields?.includes(field.key) === true);
   const reason = controls.sortReasons?.[field.key];
-  if (!onSortChange || (!sortable && !addable && reason === undefined)) {
+  const enabled = sortable || addable;
+  if (!onSortChange || (!enabled && reason === undefined)) {
     return <span className="qg-header-label">{field.label}</span>;
   }
   const label = { label: field.label };
   return (
     <Button
       className="qg-header-sort"
-      data-no-drag={sortable || addable || undefined}
+      data-no-drag={enabled || undefined}
       data-header-sort={field.key}
       data-sorted={direction ?? undefined}
       data-sort-position={position >= 0 ? position + 1 : undefined}
@@ -254,8 +255,8 @@ function HeaderLabel({ field, controls }: HeaderPartProps) {
           ? messages.sortPosition({ ...label, position: position + 1 })
           : messages.sortByField(label)
       }
-      title={sortable || addable ? undefined : reason}
-      disabled={!sortable && !addable}
+      title={enabled ? undefined : reason}
+      disabled={!enabled}
       focusableWhenDisabled
       onClick={(event) => {
         if (addable && (event.shiftKey || !sortable)) {

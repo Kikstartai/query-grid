@@ -1000,11 +1000,8 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
       ? (row) => press(row, "data-row-actions")
       : undefined,
   });
-  const first = columns[0]?.field;
-  const labelOf =
-    props.rowLabel ??
-    ((row: GridRow) =>
-      first ? formatValue(first, row[first.key] ?? null, locale) : row.id);
+  const labelOf = (row: GridRow) =>
+    formatRowLabel(props, columns[0]?.field, row, locale);
 
   const entryCount = grouped?.entries.length ?? rows.length;
 
@@ -1067,6 +1064,18 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
   );
 }
 
+function formatRowLabel(
+  props: DataGridProps,
+  first: FieldDef | undefined,
+  row: GridRow,
+  locale: string,
+): string {
+  if (props.rowLabel) {
+    return props.rowLabel(row);
+  }
+  return first ? formatValue(first, row[first.key] ?? null, locale) : row.id;
+}
+
 function orderRows(rows: GridRow[], order: string[]): GridRow[] {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const ordered = order.flatMap((id) => byId.get(id) ?? []);
@@ -1081,13 +1090,7 @@ function ReorderableGrid(props: DataGridRootProps) {
   const first = props.fields.find((field) => !field.hidden);
   const labelOf = (id: string) => {
     const row = rows.find((item) => item.id === id);
-    if (!row) {
-      return undefined;
-    }
-    if (props.rowLabel) {
-      return props.rowLabel(row);
-    }
-    return first ? formatValue(first, row[first.key] ?? null, locale) : id;
+    return row ? formatRowLabel(props, first, row, locale) : undefined;
   };
   const rail = usePrimitive(rowRail, {
     order: ids,

@@ -626,14 +626,18 @@ async function pickBound(client: Client, size: number): Promise<string> {
 
 const SECOND_SORT = [{ field: "region", direction: "asc" as const }];
 
-async function pickFarCursor(client: Client, size: number): Promise<string> {
+async function pickNewestCursor(
+  client: Client,
+  offset: number,
+  sorts: string[],
+): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
-    `SELECT id FROM orders ORDER BY created_at DESC, id DESC OFFSET ${size - PAGE - 1} LIMIT 1`,
+    `SELECT id FROM orders ORDER BY created_at DESC, id DESC OFFSET ${offset} LIMIT 1`,
   );
   const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
   const row = await client.query<GridRow>(rowSql.text, rowSql.values);
   return encodeCursor({
-    sortValues: [String(row.rows[0].created_at), String(row.rows[0].region)],
+    sortValues: sorts.map((field) => String(row.rows[0][field])),
     id: rows[0].id,
   });
 }
@@ -646,15 +650,9 @@ async function benchExport(client: Client, total: number): Promise<Result[]> {
       { field: "created_at", min: await pickBound(client, size), max: null },
     ],
   };
-  const last = await client.query<{ id: string }>(
-    `SELECT id FROM orders ORDER BY created_at DESC, id DESC OFFSET ${size - EXPORT_PAGE - 1} LIMIT 1`,
-  );
-  const rowSql = buildRowSql(ORDERS_GRID_DEF, last.rows[0].id);
-  const row = await client.query<GridRow>(rowSql.text, rowSql.values);
-  const cursor = encodeCursor({
-    sortValues: [String(row.rows[0].created_at)],
-    id: last.rows[0].id,
-  });
+  const cursor = await pickNewestCursor(client, size - EXPORT_PAGE - 1, [
+    "created_at",
+  ]);
   const cases: [string, SqlQuery][] = [
     [
       "the count that refuses an export over the limit",
@@ -763,7 +761,10 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
         ORDERS_GRID_DEF,
         {
           ...withThenBy(core, SECOND_SORT),
-          cursor: await pickFarCursor(client, size),
+          cursor: await pickNewestCursor(client, size - PAGE - 1, [
+            "created_at",
+            "region",
+          ]),
         },
         PAGE,
       ),
