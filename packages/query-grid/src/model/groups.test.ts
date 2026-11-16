@@ -31,7 +31,7 @@ import {
 import { createQueryStore } from "./query-store.ts";
 import { createFeed } from "./row-feed.ts";
 import { decodeQuery, encodeQuery } from "./query-url.ts";
-import type { GroupHeader } from "./wire-types.ts";
+import type { GroupHeader } from "./data-source.ts";
 
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: TEST_INDEXES };
 const BASE = defaultQuery(DEF);

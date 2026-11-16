@@ -16,7 +16,7 @@ import type {
   GroupsResult,
   PageResult,
   TotalResult,
-} from "./wire-types.ts";
+} from "./data-source.ts";
 
 export const SUB_ROUTES = [
   "count",

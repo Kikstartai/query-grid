@@ -25,7 +25,7 @@ import {
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
-import type { GroupHeader } from "./wire-types.ts";
+import type { GroupHeader } from "./data-source.ts";
 import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 

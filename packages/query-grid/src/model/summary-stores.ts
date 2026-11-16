@@ -17,7 +17,7 @@ import {
 } from "./query-resource.ts";
 import type { QueryStore } from "./query-store.ts";
 import { createStore } from "./store.ts";
-import type { CountResult, FacetCount, TotalResult } from "./wire-types.ts";
+import type { CountResult, FacetCount, TotalResult } from "./data-source.ts";
 
 export type CountState = ResourceState<CountResult | null>;
 export type TotalState = ResourceState<TotalResult[]>;

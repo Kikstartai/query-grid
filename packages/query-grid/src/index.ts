@@ -20,7 +20,20 @@ export {
   type RangeChip,
   type SortChip,
 } from "./model/chips.ts";
-export type { DataSource } from "./model/data-source.ts";
+export type {
+  CountResult,
+  CountSource,
+  DataSource,
+  FacetCount,
+  GroupHeader,
+  GroupSource,
+  GroupsResult,
+  OptionSearch,
+  PageResult,
+  TotalAvailable,
+  TotalResult,
+  TotalUnavailable,
+} from "./model/data-source.ts";
 export {
   createGrouping,
   getGroupQuery,
@@ -233,16 +246,3 @@ export {
   resolveLimits,
   type GridLimits,
 } from "./model/limits.ts";
-export type {
-  CountResult,
-  CountSource,
-  FacetCount,
-  GroupHeader,
-  GroupSource,
-  GroupsResult,
-  OptionSearch,
-  PageResult,
-  TotalAvailable,
-  TotalResult,
-  TotalUnavailable,
-} from "./model/wire-types.ts";
