@@ -151,9 +151,11 @@ export const POST = (request: Request) => handle(request);
 | `GET /count`       | `{ count, capped, source }`; `exact=1` asks for the exact count                                                      | built in                     |
 | `GET /total`       | one result per total field: `{ field, available, sum, rows, source }` or `{ field, available: false, code, params }` | built in                     |
 | `GET /facets`      | `[{ value, count, sums }]` from the counter table, `sums` keyed by total field; it ignores the query                 | built in                     |
+| `GET /export`      | the whole filtered result as CSV, streamed; `columns` names the fields (see "Export")                                | built in                     |
 | `GET /options`     | `[{ value, label }]` for a lookup field (`field`, `query`, `value`)                                                  | the `options` hook           |
 | `GET /transitions` | `[[from, to]]`, for the board                                                                                        | the `moves.transitions` hook |
 | `POST /status`     | `{ id, to }` moves one row and returns it, for the board                                                             | the `moves.change` hook      |
+| `POST /order`      | `{ id, after, before }` moves one row in a manual order and returns the rows it changed (see "Row reorder")          | the `reorder.move` hook      |
 
 - A refusal is a 400, a refused transition a 409, an omitted hook or an unknown route a 404, the wrong method a 405 and anything else a 500 that carries no detail.
 - Every error body is `{ error, message, code, params }`. `code` and `params` are what the client renders through its messages; `message` is the code and its params as one log line. No English crosses the wire.
@@ -249,6 +251,8 @@ interface DataSourceCapabilities {
   overlapFields: string[];
   groupFields: string[];
   sortFields: string[];
+  thenByFields: string[];
+  sortOrders: string[][];
   searchFields: string[];
   isFacetCountExact(query: QueryState): boolean;
 }
@@ -290,21 +294,23 @@ import { DataGrid, FacetPanel } from "@kikstart/query-grid-react/components";
 />
 ```
 
-| Component                                                  | Takes                                                                                                                                 |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `DataGrid`, or `DataGrid.Root` around its parts            | `fields`, `rows`, `hasNext`, `onEndReached`, `loading`; optionally `error`, `sort` and `onSortChange`, header `filters`, column state |
-| `CardList`                                                 | the same row window, plus `titleField` and `badgeField`                                                                               |
-| `StatusBoard`                                              | generic `lanes`, `onMove(id, to, { from, index })` and `canMove(from, to)`                                                            |
-| `FilterBar`, `FilterSidebar`                               | children; the sidebar also takes `side: "start" \| "end"`, `activeCount` and `onReset`                                                |
-| `EqualsSelect`                                             | a `field` with `options`, `values` and `onValuesChange`; `multiple`                                                                   |
-| `LookupFilter`                                             | the same, plus a required `loadOptions`, and `valueLabels` and `onOptionPick` for the chosen values' labels                           |
-| `RangeFilter`                                              | a `field`, `range` and `onRangeChange`: a date range for a `datetime` field, two number inputs otherwise                              |
-| `SortControl`, `SearchFilter`                              | options or a value, and one change callback                                                                                           |
-| `FilterChips`                                              | `chips`, `onRemove(chipId, valueId?)`, `onReset`                                                                                      |
-| `FacetPanel`                                               | `options` with counts, `values`, `onValuesChange`, `multiple`                                                                         |
-| `ViewSwitch`, `ColumnsMenu`, `CountDisplay`, `TotalFooter` | a value and, where it changes, a callback                                                                                             |
+| Component                                                  | Takes                                                                                                                                                                                |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DataGrid`, or `DataGrid.Root` around its parts            | `fields`, `rows`, `hasNext`, `onEndReached`, `loading`; optionally `error`, `sorts` and `onSortChange`, header `filters`, column state, selection, row open, row actions and reorder |
+| `ExportButton`                                             | `onExport`, `exporting`, `error`, and `disabled` with a `reason`                                                                                                                     |
+| `BadgeCell`, `ListCell`, `LinkCell`, `FieldCell`           | a label and a tone, a list of items, an `href`, or a field with its value                                                                                                            |
+| `CardList`                                                 | the same row window, plus `titleField` and `badgeField`                                                                                                                              |
+| `StatusBoard`                                              | generic `lanes`, `onMove(id, to, { from, index })` and `canMove(from, to)`                                                                                                           |
+| `FilterBar`, `FilterSidebar`                               | children; the sidebar also takes `side: "start" \| "end"`, `activeCount` and `onReset`                                                                                               |
+| `EqualsSelect`                                             | a `field` with `options`, `values` and `onValuesChange`; `multiple`                                                                                                                  |
+| `LookupFilter`                                             | the same, plus a required `loadOptions`, and `valueLabels` and `onOptionPick` for the chosen values' labels                                                                          |
+| `RangeFilter`                                              | a `field`, `range` and `onRangeChange`: a date range for a `datetime` field, two number inputs otherwise                                                                             |
+| `SortControl`, `SearchFilter`                              | options or a value, and one change callback                                                                                                                                          |
+| `FilterChips`                                              | `chips`, `onRemove(chipId, valueId?)`, `onReset`                                                                                                                                     |
+| `FacetPanel`                                               | `options` with counts, `values`, `onValuesChange`, `multiple`                                                                                                                        |
+| `ViewSwitch`, `ColumnsMenu`, `CountDisplay`, `TotalFooter` | a value and, where it changes, a callback                                                                                                                                            |
 
-- **`DataGrid` is a compound.** `<DataGrid />` is the default composition: `DataGrid.Root` holding a `DataGrid.Toolbar` with `DataGrid.Status` and `DataGrid.ColumnsMenu`, then `DataGrid.Body`. Compose the parts yourself to drop the toolbar, move the status under the grid or put your own controls beside it; the parts share the grid's handle through `DataGrid.Root`, and a part outside one throws. The select column is part of the body.
+- **`DataGrid` is a compound.** `<DataGrid />` is the default composition: `DataGrid.Root` holding a `DataGrid.Toolbar` with `DataGrid.Status` and `DataGrid.ColumnsMenu`, then `DataGrid.Selection` and `DataGrid.Body`. Compose the parts yourself to drop the toolbar, move the status under the grid or put your own controls beside it; the parts share the grid's handle through `DataGrid.Root`, and a part outside one throws. The select column is part of the body.
 - **Column state** (order, width, visibility, pin) is internal to `DataGrid` by default and kept nowhere. Pass `columns` and `onColumnsChange` to control it, or a `columnPersistence` (`load` and `save`, sync or async; `createLocalStoragePersistence(key)` is one) to keep the internal state somewhere.
 - **The three filter controls are explicit variants**, each with its own props, so a lookup without `loadOptions` is a type error. The def-driven `FieldFilter`, which picks one from the capabilities and the field's `type` and `options`, exists only in `./ui`.
 - **A control's `reason` is its `title`.** Inside a `FilterSidebar` it is also shown as text: the sidebar sets `ReasonDisplayContext`, which a host's own container can set too.
@@ -494,12 +500,15 @@ A scope is a filter the user did not choose and cannot see: the folder a file li
 | `CONTAINS_MAX_LENGTH`, `isContainsField`         | `TEXT_MAX_LENGTH`, `isTextField`                       |
 | a `cell` taking `string \| number \| null`       | a `cell` taking `GridValue`                            |
 | `r.<field>` once per field                       | `r.<field>` repeats                                    |
+| `Cursor.sortValue` (one value)                   | `Cursor.sortValues` (one per sort column)              |
+
+Added since 0.4.0, for a host that builds these objects itself: a `DataSource` also has `fetchExport` and `reorderRow`, `DataSourceCapabilities` also has `thenByFields` and `sortOrders`, `Offers` has `thenBy`, a sort chip has `then`, and `GridLimits` has `exportLimit`. `QueryState.thenBy` is optional, so a query written for 0.4.0 still type-checks. A page's `ORDER BY` and cursor are unchanged for a single sort.
 
 A `c.<field>=text` URL written by 0.4.0 still reads as a contains filter.
 
 ## Limits
 
-Five numbers bound what the server does. They are `GridLimits` in core, with `DEFAULT_LIMITS`:
+Six numbers bound what the server does. They are `GridLimits` in core, with `DEFAULT_LIMITS`:
 
 | Limit            | Default | Bounds                                                                       |
 | ---------------- | ------- | ---------------------------------------------------------------------------- |
@@ -508,6 +517,7 @@ Five numbers bound what the server does. They are `GridLimits` in core, with `DE
 | `searchLimit`    | 500     | the rows a search returns, and its count and total                           |
 | `searchBudgetMs` | 120     | the statement budget of a search, and of a filter with a text or array index |
 | `narrowLimit`    | 100,000 | the rows the indexed filters may leave for an expensive operation            |
+| `exportLimit`    | 50,000  | the rows one export may send                                                 |
 
 ```ts
 const handle = createGridHandler({
@@ -518,7 +528,7 @@ const handle = createGridHandler({
 ```
 
 - Passing nothing keeps every default. `resolveLimits` refuses a value that is no positive integer when the handler is made. Each runner function takes the limits as its last argument.
-- They are set once, on the server. The browser holds no copy: a capped count says it is capped, a refused total carries the cap, the narrowed size carries its limit, and `GET /limits` (`source.fetchLimits`, `useGridLimits()`) answers all five.
+- They are set once, on the server. The browser holds no copy: a capped count says it is capped, a refused total carries the cap, the narrowed size carries its limit, and `GET /limits` (`source.fetchLimits`, `useGridLimits()`) answers all six.
 - `PAGE_LIMIT_MAX` (1,000), the search length (3 to 80 characters) and the identifier length stay fixed.
 
 ## The narrowed set
@@ -545,6 +555,173 @@ Some operations have no index to answer them at any size: an OR across fields, a
 - **Rows** load per group. Opening a group starts a keyset feed for the query with that value added, the same feed a board lane uses; a collapsed group loads nothing, and each open group has its own Load more.
 - `DataGrid` takes `groups`, and renders header rows, the rows of open groups and a load-more row in the one virtual list. The bound `DataGrid` builds them from `createGrouping`. `GroupControl` is the select that sets the field, in the default filter bar after the sort.
 - The count and the totals in the page header stay the query's own.
+
+## Sorting by several columns
+
+A sort is a first column and up to two more (`SORT_MAX` is 3). `QueryState.sort` is the first, as before, and `QueryState.thenBy` lists the rest. The URL holds them all: `?sort=item_count.desc,total.desc`.
+
+```ts
+indexes: [
+  { equals: [], sort: "created_at", range: true },
+  { equals: [], sort: "item_count", then: ["total"] },
+],
+```
+
+- **An index declares a composite order** with `then`. It is one btree over the equality columns, the sort, the `then` columns and the key, and it answers that order at any table size, both ways: a page is `(item_count, total, id) < ($1, $2, $3)`, one row comparison over the whole sort key.
+- **One direction for every column.** One index read forward or backward gives every column the same direction, so `item_count desc, total desc` and `asc, asc` are the index's and `desc, asc` is not.
+- **Any other further column runs over the narrowed set**: a column no index orders, or one that runs the other way. The first column still needs its index. The page reads the rows the indexed filters leave, at most `narrowLimit`, and sorts them; its keyset is spelled out column by column behind a bound on the first, so a deep page still starts at the cursor.
+- **A further column must have a value in every row** on a server grid: a nullable or an array field is never one, and neither is the key.
+- **A client grid** sorts by any fields, each its own way, with no limit.
+- **The key breaks ties the first column's way**, in Postgres and in memory, so the two page identically.
+- **A column only a composite index sorts brings the rest of its order.** Clicking Items on the demo sorts by Items, then Total: `capabilities.sortOrders` lists the declared orders and `setSort` reaches them.
+- **Headers show the order.** A sorted header carries its direction and, with more than one, its place (1, 2, 3). Click sorts by that column alone. Shift+click adds it as the next column, turns it, then removes it. A column the data cannot sort by now is a disabled button with the reason as its `title`; a column that can never sort is a plain label.
+- **The sort control** in the filter bar has a Then by select beside it, with a direction button per chosen column. The sort chip reads `Sort: Items ↓, then Total ↓`.
+- Actions: `setSort` replaces the sort, `addSort` adds or turns a column, `removeSort` drops one. `Offers.thenBy` lists the columns that may be added now, and `capabilities.thenByFields` the ones that ever can.
+
+On 620,000 orders a deep keyset page of the composite order takes 1.0 ms at the median and reads `auto_orders_item_count__total` with no Sort. A second column over a 100,000-row narrowed set is 1.0 ms for the first page.
+
+## Export
+
+`GET /export` streams the whole filtered result as CSV: the query's filters, sort and scope, every row, not the loaded pages.
+
+```tsx
+import { DataGrid, ExportButton } from "@kikstart/query-grid-react/ui";
+
+<DataGrid.Root>
+  <DataGrid.Toolbar>
+    <DataGrid.Status />
+    <ExportButton />
+    <DataGrid.ColumnsMenu />
+  </DataGrid.Toolbar>
+  <DataGrid.Body />
+</DataGrid.Root>;
+```
+
+- **Bounded by `exportLimit`**, 50,000 rows by default, set on the server. Before the first page is read the result is counted up to the limit (from the counter table when it can be), and an export over it is a 400 `export_too_large` with the limit in `params`. A search exports what it returns and is refused past `searchLimit`.
+- **Streamed in keyset pages** of 1,000 by `walkExportPages`, the page walker with that count in front. Nothing is buffered on the server, and a deep page costs what the first does. The narrowed set is sized once for the walk.
+- **The columns** are the `columns` parameter, field keys in order; the bound `ExportButton` sends the visible columns in their current order. Without it every field that is not hidden is sent. An unknown column is a 400.
+- **The cells** are plain values: money in major units (`1234.56`), a date as stored, an option as its label, a list joined with commas. The header row is the field labels. The file is UTF-8 with a byte order mark and CRLF line ends.
+- **Formula cells are neutralised.** A text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is led by an apostrophe, so a spreadsheet shows it and never runs it. A number the encoder wrote itself keeps its sign.
+- **The button** is disabled with its reason when the count is known to be over the limit, shows a refusal beside it, and downloads `<def.id>.csv`. `useQueryGridActions().fetchExport(columns?)` returns the same text for a host's own button.
+- **A client grid exports from memory**, with no limit.
+- **A scope is honoured**: `fetchExport` is one of the reads `mapSourceQueries` wraps.
+- **Another format is the host's.** Core has no dependencies, so there is no Excel or PDF here. On the server, `walkExportPages(def, execute, query, signal, limits)` yields the same bounded pages of rows for a route with its own encoder; in the browser, `encodeCsv`, `formatExportValue` and `listExportFields` are the pieces the CSV is made of.
+
+## Selection and bulk actions
+
+The grid selects rows. A host reads the selection and puts its bulk actions in the selection bar.
+
+```tsx
+function ArchiveSelected() {
+  const selection = useRowSelection();
+  const { clearSelection } = useQueryGridActions();
+  return (
+    <Button
+      onClick={async () => {
+        await archive(selection);
+        clearSelection();
+      }}
+    >
+      Archive
+    </Button>
+  );
+}
+
+<DataGrid.Root>
+  <DataGrid.Selection>
+    <ArchiveSelected />
+  </DataGrid.Selection>
+  <DataGrid.Body />
+</DataGrid.Root>;
+```
+
+- `useRowSelection()` is `{ kind: "none" }`, `{ kind: "rows", ids }` or `{ kind: "matching", query, scope, count, capped }`.
+- **Everything matching is the query, never ids.** When every loaded row is selected and more match, the bar offers `Select all 620 000 rows that match`. The selection is then the query and the scope, for the host to run its action over on the server with the same filters.
+- **No extra query.** The count shown is the one the page already has, read from the count store only while a selection is up. Selecting sends nothing.
+- Deselecting one row of an everything-matching selection leaves the loaded rows by id. A new query clears the selection. `clearSelection()` clears it from the host.
+- The base `DataGrid` takes `onSelectionChange({ ids, allMatching })`, `matchingCount` (the text of the offer) and `selectionKey` (a change clears the selection). `DataGrid.Selection` is the bar, hidden while nothing is selected, and its children are the host's actions.
+
+## Row open and row actions
+
+```tsx
+<DataGrid
+  rowHref={(row) => `/orders/${row.id}`}
+  onRowOpen={(row) => router.push(`/orders/${row.id}`)}
+  rowActions={(row) => (
+    <>
+      <MenuItem value="edit">Edit</MenuItem>
+      <MenuItem value="delete">Delete</MenuItem>
+    </>
+  )}
+  onRowAction={(value, row) => run(value, row)}
+/>
+```
+
+- **Open.** The first visible cell of each row is the open target: a link with `rowHref` (so a middle click and a new tab work), a button with `onRowOpen` alone. With both, a plain click calls `onRowOpen` and anything else follows the link. Enter on any cell of the row opens it.
+- **Actions.** `rowActions(row)` returns UI SDK `MenuItem`s. The grid adds one trailing column, sticky at the inline end, with a trigger per row and one UI SDK Menu for the whole grid, so the menu's keyboard, typeahead, dismissal and focus return are UI SDK's. Shift+F10 or the menu key on a cell opens that row's menu. `onRowAction(value, row)` runs the chosen item; a returned promise keeps the item pending.
+- The triggers are named for their row (`Actions for 566601`) through `rowLabel`, which defaults to the first visible column.
+- A link or a button inside a cell keeps its own click: a press on one does not start a cell range.
+- The package ships no edit or delete dialog and no form: the callbacks are the seam.
+
+## Row reorder
+
+A list with a manual order is reordered by dragging a row's handle, or with the keyboard: Space on the handle picks the row up, the arrows move it, Home and End send it to an end, Space drops it and Escape puts it back.
+
+```ts
+export const STAGES_GRID_DEF = {
+  id: "stages",
+  orderField: "position",
+  defaultSort: { field: "position", direction: "asc" },
+  fields: [
+    { key: "id", label: "ID", type: "id", hidden: true },
+    { key: "name", label: "Name", type: "text" },
+    { key: "position", label: "Order", type: "integer" },
+  ],
+} satisfies GridDef;
+```
+
+- **`orderField`** on the def names the number the order is kept in. A def without it has no reorder at all.
+- **Offered only when what the user sees is the order.** The grid is sorted ascending by the order field and by nothing else, it is not grouped, and every matching row is loaded: a client grid, or a server result that fits in the first page. Otherwise the handles stay, disabled, with the reason: `Sort by Order ascending, and by nothing else, to reorder.`
+- **A filter is fine.** The move is `{ id, index, after, before }`: the row, and the rows it now sits between.
+- **Saved through the source.** `source.reorderRow(move)` returns the rows whose order value changed. The in-memory source deals the same values out again over the new sequence, so a hidden row keeps a place. `createHttpSource` posts `{ id, after, before }` to `/order`, which the handler hands to the `reorder.move` hook: the host writes the new position however it stores it and returns the rows it changed. The ids are validated before the hook runs.
+- The grid moves the row at once and puts it back, with a message, when the save fails.
+- The base `DataGrid` takes `onRowReorder(move)` and `reorder: { disabled, reason, error }`. `useReorderOffer()` says whether the bound grid offers it and why not.
+
+## Cells
+
+A field renders through its `cell` when it has one. Without one, `render` picks a ready-made cell:
+
+| `render`  | Shows                                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| (none)    | the value formatted by its type: text, date, date and time, money, Yes / No                                |
+| `"badge"` | the value's label in a badge, toned by `tones[value]`: `neutral`, `info`, `success`, `warning` or `danger` |
+| `"list"`  | an array as the first three items and `+2` for the rest                                                    |
+
+- `BadgeCell`, `ListCell`, `LinkCell` and `FieldCell` are exported from `./components` for a custom `cell`, and `createLinkCell((value, row) => href)` makes a link cell. Only a web, mail, phone or same-site address becomes a link; anything else is shown as text.
+- `render` and `tones` are plain data on the field, so a stored def can carry them.
+- The badge tones are tints of `--ui-primary` and `--ui-destructive`; restyle `.qg-badge[data-tone]` for a palette of your own.
+- The row link, the reorder handle and the actions menu are the grid's own columns, not renderers.
+
+## Stored grid defs
+
+A def kept as JSON in a database is untrusted input. `normalizeStoredGridDef(input)` returns `{ ok: true, def }`, a fresh def holding only known keys, or `{ ok: false, problems }`, a list of codes with a `path`:
+
+```ts
+import { normalizeStoredGridDef } from "@kikstart/query-grid";
+
+const result = normalizeStoredGridDef(JSON.parse(stored));
+if (!result.ok) {
+  throw new Error(result.problems.map((item) => item.code).join(", "));
+}
+const def = { ...result.def, table: "orders" } satisfies PostgresGridDef;
+```
+
+- It accepts the core def and its indexes: `id`, `fields`, `defaultSort`, `facet`, `totals`, `search`, `orderField`, `indexes`, `textIndexes`, `arrayIndexes`.
+- An unknown key is `stored_unknown_key`, a wrong shape `stored_invalid`, a reference to a field the def lacks `stored_unknown_field`, a repeat `stored_duplicate` and an oversized list `stored_too_many`. It never throws and reports up to 50 problems.
+- **Storage is the host's.** `table` and `counterTable` are refused, so stored JSON never names a table; the host adds them and runs `validateGridDef` for the Postgres rules.
+- A field key is a plain identifier and never `__proto__`, `constructor` or `prototype`.
+- A `cell` is a function, so it is never stored: `render` and `tones` are the stored form.
+- Which filters, columns and actions a screen shows stays the layout's: props on the parts, never keys of a def.
 
 ## Styling
 
@@ -666,21 +843,23 @@ function Rows() {
 }
 ```
 
-| Hook                                              | Gives                                                                                                      |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `useQueryState`                                   | the query                                                                                                  |
-| `useOffers`, `useOfferContext`                    | which filters, ranges, sorts and search are answered now, and which take several values                    |
-| `useOfferState`                                   | whether one control is offered, and the sentence that says why not                                         |
-| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped                                           |
-| `useCountState`, `useTotalState`, `useFacetState` | count, total and facet counts, each fetched only once something reads it                                   |
-| `useFilterChips`                                  | one entry per active filter and the sort: the chip as data, and its labelled item                          |
-| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns                                     |
-| `useGridView`                                     | the current view                                                                                           |
-| `useQueryGridActions`                             | every change: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions`, `moveRow` |
+| Hook                                              | Gives                                                                                                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useQueryState`                                   | the query                                                                                                                                                 |
+| `useOffers`, `useOfferContext`                    | which filters, ranges, sorts and search are answered now, and which take several values                                                                   |
+| `useOfferState`                                   | whether one control is offered, and the sentence that says why not                                                                                        |
+| `useFeedState`                                    | the loaded rows, paging status and whether the result was capped                                                                                          |
+| `useCountState`, `useTotalState`, `useFacetState` | count, total and facet counts, each fetched only once something reads it                                                                                  |
+| `useFilterChips`                                  | one entry per active filter and the sort: the chip as data, and its labelled item                                                                         |
+| `useColumns`                                      | column order, widths, visibility and pinning, and the laid-out columns                                                                                    |
+| `useGridView`                                     | the current view                                                                                                                                          |
+| `useRowSelection`                                 | the selected row ids, or everything matching as the query and scope with its count                                                                        |
+| `useReorderOffer`                                 | whether the grid's manual order may be changed now, and the sentence that says why not                                                                    |
+| `useQueryGridActions`                             | every change: `dispatch`, `loadMore`, `requestExact`, `setView`, `rememberLabel`, `loadOptions`, `moveRow`, `fetchExport`, `clearSelection`, `reorderRow` |
 
 The hooks read; `useQueryGridActions()` changes. The stores behind them are not part of the public surface.
 
-Without React at all, core is the whole model: `createQueryStore`, `createFeed`, `createCountStore`, `listOffers` and `applyAction` are plain functions over an emitter, and `explainUnavailable(query, target, context)` returns the reason a control is unavailable as a code and the fields that block it. For a host's own export, `useQueryState()` is the query, `useColumns().layout` the visible columns in order, and `walkGridPages(def, execute, query)` on the server yields every page of the result by keyset.
+Without React at all, core is the whole model: `createQueryStore`, `createFeed`, `createCountStore`, `listOffers` and `applyAction` are plain functions over an emitter, and `explainUnavailable(query, target, context)` returns the reason a control is unavailable as a code and the fields that block it. For a host's own export, `useQueryState()` is the query, `useColumns().layout` the visible columns in order, and `walkExportPages(def, execute, query)` on the server yields every page of the result by keyset, refused first when it is over `exportLimit` (`walkGridPages` is the same walk with no limit).
 
 ## The in-memory data source
 
@@ -708,7 +887,7 @@ The def then declares its **indexes**. An index is the unit the data layer answe
 - the def's `search` is a list of columns matched by substring
 - `textIndexes` and `arrayIndexes` name the fields with a trigram or an array index of their own
 
-The demo's orders grid declares ten:
+The demo's orders grid declares eleven ordered indexes and the search:
 
 | Index                                           | Index                           |
 | ----------------------------------------------- | ------------------------------- | ------------- | ----------- | ------------- | ----------------- |
@@ -722,6 +901,7 @@ The demo's orders grid declares ten:
 | `status_code =`, `region =`, sort `created_at`  | first and deep, both directions | 0.93 / 1.20   | 2.86 / 3.07 | 12.47 / 14.29 | Index Scan        |
 | `status_code =`, `channel =`, sort `created_at` | first and deep, both directions | 1.01 / 1.25   | 2.85 / 3.87 | 12.78 / 17.10 | Index Scan        |
 | search over `customer_name`, `order_number`     | 8 terms                         | 15.03 / 19.00 | none        | none          | Bitmap Index Scan |
+| no filter, sort `item_count`, then `total`      | `(item_count, total, id)`       |
 
 `validateGridDef` rejects an index that sorts on a nullable field, repeats another index, puts a range on a field whose type has none, names an equality field the def lacks or puts a timestamp in the search, and requires the default sort with no filter to be an index.
 
@@ -745,7 +925,7 @@ Every bound control renders from `listOffers(def, query, context)` and writes th
 
 ### Keyset paging
 
-A page is `SELECT … FROM orders t WHERE <filters> AND (t.<sort>, t.id) < ($a, $b) ORDER BY t.<sort> DESC, t.id DESC LIMIT n + 1`. The extra row says whether a next page exists and never reaches the client. There is no offset anywhere, so a deep page costs the same as the first. Timestamps cross the wire as microsecond ISO strings so a cursor round-trips exactly. `walkGridPages` is the same loop as an async generator, for a host's export.
+A page is `SELECT … FROM orders t WHERE <filters> AND (t.<sort>, t.id) < ($a, $b) ORDER BY t.<sort> DESC, t.id DESC LIMIT n + 1`; with further sort columns the row comparison and the `ORDER BY` hold them all, before the key. The extra row says whether a next page exists and never reaches the client. There is no offset anywhere, so a deep page costs the same as the first. Timestamps cross the wire as microsecond ISO strings so a cursor round-trips exactly. `walkGridPages` is the same loop as an async generator, and `walkExportPages` is that walk behind the export limit.
 
 ### Search
 
@@ -838,6 +1018,15 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 | Core and the server send codes and params, never sentences                                                   | The words belong to the app's language, and only the React package knows it                                                                                                                    |
 | Base components take props and know no query                                                                 | They are usable for any list, and the constraint is one layer on top instead of a condition inside every part                                                                                  |
 | A nullable column is never a sort                                                                            | The NULL-safe keyset predicate is an `OR`, which loses the index range scan on a deep page                                                                                                     |
+| A composite order is answered by an index only when every column runs the same way                           | One btree read forward or backward gives one direction; mixed directions need a `DESC` column in the index and a keyset written as a union of ranges                                           |
+| A further sort column with no index runs over the narrowed set, and the first column keeps its index         | The rows are bounded before they are sorted, and the bound on the first column lets a deep page start at the cursor                                                                            |
+| An export is counted up to its limit before the first page is read                                           | A refusal has to be a status and a code, and a response that has started streaming can only stop                                                                                               |
+| The export limit is a row count the server sets                                                              | An export costs what it sends: the limit is the longest request a host will hold open, so it is the host's number                                                                              |
+| A CSV text cell that starts like a formula is led by an apostrophe                                           | A spreadsheet runs `=`, `+`, `-` and `@` cells; the apostrophe is the form the spreadsheets themselves show as text                                                                            |
+| Everything matching is selected as the query, not as ids                                                     | The ids of 620,000 rows are a query the page never needed; the filter already names them, and the host's action runs it on the server                                                          |
+| The row actions are one UI SDK Menu for the grid, with a trigger a row                                       | One menu instance a row costs frames while scrolling; a controller with the row as its payload keeps UI SDK's keyboard and focus                                                               |
+| Reorder is offered only on a whole set in its manual order                                                   | A move between two loaded rows of a longer or differently sorted list lands somewhere the user never saw                                                                                       |
+| A stored def is rebuilt from known keys and never names a table                                              | JSON from a database is input: an unknown key is an error, not a pass-through, and storage stays the host's code                                                                               |
 | The search returns 500 unordered rows and no cursor                                                          | A bitmap scan has no order; ordering it means a Sort over every match                                                                                                                          |
 | The search is refused past 120 ms                                                                            | Its cost follows the match count, so only a time budget bounds it                                                                                                                              |
 | Setting the search returns to the default sort                                                               | A capped result has no order; a complete one is sorted in memory by the default sort first                                                                                                     |
@@ -1110,17 +1299,17 @@ bun run dev
 
 The demo needs `apps/demo/.env.local` holding `QUERY_GRID_DATABASE_URL`, a direct Postgres 18 connection string (see `apps/demo/.env.example`). It serves on port 3040.
 
-| Script (`bun run --filter demo …`) | What                                                                                                                                                                                                                        |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db:setup`                         | schema, seed (620,000 orders and 30,000 customers by default), generated DDL, vacuum                                                                                                                                        |
-| `db:migrate`                       | the schema and the generated steps, one statement at a time, no seeding                                                                                                                                                     |
-| `db:generate`, `db:check`          | writes, or checks, one `db/migrations/0002_query_grid_<table>.sql` per table from the server defs                                                                                                                           |
-| `test`                             | def validity, the control enumeration with one and several values, migration parity (no database)                                                                                                                           |
-| `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact, several values per field                                                                                                             |
-| `e2e`                              | the browser suite against `next start` on port 3040 (or `E2E_PORT`): refusals, counts, filters, grid, views, board, right to left, theme, layout shift                                                                      |
-| `e2e:shots`                        | retakes the README screenshots into `docs/screenshots`                                                                                                                                                                      |
-| `db:bench`                         | p50 and p95 of every index with `EXPLAIN (ANALYZE)`, with one value and with several, empty values, the search with filters, and each expensive operation over a 100,000-row narrowed set, written to `db/bench-results.md` |
-| `db:bench:quick`                   | the per-release check: a handful of representative cases with 5 runs each, about a minute, nothing written                                                                                                                  |
+| Script (`bun run --filter demo …`) | What                                                                                                                                                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db:setup`                         | schema, seed (620,000 orders and 30,000 customers by default), generated DDL, vacuum                                                                                                                                                               |
+| `db:migrate`                       | the schema and the generated steps, one statement at a time, no seeding                                                                                                                                                                            |
+| `db:generate`, `db:check`          | writes, or checks, one `db/migrations/0002_query_grid_<table>.sql` per table from the server defs                                                                                                                                                  |
+| `test`                             | def validity, the control enumeration with one and several values, migration parity (no database)                                                                                                                                                  |
+| `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact, several values per field                                                                                                                                    |
+| `e2e`                              | the browser suite against `next start` on port 3040 (or `E2E_PORT`): refusals, counts, filters, grid, sort columns, export, selection, row open and actions, reorder, views, board, right to left, theme, layout shift                             |
+| `e2e:shots`                        | retakes the README screenshots into `docs/screenshots`                                                                                                                                                                                             |
+| `db:bench`                         | p50 and p95 of every index with `EXPLAIN (ANALYZE)`, with one value and with several, empty values, the search with filters, each expensive operation over a 100,000-row narrowed set and an export at its limit, written to `db/bench-results.md` |
+| `db:bench:quick`                   | the per-release check: a handful of representative cases with 5 runs each, about a minute, nothing written                                                                                                                                         |
 
 `e2e` needs a production build (`bun run build`) and starts `next start` itself unless one is already listening; run `bunx playwright install chromium` once. Board moves write to the database, so they run after every read-only test.
 

@@ -12,6 +12,7 @@ query-grid is a filter and data grid for very large tables. This document says h
 - **One def per grid.** An app declares each grid once, in one object, and each package reads its own slice of it.
 - **Server and client.** A server grid reads its rows over HTTP and is limited by its indexes. A client grid holds its rows in memory and is not limited.
 - **Very large data sets are never a constraint.** Every request is bounded by a page size, a cap, a time budget or the narrowed-set limit.
+- **Every feature is in one of three tiers.** An index answers it at any table size; or it runs over a narrowed set, counted first and refused past `narrowLimit`; or it is not offered, and its control stays visible, disabled, with the reason. A client grid holds its rows and takes everything.
 - **Some operations run only over a narrowed set.** An OR across fields, a range no index bounds, an excluded range, a text filter or an overlap with no index of its own, and a group by a field no counter holds are answered over the rows the indexed filters leave, and only when those rows number at most `narrowLimit`. A control that needs a smaller set stays visible and says how large the set is.
 
 ## Packages
@@ -37,6 +38,7 @@ Three npm packages in one repo, released together at one version.
 | `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                                                                                                                                                  |
 | `./memory` | `createMemorySource`, `memoryCapabilities`, `filterRows`                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
+- Core also holds what the grid features need and no browser does: `sortRows` over several columns, the CSV encoder (`encodeCsv`, `formatExportValue`, `listExportFields`), the reorder model (`canReorder`, `explainReorder`, `resolveRowMove`, `reorderRows`) and `normalizeStoredGridDef`.
 - The stores are plain objects with `subscribe` and a getter, built on one emitter. There is no store library.
 - The count, totals and facet counts are one kind of resource: it follows the query store, starts on its first subscriber and aborts the request it replaces.
 
@@ -52,7 +54,13 @@ Three npm packages in one repo, released together at one version.
 - A base component takes props and calls back. It imports no provider hook and knows no query, source, index or URL. An option or a control may carry `disabled` and a `reason`.
 - A bound wrapper reads the provider and renders the base component of the same name.
 - Everything is built on UI SDK components and behaviours. There are no hand-written primitives, no native `<select>` or date input and no table library.
-- `DataGrid` is a compound: `Root`, `Toolbar`, `Status`, `ColumnsMenu` and `Body`, with `<DataGrid />` as the default composition. It takes a row window: `rows`, `hasNext`, `onEndReached` and `loading`.
+- `DataGrid` is a compound: `Root`, `Toolbar`, `Status`, `ColumnsMenu`, `Selection` and `Body`, with `<DataGrid />` as the default composition. It takes a row window: `rows`, `hasNext`, `onEndReached` and `loading`.
+- A header's sort button shows the direction and, with several sort columns, the column's place. Click replaces the sort; Shift+click adds the column, turns it, then removes it. A column the data cannot sort by now is a disabled button with its reason; one that never sorts is a label.
+- `DataGrid` reports its selection (`onSelectionChange`), and `DataGrid.Selection` is the bar that shows it and holds the host's bulk actions. When every loaded row is selected and more match, the bar offers everything matching: a flag, not ids, kept true while all loaded rows stay selected.
+- A row opens through `rowHref` or `onRowOpen`: the first visible cell is the link or button, and Enter on any cell of the row presses it. `rowActions` adds a trailing column of triggers and one UI SDK Menu for the grid, opened through a menu controller with the row as its payload; Shift+F10 on a cell presses that row's trigger. A press on a link or a button inside a cell never starts a cell range.
+- `onRowReorder` adds a column of handles. The handles are parts of a second primitive, a rail built on UI SDK's `createReorder`: its draft order is the order the rows render in, so the list reorders under the pointer and the keyboard, and the moving row is kept mounted by the virtualizer.
+- A field with no `cell` renders through `FieldCell`: a badge for `render: "badge"`, a list for `render: "list"`, the formatted value otherwise.
+- `ExportButton` asks the source for the CSV of the current query and saves it; it is held with its reason when the count is known to be over the export limit.
 - `DataGrid` also takes `groups`. Each group is a header row, the rows of an open group and a load-more row, all mixed into the one virtual list. The cell focus, the range and the selection run over the data rows alone, so the arrow keys step from row to row past a header, and a header is a button on its own tab stop.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
@@ -66,34 +74,37 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid-postgres`
 
-| Part                | Holds                                                                                                                      |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| storage             | `PostgresGridDef`: the def plus `table` and `facet.counterTable`                                                           |
-| validation          | `validateGridDef`, `validateGridDefs`, `describeIndex`                                                                     |
-| SQL builder         | the page, row, count, total, facet and group statements; `assertDeclared` and `QueryRejected`                              |
-| runner              | `listGridPage`, `walkGridPages`, `getGridCount`, `listGridTotals`, `listFacetCounts`, `listGridGroups`, `getNarrowedSizes` |
-| DDL                 | `generateGridMigration`, `listGridMigrationSteps`, `listTableMigrations`, `listIndexDdl`, `listMissingIndexes`             |
-| `createGridHandler` | a fetch-standard `Request` in, a `Response` out                                                                            |
+| Part                | Holds                                                                                                                                         |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| storage             | `PostgresGridDef`: the def plus `table` and `facet.counterTable`                                                                              |
+| validation          | `validateGridDef`, `validateGridDefs`, `describeIndex`                                                                                        |
+| SQL builder         | the page, row, count, total, facet and group statements; `assertDeclared` and `QueryRejected`                                                 |
+| runner              | `listGridPage`, `walkGridPages`, `walkExportPages`, `getGridCount`, `listGridTotals`, `listFacetCounts`, `listGridGroups`, `getNarrowedSizes` |
+| DDL                 | `generateGridMigration`, `listGridMigrationSteps`, `listTableMigrations`, `listIndexDdl`, `listMissingIndexes`                                |
+| `createGridHandler` | a fetch-standard `Request` in, a `Response` out                                                                                               |
 
 ## The grid def
 
 A host writes one object per grid and checks it with `satisfies GridDef & PostgresGridDef`.
 
-| Type              | Package  | Adds                                             |
-| ----------------- | -------- | ------------------------------------------------ |
-| `BaseGridDef`     | core     | `id`, `fields`, `defaultSort`, `facet`, `totals` |
-| `IndexedGridDef`  | core     | `indexes`, `textIndexes`, `arrayIndexes`         |
-| `GridDef`         | React    | a `cell` on any field                            |
-| `PostgresGridDef` | Postgres | `table` and `facet.counterTable`                 |
+| Type              | Package  | Adds                                                                     |
+| ----------------- | -------- | ------------------------------------------------------------------------ |
+| `BaseGridDef`     | core     | `id`, `fields`, `defaultSort`, `facet`, `totals`, `search`, `orderField` |
+| `IndexedGridDef`  | core     | `indexes`, `textIndexes`, `arrayIndexes`                                 |
+| `GridDef`         | React    | a `cell` on any field                                                    |
+| `PostgresGridDef` | Postgres | `table` and `facet.counterTable`                                         |
 
-- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `array`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
+- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `array`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden`, `wrap`, `render` (`text`, `badge`, `list`) and `tones`.
+- `orderField` names the number a manual order is kept in. Only a def with one reorders.
 - `nullable` is what makes a field optional: only such a field takes the empty and not-empty values.
 - The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores indexes and storage.
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
 - An index is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each is one `CREATE INDEX`; the search's columns are `search` on the def, with one index of their own.
+- An index with `then` declares a composite order: its sort, then those columns, then the key. It answers exactly that order, every column in one direction, and not its first column alone.
 - An index's equality fields take several values each unless it sets `multi: false`.
 - An index with `empty` is partial: it holds only the rows where those nullable fields are empty, and answers a query that filters them to empty.
 - `textIndexes` names text fields with a trigram index each, and `arrayIndexes` array fields with a GIN index each. They answer a filter, never an order, so they are lists beside `indexes` and not indexes in it.
+- `normalizeStoredGridDef` turns a def read from storage into one built only from known keys, or a list of problem codes with paths. It accepts the core def and its indexes and refuses `table` and `counterTable`: storage is the host's.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
 ## Data source capabilities
@@ -116,15 +127,18 @@ interface DataSourceCapabilities {
   overlapFields: string[];
   groupFields: string[];
   sortFields: string[];
+  thenByFields: string[];
+  sortOrders: string[][];
   searchFields: string[];
   isFacetCountExact: (query: QueryState) => boolean;
 }
 ```
 
+- `sortFields` are the first sort columns an index gives. `thenByFields` are the columns a further sort may take: on a server grid every field with a value in each row (not nullable, not an array, not the key), on a client grid every field. `sortOrders` are the composite orders the indexes declare.
 - `indexCapabilities(indexes, { facetField, searchFields, fields, textIndexes, arrayIndexes })` builds them for a server grid: every field in an index's `equals` (a partial index's `empty` fields are answerable but are no control's and no URL key's), every index's sort, `searchFields`, and from `fields` every number and date as a range, every text field as a text filter, every array field as an overlap and every equality field but a bare id as a group. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
 - `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, an array an overlap, any other field an equality, a text field also the text filters, and every field sorts.
 - A query that costs what it matches, not what the page holds, is budgeted: the search, and a plan whose core holds a filter with an index of its own. `isQueryBudgeted(def, query)` is the one test, and a source runs such a query under its time budget.
-- `planQuery(indexes, query, extras)` splits a query into the core an index answers (the equality filters, the sort and a range on it) and the parts that run over that core's rows. A text filter or an overlap whose field has an index of its own stays in the core, and the plan is `budgeted`; beside any narrowed part it joins the narrowed set instead. `isNarrowed` says a query has such a part, or groups by a field other than the counted one. `narrowBasis` names the rows they run over, so a size known for one query answers another over the same rows.
+- `planQuery(indexes, query, extras)` splits a query into the core an index answers (the equality filters, the sort and a range on it) and the parts that run over that core's rows. Further sort columns stay in the core when an index declares that order, every column one way; otherwise the core keeps the first column alone and the query is narrowed. A text filter or an overlap whose field has an index of its own stays in the core, and the plan is `budgeted`; beside any narrowed part it joins the narrowed set instead. `isNarrowed` says a query has such a part, or groups by a field other than the counted one. `narrowBasis` names the rows they run over, so a size known for one query answers another over the same rows.
 - `canRun` is the answer for one query. The field lists are what could ever be asked.
 - Flags say how the source behaves, never which kind it is: `holdsAllRows` (every row is in hand, so a board lane keeps the whole query), `searchIsOrdered` (search results sort like any query, rather than arriving as one capped unordered batch the feed sorts itself) and `facetCountsFollowFilters` (facet counts are recounted under the other filters, rather than read from the counter table) are true for the memory source and false for an index-backed one. `narrowLimited` is the reverse: an index-backed source limits the narrowed set and the memory source does not.
 - `OfferContext` is the capabilities, whether every search match is loaded, and `narrowed`: the size of the rows the current filters leave, as the source last counted it.
@@ -153,6 +167,7 @@ interface QueryState {
   match: "all" | "any";
   search: string | null;
   sort: { field: string; direction: "asc" | "desc" };
+  thenBy?: { field: string; direction: "asc" | "desc" }[];
   group: string | null;
   cursor: string | null;
 }
@@ -168,9 +183,10 @@ interface QueryState {
 - **Intent becomes literal filters at the source.** `withLiteralFilters` wraps a data source: every fetch sees literal values and bounds, and the capability checks (`canRun`, `isNarrowed`, `isFacetCountExact`, `narrowBasis`) see the same rewrite with a preset as an unbounded range. Both built-in sources are wrapped. The server never sees an excluded value or a preset name, and refuses both.
 - **Text filters** are contains, does not contain, starts with, ends with and is not, on a text field with no options; a query holds up to eight, several on one field included. The first four ignore case; is not compares the exact text. **Overlaps** match an array field that holds any of the values. **Match any** ORs the field filters (equality, overlaps, ranges and text filters). **Group** names one field to group the grid by. On a server grid all of these run over the narrowed set, except a group by the counted field, and a contains, starts-with, ends-with or overlap on a field with an index of its own.
 - **A negation keeps an empty cell.** An excluded range, does not contain and is not all match a row whose field is empty, as exclude does.
+- **Sort.** `sort` is the first column and `thenBy` up to two more, each with its own direction; the key breaks ties the first column's way. `setSort` replaces the sort, and reaches a declared composite order when its first column has no index of its own; `addSort` adds or turns a column; `removeSort` drops one and falls back to the default sort when what is left does not run.
 - The search takes 3 to 80 characters. On a server grid it combines with equality filters on any indexed field, including empty and excluded values, and with nothing else: no range, text filter or overlap.
 - The search is an unranked, case-insensitive substring match (`ILIKE '%term%'`) over the def's `search` columns joined with spaces, backed by a `pg_trgm` GIN index. It is not full-text search: no stemming, no ranking, no order.
-- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `o.<field>` repeated per array value, `r.<field>=min..max` or `r.<field>=<preset>` repeated per range, with `!` before an excluded range and `(` or `)` beside an open bound (`r.total=!(5..9)`), one key per text operator (`c.`, `nc.`, `sw.`, `ew.`, `ne.<field>=text`), `match=any`, `group=<field>`, `q`, `sort=<field>.<direction>` and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
+- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `o.<field>` repeated per array value, `r.<field>=min..max` or `r.<field>=<preset>` repeated per range, with `!` before an excluded range and `(` or `)` beside an open bound (`r.total=!(5..9)`), one key per text operator (`c.`, `nc.`, `sw.`, `ew.`, `ne.<field>=text`), `match=any`, `group=<field>`, `q`, `sort=<field>.<direction>` with further columns after commas (`sort=item_count.desc,total.desc`) and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
 - A filter, range, sort, view or reset pushes a history entry. The search replaces. A URL nothing answers is rewritten to the default.
 - Column layout stays out of the URL.
 
@@ -187,9 +203,11 @@ interface QueryState {
 | `GET /groups`      | `{ groups: [{ value, label, count, capped, sums }], source, truncated }` for the query's `group`                           | built in                     |
 | `GET /narrowed`    | `{ limit, all: { rows, over }, any }`: the rows the indexed filters leave, and the sum of the terms under match any        | built in                     |
 | `GET /limits`      | the limits the handler runs under                                                                                          | built in                     |
+| `GET /export`      | the whole filtered result as `text/csv`, streamed; `columns` names the fields                                              | built in                     |
 | `GET /options`     | `[{ value, label }]` for a lookup field                                                                                    | the `options` hook           |
 | `GET /transitions` | `[[from, to]]`, for the board                                                                                              | the `moves.transitions` hook |
 | `POST /status`     | `{ id, to }` moves one row and returns it                                                                                  | the `moves.change` hook      |
+| `POST /order`      | `{ id, after, before }` moves one row in a manual order and returns the rows whose order value changed                     | the `reorder.move` hook      |
 
 - The query travels as the same URL parameters the page uses.
 - An error body is `{ error, message, code, params }`. `error` is the category, `code` the specific reason, `message` the code and its params for logs.
@@ -197,6 +215,9 @@ interface QueryState {
 - Every response is `no-store` and carries `server-timing`.
 - `limit` defaults to 200 and is capped at 1,000. A count is capped at 10,000 and a search result at 500 rows. These, the search budget and the narrowed-set limit are `GridLimits`, set once on the handler (`limits`) or passed to a runner function. The browser holds no copy: a response carries the limit that shaped it, and `/limits` answers them all.
 - A refusal over the narrowed-set limit is `narrow_first` with `rows` and `limit`.
+- An export over `exportLimit` (or, for a search, `searchLimit`) is `export_too_large` with `limit`. It is decided before the response starts, so it is a 400 with a body like any refusal. A failure after the first byte can only end the stream.
+- The cursor is the sort values of the last row, one per sort column, and its key. A cursor of another length, or with a value outside its column's type, is `invalid_cursor`.
+- `/order` validates `id`, `after` and `before` as keys, and needs one neighbour, before the hook runs.
 - `/facets` ignores the query: facet counts are whole-table counts.
 - A total is unavailable per field, as `over_cap` with the cap.
 - Every read runs under `request.signal`, which is the third argument of the host's `execute` and of the hooks.
@@ -206,7 +227,9 @@ interface QueryState {
 ## Storage
 
 - **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key, with `WHERE <field> IS NULL` for each field in its `empty`. The def's `search` is one trigram index over the concatenated columns. Each field in `textIndexes` is a trigram GIN index on that column, and each in `arrayIndexes` a GIN index on the array.
-- **Paging is keyset**, on the sort and the key, in both directions.
+- **Paging is keyset**, on the sort and the key, in both directions. With further sort columns the key is every sort column and then the row key. Columns that all run one way compare as one row, `(a, b, id) < ($1, $2, $3)`, which a composite index reads as one range. Mixed directions are spelled out column by column behind a bound on the first, `a <= $1 AND (a < $1 OR (a = $1 AND (b > $2 OR …)))`, and run only over a narrowed set.
+- **A composite order** is one btree over the equality columns, the sort, the `then` columns and the key. A live total of a query it answers is read in that same order, so the scan still stops at the cap.
+- **An export** is the capped count of the query up to `exportLimit`, then the keyset walk in pages of 1,000, each page encoded and sent as it is read. The narrowed set is sized once for the walk. CSV cells are plain values; a text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return is led by an apostrophe.
 - **One value is `= $n`; several are `= ANY($n)`** with one array parameter. SQL is never built from a value.
 - **The counter table** holds one row per facet value: `row_count` and one `<field>_sum` column per total field. Three row triggers keep it current, on insert, delete and update of the facet field or of a total field.
 - **Counts.** A query that filters on the facet alone reads the counter table. Any other is counted up to the cap, and the exact count is a separate request.
@@ -246,6 +269,10 @@ interface QueryState {
 - **Counters.** A write costs one counter-row upsert per insert or delete, and two per change of the facet field or of a total field. Each extra total adds one counter-column update to that same upsert, not another statement. The counter row is a hot row under concurrent writes to one facet value.
 - **Several values per field.** `= ANY` has no single index order to read, so the cost grows with the table. An index whose page misses the budget is declared `multi: false`.
 - **The search** is bounded by its time budget, not by the index, and its threshold falls as the table grows.
+- **A composite order** costs one more index, like any declared index, and nothing on the request path: a page is one range read of it.
+- **An export** costs one capped count and one page read per 1,000 rows, at most `exportLimit` rows. It holds one request open for as long as that takes; the limit is the host's latency and memory choice.
+- **Selection** costs no request: everything matching is the query the page already ran, with the count it already has.
+- **Reorder** runs only over a set held whole, at most one page of rows, so the client's work is bounded and the server's is the host's hook.
 - **The narrowed set** is bounded by `narrowLimit` rows whatever the table holds. Its cost is the count of the core plus one pass over at most that many rows, on every page, count and total of a narrowed query.
 - **Rollout.** Indexes are built `CONCURRENTLY` and never block writes. The counter backfill is one snapshot read of the table with two brief table locks around it.
 
@@ -259,6 +286,12 @@ interface QueryState {
 
 ## Deferred
 
+- **Out of the grid features, deliberately:** page-number pagination (keyset scrolling stays: an offset is a cost that grows with the page); Excel and PDF export (core has no dependencies; `walkExportPages` and the CSV pieces are what a host's own encoder plugs into); an export shaped for re-import; edit and delete dialogs and form modals (`onRowOpen`, `rowActions` and `onRowAction` are the seam); permissions (a host shows and wires only the actions a user may take, and the handler's hooks are where it enforces them); translations beyond the one English messages object; and settings toggles, which stay layout props on the parts.
+- A composite order with mixed directions at any size: it needs a `DESC` column in the index and a keyset written as a union of ranges. It runs over the narrowed set today.
+- A first sort column with no index, a nullable sort column on a server grid, and a default sort of several columns.
+- Reorder on a server result larger than one loaded page, and reorder inside a group.
+- An export of the selected ids alone, an export of a grouped view as groups, and an export above `exportLimit` as a background job.
+- A row actions menu on right click, and select-everything-matching in a grouped grid.
 - Nested groups, full-text or vector search, and an OR, a second range or a negated filter above the narrowed-set limit.
 - A text filter with an index beside a narrowed part, above the narrowed-set limit: it joins the narrowed set today.
 - Facet counts under a scope on a server grid, an add-a-range control (a second range on a field comes from the URL or `addRange`), and a scope the handler enforces from the request.
