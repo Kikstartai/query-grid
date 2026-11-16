@@ -739,6 +739,26 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 
 ## Benchmarks
 
+### Budgets
+
+Each budget, what holds it, and the worst result on 620,000 orders for 0.4.0.
+
+| Budget                                    | Value          | Held by                              | Worst measured (p95)                               |
+| ----------------------------------------- | -------------- | ------------------------------------ | -------------------------------------------------- |
+| Page, capped count, live total            | 150 ms         | the benchmark's pass bar             | 34.03 ms (five rare statuses in five rare regions) |
+| Search, alone or with an equality filter  | 120 ms         | `searchBudgetMs`, refused past it    | 18.92 ms (`Mokoena` with a region and a channel)   |
+| Expensive operation over the narrowed set | 500 ms         | the benchmark's pass bar             | 314.08 ms (match any at 100,000 rows)              |
+| Narrowed-set size                         | 100,000 rows   | `narrowLimit`, refused past it       | none                                               |
+| Capped count and total                    | 10,000 rows    | `countCap`                           | none                                               |
+| Search result                             | 500 rows       | `searchLimit`                        | none                                               |
+| Any statement (demo executor)             | 5 s            | `SET LOCAL statement_timeout`        | none                                               |
+| Exact count (button only)                 | 60 s           | its own statement timeout            | none                                               |
+| Per-release check                         | about 1 minute | `db:bench:quick`, 30 cases at 5 runs | 30 of 30                                           |
+
+The quick check runs every release. The full `db:bench` (218 queries) runs on demand.
+
+### Method
+
 `bun run --filter demo db:bench`: 30 runs per query after 3 warm-ups. Time is planning plus execution from `EXPLAIN (ANALYZE)`, so it is server-side and excludes the network. Each table shows the slowest variant per index. With one value per field the pass bar is p95 under 150 ms, an index scan, no Seq Scan and no Sort node. With several values per field it is the same budget and no Seq Scan; a Sort is allowed and reported, because `= ANY` has no single index order to read.
 
 ### Neon, 620,000 orders
