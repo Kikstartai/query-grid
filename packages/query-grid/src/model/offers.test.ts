@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { OfferContext, QueryState } from "./field-types.ts";
+import type { QueryState } from "./query-state.ts";
+import type { OfferContext } from "./capabilities.ts";
 import {
   TEST_DEF,
   TEST_SEARCH_FIELDS,
@@ -17,8 +18,8 @@ import {
   getIndex,
   indexCapabilities,
   indexId,
-  type IndexDef,
 } from "./indexes.ts";
+import type { IndexDef } from "./grid-def.ts";
 
 const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);

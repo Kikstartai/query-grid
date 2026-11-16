@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
+import type { GridRow } from "./grid-def.ts";
 import type {
-  GridRow,
   QueryState,
   RangeInput,
   RangeState,
   TextState,
-} from "./field-types.ts";
+} from "./query-state.ts";
 import { createTestSource } from "./grid-def.fixture.ts";
 import {
   gridDefCapabilities,
@@ -15,8 +15,8 @@ import {
   isQueryBudgeted,
   isQueryRunnable,
   planQuery,
-  type IndexedGridDef,
 } from "./indexes.ts";
+import type { IndexedGridDef } from "./grid-def.ts";
 import { toLiteralQuery } from "./literal-filters.ts";
 import { createMemorySource, memoryCapabilities } from "./memory-source.ts";
 import {

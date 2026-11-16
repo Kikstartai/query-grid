@@ -6,16 +6,14 @@ import type {
   PageResult,
   TotalResult,
 } from "./data-source.ts";
-import type {
-  FieldOption,
-  GridRow,
-  NarrowedResult,
-  QueryState,
-} from "./field-types.ts";
+import type { FieldOption, GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type { NarrowedResult } from "./capabilities.ts";
 import { SourceError, type Problem } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
 import { encodeQuery } from "./query-url.ts";
-import { gridDefCapabilities, type IndexedGridDef } from "./indexes.ts";
+import { gridDefCapabilities } from "./indexes.ts";
+import type { IndexedGridDef } from "./grid-def.ts";
 import type { GridLimits } from "./limits.ts";
 
 export const SUB_ROUTES = [

@@ -2,13 +2,15 @@ import {
   getField,
   isDateType,
   isDefaultSort,
-  listRanges,
   type BaseGridDef,
+  type SortDirection,
+} from "./grid-def.ts";
+import {
+  listRanges,
   type QueryState,
   type RangeState,
-  type SortDirection,
   type TextOp,
-} from "./field-types.ts";
+} from "./query-state.ts";
 import {
   getReservedValue,
   isExcluding,

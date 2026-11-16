@@ -1,16 +1,18 @@
 import {
   getField,
   isDefaultSort,
-  listRanges,
   type BaseGridDef,
+  type SortDirection,
+} from "./grid-def.ts";
+import {
+  listRanges,
   type MatchMode,
-  type OfferContext,
   type QueryState,
   type RangeInput,
   type RangeState,
-  type SortDirection,
   type TextOp,
-} from "./field-types.ts";
+} from "./query-state.ts";
+import type { OfferContext } from "./capabilities.ts";
 import { canExpandEquals, toExcludeValues } from "./field-values.ts";
 import { INDEXED_TEXT_OPS, TEXT_INDEX_MIN_LENGTH } from "./indexes.ts";
 import { toRange } from "./range-bounds.ts";

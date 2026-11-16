@@ -1,6 +1,7 @@
 import type { DataSource } from "./data-source.ts";
-import type { DataSourceCapabilities, BaseGridDef } from "./field-types.ts";
-import type { IndexDef } from "./indexes.ts";
+import type { BaseGridDef } from "./grid-def.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
+import type { IndexDef } from "./grid-def.ts";
 
 export const TEST_SEARCH_FIELDS = ["name", "number"];
 

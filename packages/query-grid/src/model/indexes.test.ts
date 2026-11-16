@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { QueryState } from "./field-types.ts";
+import type { QueryState } from "./query-state.ts";
 import {
   TEST_DEF,
   TEST_SEARCH_FIELDS,

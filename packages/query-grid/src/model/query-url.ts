@@ -2,15 +2,17 @@ import { isDatePreset } from "./date-presets.ts";
 import { toRange } from "./range-bounds.ts";
 import {
   isDefaultSort,
-  TEXT_OPS,
   type BaseGridDef,
-  type DataSourceCapabilities,
+  type SortDirection,
+} from "./grid-def.ts";
+import {
+  TEXT_OPS,
   type QueryState,
   type RangeState,
-  type SortDirection,
   type TextOp,
   type TextState,
-} from "./field-types.ts";
+} from "./query-state.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
 
 const EQUALS_PREFIX = "f.";
 const OVERLAP_PREFIX = "o.";

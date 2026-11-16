@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
-import type {
-  GridRow,
-  NarrowedState,
-  OfferContext,
-  QueryState,
-} from "./field-types.ts";
+import type { GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type { NarrowedState, OfferContext } from "./capabilities.ts";
 import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 import {
   createTestSource,
@@ -15,12 +12,8 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createGrouping, getGroupQuery, sortGroups } from "./groups.ts";
-import {
-  indexCapabilities,
-  isFacetOnlyQuery,
-  planQuery,
-  type IndexedGridDef,
-} from "./indexes.ts";
+import { indexCapabilities, isFacetOnlyQuery, planQuery } from "./indexes.ts";
+import type { IndexedGridDef } from "./grid-def.ts";
 import { createMemorySource } from "./memory-source.ts";
 import {
   applyAction,

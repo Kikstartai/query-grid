@@ -1,16 +1,18 @@
 import {
   getField,
-  RANGE_FILTER_MAX,
   resolveMaxValues,
+  type BaseFieldDef,
+  type BaseGridDef,
+} from "./grid-def.ts";
+import {
+  RANGE_FILTER_MAX,
   TEXT_FILTER_MAX,
   TEXT_MAX_LENGTH,
   TEXT_OPS,
-  type BaseFieldDef,
-  type BaseGridDef,
   type QueryState,
   type RangeState,
   type TextState,
-} from "./field-types.ts";
+} from "./query-state.ts";
 import { canCombineValues, getReservedValue } from "./field-values.ts";
 import { isOverlapField, isTextField } from "./indexes.ts";
 import type { Problem } from "./problems.ts";

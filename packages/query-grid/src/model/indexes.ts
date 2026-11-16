@@ -2,30 +2,13 @@ import {
   isRangeType,
   listSearchFields,
   type BaseFieldDef,
-  type BaseGridDef,
-  type QueryState,
-  type DataSourceCapabilities,
-  type TextOp,
-  type TextState,
-} from "./field-types.ts";
+  type IndexDef,
+  type IndexedGridDef,
+  type IndexExtras,
+} from "./grid-def.ts";
+import type { QueryState, TextOp, TextState } from "./query-state.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
 import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
-
-export interface IndexDef {
-  equals: string[];
-  sort: string;
-  range?: boolean;
-  multi?: boolean;
-  empty?: string[];
-}
-
-export interface IndexExtras {
-  textIndexes?: string[];
-  arrayIndexes?: string[];
-}
-
-export interface IndexedGridDef extends BaseGridDef, IndexExtras {
-  indexes: IndexDef[];
-}
 
 export interface IndexCapabilitiesOptions extends IndexExtras {
   facetField?: string;

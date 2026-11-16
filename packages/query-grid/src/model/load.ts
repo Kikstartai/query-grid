@@ -1,4 +1,4 @@
-import type { QueryState } from "./field-types.ts";
+import type { QueryState } from "./query-state.ts";
 
 export type LoadStatus = "idle" | "loading" | "error";
 

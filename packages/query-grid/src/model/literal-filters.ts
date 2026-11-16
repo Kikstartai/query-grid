@@ -4,13 +4,8 @@ import {
   resolveDatePreset,
   resolveDayPreset,
 } from "./date-presets.ts";
-import {
-  getField,
-  isDateType,
-  type BaseGridDef,
-  type QueryState,
-  type RangeState,
-} from "./field-types.ts";
+import { getField, isDateType, type BaseGridDef } from "./grid-def.ts";
+import type { QueryState, RangeState } from "./query-state.ts";
 import { expandEquals, isExcluding } from "./field-values.ts";
 
 function resolveEquals(

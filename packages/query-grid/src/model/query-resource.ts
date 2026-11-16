@@ -1,5 +1,5 @@
 import type { Listener } from "./emitter.ts";
-import type { QueryState } from "./field-types.ts";
+import type { QueryState } from "./query-state.ts";
 import {
   createAbortable,
   isAbort,

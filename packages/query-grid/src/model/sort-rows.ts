@@ -7,7 +7,7 @@ import {
   type GridRow,
   type GridValue,
   type SortState,
-} from "./field-types.ts";
+} from "./grid-def.ts";
 
 export function toComparable(
   field: BaseFieldDef,

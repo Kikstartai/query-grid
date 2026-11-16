@@ -4,15 +4,13 @@ import {
   getField,
   listSearchFields,
   listTotalFields,
-  type DataSourceCapabilities,
   type BaseFieldDef,
   type FieldOption,
   type BaseGridDef,
   type GridRow,
-  type QueryState,
-  type RangeState,
-  type TextState,
-} from "./field-types.ts";
+} from "./grid-def.ts";
+import type { QueryState, RangeState, TextState } from "./query-state.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
 import { matchesEquals } from "./field-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {

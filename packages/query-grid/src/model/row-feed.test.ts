@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DataSource } from "./data-source.ts";
-import type {
-  DataSourceCapabilities,
-  GridRow,
-  QueryState,
-} from "./field-types.ts";
+import type { GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
 import {
   createTestSource,
   settle,

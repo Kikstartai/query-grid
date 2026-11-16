@@ -1,10 +1,6 @@
-import type {
-  DataSourceCapabilities,
-  FieldOption,
-  GridRow,
-  NarrowedResult,
-  QueryState,
-} from "./field-types.ts";
+import type { FieldOption, GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type { DataSourceCapabilities, NarrowedResult } from "./capabilities.ts";
 import type { GridLimits } from "./limits.ts";
 import type { Problem } from "./problems.ts";
 

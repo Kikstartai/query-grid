@@ -1,4 +1,4 @@
-import type { BaseFieldDef, GridValue } from "./field-types.ts";
+import type { BaseFieldDef, GridValue } from "./grid-def.ts";
 
 export const DEFAULT_LOCALE = "en";
 export const DEFAULT_CURRENCY = "USD";

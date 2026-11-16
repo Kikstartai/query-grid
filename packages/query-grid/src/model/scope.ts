@@ -1,5 +1,5 @@
 import { mapSourceQueries, type DataSource } from "./data-source.ts";
-import type { QueryState, RangeState, TextState } from "./field-types.ts";
+import type { QueryState, RangeState, TextState } from "./query-state.ts";
 
 export interface QueryScope {
   equals?: Record<string, string[]>;

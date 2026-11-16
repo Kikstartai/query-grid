@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
+import type { QueryState } from "./query-state.ts";
 import {
   listFilterFields,
   resolveFilterKind,
   type DataSourceCapabilities,
   type OfferContext,
-  type QueryState,
-} from "./field-types.ts";
+} from "./capabilities.ts";
 import { TEST_DEF, TEST_SEARCH_FIELDS, UNTIERED } from "./grid-def.fixture.ts";
 import { memoryCapabilities } from "./memory-source.ts";
 import {

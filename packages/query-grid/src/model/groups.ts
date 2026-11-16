@@ -6,8 +6,8 @@ import {
   type BaseGridDef,
   type GridRow,
   type GridValue,
-  type QueryState,
-} from "./field-types.ts";
+} from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
 import { EMPTY_VALUE } from "./field-values.ts";
 import { createAbortable, isAbort, type LoadStatus } from "./load.ts";
 import { toProblem, type Problem } from "./problems.ts";

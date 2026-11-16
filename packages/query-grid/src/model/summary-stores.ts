@@ -5,14 +5,13 @@ import type {
   TotalResult,
 } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
-import {
-  getField,
-  hasFixedValues,
-  type NarrowedResult,
-  type NarrowedState,
-  type QueryState,
-  type DataSourceCapabilities,
-} from "./field-types.ts";
+import { getField, hasFixedValues } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type {
+  NarrowedResult,
+  NarrowedState,
+  DataSourceCapabilities,
+} from "./capabilities.ts";
 import { getReservedValue } from "./field-values.ts";
 import { labelKey } from "./format.ts";
 import type { GridLimits } from "./limits.ts";

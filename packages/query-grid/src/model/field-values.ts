@@ -2,7 +2,7 @@ import {
   resolveMaxValues,
   type BaseFieldDef,
   type GridValue,
-} from "./field-types.ts";
+} from "./grid-def.ts";
 
 export const EMPTY_VALUE = "_empty";
 export const NOT_EMPTY_VALUE = "_not_empty";

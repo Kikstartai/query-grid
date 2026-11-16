@@ -8,7 +8,8 @@ import {
   normalizeEqualsValues,
   NOT_EMPTY_VALUE,
 } from "./field-values.ts";
-import { getField, type GridRow, type QueryState } from "./field-types.ts";
+import { getField, type GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
 import { TEST_DEF } from "./grid-def.fixture.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { defaultQuery } from "./query-actions.ts";

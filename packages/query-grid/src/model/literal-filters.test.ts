@@ -9,12 +9,8 @@ import {
 
 import { listFilterChips } from "./chips.ts";
 import { DATE_PRESETS, resolveDatePreset } from "./date-presets.ts";
-import {
-  getField,
-  type BaseGridDef,
-  type GridRow,
-  type QueryState,
-} from "./field-types.ts";
+import { getField, type BaseGridDef, type GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
 import {
   canExpandEquals,
   EMPTY_VALUE,

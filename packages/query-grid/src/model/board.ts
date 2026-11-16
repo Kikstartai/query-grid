@@ -1,12 +1,8 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
-import {
-  getFacetField,
-  type DataSourceCapabilities,
-  type BaseGridDef,
-  type GridRow,
-  type QueryState,
-} from "./field-types.ts";
+import { getFacetField, type BaseGridDef, type GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
+import type { DataSourceCapabilities } from "./capabilities.ts";
 import { expandEquals } from "./field-values.ts";
 import { isMatchAny } from "./indexes.ts";
 import { createQueryStore } from "./query-store.ts";

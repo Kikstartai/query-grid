@@ -1,10 +1,10 @@
+import type { BaseGridDef } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
 import type {
   DataSourceCapabilities,
-  BaseGridDef,
   NarrowedState,
   OfferContext,
-  QueryState,
-} from "./field-types.ts";
+} from "./capabilities.ts";
 import {
   applyAction,
   defaultQuery,

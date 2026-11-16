@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { createBoard, getLaneQueries, type Board } from "./board.ts";
 import type { DataSource } from "./data-source.ts";
-import type { GridRow, QueryState } from "./field-types.ts";
+import type { GridRow } from "./grid-def.ts";
+import type { QueryState } from "./query-state.ts";
 import {
   createTestSource,
   settle,

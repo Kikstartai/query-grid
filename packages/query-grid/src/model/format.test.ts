@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { BaseFieldDef } from "./field-types.ts";
+import type { BaseFieldDef } from "./grid-def.ts";
 import { formatCount, formatMoney, formatSum, formatValue } from "./format.ts";
 
 const PRICE: BaseFieldDef = { key: "price", label: "Price", type: "money" };
