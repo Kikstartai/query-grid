@@ -12,7 +12,7 @@ query-grid is a filter and data grid for very large tables. This document says h
 - **One def per grid.** An app declares each grid once, in one object, and each package reads its own slice of it.
 - **Server and client.** A server grid reads its rows over HTTP and is limited by its indexes. A client grid holds its rows in memory and is not limited.
 - **Very large data sets are never a constraint.** Every request is bounded by a page size, a cap, a time budget or the narrowed-set limit.
-- **Some operations run only over a narrowed set.** An OR across fields, a range no index bounds, a contains, and a group by a field no counter holds are answered over the rows the indexed filters leave, and only when those rows number at most `narrowLimit`. A control that needs a smaller set stays visible and says how large the set is.
+- **Some operations run only over a narrowed set.** An OR across fields, a range no index bounds, an excluded range, a text filter or an overlap with no index of its own, and a group by a field no counter holds are answered over the rows the indexed filters leave, and only when those rows number at most `narrowLimit`. A control that needs a smaller set stays visible and says how large the set is.
 
 ## Packages
 
@@ -56,9 +56,11 @@ Three npm packages in one repo, released together at one version.
 - `DataGrid` also takes `groups`. Each group is a header row, the rows of an open group and a load-more row, all mixed into the one virtual list. The cell focus, the range and the selection run over the data rows alone, so the arrow keys step from row to row past a header, and a header is a button on its own tab stop.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
-- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `ContainsFilter`, `MatchToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the capabilities, the field's `type` and its `options`.
+- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `TextFilter`, `MatchToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the capabilities, the field's `type` and its `options`: an array field gets the select or the lookup as an overlap, and a boolean the select with its two values.
+- `RangeFilter` carries an operator: a select beside one number or two, and for a date the period select with On…, Before…, After… and their kin after the presets. An excluded operator the offers do not hold for the field (`Offers.ranges` but not `Offers.narrowRanges`) is listed, disabled, with the narrowing reason. `TextFilter` is one row per text filter (a field, an operator and the text) and an empty row to add the next. A field offered only through its text index (`Offers.texts` but not `Offers.narrowTexts`) has its negations disabled with the narrowing reason and asks for three characters, so nothing a row can send is refused.
 - `EqualsSelect` and `LookupFilter` list `(empty)` and `(not empty)` first on a nullable field. `EqualsSelect` carries an Exclude toggle on a field with a fixed list of values. A date `RangeFilter` is a period select (Today to This year, then Custom…) that shows the date picker only for Custom.
-- The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then Contains, the Match toggle, the sort and the group. Without it they show every filterable field. `contains` names the text fields the Contains control lists, and defaults to `fields`. `children` replaces everything.
+- The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then the text filter, the Match toggle, the sort and the group. Without it they show every filterable field. `texts` names the text fields the text filter lists, and defaults to `fields`. `children` replaces everything.
+- A provider takes a `scope`: filters ANDed into every read that are no part of the query, the URL or the chips. It is read once, like the def, and wraps the source with core's `withScope`.
 - `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `queryString` and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
 - `styles.css` styles only the package's own elements, reads the `--ui-*` tokens of `@ui-sdk/core/web.css` and defines none.
 
@@ -80,16 +82,18 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 | Type              | Package  | Adds                                             |
 | ----------------- | -------- | ------------------------------------------------ |
 | `BaseGridDef`     | core     | `id`, `fields`, `defaultSort`, `facet`, `totals` |
-| `IndexedGridDef`  | core     | `indexes`                                        |
+| `IndexedGridDef`  | core     | `indexes`, `textIndexes`, `arrayIndexes`         |
 | `GridDef`         | React    | a `cell` on any field                            |
 | `PostgresGridDef` | Postgres | `table` and `facet.counterTable`                 |
 
-- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `money`, `datetime`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
+- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `array`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden` and `wrap`.
 - `nullable` is what makes a field optional: only such a field takes the empty and not-empty values.
 - The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores indexes and storage.
 - `facet` names one field with options. `totals` lists the money or integer fields the footer sums.
 - An index is the unit the data layer answers: a set of equality fields and a sort, optionally with a range on the sort. Each is one `CREATE INDEX`; the search's columns are `search` on the def, with one index of their own.
 - An index's equality fields take several values each unless it sets `multi: false`.
+- An index with `empty` is partial: it holds only the rows where those nullable fields are empty, and answers a query that filters them to empty.
+- `textIndexes` names text fields with a trigram index each, and `arrayIndexes` array fields with a GIN index each. They answer a filter, never an order, so they are lists beside `indexes` and not indexes in it.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
 ## Data source capabilities
@@ -108,7 +112,8 @@ interface DataSourceCapabilities {
   narrowBasis: (query: QueryState) => string;
   equalsFields: string[];
   rangeFields: string[];
-  containsFields: string[];
+  textFields: string[];
+  overlapFields: string[];
   groupFields: string[];
   sortFields: string[];
   searchFields: string[];
@@ -116,9 +121,10 @@ interface DataSourceCapabilities {
 }
 ```
 
-- `indexCapabilities(indexes, { facetField, searchFields, fields })` builds them for a server grid: every field in an index's `equals`, every index's sort, `searchFields`, and from `fields` every number and date as a range, every text field as a contains and every equality field but a bare id as a group. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
-- `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, a text field also a contains, and every field sorts.
-- `planQuery(indexes, query)` splits a query into the core an index answers (the equality filters, the sort and a range on it) and the parts that run over that core's rows. `isNarrowed` says a query has such a part, or groups by a field other than the counted one. `narrowBasis` names the rows they run over, so a size known for one query answers another over the same rows.
+- `indexCapabilities(indexes, { facetField, searchFields, fields, textIndexes, arrayIndexes })` builds them for a server grid: every field in an index's `equals` (a partial index's `empty` fields are answerable but are no control's and no URL key's), every index's sort, `searchFields`, and from `fields` every number and date as a range, every text field as a text filter, every array field as an overlap and every equality field but a bare id as a group. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, an array an overlap, any other field an equality, a text field also the text filters, and every field sorts.
+- A query that costs what it matches, not what the page holds, is budgeted: the search, and a plan whose core holds a filter with an index of its own. `isQueryBudgeted(def, query)` is the one test, and a source runs such a query under its time budget.
+- `planQuery(indexes, query, extras)` splits a query into the core an index answers (the equality filters, the sort and a range on it) and the parts that run over that core's rows. A text filter or an overlap whose field has an index of its own stays in the core, and the plan is `budgeted`; beside any narrowed part it joins the narrowed set instead. `isNarrowed` says a query has such a part, or groups by a field other than the counted one. `narrowBasis` names the rows they run over, so a size known for one query answers another over the same rows.
 - `canRun` is the answer for one query. The field lists are what could ever be asked.
 - Flags say how the source behaves, never which kind it is: `holdsAllRows` (every row is in hand, so a board lane keeps the whole query), `searchIsOrdered` (search results sort like any query, rather than arriving as one capped unordered batch the feed sorts itself) and `facetCountsFollowFilters` (facet counts are recounted under the other filters, rather than read from the counter table) are true for the memory source and false for an index-backed one. `narrowLimited` is the reverse: an index-backed source limits the narrowed set and the memory source does not.
 - `OfferContext` is the capabilities, whether every search match is loaded, and `narrowed`: the size of the rows the current filters leave, as the source last counted it.
@@ -126,6 +132,7 @@ interface DataSourceCapabilities {
 - `listOffers(def, query, context)` says what the next action may be. `applyAction` refuses an action whose result the capabilities do not answer. `explainUnavailable(query, target, context)` gives the reason as a code.
 - The control for a field follows from the capabilities, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
 - The URL keys a provider owns are the capabilities' fields. Any other parameter is left alone.
+- `withScope(source, scope)` answers every capability for the scoped query, takes the scope's equality and array fields out of the field lists, and withdraws Match any, which would OR the scope away. On a source that reads facet counts from a counter table it hides them: those count the whole table.
 
 ## Query state
 
@@ -137,8 +144,12 @@ interface QueryState {
     min: string | null;
     max: string | null;
     preset?: string;
+    exclude?: boolean;
+    minExclusive?: boolean;
+    maxExclusive?: boolean;
   }[];
-  contains: { field: string; value: string } | null;
+  texts: { field: string; op: TextOp; value: string }[];
+  overlaps: Record<string, string[]>;
   match: "all" | "any";
   search: string | null;
   sort: { field: string; direction: "asc" | "desc" };
@@ -150,13 +161,16 @@ interface QueryState {
 - Filters combine with AND, or with OR under `match: "any"` once two fields are filtered. Within one field, equality takes several values, up to the field's `maxValues` (default 20).
 - **Empty.** On a nullable field an equality filter takes two reserved values: `_empty` (no value) and `_not_empty` (any value). Empty mixes with real values ("Glen or nobody"); not empty stands alone.
 - **Exclude.** On a field with a fixed list of values, `!value` in the filter leaves that value out. It is intent: the URL and the query keep it, and it becomes the remaining values (and empty, on a nullable field) when the query runs, so an option added later is included. It is refused when nothing would remain or more than `maxValues` would.
-- **Ranges.** A query holds one range per field. On a server grid the one on the sort field of an index with `range` is answered by that index; any other runs over the narrowed set.
+- **Ranges.** A range may leave a bound's own value out (`minExclusive`, `maxExclusive`) or be turned inside out (`exclude`): not between, and with one value in both bounds, not equal. A field takes several. On a server grid the first plain range on the sort field of an index with `range` is answered by that index; any other, and every excluded one, runs over the narrowed set.
+- **A day.** A `date` field compares calendar days. On a `datetime` field "on a day" is the range of that day's two ends, "after" is past its last instant and "before" is short of its first.
 - **Presets.** A date range may carry a `preset` in place of its bounds (`today`, `yesterday`, `last-7-days`, `last-30-days`, `this-month`, `last-month`, `this-year`). It is intent too: resolved when the query runs to whole days in the viewer's time zone, both ends included.
+- **A wrapper that rewrites queries goes through `mapSourceQueries`**, which names every query-taking member of a data source once. `withLiteralFilters` and `withScope` are both calls to it.
 - **Intent becomes literal filters at the source.** `withLiteralFilters` wraps a data source: every fetch sees literal values and bounds, and the capability checks (`canRun`, `isNarrowed`, `isFacetCountExact`, `narrowBasis`) see the same rewrite with a preset as an unbounded range. Both built-in sources are wrapped. The server never sees an excluded value or a preset name, and refuses both.
-- **Contains** is a case-insensitive substring match on one text field. **Match any** ORs the field filters (equality, ranges and contains). **Group** names one field to group the grid by. On a server grid all three run over the narrowed set, except a group by the counted field.
-- The search takes 3 to 80 characters. On a server grid it combines with equality filters on any indexed field, including empty and excluded values, and with nothing else.
+- **Text filters** are contains, does not contain, starts with, ends with and is not, on a text field with no options; a query holds up to eight, several on one field included. The first four ignore case; is not compares the exact text. **Overlaps** match an array field that holds any of the values. **Match any** ORs the field filters (equality, overlaps, ranges and text filters). **Group** names one field to group the grid by. On a server grid all of these run over the narrowed set, except a group by the counted field, and a contains, starts-with, ends-with or overlap on a field with an index of its own.
+- **A negation keeps an empty cell.** An excluded range, does not contain and is not all match a row whose field is empty, as exclude does.
+- The search takes 3 to 80 characters. On a server grid it combines with equality filters on any indexed field, including empty and excluded values, and with nothing else: no range, text filter or overlap.
 - The search is an unranked, case-insensitive substring match (`ILIKE '%term%'`) over the def's `search` columns joined with spaces, backed by a `pg_trgm` GIN index. It is not full-text search: no stemming, no ranking, no order.
-- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `r.<field>=min..max` or `r.<field>=<preset>`, `c.<field>=text`, `match=any`, `group=<field>`, `q`, `sort=<field>.<direction>` and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
+- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `o.<field>` repeated per array value, `r.<field>=min..max` or `r.<field>=<preset>` repeated per range, with `!` before an excluded range and `(` or `)` beside an open bound (`r.total=!(5..9)`), one key per text operator (`c.`, `nc.`, `sw.`, `ew.`, `ne.<field>=text`), `match=any`, `group=<field>`, `q`, `sort=<field>.<direction>` and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
 - A filter, range, sort, view or reset pushes a history entry. The search replaces. A URL nothing answers is rewritten to the default.
 - Column layout stays out of the URL.
 
@@ -191,13 +205,15 @@ interface QueryState {
 
 ## Storage
 
-- **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key. The def's `search` is one trigram index over the concatenated columns.
+- **One declared index, one `CREATE INDEX`.** An ordered index is a btree over its equality columns, its sort and the key, with `WHERE <field> IS NULL` for each field in its `empty`. The def's `search` is one trigram index over the concatenated columns. Each field in `textIndexes` is a trigram GIN index on that column, and each in `arrayIndexes` a GIN index on the array.
 - **Paging is keyset**, on the sort and the key, in both directions.
 - **One value is `= $n`; several are `= ANY($n)`** with one array parameter. SQL is never built from a value.
 - **The counter table** holds one row per facet value: `row_count` and one `<field>_sum` column per total field. Three row triggers keep it current, on insert, delete and update of the facet field or of a total field.
 - **Counts.** A query that filters on the facet alone reads the counter table. Any other is counted up to the cap, and the exact count is a separate request.
 - **Totals.** A query that filters on the facet alone reads the counter table. Any other is summed live in one statement for every total field, over the index scan, and only when at most 10,000 rows match. With one plain value per field the scan is read in sort order, with `enable_sort = off`, so it stops at row 10,001. Several values, not empty and match any are capped unordered instead, like the count: no index gives them an order, and an ordered walk would not stop when few rows match.
 - **Match any** reads its rows first, behind `OFFSET 0`, and sorts them after, for the same reason.
+- **A filter with an index of its own** (a contains, starts-with or ends-with of three characters or more on a `textIndexes` field, an overlap on an `arrayIndexes` field) keeps the page's order and keyset: the statement is the ordinary page with one more clause, run with `enable_seqscan = off` under the search budget, and the planner walks the sort index or reads the GIN index by what the value matches. Its count and total are capped unordered, and all three answer `too_broad` past the budget.
+- **A negated or open filter** is one comparison: an open bound is `>` or `<`, an excluded range its two outer sides ORed (with `IS NULL` on a nullable field), does not contain `NOT ILIKE` (with `IS NULL`), is not `IS DISTINCT FROM`, an overlap `&&` with one array parameter.
 - **The search** runs under a 120 ms statement budget and answers `too_broad` past it. An equality filter beside it is one more clause on the same statement: the planner reads the trigram index, the filter's index or both. No extra index is built for the combination.
 - **Empty values.** `_empty` is `IS NULL`, `_not_empty` is `IS NOT NULL`, and empty beside real values is `(col = ANY($n) OR col IS NULL)`, all on the field's ordinary index.
 - **The narrowed set.** Before a narrowed query runs, the server counts its core up to `narrowLimit` (from the counter table when the core filters on the facet alone) and refuses past it. Under match any it sums the count of each filter through that filter's own index, and falls back to the whole table when a filter has none. The query then runs with `enable_seqscan = off`, so it reads the core's index and filters, and the statement budget remains the safety net.
@@ -243,7 +259,10 @@ interface QueryState {
 
 ## Deferred
 
-- Nested groups, full-text or vector search, and an OR, a second range or a contains above the narrowed-set limit.
+- Nested groups, full-text or vector search, and an OR, a second range or a negated filter above the narrowed-set limit.
+- A text filter with an index beside a narrowed part, above the narrowed-set limit: it joins the narrowed set today.
+- Facet counts under a scope on a server grid, an add-a-range control (a second range on a field comes from the URL or `addRange`), and a scope the handler enforces from the request.
+- Case-insensitive equality, which needs an expression index on the lowered column.
 - A range beside the search: measured within budget at the median and over it in the tail.
 - A separate components npm package.
 - Runtime add and remove of filters: a "+ Add filter" menu over the allowed fields, modelled on the columns menu and the column state, with the containers' `fields` as the initial list.
