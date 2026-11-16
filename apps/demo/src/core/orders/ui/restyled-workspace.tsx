@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { gridDefRunnable } from "@kikstart/query-grid";
+import { gridDefCapabilities } from "@kikstart/query-grid";
 
 import {
   CountDisplay,
@@ -36,7 +36,7 @@ function RestyledSkeleton() {
       >
         <SkeletonFilters
           def={ORDERS_GRID_DEF}
-          runnable={gridDefRunnable(ORDERS_GRID_DEF)}
+          capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
           fields={ORDER_BAR_FIELDS}
           contains={ORDER_CONTAINS_FIELDS}
         />

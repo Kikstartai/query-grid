@@ -23,7 +23,7 @@ import {
   toExcludeValues,
 } from "./field-values.ts";
 import { TEST_DEF, TEST_INDEXES } from "./grid-def.fixture.ts";
-import { indexRunnable } from "./indexes.ts";
+import { indexCapabilities } from "./indexes.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { applyAction, defaultQuery, listOffers } from "./query-actions.ts";
 import { toLiteralQuery, withLiteralFilters } from "./literal-filters.ts";
@@ -57,11 +57,11 @@ const WIDE: BaseGridDef = {
 function indexed(def: BaseGridDef, multi: boolean) {
   return withLiteralFilters(def, {
     ...createMemorySource(def, []),
-    runnable: indexRunnable(
+    capabilities: indexCapabilities(
       TEST_INDEXES.map((index) => ({ ...index, multi })),
       { facetField: "status" },
     ),
-  }).runnable;
+  }).capabilities;
 }
 
 describe("exclude", () => {
@@ -138,19 +138,19 @@ describe("exclude", () => {
   });
 
   test("it is offered where the remaining values run, and the store keeps the intent", () => {
-    const runnable = indexed(TEST_DEF, true);
-    const context = { runnable, allSearchMatchesLoaded: false };
+    const capabilities = indexed(TEST_DEF, true);
+    const context = { capabilities, allSearchMatchesLoaded: false };
     expect(listOffers(TEST_DEF, BASE, context).exclude).toEqual([
       "status",
       "region",
     ]);
     expect(
       listOffers(WIDE, BASE, {
-        runnable: indexed(WIDE, false),
+        capabilities: indexed(WIDE, false),
         allSearchMatchesLoaded: false,
       }).exclude,
     ).toEqual(["status"]);
-    const store = createQueryStore(TEST_DEF, runnable, BASE);
+    const store = createQueryStore(TEST_DEF, capabilities, BASE);
     store.dispatch({
       type: "setEquals",
       field: "status",
@@ -288,7 +288,7 @@ describe("date presets", () => {
     ];
     const source = createMemorySource(TEST_DEF, rows);
     const context = {
-      runnable: source.runnable,
+      capabilities: source.capabilities,
       allSearchMatchesLoaded: false,
     };
     const query = applyAction(
@@ -352,7 +352,10 @@ describe("date presets", () => {
 
 describe("several ranges", () => {
   const source = createMemorySource(TEST_DEF, []);
-  const context = { runnable: source.runnable, allSearchMatchesLoaded: false };
+  const context = {
+    capabilities: source.capabilities,
+    allSearchMatchesLoaded: false,
+  };
 
   test("a range is set per field and cleared per field", () => {
     const one = applyAction(
@@ -391,16 +394,16 @@ describe("several ranges", () => {
   });
 
   test("an index-backed source takes one range, on its sort", () => {
-    const runnable = indexRunnable(TEST_INDEXES);
-    const server = { runnable, allSearchMatchesLoaded: false };
+    const capabilities = indexCapabilities(TEST_INDEXES);
+    const server = { capabilities, allSearchMatchesLoaded: false };
     const byTotal: QueryState = {
       ...BASE,
       sort: { field: "total", direction: "asc" },
       ranges: [{ field: "total", min: "1", max: null }],
     };
-    expect(runnable.canRun(byTotal)).toBe(true);
+    expect(capabilities.canRun(byTotal)).toBe(true);
     expect(
-      runnable.canRun({
+      capabilities.canRun({
         ...byTotal,
         ranges: [
           ...byTotal.ranges,

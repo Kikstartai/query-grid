@@ -6,7 +6,7 @@ import {
   GRID_VIEWS,
   listQueryKeys,
   normalizeQuery,
-  type RunnableQueries,
+  type DataSourceCapabilities,
   type BaseGridDef,
   type GridView,
   type QueryKey,
@@ -23,17 +23,20 @@ export interface UrlState {
   view: GridView;
 }
 
-function listUrlKeys(runnable: RunnableQueries): QueryKey[] {
-  return [...listQueryKeys(runnable), VIEW_KEY];
+function listUrlKeys(capabilities: DataSourceCapabilities): QueryKey[] {
+  return [...listQueryKeys(capabilities), VIEW_KEY];
 }
 
 function urlName(key: QueryKey, prefix: string): string {
   return prefix ? `${prefix}.${key.name}` : key.name;
 }
 
-export function buildUrlParsers(runnable: RunnableQueries, prefix = "") {
+export function buildUrlParsers(
+  capabilities: DataSourceCapabilities,
+  prefix = "",
+) {
   return Object.fromEntries(
-    listUrlKeys(runnable).map((key) => [
+    listUrlKeys(capabilities).map((key) => [
       urlName(key, prefix),
       key.repeated ? parseAsNativeArrayOf(parseAsString) : parseAsString,
     ]),
@@ -41,12 +44,12 @@ export function buildUrlParsers(runnable: RunnableQueries, prefix = "") {
 }
 
 export function toQueryString(
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   values: UrlValues,
   prefix = "",
 ): string {
   const params = new URLSearchParams();
-  for (const key of listUrlKeys(runnable)) {
+  for (const key of listUrlKeys(capabilities)) {
     for (const item of [values[urlName(key, prefix)] ?? []].flat()) {
       params.append(key.name, item);
     }
@@ -55,13 +58,13 @@ export function toQueryString(
 }
 
 export function normalizeQueryString(
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   queryString: string,
   prefix: string,
 ): string {
   const params = new URLSearchParams(queryString);
   const own = new URLSearchParams();
-  for (const key of listUrlKeys(runnable)) {
+  for (const key of listUrlKeys(capabilities)) {
     for (const value of params.getAll(urlName(key, prefix))) {
       own.append(key.name, value);
     }
@@ -71,12 +74,12 @@ export function normalizeQueryString(
 
 export function readUrlState(
   def: BaseGridDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   queryString: string,
 ): UrlState {
   const params = new URLSearchParams(queryString);
   return {
-    query: normalizeQuery(def, runnable, decodeQuery(def, params)),
+    query: normalizeQuery(def, capabilities, decodeQuery(def, params)),
     view:
       GRID_VIEWS.find((view) => view === params.get(VIEW_KEY.name)) ?? "grid",
   };
@@ -84,7 +87,7 @@ export function readUrlState(
 
 export function toUrlValues(
   def: BaseGridDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   state: UrlState,
   prefix = "",
 ): UrlValues {
@@ -93,7 +96,7 @@ export function toUrlValues(
     params.set(VIEW_KEY.name, state.view);
   }
   return Object.fromEntries(
-    listUrlKeys(runnable).map((key) => [
+    listUrlKeys(capabilities).map((key) => [
       urlName(key, prefix),
       key.repeated ? params.getAll(key.name) : params.get(key.name),
     ]),
@@ -102,10 +105,10 @@ export function toUrlValues(
 
 export function encodeUrlState(
   def: BaseGridDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   state: UrlState,
 ): string {
-  return toQueryString(runnable, toUrlValues(def, runnable, state));
+  return toQueryString(capabilities, toUrlValues(def, capabilities, state));
 }
 
 export function readStoreState(store: QueryStore): UrlState {
@@ -115,7 +118,7 @@ export function readStoreState(store: QueryStore): UrlState {
 export function encodeStore(store: QueryStore): string {
   return encodeUrlState(
     store.def,
-    store.getOfferContext().runnable,
+    store.getOfferContext().capabilities,
     readStoreState(store),
   );
 }

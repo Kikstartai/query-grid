@@ -157,7 +157,7 @@ export function createGrouping(
       return known;
     }
     const groupQuery = getGroupQuery(query, value);
-    const rows = createQueryStore(def, source.runnable, groupQuery);
+    const rows = createQueryStore(def, source.capabilities, groupQuery);
     if (rows.getQuery() !== groupQuery) {
       return null;
     }

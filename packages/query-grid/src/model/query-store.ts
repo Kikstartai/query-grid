@@ -1,5 +1,5 @@
 import type {
-  RunnableQueries,
+  DataSourceCapabilities,
   BaseGridDef,
   NarrowedState,
   OfferContext,
@@ -36,11 +36,11 @@ export interface QueryStore {
 
 export function normalizeQuery(
   def: BaseGridDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   query: QueryState,
 ): QueryState {
   const usable =
-    runnable.canRun(query) &&
+    capabilities.canRun(query) &&
     validateQueryValues(def, toLiteralQuery(def, query, null)) === null;
   return usable ? query : defaultQuery(def);
 }
@@ -83,14 +83,14 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
 
 export function createQueryStore(
   def: BaseGridDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   initial: QueryState,
   initialView: GridView = "grid",
 ): QueryStore {
   const store = createStore<QueryStoreState>({
-    query: normalizeQuery(def, runnable, initial),
+    query: normalizeQuery(def, capabilities, initial),
     view: initialView,
-    context: { runnable, allSearchMatchesLoaded: false, narrowed: null },
+    context: { capabilities, allSearchMatchesLoaded: false, narrowed: null },
     historyWrite: "replace",
   });
   const change = (patch: Partial<QueryStoreState>) =>
@@ -118,7 +118,7 @@ export function createQueryStore(
       change({
         query: reuseQuery(
           store.get().query,
-          normalizeQuery(def, runnable, next),
+          normalizeQuery(def, capabilities, next),
         ),
         view,
         historyWrite: "replace",

@@ -146,7 +146,7 @@ function BoundRangeFilter({ field }: FieldFilterProps) {
 
 export function FieldFilter(props: FieldFilterProps) {
   const { source } = useQueryGrid();
-  switch (resolveFilterKind(props.field, source.runnable)) {
+  switch (resolveFilterKind(props.field, source.capabilities)) {
     case "lookup":
       return <BoundLookupFilter {...props} />;
     case "equals":
@@ -169,7 +169,7 @@ export function SortControl() {
   const offered = offers.sorts.length > 0;
   return (
     <BaseSortControl
-      options={context.runnable.sortFields.map((key) => ({
+      options={context.capabilities.sortFields.map((key) => ({
         value: key,
         label: getFieldLabel(def, key),
         disabled: !offers.sorts.includes(key),
@@ -206,7 +206,7 @@ export function GroupControl() {
   const context = useOfferContext();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
-  const fields = context.runnable.groupFields;
+  const fields = context.capabilities.groupFields;
   if (fields.length === 0) {
     return null;
   }
@@ -244,7 +244,7 @@ export function SearchFilter() {
   const context = useOfferContext();
   const { dispatch } = useQueryGridActions();
   const offer = useOfferState({ kind: "search" });
-  const fields = context.runnable.searchFields;
+  const fields = context.capabilities.searchFields;
   if (fields.length === 0) {
     return null;
   }
@@ -271,7 +271,7 @@ export function ContainsFilter({ fields }: ContainsFilterProps) {
   const { def, source } = useQueryGrid();
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
-  const keys = listContainsFilterFields(source.runnable, fields);
+  const keys = listContainsFilterFields(source.capabilities, fields);
   const current = query.contains?.field ?? keys[0] ?? "";
   const offer = useOfferState({ kind: "contains", field: current });
   if (keys.length === 0) {
@@ -303,7 +303,7 @@ export function MatchToggle() {
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
   const offer = useOfferState({ kind: "match" });
-  if (!source.runnable.matchAny) {
+  if (!source.capabilities.matchAny) {
     return null;
   }
   return (
@@ -348,7 +348,7 @@ function DefaultFilters({ fields, contains }: DefaultFiltersProps) {
   return (
     <>
       <SearchFilter />
-      {listFilterFields(def, source.runnable, fields).map((field) => (
+      {listFilterFields(def, source.capabilities, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
       <ContainsFilter fields={contains ?? fields} />

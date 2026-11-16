@@ -80,7 +80,9 @@ function useGridControls() {
       dispatch({ type: "setSort", field, direction }),
     filters: Object.fromEntries(
       def.fields
-        .filter((field) => resolveFilterKind(field, source.runnable) !== null)
+        .filter(
+          (field) => resolveFilterKind(field, source.capabilities) !== null,
+        )
         .map((field) => [
           field.key,
           <FieldFilter key={field.key} field={field} />,

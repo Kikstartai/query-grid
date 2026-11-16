@@ -50,7 +50,7 @@ export function createFeed(
   pageSize: number,
 ): Feed {
   const def = store.def;
-  const sortsSearchLocally = !source.runnable.searchIsOrdered;
+  const sortsSearchLocally = !source.capabilities.searchIsOrdered;
   const feed = createStore(initialFeedState(store.getQuery()));
   const begin = createAbortable();
   const insertedIds = new Set<string>();

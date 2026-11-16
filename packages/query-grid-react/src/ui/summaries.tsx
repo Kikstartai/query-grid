@@ -68,7 +68,7 @@ export function FacetPanel() {
   const { def } = useQueryGrid();
   const messages = useMessages();
   const query = useQueryState();
-  const { runnable } = useOfferContext();
+  const { capabilities } = useOfferContext();
   const facets = useFacetState();
   const key = def.facet?.field ?? "";
   const { multiple } = useEqualsFilter(key);
@@ -84,12 +84,12 @@ export function FacetPanel() {
     onValuesChange: (values: string[]) =>
       dispatch({ type: "setEquals", field: key, values }),
   };
-  const counted = runnable.isFacetCountExact(query);
+  const counted = capabilities.isFacetCountExact(query);
   const showCounts = counted && facets.loaded;
   const countOf = (value: string) =>
     facets.result.find((item) => item.value === value)?.count ?? 0;
   const shown = counted ? "counter" : "hidden";
-  const note = runnable.facetCountsFollowFilters ? "following" : shown;
+  const note = capabilities.facetCountsFollowFilters ? "following" : shown;
   return (
     <BaseFacetPanel
       label={field.label}

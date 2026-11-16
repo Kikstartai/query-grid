@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="630" viewBox="0 0 680 630" role="img">
-  <title>query-grid runnable-query flow</title>
-  <desc>Host defs feed the memory source or postgres indexes, which produce one RunnableQueries object; the provider passes it to the offers, which enable components, and the server checks each request against indexes again.</desc>
+  <title>query-grid data source capabilities flow</title>
+  <desc>Host defs feed the memory source or postgres indexes, which produce one DataSourceCapabilities object; the provider passes it to the offers, which enable components, and the server checks each request against indexes again.</desc>
   <style>
     text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     .th { font-size: 14px; font-weight: 500; }
@@ -30,12 +30,12 @@
     <text class="ts" x="340" y="78" text-anchor="middle" dominant-baseline="central">FieldDef, GridDef</text></g>
   <g class="core"><rect x="100" y="136" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="210" y="154" text-anchor="middle" dominant-baseline="central">Memory source</text>
-    <text class="ts" x="210" y="174" text-anchor="middle" dominant-baseline="central">memoryRunnable(def)</text></g>
+    <text class="ts" x="210" y="174" text-anchor="middle" dominant-baseline="central">memoryCapabilities(def)</text></g>
   <g class="pg"><rect x="360" y="136" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="470" y="154" text-anchor="middle" dominant-baseline="central">Indexes</text>
-    <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">indexRunnable(indexes)</text></g>
+    <text class="ts" x="470" y="174" text-anchor="middle" dominant-baseline="central">indexCapabilities(indexes)</text></g>
   <g class="core"><rect x="230" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
-    <text class="th" x="340" y="250" text-anchor="middle" dominant-baseline="central">RunnableQueries</text>
+    <text class="th" x="340" y="250" text-anchor="middle" dominant-baseline="central">DataSourceCapabilities</text>
     <text class="ts" x="340" y="270" text-anchor="middle" dominant-baseline="central">canRun, sort, search</text></g>
   <g class="react"><rect x="230" y="328" width="220" height="56" rx="8" stroke-width="0.5"/>
     <text class="th" x="340" y="346" text-anchor="middle" dominant-baseline="central">QueryGridProvider</text>

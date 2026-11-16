@@ -5,7 +5,7 @@ import {
   type NarrowedResult,
   type NarrowedState,
   type QueryState,
-  type RunnableQueries,
+  type DataSourceCapabilities,
 } from "./field-types.ts";
 import { getReservedValue } from "./field-values.ts";
 import { labelKey } from "./format.ts";
@@ -76,7 +76,7 @@ export function createFacetStore(
     {
       initial: [],
       keepResult: true,
-      followsFilters: source.runnable.facetCountsFollowFilters,
+      followsFilters: source.capabilities.facetCountsFollowFilters,
     },
   );
 }
@@ -86,14 +86,14 @@ export interface NarrowedStore {
 }
 
 function toNarrowedState(
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   query: QueryState,
   result: NarrowedResult,
 ): NarrowedState {
   return {
     ...result,
-    allBasis: runnable.narrowBasis({ ...query, match: "all" }),
-    anyBasis: runnable.narrowBasis({ ...query, match: "any" }),
+    allBasis: capabilities.narrowBasis({ ...query, match: "all" }),
+    anyBasis: capabilities.narrowBasis({ ...query, match: "any" }),
   };
 }
 
@@ -109,7 +109,7 @@ export function createNarrowedStore(
   const publish = () => {
     const { query, result, status, loaded } = resource.getState();
     if (status === "idle" && loaded && result) {
-      store.setNarrowed(toNarrowedState(source.runnable, query, result));
+      store.setNarrowed(toNarrowedState(source.capabilities, query, result));
     }
   };
   return { connect: () => resource.subscribe(publish) };

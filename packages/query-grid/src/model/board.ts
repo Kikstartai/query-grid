@@ -2,7 +2,7 @@ import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import {
   getFacetField,
-  type RunnableQueries,
+  type DataSourceCapabilities,
   type BaseGridDef,
   type GridRow,
   type QueryState,
@@ -72,13 +72,13 @@ function loadTransitions(source: DataSource): TransitionLoad {
 export function getLaneQueries(
   def: BaseGridDef,
   query: QueryState,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
 ): Map<string, QueryState> | null {
   const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }
-  const holdsAllRows = runnable.holdsAllRows;
+  const holdsAllRows = capabilities.holdsAllRows;
   const chosen = query.equals[field.key];
   const selected = chosen ? expandEquals(field, chosen) : undefined;
   const statuses = field.options
@@ -96,7 +96,8 @@ export function getLaneQueries(
   const plain = query.contains === null && query.ranges.length === 0;
   const combinable =
     !isMatchAny(query) && (holdsAllRows || (query.search === null && plain));
-  const answerable = combinable && [...queries.values()].every(runnable.canRun);
+  const answerable =
+    combinable && [...queries.values()].every(capabilities.canRun);
   return answerable ? queries : null;
 }
 
@@ -120,7 +121,7 @@ export function createBoard(
     [...laneQueries].map(([lane, query]) => [
       lane,
       createFeed(
-        createQueryStore(def, source.runnable, query, "board"),
+        createQueryStore(def, source.capabilities, query, "board"),
         source,
         LANE_PAGE_SIZE,
       ),

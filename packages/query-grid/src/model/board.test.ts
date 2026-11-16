@@ -12,9 +12,9 @@ import {
 } from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
 import { defaultQuery } from "./query-actions.ts";
-import { indexRunnable } from "./indexes.ts";
+import { indexCapabilities } from "./indexes.ts";
 
-const RUNNABLE = indexRunnable(TEST_INDEXES, {
+const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
   facetField: "status",
   searchFields: TEST_SEARCH_FIELDS,
 });
@@ -32,7 +32,7 @@ interface Calls {
 }
 
 function createSource(calls: Calls): DataSource {
-  return createTestSource(RUNNABLE, {
+  return createTestSource(CAPABILITIES, {
     fetchPage: async (query) => ({
       rows: ROWS.filter((row) =>
         query.equals.status?.includes(String(row.status)),
@@ -64,11 +64,13 @@ function listLaneIds(board: Board): Record<string, string[]> {
 }
 
 function listLanes(query: QueryState): string[] {
-  return [...(getLaneQueries(TEST_DEF, query, RUNNABLE) ?? new Map()).keys()];
+  return [
+    ...(getLaneQueries(TEST_DEF, query, CAPABILITIES) ?? new Map()).keys(),
+  ];
 }
 
 async function openBoard(source: DataSource): Promise<Board> {
-  const queries = getLaneQueries(TEST_DEF, BASE, source.runnable);
+  const queries = getLaneQueries(TEST_DEF, BASE, source.capabilities);
   const board = createBoard(TEST_DEF, source, queries ?? new Map());
   board.subscribe(() => undefined);
   await settle();
@@ -82,10 +84,12 @@ describe("lane queries", () => {
       sort: { field: "total", direction: "asc" },
     };
     expect(listLanes(sorted)).toEqual(["open", "done"]);
-    expect(getLaneQueries(TEST_DEF, sorted, RUNNABLE)?.get("open")).toEqual({
-      ...BASE,
-      equals: { status: ["open"] },
-    });
+    expect(getLaneQueries(TEST_DEF, sorted, CAPABILITIES)?.get("open")).toEqual(
+      {
+        ...BASE,
+        equals: { status: ["open"] },
+      },
+    );
   });
 
   test("a selected facet value narrows the lanes", () => {
@@ -96,13 +100,13 @@ describe("lane queries", () => {
 
   test("a search or an unanswerable lane leaves no board", () => {
     expect(
-      getLaneQueries(TEST_DEF, { ...BASE, search: "abc" }, RUNNABLE),
+      getLaneQueries(TEST_DEF, { ...BASE, search: "abc" }, CAPABILITIES),
     ).toBeNull();
     expect(
       getLaneQueries(
         TEST_DEF,
         { ...BASE, equals: { region: ["north"] } },
-        RUNNABLE,
+        CAPABILITIES,
       ),
     ).toBeNull();
   });
@@ -124,7 +128,7 @@ describe("the board", () => {
   test("transitions given to the board replace the source's", async () => {
     const calls: Calls = { transitions: 0, moves: [] };
     const source = createSource(calls);
-    const queries = getLaneQueries(TEST_DEF, BASE, source.runnable);
+    const queries = getLaneQueries(TEST_DEF, BASE, source.capabilities);
     const board = createBoard(TEST_DEF, source, queries ?? new Map(), [
       ["done", "open"],
     ]);

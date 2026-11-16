@@ -119,13 +119,13 @@ export function withLiteralFilters(
   });
   return {
     ...source,
-    runnable: {
-      ...source.runnable,
-      canRun: (query) => source.runnable.canRun(shape(query)),
-      isNarrowed: (query) => source.runnable.isNarrowed(shape(query)),
-      narrowBasis: (query) => source.runnable.narrowBasis(mark(query)),
+    capabilities: {
+      ...source.capabilities,
+      canRun: (query) => source.capabilities.canRun(shape(query)),
+      isNarrowed: (query) => source.capabilities.isNarrowed(shape(query)),
+      narrowBasis: (query) => source.capabilities.narrowBasis(mark(query)),
       isFacetCountExact: (query) =>
-        source.runnable.isFacetCountExact(shape(query)),
+        source.capabilities.isFacetCountExact(shape(query)),
     },
     fetchPage: (query, limit, signal) =>
       source.fetchPage(resolve(query), limit, signal),

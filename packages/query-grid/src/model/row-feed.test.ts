@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { DataSource } from "./data-source.ts";
-import type { RunnableQueries, GridRow, QueryState } from "./field-types.ts";
+import type {
+  DataSourceCapabilities,
+  GridRow,
+  QueryState,
+} from "./field-types.ts";
 import {
   createTestSource,
   settle,
@@ -14,7 +18,7 @@ import { createQueryStore } from "./query-store.ts";
 import { createFeed } from "./row-feed.ts";
 import { createCountStore } from "./summary-stores.ts";
 
-const SERVER: RunnableQueries = {
+const SERVER: DataSourceCapabilities = {
   ...UNTIERED,
   holdsAllRows: false,
   searchIsOrdered: false,

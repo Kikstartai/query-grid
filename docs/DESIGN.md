@@ -31,11 +31,11 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid`
 
-| Export     | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`        | field and grid def types, `QueryState`, `RunnableQueries`, indexes, `indexRunnable` and `planQuery`, the URL codec, value validation, reserved values and exclusion, date presets, `toLiteralQuery`, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet, label, limits and narrowed-size stores, the board and grouping models, chips, formatting, the `DataSource` contract, the wire result types, `GridLimits`, problems as codes |
-| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                                                                                                                                       |
-| `./memory` | `createMemorySource`, `memoryRunnable`, `filterRows`                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Export     | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`        | field and grid def types, `QueryState`, `DataSourceCapabilities`, indexes, `indexCapabilities` and `planQuery`, the URL codec, value validation, reserved values and exclusion, date presets, `toLiteralQuery`, actions and offers, refusal reasons, the query store, the row feed, the count, total, facet, label, limits and narrowed-size stores, the board and grouping models, chips, formatting, the `DataSource` contract, the wire result types, `GridLimits`, problems as codes |
+| `./http`   | `createHttpSource` and the protocol it shares with the handler: route names, parameter names, the error and move bodies                                                                                                                                                                                                                                                                                                                                                                  |
+| `./memory` | `createMemorySource`, `memoryCapabilities`, `filterRows`                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 - The stores are plain objects with `subscribe` and a getter, built on one emitter. There is no store library.
 - The count, totals and facet counts are one kind of resource: it follows the query store, starts on its first subscriber and aborts the request it replaces.
@@ -56,7 +56,7 @@ Three npm packages in one repo, released together at one version.
 - `DataGrid` also takes `groups`. Each group is a header row, the rows of an open group and a load-more row, all mixed into the one virtual list. The cell focus, the range and the selection run over the data rows alone, so the arrow keys step from row to row past a header, and a header is a button on its own tab stop.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
-- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `ContainsFilter`, `MatchToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the runnable queries, the field's `type` and its `options`.
+- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `ContainsFilter`, `MatchToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the capabilities, the field's `type` and its `options`.
 - `EqualsSelect` and `LookupFilter` list `(empty)` and `(not empty)` first on a nullable field. `EqualsSelect` carries an Exclude toggle on a field with a fixed list of values. A date `RangeFilter` is a period select (Today to This year, then Custom…) that shows the date picker only for Custom.
 - The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then Contains, the Match toggle, the sort and the group. Without it they show every filterable field. `contains` names the text fields the Contains control lists, and defaults to `fields`. `children` replaces everything.
 - `QueryGridProvider` keeps the query in the URL through nuqs, which is a peer dependency. `StaticQueryGridProvider` takes a `queryString` and needs no adapter. `urlPrefix` namespaces one grid's keys, for two grids on a page.
@@ -92,12 +92,12 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 - An index's equality fields take several values each unless it sets `multi: false`.
 - `validateGridDef` checks a def against Postgres's rules before any migration is written: among them, a total must be a non-null money or integer field named once, and a currency must be a code `Intl` knows.
 
-## Runnable queries
+## Data source capabilities
 
-Runnable queries are what a data source can answer. Every control reads them; nothing reads the indexes directly.
+The capabilities are what a data source can answer fast. Every control reads them; nothing reads the indexes directly.
 
 ```ts
-interface RunnableQueries {
+interface DataSourceCapabilities {
   holdsAllRows: boolean;
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
@@ -116,16 +116,16 @@ interface RunnableQueries {
 }
 ```
 
-- `indexRunnable(indexes, { facetField, searchFields, fields })` builds them for a server grid: every field in an index's `equals`, every index's sort, `searchFields`, and from `fields` every number and date as a range, every text field as a contains and every equality field but a bare id as a group. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
-- `memoryRunnable(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, a text field also a contains, and every field sorts.
+- `indexCapabilities(indexes, { facetField, searchFields, fields })` builds them for a server grid: every field in an index's `equals`, every index's sort, `searchFields`, and from `fields` every number and date as a range, every text field as a contains and every equality field but a bare id as a group. `createHttpSource(def, basePath)` calls it, so the client offers exactly what the server accepts.
+- `memoryCapabilities(def)` builds them for a client grid: a number or a date without options takes a range, any other field an equality, a text field also a contains, and every field sorts.
 - `planQuery(indexes, query)` splits a query into the core an index answers (the equality filters, the sort and a range on it) and the parts that run over that core's rows. `isNarrowed` says a query has such a part, or groups by a field other than the counted one. `narrowBasis` names the rows they run over, so a size known for one query answers another over the same rows.
 - `canRun` is the answer for one query. The field lists are what could ever be asked.
 - Flags say how the source behaves, never which kind it is: `holdsAllRows` (every row is in hand, so a board lane keeps the whole query), `searchIsOrdered` (search results sort like any query, rather than arriving as one capped unordered batch the feed sorts itself) and `facetCountsFollowFilters` (facet counts are recounted under the other filters, rather than read from the counter table) are true for the memory source and false for an index-backed one. `narrowLimited` is the reverse: an index-backed source limits the narrowed set and the memory source does not.
-- `OfferContext` is the runnable queries, whether every search match is loaded, and `narrowed`: the size of the rows the current filters leave, as the source last counted it.
+- `OfferContext` is the capabilities, whether every search match is loaded, and `narrowed`: the size of the rows the current filters leave, as the source last counted it.
 - An action whose result is a narrowed query is offered only when that size is known and within the limit. A query already over a narrowed set may change its filters freely: the server decides, and a refusal shows in the grid with the limit.
-- `listOffers(def, query, context)` says what the next action may be. `applyAction` refuses an action whose result the runnable queries do not answer. `explainUnavailable(query, target, context)` gives the reason as a code.
-- The control for a field follows from the runnable queries, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
-- The URL keys a provider owns are the runnable queries' fields. Any other parameter is left alone.
+- `listOffers(def, query, context)` says what the next action may be. `applyAction` refuses an action whose result the capabilities do not answer. `explainUnavailable(query, target, context)` gives the reason as a code.
+- The control for a field follows from the capabilities, its `type` and its `options`: an equality field with options is a select, one without is a lookup, a range field is a range. A field in both gets the equality control.
+- The URL keys a provider owns are the capabilities' fields. Any other parameter is left alone.
 
 ## Query state
 
@@ -152,7 +152,7 @@ interface QueryState {
 - **Exclude.** On a field with a fixed list of values, `!value` in the filter leaves that value out. It is intent: the URL and the query keep it, and it becomes the remaining values (and empty, on a nullable field) when the query runs, so an option added later is included. It is refused when nothing would remain or more than `maxValues` would.
 - **Ranges.** A query holds one range per field. On a server grid the one on the sort field of an index with `range` is answered by that index; any other runs over the narrowed set.
 - **Presets.** A date range may carry a `preset` in place of its bounds (`today`, `yesterday`, `last-7-days`, `last-30-days`, `this-month`, `last-month`, `this-year`). It is intent too: resolved when the query runs to whole days in the viewer's time zone, both ends included.
-- **Intent becomes literal filters at the source.** `withLiteralFilters` wraps a data source: every fetch sees literal values and bounds, and the runnable checks (`canRun`, `isNarrowed`, `isFacetCountExact`, `narrowBasis`) see the same rewrite with a preset as an unbounded range. Both built-in sources are wrapped. The server never sees an excluded value or a preset name, and refuses both.
+- **Intent becomes literal filters at the source.** `withLiteralFilters` wraps a data source: every fetch sees literal values and bounds, and the capability checks (`canRun`, `isNarrowed`, `isFacetCountExact`, `narrowBasis`) see the same rewrite with a preset as an unbounded range. Both built-in sources are wrapped. The server never sees an excluded value or a preset name, and refuses both.
 - **Contains** is a case-insensitive substring match on one text field. **Match any** ORs the field filters (equality, ranges and contains). **Group** names one field to group the grid by. On a server grid all three run over the narrowed set, except a group by the counted field.
 - The search takes 3 to 80 characters. On a server grid it combines with equality filters on any indexed field, including empty and excluded values, and with nothing else.
 - The search is an unranked, case-insensitive substring match (`ILIKE '%term%'`) over the def's `search` columns joined with spaces, backed by a `pg_trgm` GIN index. It is not full-text search: no stemming, no ranking, no order.
@@ -223,7 +223,7 @@ interface QueryState {
 
 ## Scale
 
-- **Nothing grows with a tenant count.** This is library code. Runnable queries are computed once per def.
+- **Nothing grows with a tenant count.** This is library code. Capabilities are computed once per def.
 - **Request path.** One interaction is one indexed page read, one capped count and one statement for every total. Each is bounded by the page size, the cap or a time budget.
 - **Storage per index.** Every declared index is a real index on its table. Indexes are declared deliberately, per grid, and never generated per column.
 - **Write amplification.** Each insert writes every index. Write cost is proportional to the index count.

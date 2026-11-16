@@ -77,7 +77,7 @@ export interface QueryState {
   cursor: string | null;
 }
 
-export interface RunnableQueries {
+export interface DataSourceCapabilities {
   holdsAllRows: boolean;
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
@@ -113,7 +113,7 @@ export interface NarrowedState extends NarrowedResult {
 }
 
 export interface OfferContext {
-  runnable: RunnableQueries;
+  capabilities: DataSourceCapabilities;
   allSearchMatchesLoaded: boolean;
   narrowed?: NarrowedState | null;
 }
@@ -164,12 +164,12 @@ export const CONTAINS_MAX_LENGTH = 80;
 
 export function resolveFilterKind(
   field: BaseFieldDef,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
 ): FilterKind | null {
-  if (runnable.equalsFields.includes(field.key)) {
+  if (capabilities.equalsFields.includes(field.key)) {
     return field.options ? "equals" : "lookup";
   }
-  if (runnable.rangeFields.includes(field.key)) {
+  if (capabilities.rangeFields.includes(field.key)) {
     return "range";
   }
   return null;
@@ -177,13 +177,15 @@ export function resolveFilterKind(
 
 export function listFilterFields<F extends BaseFieldDef>(
   def: BaseGridDef<F>,
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   keys?: string[],
 ): F[] {
   const fields = keys
     ? keys.flatMap((key) => getField(def, key) ?? [])
     : def.fields;
-  return fields.filter((field) => resolveFilterKind(field, runnable) !== null);
+  return fields.filter(
+    (field) => resolveFilterKind(field, capabilities) !== null,
+  );
 }
 
 export function isDefaultSort(def: BaseGridDef, sort: SortState): boolean {

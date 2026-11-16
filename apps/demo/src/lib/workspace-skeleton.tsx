@@ -3,7 +3,7 @@ import {
   listFilterFields,
   resolveFilterKind,
   type BaseGridDef,
-  type RunnableQueries,
+  type DataSourceCapabilities,
 } from "@kikstart/query-grid";
 
 const GRID_ROWS = Array.from({ length: 14 }, (_, index) => index);
@@ -14,7 +14,7 @@ interface SkeletonProps {
 }
 
 interface SkeletonFiltersProps extends SkeletonProps {
-  runnable: RunnableQueries;
+  capabilities: DataSourceCapabilities;
   fields?: string[];
   contains?: string[];
 }
@@ -43,24 +43,24 @@ export function SkeletonTools() {
 
 export function SkeletonFilters({
   def,
-  runnable,
+  capabilities,
   fields,
   contains,
 }: SkeletonFiltersProps) {
   const searchable =
-    listContainsFilterFields(runnable, contains ?? fields).length > 0;
+    listContainsFilterFields(capabilities, contains ?? fields).length > 0;
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />
-      {listFilterFields(def, runnable, fields).map((field) => (
+      {listFilterFields(def, capabilities, fields).map((field) => (
         <span
           key={field.key}
           className="skeleton skeleton-control"
-          data-kind={resolveFilterKind(field, runnable)}
+          data-kind={resolveFilterKind(field, capabilities)}
         />
       ))}
       <SkeletonControl kind="contains" shown={searchable} />
-      <SkeletonControl kind="match" shown={runnable.matchAny} />
+      <SkeletonControl kind="match" shown={capabilities.matchAny} />
       <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
   );
@@ -115,7 +115,7 @@ function SkeletonTotal({ def }: SkeletonProps) {
 
 export function WorkspaceSkeleton({
   def,
-  runnable,
+  capabilities,
   fields,
   contains,
 }: SkeletonFiltersProps) {
@@ -130,7 +130,7 @@ export function WorkspaceSkeleton({
       >
         <SkeletonFilters
           def={def}
-          runnable={runnable}
+          capabilities={capabilities}
           fields={fields}
           contains={contains}
         />

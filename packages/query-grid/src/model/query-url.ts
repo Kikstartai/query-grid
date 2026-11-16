@@ -3,7 +3,7 @@ import {
   isDefaultSort,
   type BaseGridDef,
   type ContainsState,
-  type RunnableQueries,
+  type DataSourceCapabilities,
   type QueryState,
   type RangeState,
   type SortDirection,
@@ -24,14 +24,18 @@ export interface QueryKey {
   repeated: boolean;
 }
 
-export function listQueryKeys(runnable: RunnableQueries): QueryKey[] {
-  const equals = runnable.equalsFields.map((key) => `${EQUALS_PREFIX}${key}`);
-  const ranges = runnable.rangeFields.map((key) => `${RANGE_PREFIX}${key}`);
-  const contains = runnable.containsFields.map(
+export function listQueryKeys(
+  capabilities: DataSourceCapabilities,
+): QueryKey[] {
+  const equals = capabilities.equalsFields.map(
+    (key) => `${EQUALS_PREFIX}${key}`,
+  );
+  const ranges = capabilities.rangeFields.map((key) => `${RANGE_PREFIX}${key}`);
+  const contains = capabilities.containsFields.map(
     (key) => `${CONTAINS_PREFIX}${key}`,
   );
-  const match = runnable.matchAny ? [MATCH_PARAM] : [];
-  const group = runnable.groupFields.length > 0 ? [GROUP_PARAM] : [];
+  const match = capabilities.matchAny ? [MATCH_PARAM] : [];
+  const group = capabilities.groupFields.length > 0 ? [GROUP_PARAM] : [];
   return [
     ...equals.map((name) => ({ name, repeated: true })),
     ...[

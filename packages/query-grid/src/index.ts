@@ -54,7 +54,7 @@ export {
   listTotalFields,
   resolveFilterKind,
   resolveMaxValues,
-  type RunnableQueries,
+  type DataSourceCapabilities,
   type FacetDef,
   type BaseFieldDef,
   type FieldLookup,
@@ -155,7 +155,7 @@ export {
 } from "./model/range-bounds.ts";
 export {
   countFilterTerms,
-  gridDefRunnable,
+  gridDefCapabilities,
   isContainsField,
   isFacetOnlyQuery,
   isGroupField,
@@ -170,10 +170,10 @@ export {
   planQuery,
   listSortFields,
   getIndex,
-  indexRunnable,
+  indexCapabilities,
   indexId,
   type IndexDef,
-  type IndexRunnableOptions,
+  type IndexCapabilitiesOptions,
   type IndexedGridDef,
   type QueryPlan,
 } from "./model/indexes.ts";

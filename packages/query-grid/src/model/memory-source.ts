@@ -4,7 +4,7 @@ import {
   getField,
   listSearchFields,
   listTotalFields,
-  type RunnableQueries,
+  type DataSourceCapabilities,
   type BaseFieldDef,
   type FieldOption,
   type BaseGridDef,
@@ -29,7 +29,7 @@ import { sortRows, toComparable } from "./sort-rows.ts";
 
 const OPTION_LIMIT = 50;
 
-export function memoryRunnable(def: BaseGridDef): RunnableQueries {
+export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
   const searchFields = listSearchFields(def);
   const rangeFields = listNarrowRangeFields(def.fields);
   const equalsFields = def.fields
@@ -216,7 +216,7 @@ export function createMemorySource(
     return (selected as Selection).rows;
   };
   return withLiteralFilters(def, {
-    runnable: memoryRunnable(def),
+    capabilities: memoryCapabilities(def),
     fetchPage: async (query, limit) => {
       const offset = Number(query.cursor ?? 0) || 0;
       const found = select(query);

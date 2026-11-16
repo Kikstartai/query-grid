@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { memoryRunnable } from "@kikstart/query-grid/memory";
+import { memoryCapabilities } from "@kikstart/query-grid/memory";
 
 import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
@@ -31,7 +31,7 @@ export function TasksWorkspace() {
         fallback={
           <WorkspaceSkeleton
             def={TASKS_GRID_DEF}
-            runnable={memoryRunnable(TASKS_GRID_DEF)}
+            capabilities={memoryCapabilities(TASKS_GRID_DEF)}
             fields={TASK_FILTER_FIELDS}
             contains={TASK_CONTAINS_FIELDS}
           />

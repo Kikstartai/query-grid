@@ -37,7 +37,7 @@ import { createUrlSync, type UrlSync } from "./url-sync.ts";
 const DEF = TEST_GRID_DEF;
 const BASE = defaultQuery(DEF);
 const source = createMemorySource(DEF, TEST_ROWS);
-const RUNNABLE = source.runnable;
+const CAPABILITIES = source.capabilities;
 
 function Readout() {
   const query = useQueryState();
@@ -77,12 +77,12 @@ function renderAt(search: string) {
 
 describe("the URL parsers", () => {
   test("the key map is built from the def at runtime, on core's keys", () => {
-    expect(Object.keys(buildUrlParsers(RUNNABLE))).toEqual([
-      ...RUNNABLE.equalsFields.map((key) => `f.${key}`),
+    expect(Object.keys(buildUrlParsers(CAPABILITIES))).toEqual([
+      ...CAPABILITIES.equalsFields.map((key) => `f.${key}`),
       "r.number",
       "r.created_at",
       "r.total",
-      ...RUNNABLE.containsFields.map((key) => `c.${key}`),
+      ...CAPABILITIES.containsFields.map((key) => `c.${key}`),
       "match",
       "group",
       "q",
@@ -90,7 +90,7 @@ describe("the URL parsers", () => {
       "cursor",
       "view",
     ]);
-    expect(RUNNABLE.containsFields).toEqual(["name", "note"]);
+    expect(CAPABILITIES.containsFields).toEqual(["name", "note"]);
   });
 
   test("a state written for nuqs is the one core encodes, and reads back", () => {
@@ -103,10 +103,10 @@ describe("the URL parsers", () => {
       },
       view: "list" as const,
     };
-    const values = toUrlValues(DEF, RUNNABLE, state);
+    const values = toUrlValues(DEF, CAPABILITIES, state);
     expect(values).toEqual({
       ...Object.fromEntries(
-        RUNNABLE.equalsFields.map((key) => [`f.${key}`, []]),
+        CAPABILITIES.equalsFields.map((key) => [`f.${key}`, []]),
       ),
       "f.status": ["open", "done"],
       "f.region": ["north"],
@@ -122,7 +122,7 @@ describe("the URL parsers", () => {
       cursor: null,
       view: "list",
     });
-    const queryString = toQueryString(RUNNABLE, values);
+    const queryString = toQueryString(CAPABILITIES, values);
     const core = encodeQuery(DEF, state.query);
     for (const [name, value] of core) {
       expect(new URLSearchParams(queryString).getAll(name)).toContain(value);
@@ -130,7 +130,7 @@ describe("the URL parsers", () => {
     expect([...new URLSearchParams(queryString)]).toHaveLength(
       [...core].length + 1,
     );
-    expect(readUrlState(DEF, source.runnable, queryString)).toEqual(state);
+    expect(readUrlState(DEF, source.capabilities, queryString)).toEqual(state);
   });
 });
 
@@ -185,9 +185,9 @@ interface PrefixedGrid {
 }
 
 function connectGrid(url: UrlValues, prefix: string): PrefixedGrid {
-  const store = createQueryStore(DEF, source.runnable, BASE);
+  const store = createQueryStore(DEF, source.capabilities, BASE);
   const sync = createUrlSync(store, "", (state) =>
-    Object.assign(url, toUrlValues(DEF, RUNNABLE, state, prefix)),
+    Object.assign(url, toUrlValues(DEF, CAPABILITIES, state, prefix)),
   );
   sync.connect();
   return { store, sync };
@@ -195,8 +195,8 @@ function connectGrid(url: UrlValues, prefix: string): PrefixedGrid {
 
 describe("two grids on one page", () => {
   test("a prefix puts every key of a grid under its own name", () => {
-    expect(Object.keys(buildUrlParsers(RUNNABLE, "a"))).toEqual(
-      Object.keys(buildUrlParsers(RUNNABLE)).map((key) => `a.${key}`),
+    expect(Object.keys(buildUrlParsers(CAPABILITIES, "a"))).toEqual(
+      Object.keys(buildUrlParsers(CAPABILITIES)).map((key) => `a.${key}`),
     );
   });
 
@@ -237,7 +237,7 @@ describe("two grids on one page", () => {
     const second = connectGrid(url, "b");
     first.store.dispatch({ type: "setSearch", value: "acme" });
     first.store.setView("board");
-    second.sync.follow(toQueryString(RUNNABLE, url, "b"));
+    second.sync.follow(toQueryString(CAPABILITIES, url, "b"));
     expect(second.store.getQuery()).toEqual(BASE);
     expect(second.store.getView()).toBe("grid");
     second.store.dispatch({
@@ -245,10 +245,10 @@ describe("two grids on one page", () => {
       field: "status",
       values: ["done"],
     });
-    first.sync.follow(toQueryString(RUNNABLE, url, "a"));
+    first.sync.follow(toQueryString(CAPABILITIES, url, "a"));
     expect(first.store.getQuery()).toEqual({ ...BASE, search: "acme" });
-    expect(toQueryString(RUNNABLE, url, "a")).toBe("q=acme&view=board");
-    expect(toQueryString(RUNNABLE, url, "b")).toBe("f.status=done");
+    expect(toQueryString(CAPABILITIES, url, "a")).toBe("q=acme&view=board");
+    expect(toQueryString(CAPABILITIES, url, "b")).toBe("f.status=done");
     expect(url["a.q"]).toBe("acme");
     expect(url["b.f.status"]).toEqual(["done"]);
     expect(url.q).toBeUndefined();
@@ -292,7 +292,7 @@ describe("the actions", () => {
         <Capture />
       </StaticQueryGridProvider>,
     );
-    const lanes = getLaneQueries(DEF, BASE, counting.runnable);
+    const lanes = getLaneQueries(DEF, BASE, counting.capabilities);
     const board = createBoard(DEF, counting, lanes ?? new Map());
     const id = TEST_ROWS[0].id;
     const moved = await captured[0].moveRow(board, {

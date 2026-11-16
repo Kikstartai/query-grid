@@ -645,7 +645,7 @@ describe("intent the browser resolves", () => {
         sort: TEST_DEF.defaultSort,
         cursor: null,
       };
-      expect(source.runnable.canRun(query)).toBe(true);
+      expect(source.capabilities.canRun(query)).toBe(true);
       await source.fetchPage(query, 10, signal);
       expect(seen[0].values).toEqual(["done"]);
       await source.fetchPage(

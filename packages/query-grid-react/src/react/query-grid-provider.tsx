@@ -145,10 +145,10 @@ function createValue(
   queryString: string,
 ): QueryGridContextValue {
   const { def, source } = props;
-  const initial = readUrlState(def, source.runnable, queryString);
+  const initial = readUrlState(def, source.capabilities, queryString);
   const store = createQueryStore(
     def,
-    source.runnable,
+    source.capabilities,
     initial.query,
     initial.view,
   );
@@ -194,7 +194,7 @@ function createValue(
 
 function useNarrowedSizes({ source, narrowed }: QueryGridContextValue): void {
   useEffect(() => {
-    if (!source.runnable.narrowLimited) {
+    if (!source.capabilities.narrowLimited) {
       return;
     }
     return narrowed.connect();
@@ -203,16 +203,16 @@ function useNarrowedSizes({ source, narrowed }: QueryGridContextValue): void {
 
 export function QueryGridProvider(props: QueryGridProviderProps) {
   const prefix = props.urlPrefix ?? "";
-  const { runnable } = props.source;
-  const [parsers] = useState(() => buildUrlParsers(runnable, prefix));
+  const { capabilities } = props.source;
+  const [parsers] = useState(() => buildUrlParsers(capabilities, prefix));
   const [values, setValues] = useQueryStates(parsers);
-  const queryString = toQueryString(runnable, values as UrlValues, prefix);
+  const queryString = toQueryString(capabilities, values as UrlValues, prefix);
   const [value] = useState(() => createValue(props, queryString));
   const setter = useLatest(setValues);
   const [sync] = useState(() =>
     createUrlSync(value.store, queryString, (state, history) => {
       void setter.current(
-        toUrlValues(value.def, runnable, state, prefix),
+        toUrlValues(value.def, capabilities, state, prefix),
         history === "push"
           ? { history }
           : { history, limitUrlUpdates: throttle(REPLACE_THROTTLE_MS) },
@@ -240,7 +240,7 @@ function ignoreWrite(): void {
 
 export function StaticQueryGridProvider(props: StaticQueryGridProviderProps) {
   const queryString = normalizeQueryString(
-    props.source.runnable,
+    props.source.capabilities,
     props.queryString,
     props.urlPrefix ?? "",
   );

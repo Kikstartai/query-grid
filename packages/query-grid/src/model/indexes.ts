@@ -4,7 +4,7 @@ import {
   type BaseFieldDef,
   type BaseGridDef,
   type QueryState,
-  type RunnableQueries,
+  type DataSourceCapabilities,
 } from "./field-types.ts";
 import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 
@@ -19,7 +19,7 @@ export interface IndexedGridDef extends BaseGridDef {
   indexes: IndexDef[];
 }
 
-export interface IndexRunnableOptions {
+export interface IndexCapabilitiesOptions {
   facetField?: string;
   searchFields?: string[];
   fields?: BaseFieldDef[];
@@ -85,10 +85,10 @@ export function listContainsFields(fields: BaseFieldDef[]): string[] {
 }
 
 export function listContainsFilterFields(
-  runnable: RunnableQueries,
+  capabilities: DataSourceCapabilities,
   keys?: string[],
 ): string[] {
-  return runnable.containsFields.filter(
+  return capabilities.containsFields.filter(
     (key) => keys === undefined || keys.includes(key),
   );
 }
@@ -344,10 +344,10 @@ export function isFacetOnlyQuery(
   );
 }
 
-export function indexRunnable(
+export function indexCapabilities(
   indexes: IndexDef[],
-  options: IndexRunnableOptions = {},
-): RunnableQueries {
+  options: IndexCapabilitiesOptions = {},
+): DataSourceCapabilities {
   const searchFields = options.searchFields ?? [];
   const tier = options.fields
     ? createTier(indexes, searchFields, options.fields)
@@ -377,8 +377,10 @@ export function indexRunnable(
   };
 }
 
-export function gridDefRunnable(def: IndexedGridDef): RunnableQueries {
-  return indexRunnable(def.indexes, {
+export function gridDefCapabilities(
+  def: IndexedGridDef,
+): DataSourceCapabilities {
+  return indexCapabilities(def.indexes, {
     facetField: def.facet?.field,
     searchFields: listSearchFields(def),
     fields: def.fields,

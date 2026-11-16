@@ -7,7 +7,7 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
-import { isQueryIndexed, getIndex, indexRunnable } from "./indexes.ts";
+import { isQueryIndexed, getIndex, indexCapabilities } from "./indexes.ts";
 import { defaultQuery } from "./query-actions.ts";
 
 const INDEXES = TEST_INDEXES;
@@ -49,7 +49,7 @@ describe("getIndex", () => {
     expect(
       getIndex(single, { ...BASE, equals: { status: ["open"] } }),
     ).not.toBeNull();
-    expect(indexRunnable(single).canRun(several)).toBe(false);
+    expect(indexCapabilities(single).canRun(several)).toBe(false);
   });
 
   test("a search combines with equality filters on indexed fields, and with no range", () => {
@@ -78,16 +78,16 @@ describe("getIndex", () => {
 });
 
 describe("the HTTP source", () => {
-  test("it builds its runnable queries from the def's own indexes and facet", () => {
+  test("it builds its capabilities from the def's own indexes and facet", () => {
     const source = createHttpSource(
       { ...TEST_DEF, indexes: INDEXES },
       "/things",
     );
-    expect(source.runnable.holdsAllRows).toBe(false);
-    expect(source.runnable.sortFields).toEqual(["created_at", "total"]);
-    expect(source.runnable.isFacetCountExact(BASE)).toBe(true);
+    expect(source.capabilities.holdsAllRows).toBe(false);
+    expect(source.capabilities.sortFields).toEqual(["created_at", "total"]);
+    expect(source.capabilities.isFacetCountExact(BASE)).toBe(true);
     expect(
-      source.runnable.canRun({
+      source.capabilities.canRun({
         ...BASE,
         equals: { region: ["north"] },
         sort: { field: "total", direction: "asc" },
@@ -96,8 +96,8 @@ describe("the HTTP source", () => {
   });
 });
 
-describe("indexRunnable", () => {
-  const caps = indexRunnable(INDEXES, {
+describe("indexCapabilities", () => {
+  const caps = indexCapabilities(INDEXES, {
     facetField: "status",
     searchFields: TEST_SEARCH_FIELDS,
   });
@@ -129,6 +129,6 @@ describe("indexRunnable", () => {
     expect(
       caps.isFacetCountExact({ ...BASE, equals: { region: ["north"] } }),
     ).toBe(false);
-    expect(indexRunnable(INDEXES).isFacetCountExact(BASE)).toBe(false);
+    expect(indexCapabilities(INDEXES).isFacetCountExact(BASE)).toBe(false);
   });
 });

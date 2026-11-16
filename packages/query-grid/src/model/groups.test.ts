@@ -16,7 +16,7 @@ import {
 } from "./grid-def.fixture.ts";
 import { createGrouping, getGroupQuery, sortGroups } from "./groups.ts";
 import {
-  indexRunnable,
+  indexCapabilities,
   isFacetOnlyQuery,
   planQuery,
   type IndexedGridDef,
@@ -35,7 +35,7 @@ import type { GroupHeader } from "./wire-types.ts";
 
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: TEST_INDEXES };
 const BASE = defaultQuery(DEF);
-const RUNNABLE = indexRunnable(TEST_INDEXES, {
+const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
   facetField: "status",
   searchFields: ["name", "number"],
   fields: DEF.fields,
@@ -51,10 +51,14 @@ function contextFor(query: QueryState, over: boolean): OfferContext {
     limit: 1000,
     all: { rows: over ? 1000 : 40, over, capped: over },
     any: null,
-    allBasis: RUNNABLE.narrowBasis({ ...query, match: "all" }),
-    anyBasis: RUNNABLE.narrowBasis({ ...query, match: "any" }),
+    allBasis: CAPABILITIES.narrowBasis({ ...query, match: "all" }),
+    anyBasis: CAPABILITIES.narrowBasis({ ...query, match: "any" }),
   };
-  return { runnable: RUNNABLE, allSearchMatchesLoaded: false, narrowed };
+  return {
+    capabilities: CAPABILITIES,
+    allSearchMatchesLoaded: false,
+    narrowed,
+  };
 }
 
 const ROWS: GridRow[] = Array.from({ length: 12 }, (_, index) => ({
@@ -70,14 +74,14 @@ const ROWS: GridRow[] = Array.from({ length: 12 }, (_, index) => ({
 
 describe("what may be grouped", () => {
   test("the equality fields group, and a bare id does not", () => {
-    expect(RUNNABLE.groupFields).toEqual(["status", "region"]);
-    expect(createMemorySource(TEST_DEF, []).runnable.groupFields).toEqual([
+    expect(CAPABILITIES.groupFields).toEqual(["status", "region"]);
+    expect(createMemorySource(TEST_DEF, []).capabilities.groupFields).toEqual([
       "status",
       "region",
       "name",
       "note",
     ]);
-    expect(indexRunnable(TEST_INDEXES).groupFields).toEqual([]);
+    expect(indexCapabilities(TEST_INDEXES).groupFields).toEqual([]);
   });
 
   test("the counted field groups at any size; another field only over a narrowed set", () => {
@@ -90,8 +94,8 @@ describe("what may be grouped", () => {
       "status",
       "region",
     ]);
-    expect(RUNNABLE.isNarrowed({ ...BASE, group: "region" })).toBe(true);
-    expect(RUNNABLE.isNarrowed({ ...BASE, group: "status" })).toBe(false);
+    expect(CAPABILITIES.isNarrowed({ ...BASE, group: "region" })).toBe(true);
+    expect(CAPABILITIES.isNarrowed({ ...BASE, group: "status" })).toBe(false);
   });
 
   test("a group needs an index for the rows of one group, and never joins the search or match any", () => {
@@ -99,8 +103,8 @@ describe("what may be grouped", () => {
       ...BASE,
       sort: { field: "total", direction: "asc" },
     };
-    expect(RUNNABLE.canRun({ ...byTotal, group: "status" })).toBe(true);
-    expect(RUNNABLE.canRun({ ...byTotal, group: "region" })).toBe(false);
+    expect(CAPABILITIES.canRun({ ...byTotal, group: "status" })).toBe(true);
+    expect(CAPABILITIES.canRun({ ...byTotal, group: "region" })).toBe(false);
     expect(
       explainUnavailable(
         byTotal,
@@ -108,18 +112,18 @@ describe("what may be grouped", () => {
         contextFor(byTotal, false),
       ).code,
     ).toBe("no_group_with");
-    expect(RUNNABLE.canRun({ ...BASE, search: "abc", group: "status" })).toBe(
-      false,
-    );
     expect(
-      RUNNABLE.canRun({
+      CAPABILITIES.canRun({ ...BASE, search: "abc", group: "status" }),
+    ).toBe(false);
+    expect(
+      CAPABILITIES.canRun({
         ...BASE,
         match: "any",
         equals: { status: ["open"], region: ["north"] },
         group: "status",
       }),
     ).toBe(false);
-    expect(RUNNABLE.canRun({ ...BASE, group: "name" })).toBe(false);
+    expect(CAPABILITIES.canRun({ ...BASE, group: "name" })).toBe(false);
   });
 
   test("the action, the URL and the chip", () => {
@@ -153,7 +157,7 @@ describe("what may be grouped", () => {
 
 describe("review fixes", () => {
   test("a client grid never groups under match any, like the server", () => {
-    const memory = createMemorySource(TEST_DEF, []).runnable;
+    const memory = createMemorySource(TEST_DEF, []).capabilities;
     const either: QueryState = {
       ...BASE,
       match: "any",
@@ -210,7 +214,7 @@ describe("review fixes", () => {
 
   test("the header load stops with its last reader and starts again for the next", async () => {
     const signals: AbortSignal[] = [];
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchGroups: (_query, given) => {
         signals.push(given);
         return new Promise((resolve) =>
@@ -280,7 +284,7 @@ describe("the query of one group", () => {
 describe("a grouping", () => {
   test("the headers load once, and a collapsed group loads no rows", async () => {
     const pages: QueryState[] = [];
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchGroups: async () => ({
         groups: [header("done", 4), header("open", 8)],
         source: "counter",
@@ -351,7 +355,7 @@ describe("a grouping", () => {
   });
 
   test("a failed header load is an error with its code", async () => {
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchGroups: async () => {
         throw new Error("down");
       },
@@ -368,7 +372,7 @@ describe("a grouping", () => {
 
   test("a group whose rows nothing answers says so and fetches nothing", async () => {
     let pages = 0;
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchGroups: async () => ({
         groups: [header("nowhere", 1)],
         source: "live",
@@ -458,13 +462,13 @@ describe("the in-memory source groups", () => {
 describe("the main feed and a group change", () => {
   test("setting or clearing the group does not reload the rows", async () => {
     let pages = 0;
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchPage: async () => {
         pages += 1;
         return { rows: ROWS.slice(0, 2), nextCursor: null, hasNext: false };
       },
     });
-    const store = createQueryStore(DEF, RUNNABLE, BASE);
+    const store = createQueryStore(DEF, CAPABILITIES, BASE);
     const feed = createFeed(store, source, 50);
     feed.subscribe(() => undefined);
     await settle();

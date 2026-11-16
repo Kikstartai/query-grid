@@ -15,23 +15,23 @@ import {
 import {
   isQueryIndexed,
   getIndex,
-  indexRunnable,
+  indexCapabilities,
   indexId,
   type IndexDef,
 } from "./indexes.ts";
 
 const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);
-const RUNNABLE = indexRunnable(INDEXES, {
+const CAPABILITIES = indexCapabilities(INDEXES, {
   facetField: "status",
   searchFields: TEST_SEARCH_FIELDS,
 });
 const CAPPED: OfferContext = {
-  runnable: RUNNABLE,
+  capabilities: CAPABILITIES,
   allSearchMatchesLoaded: false,
 };
 const COMPLETE: OfferContext = {
-  runnable: RUNNABLE,
+  capabilities: CAPABILITIES,
   allSearchMatchesLoaded: true,
 };
 
@@ -174,7 +174,7 @@ describe("offers from declared indexes", () => {
       index.equals.includes("region") ? { ...index, multi: false } : index,
     );
     const context: OfferContext = {
-      runnable: indexRunnable(single),
+      capabilities: indexCapabilities(single),
       allSearchMatchesLoaded: false,
     };
     const offers = listOffers(TEST_DEF, BASE, context);

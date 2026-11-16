@@ -6,11 +6,11 @@ The core of [query-grid](https://github.com/Kikstartai/query-grid): a composable
 npm install @kikstart/query-grid
 ```
 
-| Entry point                   | Holds                                                                                                                                                                                                                                                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid`        | Field and query types, `RunnableQueries`, indexes, `indexRunnable` and `planQuery`, the URL codec, validation, reserved values, exclusion and date presets, actions and offers, the stores, the row feed, the board and the grouping, chips, formatting, `GridLimits`, problem codes, the wire result types |
-| `@kikstart/query-grid/http`   | `createHttpSource`, and the protocol it shares with `createGridHandler`: the route names, the query parameters and the error and move bodies                                                                                                                                                                |
-| `@kikstart/query-grid/memory` | `createMemorySource` and `memoryRunnable`, for rows already in the browser                                                                                                                                                                                                                                  |
+| Entry point                   | Holds                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid`        | Field and query types, `DataSourceCapabilities`, indexes, `indexCapabilities` and `planQuery`, the URL codec, validation, reserved values, exclusion and date presets, actions and offers, the stores, the row feed, the board and the grouping, chips, formatting, `GridLimits`, problem codes, the wire result types |
+| `@kikstart/query-grid/http`   | `createHttpSource`, and the protocol it shares with `createGridHandler`: the route names, the query parameters and the error and move bodies                                                                                                                                                                           |
+| `@kikstart/query-grid/memory` | `createMemorySource` and `memoryCapabilities`, for rows already in the browser                                                                                                                                                                                                                                         |
 
 Declare the fields once, then hold a query and follow its rows:
 
@@ -47,7 +47,11 @@ const ORDERS: IndexedGridDef = {
 };
 
 const source = createHttpSource(ORDERS, "/api/orders");
-const store = createQueryStore(ORDERS, source.runnable, defaultQuery(ORDERS));
+const store = createQueryStore(
+  ORDERS,
+  source.capabilities,
+  defaultQuery(ORDERS),
+);
 const feed = createFeed(store, source, 100);
 
 store.dispatch({
@@ -58,9 +62,9 @@ store.dispatch({
 ```
 
 - **One query contract.** `encodeQuery` and `decodeQuery` are the only codec: the page URL, the request to the server and the server's parser all use them, and `validateQueryValues` checks a query on both sides.
-- **Indexes.** An `IndexDef` is the unit a data layer answers: a set of equality fields and a sort. `getIndex` decides whether an ordered query is declared, `isQueryIndexed` also covers the search, which comes from the def's `search`, and `indexRunnable(indexes, { facetField, searchFields })` turns the same indexes into the `RunnableQueries` the client reads, so the controls and the server cannot disagree. `createHttpSource(def, basePath)` reads them from the def.
+- **Indexes.** An `IndexDef` is the unit a data layer answers: a set of equality fields and a sort. `getIndex` decides whether an ordered query is declared, `isQueryIndexed` also covers the search, which comes from the def's `search`, and `indexCapabilities(indexes, { facetField, searchFields })` turns the same indexes into the `DataSourceCapabilities` the client reads, so the controls and the server cannot disagree. `createHttpSource(def, basePath)` reads them from the def.
 - **Defs are layers.** `BaseGridDef` and `BaseFieldDef` are what core reads. The React package adds `cell` (`GridDef`, `FieldDef`) and the Postgres package adds storage (`PostgresGridDef`), so a host writes one object per grid and each package reads its slice.
-- **Allowed filters come from the data.** A field def carries no operators. `runnable.equalsFields` and `rangeFields` are what an index names on a server grid and every field on an in-memory one, and `resolveFilterKind(field, runnable)` says which control a field gets.
+- **Allowed filters come from the data.** A field def carries no operators. `capabilities.equalsFields` and `rangeFields` are what an index names on a server grid and every field on an in-memory one, and `resolveFilterKind(field, capabilities)` says which control a field gets.
 - **Offers.** `listOffers(def, query, context)` says which filters, sorts and combinations the data source can answer from here, and `explainUnavailable` gives the reason code for one it cannot. A store applies an action only when the result is a query the source can answer.
 - **Empty, exclude and presets.** A nullable field takes `EMPTY_VALUE` and `NOT_EMPTY_VALUE` in its equality filter. A field with a fixed list of values takes `!value` to leave one out, and a date range takes a preset name in place of its bounds. The last two are intent: the query and the URL keep them, and `toLiteralQuery` turns them into literal values and bounds when the query runs. `withLiteralFilters` does that around any data source, and both built-in sources are wrapped.
 - **The narrowed set.** `planQuery(indexes, query)` splits a query into the core an index answers and the parts that run over that core's rows: `contains`, a range no index bounds and `match: "any"`. A server answers those only when the core leaves at most `narrowLimit` rows, and `createNarrowedStore` feeds that size to the offers, so a control that needs a smaller set is held with the size as its reason.

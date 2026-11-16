@@ -1,5 +1,5 @@
 import type {
-  RunnableQueries,
+  DataSourceCapabilities,
   FieldOption,
   GridRow,
   NarrowedResult,
@@ -16,7 +16,7 @@ import type {
 } from "./wire-types.ts";
 
 export interface DataSource {
-  runnable: RunnableQueries;
+  capabilities: DataSourceCapabilities;
   fetchPage: (
     query: QueryState,
     limit: number,

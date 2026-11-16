@@ -8,7 +8,7 @@ import type {
 import { SourceError, type Problem } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
 import { encodeQuery } from "./query-url.ts";
-import { gridDefRunnable, type IndexedGridDef } from "./indexes.ts";
+import { gridDefCapabilities, type IndexedGridDef } from "./indexes.ts";
 import type { GridLimits } from "./limits.ts";
 import type {
   CountResult,
@@ -63,12 +63,12 @@ export function createHttpSource(
   def: IndexedGridDef,
   basePath: string,
 ): DataSource {
-  const runnable = gridDefRunnable(def);
+  const capabilities = gridDefCapabilities(def);
   const filterParams = (query: QueryState) =>
     encodeQuery(def, { ...query, cursor: null });
   const route = (name: SubRoute) => `${basePath}/${name}`;
   return withLiteralFilters(def, {
-    runnable,
+    capabilities,
     fetchPage: (query, limit, signal) => {
       const params = encodeQuery(def, query);
       params.set(LIMIT_PARAM, String(limit));

@@ -15,7 +15,7 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import {
-  indexRunnable,
+  indexCapabilities,
   isMatchAny,
   isQueryRunnable,
   planQuery,
@@ -36,7 +36,7 @@ import { createNarrowedStore } from "./summary-stores.ts";
 
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: TEST_INDEXES };
 const BASE = defaultQuery(DEF);
-const RUNNABLE = indexRunnable(TEST_INDEXES, {
+const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
   facetField: "status",
   searchFields: ["name", "number"],
   fields: DEF.fields,
@@ -55,8 +55,8 @@ function narrowedFor(
     all: { rows: 40, over: false, capped: false },
     any: null,
     ...result,
-    allBasis: RUNNABLE.narrowBasis({ ...query, match: "all" }),
-    anyBasis: RUNNABLE.narrowBasis({ ...query, match: "any" }),
+    allBasis: CAPABILITIES.narrowBasis({ ...query, match: "all" }),
+    anyBasis: CAPABILITIES.narrowBasis({ ...query, match: "any" }),
   };
 }
 
@@ -65,14 +65,14 @@ function contextFor(
   result?: Partial<NarrowedResult>,
 ): OfferContext {
   return {
-    runnable: RUNNABLE,
+    capabilities: CAPABILITIES,
     allSearchMatchesLoaded: false,
     narrowed: narrowedFor(query, result),
   };
 }
 
 const UNKNOWN: OfferContext = {
-  runnable: RUNNABLE,
+  capabilities: CAPABILITIES,
   allSearchMatchesLoaded: false,
   narrowed: null,
 };
@@ -156,9 +156,9 @@ describe("the plan of a query", () => {
   test("the server's rule: any range field and any text field, and never beside the search", () => {
     const ranged = { ...OPEN, ranges: [TOTAL_RANGE] };
     expect(isQueryRunnable(DEF, ranged)).toBe(true);
-    expect(RUNNABLE.canRun(ranged)).toBe(true);
-    expect(RUNNABLE.isNarrowed(ranged)).toBe(true);
-    expect(RUNNABLE.isNarrowed(OPEN)).toBe(false);
+    expect(CAPABILITIES.canRun(ranged)).toBe(true);
+    expect(CAPABILITIES.isNarrowed(ranged)).toBe(true);
+    expect(CAPABILITIES.isNarrowed(OPEN)).toBe(false);
     expect(
       isQueryRunnable(DEF, {
         ...OPEN,
@@ -180,10 +180,10 @@ describe("the plan of a query", () => {
         equals: { status: ["open"], region: ["north"] },
       }),
     ).toBe(false);
-    expect(RUNNABLE.rangeFields).toEqual(["number", "created_at", "total"]);
-    expect(RUNNABLE.containsFields).toEqual(["name", "note"]);
-    expect(indexRunnable(TEST_INDEXES).containsFields).toEqual([]);
-    expect(indexRunnable(TEST_INDEXES).canRun(ranged)).toBe(false);
+    expect(CAPABILITIES.rangeFields).toEqual(["number", "created_at", "total"]);
+    expect(CAPABILITIES.containsFields).toEqual(["name", "note"]);
+    expect(indexCapabilities(TEST_INDEXES).containsFields).toEqual([]);
+    expect(indexCapabilities(TEST_INDEXES).canRun(ranged)).toBe(false);
   });
 });
 
@@ -315,7 +315,10 @@ describe("offers under the narrowed-set limit", () => {
 });
 
 describe("the basis a size is known for", () => {
-  const wrapped = withLiteralFilters(DEF, createTestSource(RUNNABLE)).runnable;
+  const wrapped = withLiteralFilters(
+    DEF,
+    createTestSource(CAPABILITIES),
+  ).capabilities;
 
   test("an expensive part leaves the basis as it was, so a known size answers it", () => {
     const basis = wrapped.narrowBasis(OPEN);
@@ -353,7 +356,7 @@ describe("the basis a size is known for", () => {
 describe("the narrowed-size store", () => {
   test("it follows the filters and hands the query store the sizes with their basis", async () => {
     const asked: QueryState[] = [];
-    const source = createTestSource(RUNNABLE, {
+    const source = createTestSource(CAPABILITIES, {
       fetchNarrowed: async (query) => {
         asked.push(query);
         return {
@@ -363,14 +366,14 @@ describe("the narrowed-size store", () => {
         };
       },
     });
-    const store = createQueryStore(DEF, RUNNABLE, BASE);
+    const store = createQueryStore(DEF, CAPABILITIES, BASE);
     const narrowed = createNarrowedStore(store, source);
     expect(store.getOfferContext().narrowed).toBeNull();
     narrowed.connect();
     await settle();
     expect(store.getOfferContext().narrowed).toMatchObject({
       all: { rows: 1, over: false, capped: false },
-      allBasis: RUNNABLE.narrowBasis(BASE),
+      allBasis: CAPABILITIES.narrowBasis(BASE),
     });
     expect(listOffers(DEF, BASE, store.getOfferContext()).contains).toEqual([
       "name",
@@ -406,7 +409,7 @@ describe("the URL, validation and chips", () => {
     expect(params.get("match")).toBe("any");
     expect(decodeQuery(DEF, params)).toEqual(query);
     expect(encodeQuery(DEF, OPEN).has("match")).toBe(false);
-    expect(listQueryKeys(RUNNABLE).map((key) => key.name)).toEqual([
+    expect(listQueryKeys(CAPABILITIES).map((key) => key.name)).toEqual([
       "f.status",
       "f.region",
       "r.number",
@@ -521,13 +524,13 @@ describe("the in-memory source takes all three with no limit", () => {
       }),
     ).toEqual([]);
     const context: OfferContext = {
-      runnable: source.runnable,
+      capabilities: source.capabilities,
       allSearchMatchesLoaded: false,
     };
     const offers = listOffers(TEST_DEF, BASE, context);
     expect(offers.matchAny).toBe(true);
     expect(offers.contains).toEqual(["name", "note"]);
-    expect(source.runnable.narrowLimited).toBe(false);
+    expect(source.capabilities.narrowLimited).toBe(false);
     expect(await source.fetchNarrowed(BASE, signal)).toBeNull();
   });
 });

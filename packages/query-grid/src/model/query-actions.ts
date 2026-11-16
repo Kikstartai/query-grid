@@ -158,7 +158,7 @@ function proposeAction(
   context: OfferContext,
 ): QueryState[] {
   const top = { ...query, cursor: null };
-  const searchIsOrdered = context.runnable.searchIsOrdered;
+  const searchIsOrdered = context.capabilities.searchIsOrdered;
   switch (action.type) {
     case "setEquals":
       return proposeEquals(def, query, action.field, action.values);
@@ -231,11 +231,11 @@ function fitNarrowLimit(
   candidate: QueryState,
   context: OfferContext,
 ): NarrowFit {
-  const { runnable, narrowed } = context;
-  if (!runnable.narrowLimited || !runnable.isNarrowed(candidate)) {
+  const { capabilities, narrowed } = context;
+  if (!capabilities.narrowLimited || !capabilities.isNarrowed(candidate)) {
     return "fits";
   }
-  const basis = runnable.narrowBasis(candidate);
+  const basis = capabilities.narrowBasis(candidate);
   if (narrowed && basis === narrowed.allBasis) {
     return narrowed.all.over ? "over" : "fits";
   }
@@ -251,12 +251,13 @@ function isAnswerable(
   candidate: QueryState,
   context: OfferContext,
 ): boolean {
-  if (!context.runnable.canRun(candidate)) {
+  if (!context.capabilities.canRun(candidate)) {
     return false;
   }
   const fit = fitNarrowLimit(candidate, context);
   return (
-    fit === "fits" || (fit === "unknown" && context.runnable.isNarrowed(query))
+    fit === "fits" ||
+    (fit === "unknown" && context.capabilities.isNarrowed(query))
   );
 }
 
@@ -288,13 +289,13 @@ export function listOffers(
   context: OfferContext,
 ): Offers {
   const offersEquals = (values: string[]) =>
-    context.runnable.equalsFields.filter((field) =>
+    context.capabilities.equalsFields.filter((field) =>
       isOffered(def, query, { type: "setEquals", field, values }, context),
     );
   return {
     equals: offersEquals(PROBE.slice(0, 1)),
     multi: offersEquals(PROBE),
-    exclude: context.runnable.equalsFields.filter((field) => {
+    exclude: context.capabilities.equalsFields.filter((field) => {
       const [first] = getField(def, field)?.options ?? [];
       return (
         first !== undefined &&
@@ -306,7 +307,7 @@ export function listOffers(
         )
       );
     }),
-    sorts: context.runnable.sortFields.filter((field) =>
+    sorts: context.capabilities.sortFields.filter((field) =>
       isOffered(
         def,
         query,
@@ -314,7 +315,7 @@ export function listOffers(
         context,
       ),
     ),
-    ranges: context.runnable.rangeFields.filter((field) =>
+    ranges: context.capabilities.rangeFields.filter((field) =>
       isOffered(
         def,
         query,
@@ -322,7 +323,7 @@ export function listOffers(
         context,
       ),
     ),
-    contains: context.runnable.containsFields.filter((field) =>
+    contains: context.capabilities.containsFields.filter((field) =>
       isOffered(
         def,
         query,
@@ -331,9 +332,9 @@ export function listOffers(
       ),
     ),
     matchAny:
-      context.runnable.matchAny &&
+      context.capabilities.matchAny &&
       isOffered(def, query, { type: "setMatch", mode: "any" }, context),
-    groups: context.runnable.groupFields.filter((field) =>
+    groups: context.capabilities.groupFields.filter((field) =>
       isOffered(def, query, { type: "setGroup", field }, context),
     ),
     search: isOffered(def, query, { type: "setSearch", value: "xxx" }, context),
@@ -387,9 +388,9 @@ function explainNarrowing(
   target: OfferTarget,
   context: OfferContext,
 ): UnavailableReason | null {
-  const { runnable, narrowed } = context;
+  const { capabilities, narrowed } = context;
   const candidate = toCandidate(query, target);
-  if (candidate === query || !runnable.canRun(candidate)) {
+  if (candidate === query || !capabilities.canRun(candidate)) {
     return null;
   }
   const field = "field" in target ? target.field : null;
@@ -408,7 +409,7 @@ function explainNarrowing(
     narrowBy:
       target.kind === "match"
         ? []
-        : runnable.equalsFields
+        : capabilities.equalsFields
             .filter((key) => query.equals[key] === undefined)
             .slice(0, NARROW_BY_MAX),
   };
