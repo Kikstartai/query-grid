@@ -412,25 +412,31 @@ test.describe("the narrowed-set tier", () => {
     page,
   }) => {
     await openGrid(page, "/orders");
-    await expect(field(page, "text")).toHaveAttribute(
+    await expect(field(page, "total")).toHaveAttribute(
       "title",
       /^Narrow by Status or Customer account first: 620.000 rows\.$/,
     );
-    await expect(field(page, "text")).toHaveAttribute("data-unavailable", "");
     await expect(field(page, "total")).toHaveAttribute("data-unavailable", "");
     await expect(field(page, "created_at")).not.toHaveAttribute(
       "data-unavailable",
       "",
     );
-    await expect(
-      bar(page).locator('[data-text-row="0"] [data-filter="text"]'),
-    ).toBeDisabled();
-
-    await pick(page, "status_code", "failed");
     await expect(field(page, "text")).not.toHaveAttribute(
       "data-unavailable",
       "",
     );
+    await bar(page)
+      .locator('[data-text-row="0"] [data-filter="text.field"]')
+      .click();
+    const note = page.locator('[data-option="note"]');
+    await expect(note).toHaveAttribute("aria-disabled", "true");
+    await expect(note).toHaveAttribute(
+      "title",
+      /^Narrow by Status or Customer account first: 620.000 rows\.$/,
+    );
+    await page.keyboard.press("Escape");
+
+    await pick(page, "status_code", "failed");
     await expect(field(page, "total")).not.toHaveAttribute(
       "data-unavailable",
       "",
@@ -507,11 +513,11 @@ test.describe("the narrowed-set tier", () => {
   test("a URL over the limit is refused by the server and says how to get under it", async ({
     page,
   }) => {
-    await page.goto("/orders?c.customer_name=smith");
+    await page.goto("/orders?c.note=gift");
     await expect(page.locator("[data-feed-state=error]")).toContainText(
       /more than 100.000 rows/,
     );
-    const refused = await page.request.get("/api/orders?c.customer_name=smith");
+    const refused = await page.request.get("/api/orders?c.note=gift");
     expect(refused.status()).toBe(400);
     expect(await refused.json()).toMatchObject({
       code: "narrow_first",
@@ -520,8 +526,8 @@ test.describe("the narrowed-set tier", () => {
     await pick(page, "status_code", "failed");
     await expect(page.locator("[data-feed-state=error]")).toHaveCount(0);
     await expect(loaded(page)).toBeVisible();
-    for (const name of await cells(page, "customer_name")) {
-      expect(name.toLowerCase()).toContain("smith");
+    for (const text of await cells(page, "note")) {
+      expect(text.toLowerCase()).toContain("gift");
     }
   });
 
@@ -532,8 +538,11 @@ test.describe("the narrowed-set tier", () => {
     await page.locator("[data-part=filter-sidebar-trigger]").click();
     const sidebar = page.locator("[data-part=filter-sidebar]");
     await expect(
-      sidebar.locator('[data-field="text"] [data-field-reason]'),
+      sidebar.locator('[data-field="total"] [data-field-reason]'),
     ).toHaveText(/Narrow by Status or Customer account first/);
+    await expect(
+      sidebar.locator('[data-field="text"] [data-field-reason]'),
+    ).toHaveCount(0);
     await expect(
       sidebar.locator('[data-field="item_count"] [data-field-reason]'),
     ).toHaveText(/Narrow by/);

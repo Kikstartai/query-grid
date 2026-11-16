@@ -208,6 +208,7 @@ function pickStart(random: () => number, from: number): string | null {
 
 export function listTaskRows(): GridRow[] {
   const random = createRandom(20261113);
+  const extra = createRandom(20261116);
   const start = Date.UTC(2026, 10, 1, 9);
   return Array.from({ length: TASK_COUNT }, (_, index) => ({
     id: `00000000-0000-7000-8000-${String(index + 1).padStart(12, "0")}`,
@@ -219,10 +220,10 @@ export function listTaskRows(): GridRow[] {
     assignee: pick(random, ASSIGNEES),
     budget: (5 + Math.floor(random() * 195)) * 1000,
     estimate: 1 + Math.floor(random() * 40),
-    rate: (4000 + Math.floor(random() * 240) * 25) / 100,
-    blocked: random() < 0.15,
-    labels: pickLabels(random),
-    start_on: pickStart(random, start),
+    rate: (4000 + Math.floor(extra() * 240) * 25) / 100,
+    blocked: extra() < 0.15,
+    labels: pickLabels(extra),
+    start_on: pickStart(extra, start),
     due_at: new Date(
       start + Math.floor(random() * 90 * 24) * 3_600_000,
     ).toISOString(),

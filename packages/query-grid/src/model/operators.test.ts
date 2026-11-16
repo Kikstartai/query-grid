@@ -21,6 +21,7 @@ import { createMemorySource, memoryCapabilities } from "./memory-source.ts";
 import {
   applyAction,
   defaultQuery,
+  explainNarrowText,
   listOffers,
   type RangeInput,
 } from "./query-actions.ts";
@@ -650,6 +651,35 @@ describe("the actions of the new filters", () => {
     const offers = listOffers(DEF, BASE, CONTEXT);
     expect(offers.overlaps).toEqual(["tags"]);
     expect(offers.texts).toEqual(["name"]);
+    expect(offers.narrowTexts).toEqual([]);
+    expect(explainNarrowText(BASE, "name", CONTEXT).code).toBe(
+      "narrow_counting",
+    );
+    const basis = CAPABILITIES.narrowBasis({
+      ...BASE,
+      texts: [text("note", "contains", "x")],
+    });
+    const sized = (rows: number, over: boolean) => ({
+      ...CONTEXT,
+      narrowed: {
+        limit: 100,
+        all: { rows, over, capped: over },
+        any: null,
+        allBasis: basis,
+        anyBasis: "",
+      },
+    });
+    const over = sized(100, true);
+    expect(listOffers(DEF, BASE, over).texts).toEqual(["name"]);
+    expect(listOffers(DEF, BASE, over).narrowTexts).toEqual([]);
+    expect(explainNarrowText(BASE, "name", over)).toMatchObject({
+      code: "narrow_first",
+      rows: 100,
+      capped: true,
+    });
+    const under = sized(40, false);
+    expect(listOffers(DEF, BASE, under).texts).toEqual(["name", "note"]);
+    expect(listOffers(DEF, BASE, under).narrowTexts).toEqual(["name", "note"]);
     const indexed = applyAction(
       DEF,
       BASE,

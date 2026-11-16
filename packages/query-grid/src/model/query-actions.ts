@@ -38,6 +38,7 @@ export interface Offers {
   sorts: string[];
   ranges: string[];
   texts: string[];
+  narrowTexts: string[];
   overlaps: string[];
   matchAny: boolean;
   groups: string[];
@@ -86,6 +87,7 @@ const TEXT_PROBE = {
   value: "xxx",
   at: 0,
 } as const;
+const NARROW_TEXT_PROBE = { ...TEXT_PROBE, op: "not_equals" } as const;
 
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
@@ -413,6 +415,9 @@ export function listOffers(
     texts: context.capabilities.textFields.filter((field) =>
       isOffered(def, query, { ...TEXT_PROBE, field }, context),
     ),
+    narrowTexts: context.capabilities.textFields.filter((field) =>
+      isOffered(def, query, { ...NARROW_TEXT_PROBE, field }, context),
+    ),
     overlaps: context.capabilities.overlapFields.filter((field) =>
       isOffered(
         def,
@@ -491,9 +496,9 @@ function explainNarrowing(
   query: QueryState,
   target: OfferTarget,
   context: OfferContext,
+  candidate: QueryState = toCandidate(query, target),
 ): UnavailableReason | null {
   const { capabilities, narrowed } = context;
-  const candidate = toCandidate(query, target);
   if (candidate === query || !capabilities.canRun(candidate)) {
     return null;
   }
@@ -517,6 +522,22 @@ function explainNarrowing(
             .filter((key) => query.equals[key] === undefined)
             .slice(0, NARROW_BY_MAX),
   };
+}
+
+// Why a field takes only what its own text index answers: the reason a short value or a negation, which run over the narrowed set, is held.
+export function explainNarrowText(
+  query: QueryState,
+  field: string,
+  context: OfferContext,
+): UnavailableReason {
+  const candidate: QueryState = {
+    ...query,
+    texts: [...query.texts, { ...NARROW_TEXT_PROBE, field }],
+  };
+  return (
+    explainNarrowing(query, { kind: "text", field }, context, candidate) ??
+    describeQuery(query, "no_filter_with", field)
+  );
 }
 
 export function explainUnavailable(

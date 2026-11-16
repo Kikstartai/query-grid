@@ -81,6 +81,7 @@ export {
   MatchToggle,
   TextFilter,
   type MatchToggleProps,
+  type TextFieldOption,
   type TextFilterProps,
   type TextFilterValue,
 } from "./narrow-filters.tsx";

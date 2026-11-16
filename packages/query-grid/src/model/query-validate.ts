@@ -143,7 +143,7 @@ function checkText(def: BaseGridDef, text: TextState): Problem | null {
   return valid ? null : invalid(text.field);
 }
 
-function firstProblem<T>(
+function getFirstProblem<T>(
   items: T[],
   check: (item: T) => Problem | null,
 ): Problem | null {
@@ -180,14 +180,14 @@ function checkFilters(def: BaseGridDef, query: QueryState): Problem | null {
     return { code: "too_many_filters", params: { max: TEXT_FILTER_MAX } };
   }
   return (
-    firstProblem(Object.entries(query.equals), ([key, values]) =>
+    getFirstProblem(Object.entries(query.equals), ([key, values]) =>
       checkEquals(def, key, values),
     ) ??
-    firstProblem(Object.entries(query.overlaps), ([key, values]) =>
+    getFirstProblem(Object.entries(query.overlaps), ([key, values]) =>
       checkOverlap(def, key, values),
     ) ??
-    firstProblem(query.ranges, (range) => checkRange(def, range)) ??
-    firstProblem(query.texts, (text) => checkText(def, text))
+    getFirstProblem(query.ranges, (range) => checkRange(def, range)) ??
+    getFirstProblem(query.texts, (text) => checkText(def, text))
   );
 }
 

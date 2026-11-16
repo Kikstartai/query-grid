@@ -513,6 +513,40 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(held.match(/data-text-row=/g)).toHaveLength(1);
   });
 
+  test("TextFilter holds a field to what its own index answers", () => {
+    const options = [
+      {
+        value: "name",
+        label: "Name",
+        indexOnly: true,
+        reason: "Narrow by Status first: 620,000+ rows.",
+      },
+      { value: "note", label: "Note", disabled: true },
+    ];
+    const short = render(
+      <TextFilter
+        options={options}
+        filters={[{ field: "name", op: "contains", value: "in" }]}
+        onFilterChange={noop}
+      />,
+    );
+    expect(short).toContain("data-text-hint");
+    expect(short).toContain("3 characters or more");
+    const long = render(
+      <TextFilter
+        options={options}
+        filters={[{ field: "name", op: "contains", value: "inv" }]}
+        onFilterChange={noop}
+      />,
+    );
+    expect(long).not.toContain("data-text-hint");
+    const idle = render(
+      <TextFilter options={options} filters={[]} onFilterChange={noop} />,
+    );
+    expect(idle).toContain('aria-label="Name contains"');
+    expect(idle).not.toContain("data-text-hint");
+  });
+
   test("TextFilter stops offering a new row at its cap", () => {
     const html = render(
       <TextFilter

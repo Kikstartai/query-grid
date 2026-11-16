@@ -124,6 +124,7 @@ export interface QueryGridMessages {
   textOps: Record<TextOp, string>;
   textValue: (params: { label: string; op: string }) => string;
   textPlaceholder: string;
+  textHint: (params: { min: number }) => string;
   matchMode: string;
   matchAll: string;
   matchAny: string;
@@ -335,6 +336,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     ends_with: "ends with",
     not_equals: "is not",
   },
+  textHint: ({ min }) => `${min} characters or more`,
   textValue: ({ label, op }) => `${label} ${op}`,
   textPlaceholder: "text…",
   matchMode: "Match",

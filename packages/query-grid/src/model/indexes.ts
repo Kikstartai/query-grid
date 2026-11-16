@@ -35,7 +35,11 @@ export interface IndexCapabilitiesOptions extends IndexExtras {
 
 const GROUP_PROBE = ["x"];
 const NO_EXTRAS: IndexExtras = {};
-const INDEXED_TEXT_OPS: TextOp[] = ["contains", "starts_with", "ends_with"];
+export const INDEXED_TEXT_OPS: TextOp[] = [
+  "contains",
+  "starts_with",
+  "ends_with",
+];
 
 export const TEXT_INDEX_MIN_LENGTH = 3;
 

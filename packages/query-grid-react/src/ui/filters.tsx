@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import {
+  explainNarrowText,
   explainUnavailable,
   getField,
   getFieldLabel,
@@ -341,7 +342,10 @@ export interface TextFilterProps {
 
 export function TextFilter({ fields }: TextFilterProps) {
   const { def, source } = useQueryGridMeta();
+  const messages = useMessages();
+  const locale = useLocale();
   const query = useQueryState();
+  const context = useOfferContext();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
   const keys = listTextFilterFields(source.capabilities, fields);
@@ -351,13 +355,20 @@ export function TextFilter({ fields }: TextFilterProps) {
     return null;
   }
   const held = offered.length === 0 && query.texts.length === 0;
+  const explain = (key: string) =>
+    formatReason(messages, def, explainNarrowText(query, key, context), locale);
   return (
     <BaseTextFilter
-      options={keys.map((key) => ({
-        value: key,
-        label: getFieldLabel(def, key),
-        disabled: !offered.includes(key),
-      }))}
+      options={keys.map((key) => {
+        const free = offers.narrowTexts.includes(key);
+        return {
+          value: key,
+          label: getFieldLabel(def, key),
+          disabled: !offered.includes(key),
+          indexOnly: offered.includes(key) && !free,
+          reason: free ? null : explain(key),
+        };
+      })}
       filters={query.texts}
       onFilterChange={(at, filter) =>
         dispatch(

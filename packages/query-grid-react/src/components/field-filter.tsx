@@ -61,7 +61,7 @@ import {
   toNumberBound,
   type BaseFieldDef,
   type FieldOption,
-  type RangeInput,
+  type RangeInput as FieldRange,
   type RangeOp,
   type RangeValue,
 } from "@kikstart/query-grid";
@@ -78,7 +78,7 @@ import {
 } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 
-export type FieldRange = RangeInput;
+export type { FieldRange };
 
 export type LoadOptions = (
   text: string,

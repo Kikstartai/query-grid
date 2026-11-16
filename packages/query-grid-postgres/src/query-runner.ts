@@ -203,7 +203,8 @@ export async function getNarrowedSizes(
     group: null,
     cursor: null,
   };
-  const all = planQuery(def.indexes, { ...filters, match: "all" }, def);
+  // The size is of the rows the ordered indexes leave: planned with no text or array index, so the probe never counts through one.
+  const all = planQuery(def.indexes, { ...filters, match: "all" });
   const any =
     countFilterTerms(filters) > 1
       ? planQuery(def.indexes, { ...filters, match: "any" }, def)
@@ -336,7 +337,7 @@ export async function listGridGroups(
   if (key === def.facet?.field) {
     return listFacetGroups(def, execute, filters, key, limits, signal);
   }
-  const plan = planQuery(def.indexes, filters, def);
+  const plan = planQuery(def.indexes, filters);
   const limit = limits.narrowLimit;
   assertUnderLimit(
     plan

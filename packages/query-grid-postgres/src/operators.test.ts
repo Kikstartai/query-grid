@@ -12,6 +12,8 @@ import {
 import { validateGridDef } from "./index-defs.ts";
 import {
   getGridCount,
+  getNarrowedSizes,
+  listGridGroups,
   listGridPage,
   listGridTotals,
   listSearchSettings,
@@ -312,6 +314,31 @@ describe("a filter with an index of its own", () => {
       expect(calls[0].sql.text).toContain("LIMIT 51) capped");
       expect(calls[1].settings).toEqual(["enable_seqscan = off"]);
     }
+  });
+
+  test("the narrowed size and a live group are sized without the text index", async () => {
+    const { calls, execute } = recording(() => [{ count: 7 }]);
+    const sizes = await getNarrowedSizes(
+      DEF,
+      execute,
+      { ...indexed, equals: { starred: ["true"] } },
+      undefined,
+      LIMITS,
+    );
+    expect(sizes.all).toEqual({ rows: 7, over: false, capped: false });
+    expect(calls[0].sql.text).toContain("WHERE t.starred = $1::boolean LIMIT");
+    expect(calls.every((call) => !call.sql.text.includes("ILIKE"))).toBe(true);
+    calls.length = 0;
+    await listGridGroups(
+      DEF,
+      execute,
+      { ...indexed, group: "starred" },
+      undefined,
+      LIMITS,
+    );
+    expect(calls[0].sql.text).not.toContain("ILIKE");
+    expect(calls[1].sql.text).toContain("ILIKE");
+    expect(calls[1].sql.text).toContain("GROUP BY t.starred");
   });
 
   test("an overlap with no index is refused over the narrowed-set limit", async () => {
