@@ -17,6 +17,17 @@ export {
   type ColumnStore,
   type GridColumn,
 } from "./column-state.ts";
+export {
+  BadgeCell,
+  createLinkCell,
+  FieldCell,
+  LinkCell,
+  ListCell,
+  type BadgeCellProps,
+  type FieldCellProps,
+  type LinkCellProps,
+  type ListCellProps,
+} from "./cells.tsx";
 export { ColumnsMenu, type ColumnsMenuProps } from "./columns-menu.tsx";
 export {
   CountDisplay,
@@ -30,8 +41,11 @@ export {
 export {
   DataGrid,
   type GridGroup,
+  type GridReorder,
+  type GridSelection,
   type DataGridProps,
   type DataGridRootProps,
+  type DataGridSelectionProps,
   type DataGridToolbarProps,
 } from "./data-grid.tsx";
 export { ExportButton, type ExportButtonProps } from "./export-button.tsx";

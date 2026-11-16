@@ -31,7 +31,11 @@ interface SheetOptions {
   columns: BaseFieldDef[];
   locale: string;
   layout?: SheetLayout | null;
+  keepRow?: number | null;
   onEndReached?: () => void;
+  onSelectedChange?: (selected: string[]) => void;
+  onRowOpen?: (row: number) => void;
+  onRowMenu?: (row: number) => void;
 }
 
 interface SheetState {
@@ -129,7 +133,11 @@ export const sheet = definePrimitive({
     columns: "value",
     locale: "value",
     layout: "value",
+    keepRow: "value",
     onEndReached: "callback",
+    onSelectedChange: "callback",
+    onRowOpen: "callback",
+    onRowMenu: "callback",
   },
   state: (_options: SheetOptions): SheetState => ({
     active: null,
@@ -161,7 +169,10 @@ export const sheet = definePrimitive({
       scrollMargin: HEADER_HEIGHT,
       keep: () => {
         const active = context.store.get().active;
-        return active && active.row < rowCount() ? [itemOf(active.row)] : [];
+        const kept = context.options().keepRow ?? null;
+        return [active?.row ?? null, kept].flatMap((row) =>
+          row !== null && row < rowCount() ? [itemOf(row)] : [],
+        );
       },
       onEnd: () => context.options().onEndReached?.(),
     });
@@ -207,14 +218,36 @@ export const sheet = definePrimitive({
       event.preventDefault();
       context.store.set({ copied: text });
     };
+    const imperative = { reason: "imperative" } as const;
+    const clearSelection = () => {
+      if (context.store.get().selected.length > 0) {
+        change("selected", [], imperative);
+      }
+    };
     const clear = () => {
-      context.store.set({
-        active: null,
-        range: null,
-        selected: [],
-        copied: "",
-      });
+      clearSelection();
+      context.store.set({ active: null, range: null, copied: "" });
       virtual.reset();
+    };
+    // Enter opens the row and the menu key its actions, but only from a cell: a control inside one keeps its own keys.
+    const rowKey = (event: KeyboardEvent, row: number): boolean => {
+      const options = context.options();
+      const onCell =
+        event.target instanceof Element && event.target.matches("[data-col]");
+      const plain =
+        !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey;
+      const open = event.key === "Enter" && plain ? options.onRowOpen : null;
+      const menu =
+        event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)
+          ? options.onRowMenu
+          : null;
+      const act = open ?? menu;
+      if (!onCell || !act) {
+        return false;
+      }
+      event.preventDefault();
+      act(row);
+      return true;
     };
     return {
       virtual,
@@ -224,7 +257,15 @@ export const sheet = definePrimitive({
       rowId,
       colCount,
       pressRow,
-      toggleAll: () => selection.toggleAll({ reason: "imperative" }),
+      rowKey,
+      toggleAll: () => selection.toggleAll(imperative),
+      selectAll: () =>
+        change(
+          "selected",
+          rows().map((row) => row.id),
+          imperative,
+        ),
+      clearSelection,
       copy,
       clear,
     };
@@ -289,8 +330,10 @@ export const sheet = definePrimitive({
         };
       },
       on: {
-        keydown: (event, { api }) => {
-          api.range.keydown(event);
+        keydown: (event, { api, props }) => {
+          if (!api.rowKey(event, props.row)) {
+            api.range.keydown(event);
+          }
         },
         pointerdown: (event, { api, props }) => {
           const cell = cellOf(event.target, props.row);

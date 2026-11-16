@@ -391,7 +391,11 @@ function cellStyle(column: GridColumn): CSSProperties {
   };
 }
 
-function PinnedHeaderCell({ column, controls }: HeaderCellProps) {
+interface PinnedHeaderCellProps extends HeaderCellProps {
+  lead: number;
+}
+
+function PinnedHeaderCell({ column, controls, lead }: PinnedHeaderCellProps) {
   return (
     <div
       className="qg-header-cell"
@@ -402,7 +406,7 @@ function PinnedHeaderCell({ column, controls }: HeaderCellProps) {
         ...cellStyle(column),
         position: "sticky",
         zIndex: 3,
-        insetInlineStart: SELECT_COLUMN_WIDTH + column.start,
+        insetInlineStart: lead + column.start,
       }}
     >
       <HeaderCellContent column={column} controls={controls} />
@@ -471,14 +475,20 @@ interface GridHeaderProps {
   columns: GridColumn[];
   controls: HeaderControls;
   totalWidth: number;
+  lead: number;
   selectAll: ReactNode;
+  leading?: ReactNode;
+  trailing?: ReactNode;
 }
 
 export function GridHeader({
   columns,
   controls,
   totalWidth,
+  lead,
   selectAll,
+  leading,
+  trailing,
 }: GridHeaderProps) {
   const pinned = columns.filter((column) => column.pinned);
   const center = columns.filter((column) => !column.pinned);
@@ -493,7 +503,7 @@ export function GridHeader({
         zIndex: 4,
         display: "flex",
         height: HEADER_HEIGHT,
-        width: SELECT_COLUMN_WIDTH + totalWidth,
+        width: totalWidth,
       }}
     >
       <div
@@ -511,14 +521,17 @@ export function GridHeader({
       >
         {selectAll}
       </div>
+      {leading}
       {pinned.map((column) => (
         <PinnedHeaderCell
           key={column.field.key}
           column={column}
           controls={controls}
+          lead={lead}
         />
       ))}
       <ReorderHeaders columns={center} controls={controls} />
+      {trailing}
     </div>
   );
 }

@@ -10,7 +10,9 @@ import {
   createLimitsStore,
   createNarrowedStore,
   createQueryStore,
+  createStore,
   createTotalStore,
+  isScopeEmpty,
   withScope,
   type DataSource,
   type QueryScope,
@@ -27,6 +29,7 @@ import { useLatest } from "../components/use-latest.ts";
 import {
   QueryGridContext,
   type QueryGridContextValue,
+  type SelectionState,
 } from "./query-grid-context.tsx";
 import {
   buildUrlParsers,
@@ -76,6 +79,12 @@ function createValue(
   const labels = createLabelStore(store, source);
   const totals = createTotalStore(store, source);
   const facets = createFacetStore(store, source);
+  const selection = createStore<SelectionState>({
+    ids: [],
+    allMatching: false,
+    key: 0,
+  });
+  const scope = props.scope && !isScopeEmpty(props.scope) ? props.scope : null;
   return {
     state: {
       store,
@@ -87,6 +96,7 @@ function createValue(
       limits: createLimitsStore(source),
       narrowed: createNarrowedStore(store, source),
       columns: createColumnStore(def.fields, persistence),
+      selection,
     },
     actions: {
       dispatch: store.dispatch,
@@ -110,8 +120,32 @@ function createValue(
           { columns },
           new AbortController().signal,
         ),
+      clearSelection: () =>
+        selection.set({
+          ids: [],
+          allMatching: false,
+          key: selection.get().key + 1,
+        }),
+      reorderRow: async (move) => {
+        const before = feed.getState().rows;
+        const from = before.findIndex((row) => row.id === move.id);
+        const moved = before[from];
+        if (!moved) {
+          return;
+        }
+        feed.removeRow(move.id);
+        feed.insertRow(move.index, moved);
+        try {
+          const changed = await source.reorderRow(move);
+          changed.forEach((row) => feed.patchRow(row.id, row));
+        } catch (error) {
+          feed.removeRow(move.id);
+          feed.insertRow(from, moved);
+          throw error;
+        }
+      },
     },
-    meta: { def, source },
+    meta: { def, source, scope },
   };
 }
 

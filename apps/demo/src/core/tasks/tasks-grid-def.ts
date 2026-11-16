@@ -92,6 +92,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
   facet: { field: "status" },
   totals: ["budget"],
   search: ["title", "assignee", "number"],
+  orderField: "rank",
   fields: [
     {
       key: "number",
@@ -121,6 +122,8 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       type: "enum",
       options: PRIORITIES,
       width: 110,
+      render: "badge",
+      tones: { low: "neutral", normal: "info", high: "danger" },
     },
     {
       key: "assignee",
@@ -161,6 +164,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       nullable: true,
       options: LABELS,
       width: 180,
+      render: "list",
     },
     {
       key: "start_on",
@@ -175,6 +179,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       type: "datetime",
       width: 180,
     },
+    { key: "rank", label: "Rank", type: "integer", width: 80 },
     { key: "id", label: "ID", type: "id", hidden: true },
   ],
 };
@@ -227,5 +232,6 @@ export function listTaskRows(): GridRow[] {
     due_at: new Date(
       start + Math.floor(random() * 90 * 24) * 3_600_000,
     ).toISOString(),
+    rank: ((index * 37) % TASK_COUNT) + 1,
   }));
 }

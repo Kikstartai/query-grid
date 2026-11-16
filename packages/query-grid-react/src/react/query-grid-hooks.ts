@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  canReorder,
+  explainReorder,
   explainUnavailable,
+  getFieldLabel,
   listFilterChips,
   listOffers,
   type BaseGridDef,
@@ -14,6 +17,7 @@ import {
   type OfferContext,
   type Offers,
   type OfferTarget,
+  type QueryScope,
   type QueryState,
   type TotalState,
 } from "@kikstart/query-grid";
@@ -26,7 +30,7 @@ import {
 } from "../components/column-state.ts";
 import type { FieldDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
-import { useLocale, useMessages } from "../components/messages.tsx";
+import { formatRows, useLocale, useMessages } from "../components/messages.tsx";
 import { useStoreValue } from "../components/use-store-value.ts";
 import { formatChip, formatReason } from "./query-grid-format.ts";
 import { useQueryGridMeta, useQueryGridState } from "./query-grid-context.tsx";
@@ -168,4 +172,88 @@ export function useColumns(): ColumnsModel {
   const { columns } = useQueryGridState();
   const state = useStoreValue(columns.subscribe, columns.getColumns);
   return { state, layout: layoutColumns(def.fields, state), store: columns };
+}
+
+export type RowSelection =
+  | { kind: "none" }
+  | { kind: "rows"; ids: string[] }
+  | {
+      kind: "matching";
+      query: QueryState;
+      scope: QueryScope | null;
+      count: number | null;
+      capped: boolean;
+    };
+
+function subscribeNothing(): () => void {
+  return () => undefined;
+}
+
+// The count is read only while a selection needs it, so selecting adds no request the page was not already making.
+function useSelectionCount(wanted: boolean): CountState {
+  const { counts } = useQueryGridState();
+  return useStoreValue(
+    wanted ? counts.subscribe : subscribeNothing,
+    counts.getState,
+  );
+}
+
+export function useRowSelection(): RowSelection {
+  const { scope } = useQueryGridMeta();
+  const { selection } = useQueryGridState();
+  const state = useStoreValue(selection.subscribe, selection.get);
+  const query = useQueryState();
+  const { result } = useSelectionCount(state.allMatching);
+  if (state.allMatching) {
+    return {
+      kind: "matching",
+      query,
+      scope,
+      count: result?.count ?? null,
+      capped: result?.capped ?? false,
+    };
+  }
+  return state.ids.length > 0
+    ? { kind: "rows", ids: state.ids }
+    : { kind: "none" };
+}
+
+export function useMatchingCount(): string | null {
+  const messages = useMessages();
+  const locale = useLocale();
+  const { selection } = useQueryGridState();
+  const state = useStoreValue(selection.subscribe, selection.get);
+  const { result } = useSelectionCount(state.ids.length > 0);
+  return result
+    ? formatRows(messages, result.count, locale, result.capped)
+    : null;
+}
+
+export interface ReorderOffer {
+  offered: boolean;
+  reason: string | null;
+}
+
+export function useReorderOffer(): ReorderOffer | null {
+  const { def } = useQueryGridMeta();
+  const messages = useMessages();
+  const query = useQueryState();
+  const feed = useFeedState();
+  if (!canReorder(def)) {
+    return null;
+  }
+  const problem = explainReorder(def, query, {
+    loaded: feed.pages > 0 && feed.status === "idle",
+    hasNext: feed.hasNext,
+  });
+  if (!problem) {
+    return { offered: true, reason: null };
+  }
+  const code = problem.code as keyof typeof messages.reorderReasons;
+  return {
+    offered: false,
+    reason: messages.reorderReasons[code]({
+      label: getFieldLabel(def, def.orderField ?? ""),
+    }),
+  };
 }

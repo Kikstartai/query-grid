@@ -17,10 +17,14 @@ export {
   useOfferState,
   useOfferContext,
   useQueryState,
+  useReorderOffer,
+  useRowSelection,
   useTotalState,
   type ColumnsModel,
   type LabelledChip,
   type OfferState,
+  type ReorderOffer,
+  type RowSelection,
 } from "./react/query-grid-hooks.ts";
 export {
   QueryGridProvider,

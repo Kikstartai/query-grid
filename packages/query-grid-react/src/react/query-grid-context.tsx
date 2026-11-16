@@ -16,12 +16,21 @@ import type {
   LimitsStore,
   NarrowedStore,
   QueryAction,
+  QueryScope,
   QueryStore,
+  RowMove,
+  Store,
   TotalStore,
 } from "@kikstart/query-grid";
 
 import type { ColumnStore } from "../components/column-state.ts";
 import type { GridDef } from "../components/fields.ts";
+
+export interface SelectionState {
+  ids: string[];
+  allMatching: boolean;
+  key: number;
+}
 
 export interface QueryGridState {
   store: QueryStore;
@@ -33,6 +42,7 @@ export interface QueryGridState {
   limits: LimitsStore;
   narrowed: NarrowedStore;
   columns: ColumnStore;
+  selection: Store<SelectionState>;
 }
 
 export interface QueryGridActions {
@@ -48,11 +58,14 @@ export interface QueryGridActions {
   ) => Promise<FieldOption[]>;
   moveRow: (board: Board, move: BoardMove) => Promise<GridRow>;
   fetchExport: (columns?: string[]) => Promise<string>;
+  clearSelection: () => void;
+  reorderRow: (move: RowMove) => Promise<void>;
 }
 
 export interface QueryGridMeta {
   def: GridDef;
   source: DataSource;
+  scope: QueryScope | null;
 }
 
 export interface QueryGridContextValue {

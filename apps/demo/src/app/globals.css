@@ -611,3 +611,12 @@ pre {
 .order-status[data-value="shipped"]::before {
   background: var(--brand);
 }
+
+.grid-note {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

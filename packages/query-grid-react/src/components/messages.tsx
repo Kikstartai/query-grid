@@ -13,6 +13,7 @@ import {
   type ProblemParams,
   type RangeOp,
   type ReasonCode,
+  type ReorderCode,
   type ReservedValue,
   type TextOp,
 } from "@kikstart/query-grid";
@@ -151,6 +152,21 @@ export interface QueryGridMessages {
   max: string;
   selectRow: string;
   selectAll: string;
+  selectedRows: (params: CountParams) => string;
+  selectAllMatching: (params: { rows: string }) => string;
+  allMatchingSelected: (params: { rows: string }) => string;
+  clearSelection: string;
+  rowActions: (params: LabelParams) => string;
+  reorderRow: (params: LabelParams) => string;
+  reorderColumn: string;
+  reorderHelp: string;
+  reorderFailed: string;
+  reorderSteps: Record<
+    "grab" | "move" | "drop" | "cancel",
+    (params: { label: string; position: number; total: number }) => string
+  >;
+  reorderReasons: Record<ReorderCode, (params: LabelParams) => string>;
+  moreItems: (params: { count: number }) => string;
   columns: string;
   pinColumn: (params: LabelParams) => string;
   resetColumns: string;
@@ -177,6 +193,8 @@ export interface QueryGridMessages {
 }
 
 type NestedKey =
+  | "reorderSteps"
+  | "reorderReasons"
   | "countSources"
   | "facetNotes"
   | "datePresets"
@@ -373,6 +391,33 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   max: "max",
   selectRow: "Select row",
   selectAll: "Select all loaded rows",
+  selectedRows: ({ formatted }) => `${formatted} selected`,
+  selectAllMatching: ({ rows }) => `Select all ${rows} that match`,
+  allMatchingSelected: ({ rows }) => `All ${rows} that match are selected.`,
+  clearSelection: "Clear selection",
+  rowActions: ({ label }) => `Actions for ${label}`,
+  reorderRow: ({ label }) => `Reorder ${label}`,
+  reorderColumn: "Order",
+  reorderHelp:
+    "Drag a row by its handle, or press Space on the handle and use the arrow keys, to move it. Space drops it and Escape puts it back.",
+  reorderFailed: "The new order was not saved",
+  reorderSteps: {
+    grab: ({ label, position, total }) =>
+      `${label} picked up, position ${position} of ${total}.`,
+    move: ({ label, position, total }) =>
+      `${label}, position ${position} of ${total}.`,
+    drop: ({ label, position, total }) =>
+      `${label} dropped at position ${position} of ${total}.`,
+    cancel: ({ label }) => `${label} put back.`,
+  },
+  reorderReasons: {
+    reorder_needs_order: ({ label }) =>
+      `Sort by ${label} ascending, and by nothing else, to reorder.`,
+    reorder_needs_all_rows: () =>
+      "Reordering needs every row loaded: narrow the filters first.",
+    reorder_grouped: () => "Clear the grouping to reorder.",
+  },
+  moreItems: ({ count }) => `+${count}`,
   columns: "Columns",
   pinColumn: ({ label }) => `Pin ${label}`,
   resetColumns: "Reset columns",
@@ -463,6 +508,8 @@ function mergeMessages(
   return {
     ...base,
     ...overrides,
+    reorderSteps: { ...base.reorderSteps, ...overrides.reorderSteps },
+    reorderReasons: { ...base.reorderReasons, ...overrides.reorderReasons },
     countSources: { ...base.countSources, ...overrides.countSources },
     facetNotes: { ...base.facetNotes, ...overrides.facetNotes },
     datePresets: { ...base.datePresets, ...overrides.datePresets },

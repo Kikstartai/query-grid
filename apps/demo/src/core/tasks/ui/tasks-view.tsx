@@ -1,9 +1,11 @@
 "use client";
 
 import { useGridView } from "@kikstart/query-grid-react";
-import { CardList, DataGrid, StatusBoard } from "@kikstart/query-grid-react/ui";
+import { CardList, StatusBoard } from "@kikstart/query-grid-react/ui";
 
-import { TASK_TRANSITIONS } from "../tasks-grid-def";
+import { DemoGrid } from "@/lib/demo-grid";
+
+import { TASK_TRANSITIONS, TASKS_GRID_DEF } from "../tasks-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["title", "assignee", "budget"];
 
@@ -21,5 +23,5 @@ export function TasksView() {
       />
     );
   }
-  return <DataGrid />;
+  return <DemoGrid def={TASKS_GRID_DEF} labelField="title" />;
 }

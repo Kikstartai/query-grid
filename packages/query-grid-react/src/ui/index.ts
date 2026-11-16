@@ -3,6 +3,7 @@ export {
   ColumnsMenu,
   DataGrid,
   type CardListProps,
+  type DataGridProps,
   type DataGridRootProps,
 } from "./data-grid.tsx";
 export { ExportButton, type ExportButtonProps } from "./export.tsx";

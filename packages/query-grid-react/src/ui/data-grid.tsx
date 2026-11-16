@@ -13,7 +13,10 @@ import {
   listTotalFields,
   resolveFilterKind,
   type BaseFieldDef,
+  toProblem,
   type GroupHeader,
+  type Problem,
+  type RowMove,
   type SortDirection,
 } from "@kikstart/query-grid";
 
@@ -22,6 +25,8 @@ import { ColumnsMenu as BaseColumnsMenu } from "../components/columns-menu.tsx";
 import {
   DataGrid as BaseDataGrid,
   DataGridDefaultParts,
+  type DataGridProps as BaseDataGridProps,
+  type GridSelection,
 } from "../components/data-grid.tsx";
 import type { RowWindow } from "../components/fields.ts";
 import {
@@ -39,13 +44,16 @@ import { formatReason } from "../react/query-grid-format.ts";
 import {
   useColumns,
   useFeedState,
+  useMatchingCount,
   useOfferContext,
   useOffers,
   useQueryState,
+  useReorderOffer,
 } from "../react/query-grid-hooks.ts";
 import {
   useQueryGridActions,
   useQueryGridMeta,
+  useQueryGridState,
 } from "../react/query-grid-context.tsx";
 import { FieldFilter } from "./filters.tsx";
 
@@ -66,8 +74,51 @@ function useRowWindow(): RowWindow {
   };
 }
 
-export interface DataGridRootProps {
+export type DataGridProps = Pick<
+  BaseDataGridProps,
+  "rowLabel" | "onRowOpen" | "rowHref" | "rowActions" | "onRowAction"
+>;
+
+export interface DataGridRootProps extends DataGridProps {
   children: ReactNode;
+}
+
+function useGridSelection() {
+  const { selection } = useQueryGridState();
+  const state = useStoreValue(selection.subscribe, selection.get);
+  return {
+    onSelectionChange: (next: GridSelection) =>
+      selection.set({ ...selection.get(), ...next }),
+    selectionKey: state.key,
+    matchingCount: useMatchingCount(),
+  };
+}
+
+function useGridReorder() {
+  const messages = useMessages();
+  const locale = useLocale();
+  const offer = useReorderOffer();
+  const { reorderRow } = useQueryGridActions();
+  const [problem, setProblem] = useState<Problem | null>(null);
+  if (!offer) {
+    return {};
+  }
+  const failure = problem
+    ? `${messages.reorderFailed}: ${formatProblemMessage(messages, problem, locale)}`
+    : null;
+  return {
+    reorder: {
+      disabled: !offer.offered,
+      reason: offer.reason,
+      error: failure,
+    },
+    onRowReorder: (move: RowMove) => {
+      reorderRow(move).then(
+        () => setProblem(null),
+        (error: unknown) => setProblem(toProblem(error)),
+      );
+    },
+  };
 }
 
 function useSortReasons(): Record<string, string> {
@@ -137,14 +188,19 @@ function useGridControls() {
   };
 }
 
-function FlatRoot({ children }: DataGridRootProps) {
+function FlatRoot({ children, ...host }: DataGridRootProps) {
   const rowWindow = useRowWindow();
   const state = useFeedState();
   const controls = useGridControls();
+  const selection = useGridSelection();
+  const reorder = useGridReorder();
   return (
     <BaseDataGrid.Root
+      {...host}
       {...controls}
       {...rowWindow}
+      {...selection}
+      {...reorder}
       capped={state.capped}
       resetKey={state.query}
     >
@@ -195,19 +251,23 @@ function formatGroupSums(
   );
 }
 
-function GroupedRoot({ children }: DataGridRootProps) {
+function GroupedRoot({ children, ...host }: DataGridRootProps) {
   const { def, source } = useQueryGridMeta();
   const query = useQueryState();
   const messages = useMessages();
   const locale = useLocale();
   const controls = useGridControls();
+  const { onSelectionChange, selectionKey } = useGridSelection();
   const [grouping] = useState(() => createGrouping(def, source, query));
   const state = useStoreValue(grouping.subscribe, grouping.getState);
   const field = getField(def, query.group ?? "");
   const totals = listTotalFields(def);
   return (
     <BaseDataGrid.Root
+      {...host}
       {...controls}
+      onSelectionChange={onSelectionChange}
+      selectionKey={selectionKey}
       rows={[]}
       hasNext={false}
       onEndReached={ignoreEnd}
@@ -244,19 +304,23 @@ function GroupedRoot({ children }: DataGridRootProps) {
   );
 }
 
-function DataGridRoot({ children }: DataGridRootProps) {
+function DataGridRoot({ children, ...host }: DataGridRootProps) {
   const { def } = useQueryGridMeta();
   const query = useQueryState();
   if (query.group === null) {
-    return <FlatRoot>{children}</FlatRoot>;
+    return <FlatRoot {...host}>{children}</FlatRoot>;
   }
   const key = encodeQuery(def, { ...query, cursor: null }).toString();
-  return <GroupedRoot key={key}>{children}</GroupedRoot>;
+  return (
+    <GroupedRoot key={key} {...host}>
+      {children}
+    </GroupedRoot>
+  );
 }
 
-function DefaultDataGrid() {
+function DefaultDataGrid(host: DataGridProps) {
   return (
-    <DataGridRoot>
+    <DataGridRoot {...host}>
       <DataGridDefaultParts />
     </DataGridRoot>
   );
@@ -267,6 +331,7 @@ export const DataGrid = Object.assign(DefaultDataGrid, {
   Toolbar: BaseDataGrid.Toolbar,
   Status: BaseDataGrid.Status,
   ColumnsMenu: BaseDataGrid.ColumnsMenu,
+  Selection: BaseDataGrid.Selection,
   Body: BaseDataGrid.Body,
 });
 
