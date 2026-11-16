@@ -16,6 +16,33 @@ export type GridValue = string | number | boolean | string[] | null;
 
 export type GridRow = Record<string, GridValue> & { id: string };
 
+export const FIELD_TYPES: readonly FieldType[] = [
+  "id",
+  "text",
+  "enum",
+  "integer",
+  "decimal",
+  "money",
+  "boolean",
+  "date",
+  "datetime",
+  "array",
+];
+
+export const FIELD_RENDERS = ["text", "badge", "list"] as const;
+
+export type FieldRender = (typeof FIELD_RENDERS)[number];
+
+export const FIELD_TONES = [
+  "neutral",
+  "info",
+  "success",
+  "warning",
+  "danger",
+] as const;
+
+export type FieldTone = (typeof FIELD_TONES)[number];
+
 export interface FieldOption {
   value: string;
   label: string;
@@ -38,6 +65,8 @@ export interface BaseFieldDef {
   pinned?: boolean;
   hidden?: boolean;
   wrap?: boolean;
+  render?: FieldRender;
+  tones?: Record<string, FieldTone>;
 }
 
 export interface FacetDef {
@@ -56,6 +85,7 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   facet?: FacetDef;
   totals?: string[];
   search?: string[];
+  orderField?: string;
 }
 
 export interface IndexDef {
@@ -64,6 +94,7 @@ export interface IndexDef {
   range?: boolean;
   multi?: boolean;
   empty?: string[];
+  then?: string[];
 }
 
 export interface IndexExtras {

@@ -85,6 +85,10 @@ export interface QueryGridMessages {
   sortBy: string;
   ascending: string;
   descending: string;
+  thenBy: string;
+  thenByDirection: (params: { label: string; direction: string }) => string;
+  sortPosition: (params: { label: string; position: number }) => string;
+  chipSortThen: (params: { label: string; direction: string }) => string;
   searchFilter: string;
   searchPlaceholder: (params: { fields: string }) => string;
   searchHint: (params: { min: number; max: number }) => string;
@@ -254,6 +258,11 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   sortBy: "Sort by",
   ascending: "Ascending",
   descending: "Descending",
+  thenBy: "Then by",
+  thenByDirection: ({ label, direction }) => `${label}: ${direction}`,
+  sortPosition: ({ label, position }) =>
+    `Sort by ${label}, sort column ${position}`,
+  chipSortThen: ({ label, direction }) => `, then ${label} ${direction}`,
   searchFilter: "Search",
   searchPlaceholder: ({ fields }) => `Search: ${fields}`,
   searchHint: ({ min, max }) => `${min} to ${max} characters`,
@@ -403,6 +412,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
       `No index answers Match any with ${blockers}.`,
     no_group_with: ({ label, blockers }) =>
       `No index reads the rows of one ${label} group with ${blockers}.`,
+    sort_limit: () => "A sort takes no more columns.",
   },
   reasonParts: {
     filter: (label) => `the ${label} filter`,
@@ -418,6 +428,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     search_length: ({ min, max }) =>
       `The search needs ${min} to ${max} characters.`,
     invalid_sort_direction: () => "Invalid sort direction.",
+    too_many_sorts: ({ max }) => `A sort takes at most ${max} columns.`,
     invalid_cursor: () => "The cursor does not decode.",
     invalid_limit: () => "The page size is not a number.",
     too_many_filters: ({ max }) => `At most ${max} of these filters at once.`,

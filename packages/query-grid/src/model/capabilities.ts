@@ -21,6 +21,8 @@ export interface DataSourceCapabilities {
   overlapFields: string[];
   groupFields: string[];
   sortFields: string[];
+  thenByFields: string[];
+  sortOrders: string[][];
   searchFields: string[];
   isFacetCountExact: (query: QueryState) => boolean;
 }

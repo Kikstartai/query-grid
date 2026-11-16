@@ -5,9 +5,11 @@ import { useState, type ReactNode } from "react";
 import {
   createGrouping,
   encodeQuery,
+  explainUnavailable,
   formatSum,
   getField,
   getReservedValue,
+  listSorts,
   listTotalFields,
   resolveFilterKind,
   type BaseFieldDef,
@@ -33,9 +35,11 @@ import {
   type QueryGridMessages,
 } from "../components/messages.tsx";
 import { useStoreValue } from "../components/use-store-value.ts";
+import { formatReason } from "../react/query-grid-format.ts";
 import {
   useColumns,
   useFeedState,
+  useOfferContext,
   useOffers,
   useQueryState,
 } from "../react/query-grid-hooks.ts";
@@ -66,20 +70,54 @@ export interface DataGridRootProps {
   children: ReactNode;
 }
 
+function useSortReasons(): Record<string, string> {
+  const { def, source } = useQueryGridMeta();
+  const messages = useMessages();
+  const locale = useLocale();
+  const query = useQueryState();
+  const context = useOfferContext();
+  const offers = useOffers();
+  const { sortFields, thenByFields } = source.capabilities;
+  const held = [...new Set([...sortFields, ...thenByFields])].filter(
+    (key) => !offers.sorts.includes(key) && !offers.thenBy.includes(key),
+  );
+  return Object.fromEntries(
+    held.map((key) => [
+      key,
+      formatReason(
+        messages,
+        def,
+        explainUnavailable(
+          query,
+          { kind: sortFields.includes(key) ? "sort" : "thenBy", field: key },
+          context,
+        ),
+        locale,
+      ),
+    ]),
+  );
+}
+
 function useGridControls() {
   const { def, source } = useQueryGridMeta();
   const query = useQueryState();
   const offers = useOffers();
   const { dispatch } = useQueryGridActions();
   const { state: columns, store } = useColumns();
+  const sortReasons = useSortReasons();
   return {
     fields: def.fields,
     columns,
     onColumnsChange: store.setColumns,
-    sort: query.sort,
+    sorts: listSorts(query),
     sortableFields: offers.sorts,
+    addableSortFields: offers.thenBy,
+    sortReasons,
     onSortChange: (field: string, direction: SortDirection) =>
       dispatch({ type: "setSort", field, direction }),
+    onSortAdd: (field: string, direction: SortDirection) =>
+      dispatch({ type: "addSort", field, direction }),
+    onSortRemove: (field: string) => dispatch({ type: "removeSort", field }),
     filters: Object.fromEntries(
       def.fields
         .filter(

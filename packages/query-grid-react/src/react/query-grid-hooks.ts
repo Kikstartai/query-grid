@@ -126,6 +126,7 @@ function isOffered(offers: Offers, target: OfferTarget): boolean {
     overlap: offers.overlaps,
     group: offers.groups,
     sort: offers.sorts,
+    thenBy: offers.thenBy,
   }[target.kind];
   return fields.includes(target.field);
 }

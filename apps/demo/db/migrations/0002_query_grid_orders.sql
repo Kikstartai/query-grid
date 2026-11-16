@@ -42,6 +42,10 @@ COMMENT ON INDEX auto_orders_status_code__region__created_at IS 'Auto-created.';
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__channel__created_at ON orders USING btree (status_code, channel, created_at, id);
 -- Mark auto_orders_status_code__channel__created_at as auto-created.
 COMMENT ON INDEX auto_orders_status_code__channel__created_at IS 'Auto-created.';
+-- no filter, sort item_count, then total
+CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_item_count__total ON orders USING btree (item_count, total, id);
+-- Mark auto_orders_item_count__total as auto-created.
+COMMENT ON INDEX auto_orders_item_count__total IS 'Auto-created.';
 -- search over customer_name, order_number
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_search ON orders USING gin ((customer_name || ' ' || order_number::text) gin_trgm_ops);
 -- Mark auto_orders_search as auto-created.

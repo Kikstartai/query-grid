@@ -71,8 +71,13 @@ export interface DataGridProps extends RowWindow {
   onColumnsChange?: (columns: ColumnState[]) => void;
   columnPersistence?: ColumnPersistence;
   sort?: SortState | null;
+  sorts?: SortState[];
   sortableFields?: string[];
+  addableSortFields?: string[];
+  sortReasons?: Record<string, string>;
   onSortChange?: (field: string, direction: SortDirection) => void;
+  onSortAdd?: (field: string, direction: SortDirection) => void;
+  onSortRemove?: (field: string) => void;
   filters?: Record<string, ReactNode>;
   activeFilters?: string[];
 }
@@ -712,8 +717,13 @@ function DataGridBody() {
   const { props, handle, update, layout, setScroller } = useDataGrid();
   const controls: HeaderControls = {
     sort: props.sort,
+    sorts: props.sorts,
     sortableFields: props.sortableFields,
+    addableSortFields: props.addableSortFields,
+    sortReasons: props.sortReasons,
     onSortChange: props.onSortChange,
+    onSortAdd: props.onSortAdd,
+    onSortRemove: props.onSortRemove,
     filters: props.filters,
     activeFilters: props.activeFilters,
     onResize: (key, width) =>

@@ -558,6 +558,7 @@ test.describe("the narrowed-set tier", () => {
       searchLimit: 500,
       searchBudgetMs: 120,
       narrowLimit: 100000,
+      exportLimit: 50000,
     });
     const sizes = await page.request.get(
       "/api/orders/narrowed?f.status_code=failed&f.channel=phone",

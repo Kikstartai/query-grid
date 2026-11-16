@@ -136,7 +136,12 @@ async function sizeOf(
 }
 
 function wholeTable(def: PostgresGridDef, query: QueryState): QueryState {
-  return { ...withoutFilters(query), search: null, sort: def.defaultSort };
+  return {
+    ...withoutFilters(query),
+    search: null,
+    sort: def.defaultSort,
+    thenBy: undefined,
+  };
 }
 
 // A size is of the rows the ordered indexes leave, so it is planned with no text or array index and never counted through one.

@@ -67,6 +67,7 @@ const DEF: PostgresGridDef = {
     { equals: [], sort: "size", range: true },
     { equals: ["starred"], sort: "created_at", range: true },
     { equals: ["folder_id"], sort: "created_at", empty: ["deleted_at"] },
+    { equals: [], sort: "size", then: ["created_at"] },
   ],
   textIndexes: ["name"],
   arrayIndexes: ["tags"],
@@ -576,6 +577,153 @@ describe("the tier each filter runs in", () => {
       }),
     ).toContain(`auto_${TABLE}_folder_id__created_at__empty_deleted_at`);
   });
+});
+
+describe("several sort columns answer as the memory source does", () => {
+  const by = (field: string, direction: "asc" | "desc") => ({
+    field,
+    direction,
+  });
+
+  test("a declared composite order pages by its whole key, both ways, with no size probe", async () => {
+    for (const direction of ["asc", "desc"] as const) {
+      calls.length = 0;
+      const ids = await expectSame(`size then created, ${direction}`, {
+        sort: by("size", direction),
+        thenBy: [by("created_at", direction)],
+      });
+      expect(ids).toHaveLength(ROW_COUNT);
+      expect(calls.some((call) => call.sql.text.includes(") capped"))).toBe(
+        false,
+      );
+    }
+  }, 60_000);
+
+  test("further columns with no index run over the narrowed set, each its own way", async () => {
+    const cases: [string, Partial<QueryState>][] = [
+      [
+        "created desc, size asc",
+        { sort: by("created_at", "desc"), thenBy: [by("size", "asc")] },
+      ],
+      [
+        "size asc, starred desc, created asc",
+        {
+          sort: by("size", "asc"),
+          thenBy: [by("starred", "desc"), by("created_at", "asc")],
+        },
+      ],
+      [
+        "starred filter, size desc, created asc",
+        {
+          equals: { starred: ["true"] },
+          sort: by("created_at", "asc"),
+          thenBy: [by("size", "desc")],
+        },
+      ],
+      [
+        "size desc, created asc: mixed, so not the composite index",
+        { sort: by("size", "desc"), thenBy: [by("created_at", "asc")] },
+      ],
+    ];
+    for (const [name, filters] of cases) {
+      calls.length = 0;
+      const ids = await expectSame(name, filters);
+      expect(ids.length).toBeGreaterThan(400);
+      expect(calls[0].sql.text).toContain(") capped");
+    }
+  }, 120_000);
+
+  test("the composite index is the one the planner reads", async () => {
+    const sql = buildPageSql(
+      DEF,
+      {
+        ...BASE,
+        sort: by("size", "asc"),
+        thenBy: [by("created_at", "asc")],
+      },
+      20,
+    );
+    await client.query("BEGIN; SET LOCAL enable_seqscan = off");
+    const { rows } = await client.query<{ "QUERY PLAN": string }>(
+      `EXPLAIN ${sql.text}`,
+      sql.values,
+    );
+    await client.query("ROLLBACK");
+    const plan = rows.map((row) => row["QUERY PLAN"]).join("\n");
+    expect(plan).toContain(`auto_${TABLE}_size__created_at`);
+    expect(plan).not.toContain("Sort");
+  }, 60_000);
+});
+
+describe("a composite order on the orders table", () => {
+  const base = defaultQuery(ORDERS_GRID_DEF);
+  const composite: QueryState = {
+    ...base,
+    sort: { field: "item_count", direction: "desc" },
+    thenBy: [{ field: "total", direction: "desc" }],
+  };
+
+  test("pages in order by keyset at any table size, with one statement a page", async () => {
+    calls.length = 0;
+    const first = await listGridPage(ORDERS_GRID_DEF, execute, composite, 200);
+    const second = await listGridPage(
+      ORDERS_GRID_DEF,
+      execute,
+      { ...composite, cursor: first.nextCursor },
+      200,
+    );
+    expect(calls).toHaveLength(2);
+    const rows = [...first.rows, ...second.rows];
+    expect(new Set(rows.map((row) => row.id)).size).toBe(400);
+    const keys = rows.map((row) => [Number(row.item_count), Number(row.total)]);
+    for (let at = 1; at < keys.length; at++) {
+      const [items, total] = keys[at];
+      const [lastItems, lastTotal] = keys[at - 1];
+      expect(
+        items < lastItems || (items === lastItems && total <= lastTotal),
+      ).toBe(true);
+    }
+  }, 60_000);
+
+  test("the planner walks the composite index and sorts nothing", async () => {
+    const page = await listGridPage(ORDERS_GRID_DEF, execute, composite, 200);
+    const sql = buildPageSql(
+      ORDERS_GRID_DEF,
+      { ...composite, cursor: page.nextCursor },
+      200,
+    );
+    const { rows } = await client.query<{ "QUERY PLAN": string }>(
+      `EXPLAIN ${sql.text}`,
+      sql.values,
+    );
+    const plan = rows.map((row) => row["QUERY PLAN"]).join("\n");
+    expect(plan).toContain("auto_orders_item_count__total");
+    expect(plan).not.toContain("Sort");
+    expect(plan).not.toContain("Seq Scan");
+  }, 60_000);
+
+  test("a further column with no index is refused on the whole table and runs once narrowed", async () => {
+    const thenBy = [{ field: "total", direction: "asc" as const }];
+    const refusal = await listGridPage(
+      ORDERS_GRID_DEF,
+      execute,
+      { ...base, thenBy },
+      50,
+    ).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(QueryRejected);
+    expect(refusal).toMatchObject({ code: "narrow_first" });
+    const narrowed: QueryState = {
+      ...base,
+      equals: { status_code: ["failed"], channel: ["phone"] },
+      sort: { field: "created_at", direction: "desc" },
+      thenBy: [{ field: "region", direction: "asc" }],
+    };
+    expect(planQuery(ORDERS_GRID_DEF.indexes, narrowed)?.narrowed).toBe(true);
+    const page = await listGridPage(ORDERS_GRID_DEF, execute, narrowed, 50);
+    expect(page.rows.length).toBeGreaterThan(0);
+    const stamps = page.rows.map((row) => String(row.created_at));
+    expect(stamps).toEqual([...stamps].sort().reverse());
+  }, 60_000);
 });
 
 describe("the text index on the orders table", () => {

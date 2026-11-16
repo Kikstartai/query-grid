@@ -14,6 +14,7 @@ import {
   labelKey,
   listTextFilterFields,
   listSelectedValues,
+  listThenBy,
   toExcludeValues,
   listFilterFields,
   SEARCH_MAX_LENGTH,
@@ -274,8 +275,41 @@ export function SortControl() {
       value={query.sort.field}
       direction={query.sort.direction}
       onSortChange={(field, direction) =>
-        dispatch({ type: "setSort", field, direction })
+        dispatch(
+          listThenBy(query).length > 0 && field === query.sort.field
+            ? { type: "addSort", field, direction }
+            : { type: "setSort", field, direction },
+        )
       }
+      thenOptions={context.capabilities.thenByFields
+        .filter((key) => key !== query.sort.field)
+        .map((key) => {
+          const held =
+            !offers.thenBy.includes(key) &&
+            !listThenBy(query).some((sort) => sort.field === key);
+          return {
+            value: key,
+            label: getFieldLabel(def, key),
+            disabled: held,
+            reason: held
+              ? formatReason(
+                  messages,
+                  def,
+                  explainUnavailable(
+                    query,
+                    { kind: "thenBy", field: key },
+                    context,
+                  ),
+                  locale,
+                )
+              : null,
+          };
+        })}
+      thenBy={listThenBy(query)}
+      onSortAdd={(field, direction) =>
+        dispatch({ type: "addSort", field, direction })
+      }
+      onSortRemove={(field) => dispatch({ type: "removeSort", field })}
       disabled={!offered}
       reason={
         offered

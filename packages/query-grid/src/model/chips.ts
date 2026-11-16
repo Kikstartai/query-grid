@@ -4,9 +4,11 @@ import {
   isDefaultSort,
   type BaseGridDef,
   type SortDirection,
+  type SortState,
 } from "./grid-def.ts";
 import {
   listRanges,
+  listThenBy,
   type QueryState,
   type RangeState,
   type TextOp,
@@ -61,6 +63,7 @@ export interface SortChip {
   kind: "sort";
   field: string;
   direction: SortDirection;
+  then: SortState[];
   clear: QueryAction | null;
 }
 
@@ -265,9 +268,11 @@ export function listFilterChips(
     kind: "sort",
     field: query.sort.field,
     direction: query.sort.direction,
-    clear: isDefaultSort(def, query.sort)
-      ? null
-      : { type: "setSort", ...def.defaultSort },
+    then: listThenBy(query),
+    clear:
+      isDefaultSort(def, query.sort) && listThenBy(query).length === 0
+        ? null
+        : { type: "setSort", ...def.defaultSort },
   });
   return chips;
 }

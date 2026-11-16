@@ -64,6 +64,8 @@ export const UNTIERED = {
   textFields: [],
   overlapFields: [],
   groupFields: [],
+  thenByFields: [],
+  sortOrders: [],
 };
 
 export function createTestSource(

@@ -1,12 +1,14 @@
 export interface Cursor {
-  sortValue: string;
+  sortValues: string[];
   id: string;
 }
 
+const CURSOR_PARTS_MAX = 8;
+
 export function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify([cursor.sortValue, cursor.id])).toString(
-    "base64url",
-  );
+  return Buffer.from(
+    JSON.stringify([...cursor.sortValues, cursor.id]),
+  ).toString("base64url");
 }
 
 export function decodeCursor(raw: string): Cursor | null {
@@ -16,13 +18,14 @@ export function decodeCursor(raw: string): Cursor | null {
     );
     if (
       !Array.isArray(parsed) ||
-      parsed.length !== 2 ||
-      typeof parsed[0] !== "string" ||
-      typeof parsed[1] !== "string"
+      parsed.length < 2 ||
+      parsed.length > CURSOR_PARTS_MAX ||
+      !parsed.every((part) => typeof part === "string")
     ) {
       return null;
     }
-    return { sortValue: parsed[0], id: parsed[1] };
+    const parts = parsed as string[];
+    return { sortValues: parts.slice(0, -1), id: parts[parts.length - 1] };
   } catch {
     return null;
   }

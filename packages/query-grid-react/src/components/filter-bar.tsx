@@ -11,7 +11,7 @@ import {
 } from "@ui-sdk/react/select";
 import { useState, type FormEvent, type ReactNode } from "react";
 
-import type { SortDirection } from "@kikstart/query-grid";
+import type { SortDirection, SortState } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
 import type { ControlOption, ControlState } from "./fields.ts";
@@ -24,16 +24,105 @@ export interface SortControlProps extends ControlState {
   value: string;
   direction: SortDirection;
   onSortChange: (field: string, direction: SortDirection) => void;
+  thenOptions?: ControlOption[];
+  thenBy?: SortState[];
+  onSortAdd?: (field: string, direction: SortDirection) => void;
+  onSortRemove?: (field: string) => void;
 }
 
-export function SortControl({
-  options,
-  value,
+const THEN_MAX_LABELS = 2;
+
+function DirectionIcon({ direction }: { direction: SortDirection }) {
+  if (direction === "desc") {
+    return <ArrowDownIcon />;
+  }
+  return <ArrowUpIcon />;
+}
+
+type ThenByProps = Pick<
+  SortControlProps,
+  | "thenOptions"
+  | "thenBy"
+  | "direction"
+  | "onSortAdd"
+  | "onSortRemove"
+  | "disabled"
+>;
+
+function ThenBy({
+  thenOptions = [],
+  thenBy = [],
   direction,
-  onSortChange,
+  onSortAdd,
+  onSortRemove,
   disabled,
-  reason,
-}: SortControlProps) {
+}: ThenByProps) {
+  const messages = useMessages();
+  if (!onSortAdd || !onSortRemove || thenOptions.length === 0) {
+    return null;
+  }
+  const chosen = thenBy.map((sort) => sort.field);
+  const labelOf = (field: string) =>
+    thenOptions.find((option) => option.value === field)?.label ?? field;
+  return (
+    <>
+      <Select
+        multiple
+        items={thenOptions}
+        value={chosen}
+        disabled={disabled}
+        onValueChange={(next: string[]) => {
+          chosen.filter((field) => !next.includes(field)).forEach(onSortRemove);
+          next
+            .filter((field) => !chosen.includes(field))
+            .forEach((field) => onSortAdd(field, direction));
+        }}
+      >
+        <SelectTrigger aria-label={messages.thenBy} data-sort="then">
+          <span className="qg-select-prefix">{messages.thenBy}</span>
+          <SelectValue
+            maxLabels={THEN_MAX_LABELS}
+            getMoreLabel={(count) => messages.moreValues({ count })}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {thenOptions.map((item) => (
+            <SelectOption
+              key={item.value}
+              value={item.value}
+              label={item.label}
+              disabled={item.disabled}
+              reason={item.reason}
+            />
+          ))}
+        </SelectContent>
+      </Select>
+      {thenBy.map((sort) => (
+        <Button
+          key={sort.field}
+          aria-label={messages.thenByDirection({
+            label: labelOf(sort.field),
+            direction:
+              sort.direction === "desc"
+                ? messages.descending
+                : messages.ascending,
+          })}
+          data-sort-then={sort.field}
+          data-direction={sort.direction}
+          disabled={disabled}
+          onClick={() =>
+            onSortAdd(sort.field, sort.direction === "desc" ? "asc" : "desc")
+          }
+        >
+          <DirectionIcon direction={sort.direction} />
+        </Button>
+      ))}
+    </>
+  );
+}
+
+export function SortControl(props: SortControlProps) {
+  const { options, value, direction, onSortChange, disabled, reason } = props;
   const messages = useMessages();
   const descending = direction === "desc";
   return (
@@ -76,8 +165,9 @@ export function SortControl({
         disabled={disabled}
         onClick={() => onSortChange(value, descending ? "asc" : "desc")}
       >
-        {descending ? <ArrowDownIcon /> : <ArrowUpIcon />}
+        <DirectionIcon direction={direction} />
       </Button>
+      <ThenBy {...props} />
     </FieldFrame>
   );
 }

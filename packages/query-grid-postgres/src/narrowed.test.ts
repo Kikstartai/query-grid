@@ -99,7 +99,7 @@ describe("the SQL of the expensive operations", () => {
       {
         ...either,
         cursor: encodeCursor({
-          sortValue: "2026-01-01T00:00:00.000000Z",
+          sortValues: ["2026-01-01T00:00:00.000000Z"],
           id: "018f4b5e-0000-7000-8000-000000000001",
         }),
       },

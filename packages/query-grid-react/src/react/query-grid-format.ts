@@ -6,6 +6,7 @@ import {
   type ChipValue,
   type FilterChip,
   type RangeChip,
+  type SortDirection,
   type UnavailableReason,
 } from "@kikstart/query-grid";
 
@@ -73,6 +74,10 @@ function formatRangeChip(
   return chip.op === null || chip.op === "between"
     ? messages.chipRange(params)
     : messages.chipRangeOps[chip.op](params);
+}
+
+function formatArrow(direction: SortDirection): string {
+  return direction === "asc" ? "↑" : "↓";
 }
 
 export function formatChip(
@@ -149,10 +154,15 @@ export function formatChip(
       return {
         id: chip.id,
         kind: chip.kind,
-        label: messages.chipSort({
-          label,
-          direction: chip.direction === "asc" ? "↑" : "↓",
-        }),
+        label: [
+          messages.chipSort({ label, direction: formatArrow(chip.direction) }),
+          ...chip.then.map((sort) =>
+            messages.chipSortThen({
+              label: getFieldLabel(def, sort.field),
+              direction: formatArrow(sort.direction),
+            }),
+          ),
+        ].join(""),
         removable,
       };
   }

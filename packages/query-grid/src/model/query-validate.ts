@@ -5,7 +5,9 @@ import {
   type BaseGridDef,
 } from "./grid-def.ts";
 import {
+  listSorts,
   RANGE_FILTER_MAX,
+  SORT_MAX,
   TEXT_FILTER_MAX,
   TEXT_MAX_LENGTH,
   TEXT_OPS,
@@ -188,6 +190,27 @@ function checkFilters(def: BaseGridDef, query: QueryState): Problem | null {
   );
 }
 
+function checkSorts(def: BaseGridDef, query: QueryState): Problem | null {
+  const sorts = listSorts(query);
+  if (sorts.length > SORT_MAX) {
+    return { code: "too_many_sorts", params: { max: SORT_MAX } };
+  }
+  for (const sort of sorts) {
+    if (sort.direction !== "asc" && sort.direction !== "desc") {
+      return { code: "invalid_sort_direction", params: {} };
+    }
+  }
+  const [, ...thenBy] = sorts.map((sort) => sort.field);
+  const stray = thenBy.find((key) => !getField(def, key));
+  if (stray !== undefined) {
+    return unknown(stray);
+  }
+  const repeated = thenBy.find(
+    (key, at) => key === query.sort.field || thenBy.indexOf(key) !== at,
+  );
+  return repeated === undefined ? null : invalid(repeated);
+}
+
 export function validateQueryValues(
   def: BaseGridDef,
   query: QueryState,
@@ -208,8 +231,5 @@ export function validateQueryValues(
       params: { min: SEARCH_MIN_LENGTH, max: SEARCH_MAX_LENGTH },
     };
   }
-  if (query.sort.direction !== "asc" && query.sort.direction !== "desc") {
-    return { code: "invalid_sort_direction", params: {} };
-  }
-  return null;
+  return checkSorts(def, query);
 }

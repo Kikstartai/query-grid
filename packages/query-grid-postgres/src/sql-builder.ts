@@ -11,7 +11,9 @@ import {
   isValidFieldValue,
   KEY_FIELD,
   listSearchFields,
+  listSorts,
   PAGE_LIMIT_MAX,
+  planQuery,
   validateQueryValues,
   type BaseFieldDef,
   type FieldType,
@@ -21,6 +23,7 @@ import {
   type ProblemParams,
   type QueryState,
   type RangeState,
+  type SortDirection,
   type TextOp,
   type TextState,
 } from "@kikstart/query-grid";
@@ -322,6 +325,63 @@ function clampLimit(requested: number, limits: GridLimits): number {
   return Math.min(Math.floor(requested), PAGE_LIMIT_MAX);
 }
 
+interface OrderKey {
+  field: BaseFieldDef;
+  direction: SortDirection;
+}
+
+const CURSOR_TEXT_MAX = 2000;
+
+// The key follows the first sort column, so one index read forward or backward gives the whole order.
+function listOrderKeys(def: PostgresGridDef, query: QueryState): OrderKey[] {
+  return [
+    ...listSorts(query).map((sort) => ({
+      field: requireField(def, sort.field),
+      direction: sort.direction,
+    })),
+    { field: requireField(def, KEY_FIELD), direction: query.sort.direction },
+  ];
+}
+
+function orderBy(keys: OrderKey[]): string {
+  return keys
+    .map(
+      (key) =>
+        `${column(key.field.key)} ${key.direction === "asc" ? "ASC" : "DESC"}`,
+    )
+    .join(", ");
+}
+
+function isCursorValue(
+  def: PostgresGridDef,
+  field: BaseFieldDef,
+  value: string,
+): boolean {
+  return field.type === "text" && !field.options
+    ? value.length <= CURSOR_TEXT_MAX
+    : isValidFieldValue(def, field.key, value);
+}
+
+function after(key: OrderKey): string {
+  return key.direction === "asc" ? ">" : "<";
+}
+
+// Columns that all run one way compare as a row, which an index reads as one range. Mixed directions have no row form: they are spelled out column by column, and run only over a narrowed set.
+function keysetClause(keys: OrderKey[], places: string[]): string {
+  const [first] = keys;
+  if (keys.every((key) => key.direction === first.direction)) {
+    const names = keys.map((key) => column(key.field.key));
+    return `(${names.join(", ")}) ${after(first)} (${places.join(", ")})`;
+  }
+  return keys.reduceRight((rest, key, at) => {
+    const name = column(key.field.key);
+    const beyond = `${name} ${after(key)} ${places[at]}`;
+    return rest === ""
+      ? beyond
+      : `(${beyond} OR (${name} = ${places[at]} AND ${rest}))`;
+  }, "");
+}
+
 export function buildPageSql(
   def: PostgresGridDef,
   query: QueryState,
@@ -343,27 +403,25 @@ export function buildPageSql(
       values: params.values,
     };
   }
-  const sortField = requireField(def, query.sort.field);
-  const keyField = requireField(def, KEY_FIELD);
-  const sort = column(sortField.key);
-  const key = column(keyField.key);
-  const direction = query.sort.direction === "asc" ? "ASC" : "DESC";
+  const keys = listOrderKeys(def, query);
   if (query.cursor) {
     const cursor = decodeCursor(query.cursor);
+    const values = cursor ? [...cursor.sortValues, cursor.id] : [];
     const usable =
-      cursor !== null &&
-      isValidFieldValue(def, sortField.key, cursor.sortValue) &&
-      isValidFieldValue(def, keyField.key, cursor.id);
-    if (!cursor || !usable) {
+      values.length === keys.length &&
+      keys.every((key, at) => isCursorValue(def, key.field, values[at]));
+    if (!usable) {
       throw new QueryRejected("invalid_cursor");
     }
-    const comparator = query.sort.direction === "asc" ? ">" : "<";
     clauses.push(
-      `(${sort}, ${key}) ${comparator} (${params.add(cursor.sortValue, sortField)}, ${params.add(cursor.id, keyField)})`,
+      keysetClause(
+        keys,
+        keys.map((key, at) => params.add(values[at], key.field)),
+      ),
     );
   }
   return {
-    text: `SELECT ${select} FROM ${table}${whereClause(clauses)} ORDER BY ${sort} ${direction}, ${key} ${direction} LIMIT ${clampLimit(limit, limits) + 1}`,
+    text: `SELECT ${select} FROM ${table}${whereClause(clauses)} ORDER BY ${orderBy(keys)} LIMIT ${clampLimit(limit, limits) + 1}`,
     values: params.values,
   };
 }
@@ -431,8 +489,9 @@ export function buildCappedTotalSql(
     (key) =>
       `coalesce(sum(capped.${identifier(key)}), 0)::float8 AS ${sumColumn(key)}`,
   );
+  const core = planQuery(def.indexes, query, def)?.core ?? query;
   const order = isTotalOrdered(def, query)
-    ? ` ORDER BY ${column(requireField(def, query.sort.field).key)}, ${column(KEY_FIELD)}`
+    ? ` ORDER BY ${[...listSorts(core).map((sort) => sort.field), KEY_FIELD].map(column).join(", ")}`
     : "";
   return {
     text: `SELECT count(*)::int AS count, ${sums.join(", ")} FROM (SELECT ${amounts.join(", ")} FROM ${from(def)}${whereClause(clauses)}${order} LIMIT ${cap + 1}) capped`,
@@ -508,13 +567,16 @@ export function toPageResult(
   if (!hasNext || !last) {
     return { rows: page, nextCursor: null, hasNext: false };
   }
-  const sortValue = last[query.sort.field];
-  if (sortValue === null || sortValue === undefined) {
-    throw new Error(`sort column ${query.sort.field} is missing from the row`);
-  }
+  const sortValues = listSorts(query).map((sort) => {
+    const value = last[sort.field];
+    if (value === null || value === undefined) {
+      throw new Error(`sort column ${sort.field} is missing from the row`);
+    }
+    return String(value);
+  });
   return {
     rows: page,
-    nextCursor: encodeCursor({ sortValue: String(sortValue), id: last.id }),
+    nextCursor: encodeCursor({ sortValues, id: last.id }),
     hasNext: true,
   };
 }

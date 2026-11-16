@@ -6,6 +6,10 @@ import {
 } from "./grid-def.ts";
 import {
   listRanges,
+  listSorts,
+  listThenBy,
+  SORT_MAX,
+  withThenBy,
   type MatchMode,
   type QueryState,
   type RangeInput,
@@ -33,6 +37,8 @@ export type QueryAction =
   | { type: "setMatch"; mode: MatchMode }
   | { type: "setGroup"; field: string | null }
   | { type: "setSort"; field: string; direction: SortDirection }
+  | { type: "addSort"; field: string; direction: SortDirection }
+  | { type: "removeSort"; field: string }
   | { type: "setSearch"; value: string }
   | { type: "clearSearch" }
   | { type: "reset" };
@@ -42,6 +48,7 @@ export interface Offers {
   multi: string[];
   exclude: string[];
   sorts: string[];
+  thenBy: string[];
   ranges: string[];
   narrowRanges: string[];
   texts: string[];
@@ -58,6 +65,7 @@ export type OfferTarget =
   | { kind: "text"; field: string }
   | { kind: "overlap"; field: string }
   | { kind: "sort"; field: string }
+  | { kind: "thenBy"; field: string }
   | { kind: "match" }
   | { kind: "group"; field: string }
   | { kind: "search" };
@@ -74,7 +82,8 @@ export type ReasonCode =
   | "narrow_first"
   | "narrow_counting"
   | "no_group_with"
-  | "no_match_any";
+  | "no_match_any"
+  | "sort_limit";
 
 export interface UnavailableReason {
   code: ReasonCode;
@@ -136,6 +145,7 @@ function proposeClear(
       equals,
       ranges: [],
       sort: def.defaultSort,
+      thenBy: undefined,
     },
     defaultQuery(def),
   ];
@@ -197,6 +207,50 @@ function clearRanges(
   }
   const target = listRanges(query, field)[at];
   return query.ranges.filter((range) => range !== target);
+}
+
+function proposeAddSort(
+  query: QueryState,
+  field: string,
+  direction: SortDirection,
+): QueryState[] {
+  const top = { ...query, cursor: null };
+  const thenBy = listThenBy(query);
+  if (field === query.sort.field) {
+    const turned = { ...top, sort: { field, direction } };
+    return [
+      turned,
+      withThenBy(
+        turned,
+        thenBy.map((sort) => ({ field: sort.field, direction })),
+      ),
+    ];
+  }
+  const known = thenBy.some((sort) => sort.field === field);
+  if (!known && thenBy.length + 1 >= SORT_MAX) {
+    return [];
+  }
+  const next = known
+    ? thenBy.map((sort) => (sort.field === field ? { field, direction } : sort))
+    : [...thenBy, { field, direction }];
+  return [withThenBy(top, next)];
+}
+
+function proposeRemoveSort(
+  def: BaseGridDef,
+  query: QueryState,
+  field: string,
+): QueryState[] {
+  const top = { ...query, cursor: null };
+  const fallback = { ...top, sort: def.defaultSort, thenBy: undefined };
+  const [next, ...rest] = listThenBy(query);
+  if (field !== query.sort.field) {
+    const kept = listThenBy(query).filter((sort) => sort.field !== field);
+    return [withThenBy(top, kept), fallback];
+  }
+  return next
+    ? [withThenBy({ ...top, sort: next }, rest), fallback]
+    : [fallback];
 }
 
 function proposeAction(
@@ -280,15 +334,43 @@ function proposeAction(
       if (unordered && !isDefaultSort(def, action)) {
         return [];
       }
+      const sort = { field: action.field, direction: action.direction };
+      const single = { ...top, sort, thenBy: undefined };
       return [
-        { ...top, sort: { field: action.field, direction: action.direction } },
+        single,
+        ...context.capabilities.sortOrders
+          .filter(([first]) => first === action.field)
+          .map(([, ...then]) =>
+            withThenBy(
+              single,
+              then.map((field) => ({ field, direction: action.direction })),
+            ),
+          ),
       ];
     }
+    case "addSort": {
+      const unordered =
+        !searchIsOrdered &&
+        query.search !== null &&
+        !context.allSearchMatchesLoaded;
+      return unordered
+        ? []
+        : proposeAddSort(query, action.field, action.direction);
+    }
+    case "removeSort":
+      return proposeRemoveSort(def, query, action.field);
     case "setSearch":
       if (searchIsOrdered) {
         return [{ ...top, search: action.value }];
       }
-      return [{ ...top, search: action.value, sort: def.defaultSort }];
+      return [
+        {
+          ...top,
+          search: action.value,
+          sort: def.defaultSort,
+          thenBy: undefined,
+        },
+      ];
     case "clearSearch":
       return [{ ...top, search: null }, defaultQuery(def)];
     case "reset":
@@ -379,12 +461,22 @@ export function listOffers(
       );
     }),
     sorts: context.capabilities.sortFields.filter((field) =>
-      isOffered(
+      proposeAction(
         def,
         query,
         { type: "setSort", field, direction: "asc" },
         context,
-      ),
+      ).some((candidate) => isAnswerable(query, candidate, context)),
+    ),
+    thenBy: context.capabilities.thenByFields.filter(
+      (field) =>
+        !listSorts(query).some((sort) => sort.field === field) &&
+        isOffered(
+          def,
+          query,
+          { type: "addSort", field, direction: query.sort.direction },
+          context,
+        ),
     ),
     ranges: context.capabilities.rangeFields.filter((field) =>
       isOffered(
@@ -477,6 +569,11 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
       return { ...query, match: "any" };
     case "group":
       return { ...query, group: target.field };
+    case "thenBy":
+      return withThenBy(query, [
+        ...listThenBy(query).filter((sort) => sort.field !== target.field),
+        { field: target.field, direction: query.sort.direction },
+      ]);
     default:
       return query;
   }
@@ -567,7 +664,8 @@ export function explainUnavailable(
       target.field,
     );
   }
-  if (query.search !== null && target.kind === "sort") {
+  const sorting = target.kind === "sort" || target.kind === "thenBy";
+  if (query.search !== null && sorting) {
     return describeQuery(
       query,
       context.allSearchMatchesLoaded ? "no_sort_index" : "search_unordered",
@@ -580,7 +678,10 @@ export function explainUnavailable(
   if (target.kind === "range" && query.sort.field !== target.field) {
     return describeQuery(query, "range_needs_sort", target.field);
   }
-  if (target.kind === "sort") {
+  if (target.kind === "thenBy" && listSorts(query).length >= SORT_MAX) {
+    return describeQuery(query, "sort_limit", target.field);
+  }
+  if (sorting) {
     return {
       ...describeQuery(query, "no_sort_with", null),
       field: target.field,
@@ -613,7 +714,9 @@ function stateKey(query: QueryState): string {
     query.match,
     query.group ?? "",
     query.search !== null ? "search" : "",
-    query.sort.field,
+    listSorts(query)
+      .map((sort) => sort.field)
+      .join(">"),
   ].join("|");
 }
 

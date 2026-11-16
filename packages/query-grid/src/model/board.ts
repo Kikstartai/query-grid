@@ -82,7 +82,13 @@ export function getLaneQueries(
     .filter((value) => selected === undefined || selected.includes(value));
   const base: QueryState = holdsAllRows
     ? { ...query, cursor: null }
-    : { ...query, ranges: [], sort: def.defaultSort, cursor: null };
+    : {
+        ...query,
+        ranges: [],
+        sort: def.defaultSort,
+        thenBy: undefined,
+        cursor: null,
+      };
   const queries = new Map<string, QueryState>(
     statuses.map((status) => [
       status,

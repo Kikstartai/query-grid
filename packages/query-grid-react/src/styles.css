@@ -463,6 +463,13 @@
   color: var(--ui-primary);
 }
 
+:where(.qg-header-sort-position) {
+  margin-inline-start: 2px;
+  color: var(--ui-primary);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
 :where(.qg-popover-filter) {
   font-weight: 400;
 }

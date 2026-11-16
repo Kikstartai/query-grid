@@ -1,12 +1,21 @@
 import {
   isRangeType,
+  KEY_FIELD,
   listSearchFields,
   type BaseFieldDef,
   type IndexDef,
   type IndexedGridDef,
   type IndexExtras,
 } from "./grid-def.ts";
-import type { QueryState, TextOp, TextState } from "./query-state.ts";
+import {
+  listSorts,
+  listThenBy,
+  SORT_MAX,
+  withThenBy,
+  type QueryState,
+  type TextOp,
+  type TextState,
+} from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
 import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 
@@ -34,7 +43,8 @@ export interface QueryPlan {
 }
 
 export function indexId(index: IndexDef): string {
-  const id = `${[...index.equals].sort().join("+")}|${index.sort}`;
+  const order = [index.sort, ...(index.then ?? [])].join(">");
+  const id = `${[...index.equals].sort().join("+")}|${order}`;
   return index.empty?.length
     ? `${id}|empty:${[...index.empty].sort().join("+")}`
     : id;
@@ -67,6 +77,36 @@ function listRangeFields(indexes: IndexDef[]): string[] {
 
 export function listSortFields(indexes: IndexDef[]): string[] {
   return [...new Set(indexes.map((index) => index.sort))];
+}
+
+export function listSortOrders(indexes: IndexDef[]): string[][] {
+  const orders = new Map<string, string[]>();
+  for (const index of indexes) {
+    if (index.then?.length) {
+      const order = [index.sort, ...index.then];
+      orders.set(order.join(">"), order);
+    }
+  }
+  return [...orders.values()];
+}
+
+// Over a narrowed set a further sort column is read and sorted in one pass, so it needs no index, only a value in every row: a nullable column has no keyset.
+export function listThenByFields(fields: BaseFieldDef[]): string[] {
+  return fields
+    .filter(
+      (field) =>
+        !field.nullable && !isOverlapField(field) && field.key !== KEY_FIELD,
+    )
+    .map((field) => field.key);
+}
+
+export function hasValidThenBy(query: QueryState, allowed: string[]): boolean {
+  const keys = listSorts(query).map((sort) => sort.field);
+  return (
+    keys.length <= SORT_MAX &&
+    new Set(keys).size === keys.length &&
+    keys.slice(1).every((key) => allowed.includes(key))
+  );
 }
 
 export function listNarrowRangeFields(fields: BaseFieldDef[]): string[] {
@@ -172,9 +212,23 @@ function answersEquals(
   );
 }
 
+// One btree read forward or backward gives every column the same direction, so a composite order is answered only when its columns all run the way the first does.
+function answersSort(index: IndexDef, query: QueryState): boolean {
+  const then = index.then ?? [];
+  const thenBy = listThenBy(query);
+  return (
+    index.sort === query.sort.field &&
+    then.length === thenBy.length &&
+    thenBy.every(
+      (sort, at) =>
+        sort.field === then[at] && sort.direction === query.sort.direction,
+    )
+  );
+}
+
 function answersQuery(index: IndexDef, query: QueryState): boolean {
   const [range] = query.ranges;
-  if (index.sort !== query.sort.field || !answersEquals(index, query.equals)) {
+  if (!answersSort(index, query) || !answersEquals(index, query.equals)) {
     return false;
   }
   if (range && (!index.range || range.field !== index.sort)) {
@@ -291,7 +345,7 @@ function planAll(
     hasTextOrOverlap(query) &&
     !hasUnindexedParts(query, extras) &&
     query.ranges.length === onSort.length;
-  const cores: QueryState[] = [
+  const filtered: QueryState[] = [
     ...(indexed
       ? [
           {
@@ -305,6 +359,10 @@ function planAll(
     { ...base, ranges: onSort },
     { ...base, ranges: [] },
   ];
+  const cores =
+    listThenBy(query).length > 0
+      ? [...filtered, ...filtered.map((core) => withThenBy(core, []))]
+      : filtered;
   const core = cores.find((candidate) => getIndex(indexes, candidate, extras));
   if (!core) {
     return null;
@@ -312,7 +370,8 @@ function planAll(
   const budgeted = hasTextOrOverlap(core);
   const narrowed =
     (!budgeted && hasTextOrOverlap(query)) ||
-    query.ranges.length > core.ranges.length;
+    query.ranges.length > core.ranges.length ||
+    listThenBy(query).length > listThenBy(core).length;
   return { core, narrowed, budgeted, terms: null };
 }
 
@@ -337,6 +396,7 @@ interface Tier {
   textFields: string[];
   overlapFields: string[];
   groupFields: string[];
+  thenByFields: string[];
 }
 
 function createTier(
@@ -356,6 +416,7 @@ function createTier(
     textFields: listTextFields(fields),
     overlapFields: listOverlapFields(fields),
     groupFields: listGroupFields(fields, listEqualsFields(indexes)),
+    thenByFields: listThenByFields(fields),
   };
 }
 
@@ -378,7 +439,10 @@ function isGroupRunnable(tier: Tier, query: QueryState): boolean {
 }
 
 function isTierRunnable(tier: Tier, query: QueryState): boolean {
-  if (!isGroupRunnable(tier, query)) {
+  if (
+    !isGroupRunnable(tier, query) ||
+    !hasValidThenBy(query, tier.thenByFields)
+  ) {
     return false;
   }
   if (query.search !== null) {
@@ -478,6 +542,9 @@ export function indexCapabilities(
     ? createTier(indexes, options, searchFields, options.fields)
     : null;
   const extras = tier?.extras ?? NO_EXTRAS;
+  const thenByFields = tier?.thenByFields ?? [
+    ...new Set(indexes.flatMap((index) => index.then ?? [])),
+  ];
   return {
     holdsAllRows: false,
     searchIsOrdered: false,
@@ -487,7 +554,9 @@ export function indexCapabilities(
     canRun: (query) =>
       tier
         ? isTierRunnable(tier, query)
-        : query.group === null && isQueryIndexed(indexes, searchFields, query),
+        : query.group === null &&
+          hasValidThenBy(query, thenByFields) &&
+          isQueryIndexed(indexes, searchFields, query),
     isNarrowed: (query) =>
       tier !== null &&
       (isGroupNarrowed(options.facetField, query) ||
@@ -499,6 +568,8 @@ export function indexCapabilities(
     overlapFields: tier?.overlapFields ?? [],
     groupFields: tier?.groupFields ?? [],
     sortFields: listSortFields(indexes),
+    thenByFields,
+    sortOrders: listSortOrders(indexes),
     searchFields,
     isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),
   };

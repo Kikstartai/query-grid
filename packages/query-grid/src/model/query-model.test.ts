@@ -544,6 +544,7 @@ describe("chips", () => {
         kind: "sort",
         field: "total",
         direction: "asc",
+        then: [],
         clear: { type: "setSort", field: "created_at", direction: "desc" },
       },
     ]);

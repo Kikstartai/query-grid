@@ -39,6 +39,7 @@ export interface QueryState {
   match: MatchMode;
   search: string | null;
   sort: SortState;
+  thenBy?: SortState[];
   group: string | null;
   cursor: string | null;
 }
@@ -46,6 +47,19 @@ export interface QueryState {
 export const TEXT_MAX_LENGTH = 80;
 export const TEXT_FILTER_MAX = 8;
 export const RANGE_FILTER_MAX = 12;
+export const SORT_MAX = 3;
+
+export function listThenBy(query: QueryState): SortState[] {
+  return query.thenBy ?? [];
+}
+
+export function listSorts(query: QueryState): SortState[] {
+  return [query.sort, ...listThenBy(query)];
+}
+
+export function withThenBy(query: QueryState, thenBy: SortState[]): QueryState {
+  return { ...query, thenBy: thenBy.length > 0 ? thenBy : undefined };
+}
 
 export function getRange(query: QueryState, key: string): RangeState | null {
   return query.ranges.find((range) => range.field === key) ?? null;

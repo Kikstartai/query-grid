@@ -69,7 +69,7 @@ describe("buildPageSql", () => {
       ...BASE,
       equals: { status: ["open"] },
       sort: BY_TOTAL,
-      cursor: encodeCursor({ sortValue: "1200", id: ID }),
+      cursor: encodeCursor({ sortValues: ["1200"], id: ID }),
     };
     const sql = buildPageSql(TEST_DEF, query, 10);
     expect(sql.text).toContain(
@@ -82,7 +82,7 @@ describe("buildPageSql", () => {
     const query: QueryState = {
       ...BASE,
       cursor: encodeCursor({
-        sortValue: "2026-01-01T00:00:00.000000Z",
+        sortValues: ["2026-01-01T00:00:00.000000Z"],
         id: ID,
       }),
     };
@@ -221,8 +221,8 @@ describe("buildPageSql", () => {
       buildPageSql(TEST_DEF, { ...BASE, cursor: "garbage" }, 10),
     ).toThrow(QueryRejected);
     for (const forged of [
-      encodeCursor({ sortValue: "not a date", id: ID }),
-      encodeCursor({ sortValue: "2026-01-01T00:00:00Z", id: "not-a-uuid" }),
+      encodeCursor({ sortValues: ["not a date"], id: ID }),
+      encodeCursor({ sortValues: ["2026-01-01T00:00:00Z"], id: "not-a-uuid" }),
     ]) {
       let refusal: unknown = null;
       try {
@@ -383,7 +383,7 @@ describe("toPageResult", () => {
     expect(page.rows).toHaveLength(2);
     expect(page.hasNext).toBe(true);
     expect(decodeCursor(page.nextCursor!)).toEqual({
-      sortValue: row(2).created_at as string,
+      sortValues: [row(2).created_at as string],
       id: row(2).id,
     });
   });

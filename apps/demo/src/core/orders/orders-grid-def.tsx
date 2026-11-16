@@ -171,6 +171,7 @@ const ORDER_INDEXES: IndexDef[] = [
   { equals: ["assignee"], sort: "created_at", range: true },
   { equals: ["status_code", "region"], sort: "created_at" },
   { equals: ["status_code", "channel"], sort: "created_at" },
+  { equals: [], sort: "item_count", then: ["total"] },
 ];
 
 export const ORDERS_GRID_DEF = {

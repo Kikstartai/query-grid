@@ -56,8 +56,13 @@ export const SELECT_COLUMN_WIDTH = 40;
 
 export interface HeaderControls {
   sort?: SortState | null;
+  sorts?: SortState[];
   sortableFields?: string[];
+  addableSortFields?: string[];
+  sortReasons?: Record<string, string>;
   onSortChange?: (field: string, direction: SortDirection) => void;
+  onSortAdd?: (field: string, direction: SortDirection) => void;
+  onSortRemove?: (field: string) => void;
   filters?: Record<string, ReactNode>;
   activeFilters?: string[];
   onResize: (key: string, width: number) => void;
@@ -176,26 +181,93 @@ interface HeaderPartProps {
   controls: HeaderControls;
 }
 
+function flip(direction: SortDirection | null): SortDirection {
+  return direction === "desc" ? "asc" : "desc";
+}
+
+function listHeaderSorts(controls: HeaderControls): SortState[] {
+  if (controls.sorts) {
+    return controls.sorts;
+  }
+  return controls.sort ? [controls.sort] : [];
+}
+
+interface SortPositionProps {
+  position: number;
+  count: number;
+}
+
+function SortPosition({ position, count }: SortPositionProps) {
+  if (position < 0 || count < 2) {
+    return null;
+  }
+  return (
+    <bdi className="qg-header-sort-position" aria-hidden="true">
+      {position + 1}
+    </bdi>
+  );
+}
+
+// A further sort column cycles with Shift: added the way the first runs, then turned, then removed.
+function pressNextSort(
+  controls: HeaderControls,
+  sorts: SortState[],
+  field: string,
+): void {
+  const [first, ...thenBy] = sorts;
+  const known = thenBy.find((sort) => sort.field === field);
+  if (known && first && known.direction !== first.direction) {
+    controls.onSortRemove?.(field);
+    return;
+  }
+  const direction = sorts.find((sort) => sort.field === field)?.direction;
+  controls.onSortAdd?.(
+    field,
+    direction ? flip(direction) : (first?.direction ?? "asc"),
+  );
+}
+
 function HeaderLabel({ field, controls }: HeaderPartProps) {
   const messages = useMessages();
-  const { sort, onSortChange } = controls;
-  if (!onSortChange || !controls.sortableFields?.includes(field.key)) {
+  const { onSortChange } = controls;
+  const sorts = listHeaderSorts(controls);
+  const position = sorts.findIndex((sort) => sort.field === field.key);
+  const direction = sorts[position]?.direction ?? null;
+  const sortable = controls.sortableFields?.includes(field.key) === true;
+  const addable =
+    controls.onSortAdd !== undefined &&
+    (position >= 0 || controls.addableSortFields?.includes(field.key) === true);
+  const reason = controls.sortReasons?.[field.key];
+  if (!onSortChange || (!sortable && !addable && reason === undefined)) {
     return <span className="qg-header-label">{field.label}</span>;
   }
-  const direction = sort?.field === field.key ? sort.direction : null;
+  const label = { label: field.label };
   return (
     <Button
       className="qg-header-sort"
       data-no-drag
       data-header-sort={field.key}
       data-sorted={direction ?? undefined}
-      aria-label={messages.sortByField({ label: field.label })}
-      onClick={() =>
-        onSortChange(field.key, direction === "desc" ? "asc" : "desc")
+      data-sort-position={position >= 0 ? position + 1 : undefined}
+      aria-label={
+        position > 0
+          ? messages.sortPosition({ ...label, position: position + 1 })
+          : messages.sortByField(label)
       }
+      title={sortable || addable ? undefined : reason}
+      disabled={!sortable && !addable}
+      focusableWhenDisabled
+      onClick={(event) => {
+        if (addable && (event.shiftKey || !sortable)) {
+          pressNextSort(controls, sorts, field.key);
+          return;
+        }
+        onSortChange(field.key, flip(direction));
+      }}
     >
       <span className="qg-header-label">{field.label}</span>
       <SortIcon direction={direction} />
+      <SortPosition position={position} count={sorts.length} />
     </Button>
   );
 }

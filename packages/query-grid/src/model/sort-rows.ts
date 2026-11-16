@@ -44,22 +44,42 @@ function compareValues(
   return a < b ? -1 : 1;
 }
 
+interface SortKey {
+  field: BaseFieldDef;
+  sign: number;
+}
+
+function toSortKey(def: BaseGridDef, sort: SortState): SortKey | null {
+  const field = getField(def, sort.field);
+  return field ? { field, sign: sort.direction === "asc" ? 1 : -1 } : null;
+}
+
 export function sortRows(
   def: BaseGridDef,
   rows: GridRow[],
   sort: SortState,
+  thenBy: SortState[] = [],
 ): GridRow[] {
-  const field = getField(def, sort.field);
-  if (!field) {
+  const first = toSortKey(def, sort);
+  if (!first) {
     return rows;
   }
-  const sign = sort.direction === "asc" ? 1 : -1;
+  const keys = [first, ...thenBy.flatMap((item) => toSortKey(def, item) ?? [])];
   return rows
-    .map((row) => ({ row, value: toComparable(field, row[field.key] ?? null) }))
-    .sort(
-      (a, b) =>
-        (compareValues(a.value, b.value) || compareValues(a.row.id, b.row.id)) *
-        sign,
-    )
+    .map((row) => ({
+      row,
+      values: keys.map((key) =>
+        toComparable(key.field, row[key.field.key] ?? null),
+      ),
+    }))
+    .sort((a, b) => {
+      for (let at = 0; at < keys.length; at++) {
+        const order = compareValues(a.values[at], b.values[at]);
+        if (order !== 0) {
+          return order * keys[at].sign;
+        }
+      }
+      return compareValues(a.row.id, b.row.id) * first.sign;
+    })
     .map((keyed) => keyed.row);
 }

@@ -6,6 +6,7 @@ export interface GridLimits {
   searchLimit: number;
   searchBudgetMs: number;
   narrowLimit: number;
+  exportLimit: number;
 }
 
 export const DEFAULT_LIMITS: GridLimits = {
@@ -14,6 +15,7 @@ export const DEFAULT_LIMITS: GridLimits = {
   searchLimit: 500,
   searchBudgetMs: 120,
   narrowLimit: 100_000,
+  exportLimit: 50_000,
 };
 
 const LIMIT_KEYS = Object.keys(DEFAULT_LIMITS) as (keyof GridLimits)[];

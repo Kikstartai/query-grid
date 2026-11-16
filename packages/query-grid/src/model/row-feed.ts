@@ -93,7 +93,7 @@ export function createFeed(
       const state = feed.get();
       set({
         rows: sortLocally
-          ? sortRows(def, fresh, query.sort)
+          ? sortRows(def, fresh, query.sort, query.thenBy)
           : state.rows.concat(fresh),
         status: "idle",
         hasNext: page.nextCursor !== null,
@@ -125,12 +125,16 @@ export function createFeed(
     const resort =
       areAllSearchMatchesLoaded() && sameFilters(next, state.query);
     if (resort) {
-      set({ query: next, rows: sortRows(def, state.rows, next.sort) });
+      set({
+        query: next,
+        rows: sortRows(def, state.rows, next.sort, next.thenBy),
+      });
       return;
     }
     const sameRows =
       sameFilters(next, state.query) &&
       next.sort === state.query.sort &&
+      next.thenBy === state.query.thenBy &&
       next.cursor === state.query.cursor;
     if (sameRows) {
       set({ query: next });

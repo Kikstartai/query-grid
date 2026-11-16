@@ -97,13 +97,14 @@ function indexDdl(
 ): IndexDdl {
   const table = identifier(def.table);
   const create = createIndex(concurrently);
-  const columns = [...index.equals, index.sort, KEY_FIELD]
+  const order = [...index.equals, index.sort, ...(index.then ?? [])];
+  const columns = [...order, KEY_FIELD]
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
   const empty = [...(index.empty ?? [])].map(identifier).sort();
   const suffix = empty.length > 0 ? `__empty_${empty.join("_")}` : "";
   const name = shortenIdentifier(
-    `${AUTO_PREFIX}${table}_${[...index.equals, index.sort].join("__")}${suffix}`,
+    `${AUTO_PREFIX}${table}_${order.join("__")}${suffix}`,
   );
   const where =
     empty.length > 0

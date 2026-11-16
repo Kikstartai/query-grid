@@ -6,6 +6,7 @@ import {
   isTextField,
   KEY_FIELD,
   indexId,
+  SORT_MAX,
   type BaseFieldDef,
   type IndexDef,
 } from "@kikstart/query-grid";
@@ -29,10 +30,11 @@ export function describeIndex(index: IndexDef): string {
     ? index.equals.map((key) => `${key} =`).join(", ")
     : "no filter";
   const range = index.range ? ` (range on ${index.sort})` : "";
+  const then = index.then?.length ? `, then ${index.then.join(", ")}` : "";
   const empty = index.empty?.length
     ? `, where ${index.empty.map((key) => `${key} is empty`).join(" and ")}`
     : "";
-  return `${filters}, sort ${index.sort}${range}${empty}`;
+  return `${filters}, sort ${index.sort}${then}${range}${empty}`;
 }
 
 export function describeTextIndex(column: string): string {
@@ -102,6 +104,33 @@ function validateOrderedIndex(def: PostgresGridDef, index: IndexDef): string[] {
         `index ${id}: ${key} is an array; its index is declared in arrayIndexes`,
       );
     }
+  }
+  const then = index.then ?? [];
+  for (const key of then) {
+    const field = getField(def, key);
+    if (!field) {
+      problems.push(`index ${id}: unknown sort field ${key}`);
+      continue;
+    }
+    if (field.nullable) {
+      problems.push(`index ${id}: a nullable field cannot be a keyset sort`);
+    }
+    if (isOverlapField(field)) {
+      problems.push(`index ${id}: ${key} is an array, which has no order`);
+    }
+    if (index.equals.includes(key) || key === index.sort || key === KEY_FIELD) {
+      problems.push(
+        `index ${id}: ${key} is already an equality, the sort or the key`,
+      );
+    }
+  }
+  for (const key of new Set(
+    then.filter((key, at) => then.indexOf(key) !== at),
+  )) {
+    problems.push(`index ${id}: ${key} is sorted on twice`);
+  }
+  if (then.length + 1 > SORT_MAX) {
+    problems.push(`index ${id}: an order has at most ${SORT_MAX} columns`);
   }
   for (const key of index.empty ?? []) {
     const field = getField(def, key);
@@ -205,6 +234,7 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     (index) =>
       index.equals.length === 0 &&
       !index.empty?.length &&
+      !index.then?.length &&
       index.sort === def.defaultSort.field,
   );
   if (!base) {

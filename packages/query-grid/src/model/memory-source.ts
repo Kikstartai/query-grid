@@ -14,6 +14,7 @@ import type { DataSourceCapabilities } from "./capabilities.ts";
 import { matchesEquals } from "./field-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {
+  hasValidThenBy,
   isMatchAny,
   listGroupFields,
   listNarrowRangeFields,
@@ -39,6 +40,7 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
     );
   const textFields = listTextFields(def.fields);
   const groupFields = listGroupFields(def.fields, equalsFields);
+  const sortFields = def.fields.map((field) => field.key);
   return {
     holdsAllRows: true,
     searchIsOrdered: true,
@@ -58,10 +60,13 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
       query.texts.every((text) => textFields.includes(text.field)) &&
       Object.keys(query.overlaps).every((key) => overlapFields.includes(key)) &&
       (query.search === null || searchFields.length > 0) &&
-      getField(def, query.sort.field) !== null,
+      sortFields.includes(query.sort.field) &&
+      hasValidThenBy(query, sortFields),
     equalsFields,
     rangeFields,
-    sortFields: def.fields.map((field) => field.key),
+    sortFields,
+    thenByFields: sortFields,
+    sortOrders: [],
     searchFields,
     isFacetCountExact: () => true,
   };
@@ -243,12 +248,13 @@ export function createMemorySource(
       selected !== null &&
       selected.source === rows &&
       selected.query.sort === query.sort &&
+      selected.query.thenBy === query.thenBy &&
       sameFilters(selected.query, query);
     if (!fresh) {
       selected = {
         source: rows,
         query,
-        rows: sortRows(def, matching(query), query.sort),
+        rows: sortRows(def, matching(query), query.sort, query.thenBy),
       };
     }
     return (selected as Selection).rows;

@@ -312,7 +312,7 @@ async function pickDeepCursor(
       const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
       const row = await client.query<GridRow>(rowSql.text, rowSql.values);
       return encodeCursor({
-        sortValue: String(row.rows[0][query.sort.field]),
+        sortValues: [String(row.rows[0][query.sort.field])],
         id: rows[0].id,
       });
     }

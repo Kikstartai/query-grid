@@ -79,6 +79,9 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
       ? current.overlaps
       : next.overlaps,
     sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
+    thenBy: sameJson(current.thenBy, next.thenBy)
+      ? current.thenBy
+      : next.thenBy,
   };
 }
 

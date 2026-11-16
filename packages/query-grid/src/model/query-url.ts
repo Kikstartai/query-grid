@@ -4,9 +4,13 @@ import {
   isDefaultSort,
   type BaseGridDef,
   type SortDirection,
+  type SortState,
 } from "./grid-def.ts";
 import {
+  listSorts,
+  listThenBy,
   TEXT_OPS,
+  withThenBy,
   type QueryState,
   type RangeState,
   type TextOp,
@@ -29,6 +33,7 @@ const GROUP_PARAM = "group";
 const SEARCH_PARAM = "q";
 const SORT_PARAM = "sort";
 const CURSOR_PARAM = "cursor";
+const SORT_SEPARATOR = ",";
 const RANGE_SEPARATOR = "..";
 const EXCLUDE_MARK = "!";
 const OPEN_MIN_MARK = "(";
@@ -101,8 +106,13 @@ export function encodeQuery(
   if (query.search !== null) {
     params.set(SEARCH_PARAM, query.search);
   }
-  if (!isDefaultSort(def, query.sort)) {
-    params.set(SORT_PARAM, `${query.sort.field}.${query.sort.direction}`);
+  if (!isDefaultSort(def, query.sort) || listThenBy(query).length > 0) {
+    params.set(
+      SORT_PARAM,
+      listSorts(query)
+        .map((sort) => `${sort.field}.${sort.direction}`)
+        .join(SORT_SEPARATOR),
+    );
   }
   if (query.group !== null) {
     params.set(GROUP_PARAM, query.group);
@@ -139,13 +149,15 @@ function decodeRange(field: string, raw: string): RangeState {
   });
 }
 
-function decodeSort(def: BaseGridDef, raw: string | null): QueryState["sort"] {
-  if (!raw) {
-    return def.defaultSort;
-  }
+function decodeSortKey(raw: string): SortState {
   const at = raw.lastIndexOf(".");
   const direction: SortDirection = raw.slice(at + 1) === "asc" ? "asc" : "desc";
   return { field: at < 0 ? raw : raw.slice(0, at), direction };
+}
+
+function decodeSorts(def: BaseGridDef, raw: string | null): SortState[] {
+  const keys = (raw ?? "").split(SORT_SEPARATOR).filter(Boolean);
+  return keys.length > 0 ? keys.map(decodeSortKey) : [def.defaultSort];
 }
 
 function addValue(
@@ -195,15 +207,19 @@ export function decodeQuery(
       texts.push(text);
     }
   }
-  return {
-    equals: Object.fromEntries(equals),
-    ranges,
-    texts,
-    overlaps: Object.fromEntries(overlaps),
-    match: params.get(MATCH_PARAM) === "any" ? "any" : "all",
-    search: params.get(SEARCH_PARAM),
-    sort: decodeSort(def, params.get(SORT_PARAM)),
-    group: params.get(GROUP_PARAM),
-    cursor: params.get(CURSOR_PARAM),
-  };
+  const [sort, ...thenBy] = decodeSorts(def, params.get(SORT_PARAM));
+  return withThenBy(
+    {
+      equals: Object.fromEntries(equals),
+      ranges,
+      texts,
+      overlaps: Object.fromEntries(overlaps),
+      match: params.get(MATCH_PARAM) === "any" ? "any" : "all",
+      search: params.get(SEARCH_PARAM),
+      sort,
+      group: params.get(GROUP_PARAM),
+      cursor: params.get(CURSOR_PARAM),
+    },
+    thenBy,
+  );
 }
