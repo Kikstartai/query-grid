@@ -10,6 +10,7 @@ import {
   isMatchAny,
   isQueryBudgeted,
   planQuery,
+  withoutFilters,
   type BaseFieldDef,
   type CountResult,
   type FacetCount,
@@ -41,19 +42,18 @@ import {
 } from "./sql-builder.ts";
 import type { PostgresGridDef } from "./storage.ts";
 
+const TIMEOUT = "statement_timeout";
+
 export function listSearchSettings(
   limits: GridLimits = DEFAULT_LIMITS,
 ): string[] {
-  return [
-    "enable_seqscan = off",
-    `statement_timeout = ${limits.searchBudgetMs}`,
-  ];
+  return ["enable_seqscan = off", `${TIMEOUT} = ${limits.searchBudgetMs}`];
 }
 export const TOTAL_SETTINGS = ["enable_sort = off"];
 export const NARROW_SETTINGS = ["enable_seqscan = off"];
 export const QUERY_CANCELED = "57014";
 
-const EXACT_COUNT_SETTINGS = ["statement_timeout = '60s'"];
+const EXACT_COUNT_SETTINGS = [`${TIMEOUT} = '60s'`];
 const WALK_PAGE_SIZE = 1000;
 
 export type SqlExecutor = <T extends object>(
@@ -66,7 +66,7 @@ function resolveCap(query: QueryState, limits: GridLimits): number {
   return query.search !== null ? limits.searchLimit : limits.countCap;
 }
 
-// The search and a filter answered by a trigram or array index cost what they match, not what the page holds, so they run under the time budget and are refused past it.
+// A budgeted query runs under the search's time budget, in place of any other timeout, and is refused past it.
 async function runFiltered<T extends object>(
   def: PostgresGridDef,
   execute: SqlExecutor,
@@ -76,16 +76,13 @@ async function runFiltered<T extends object>(
   settings: string[] = [],
   signal?: AbortSignal,
 ): Promise<T[]> {
-  if (query.search === null && !isQueryBudgeted(def, query)) {
+  if (!isQueryBudgeted(def, query)) {
     return execute<T>(sql, settings.length ? settings : undefined, signal);
   }
-  const budget = listSearchSettings(limits);
-  const kept =
-    query.search === null
-      ? settings.filter((setting) => !setting.startsWith("statement_timeout"))
-      : [];
+  const kept = settings.filter((setting) => !setting.startsWith(TIMEOUT));
+  const budgeted = [...new Set([...kept, ...listSearchSettings(limits)])];
   try {
-    return await execute<T>(sql, [...new Set([...kept, ...budget])], signal);
+    return await execute<T>(sql, budgeted, signal);
   } catch (error) {
     const canceled = (error as { code?: string }).code === QUERY_CANCELED;
     if (canceled && !signal?.aborted) {
@@ -139,18 +136,15 @@ async function sizeOf(
 }
 
 function wholeTable(def: PostgresGridDef, query: QueryState): QueryState {
-  return {
-    ...query,
-    equals: {},
-    ranges: [],
-    texts: [],
-    overlaps: {},
-    match: "all",
-    search: null,
-    sort: def.defaultSort,
-    group: null,
-    cursor: null,
-  };
+  return { ...withoutFilters(query), search: null, sort: def.defaultSort };
+}
+
+// A size is of the rows the ordered indexes leave, so it is planned with no text or array index and never counted through one.
+function planOrdered(
+  def: PostgresGridDef,
+  query: QueryState,
+): QueryPlan | null {
+  return planQuery(def.indexes, query);
 }
 
 async function sizeOfAny(
@@ -203,11 +197,10 @@ export async function getNarrowedSizes(
     group: null,
     cursor: null,
   };
-  // The size is of the rows the ordered indexes leave: planned with no text or array index, so the probe never counts through one.
-  const all = planQuery(def.indexes, { ...filters, match: "all" });
+  const all = planOrdered(def, { ...filters, match: "all" });
   const any =
     countFilterTerms(filters) > 1
-      ? planQuery(def.indexes, { ...filters, match: "any" }, def)
+      ? planOrdered(def, { ...filters, match: "any" })
       : null;
   const [allSize, anySize] = await Promise.all([
     sizeOf(def, execute, all?.core ?? wholeTable(def, filters), limit, signal),
@@ -337,7 +330,7 @@ export async function listGridGroups(
   if (key === def.facet?.field) {
     return listFacetGroups(def, execute, filters, key, limits, signal);
   }
-  const plan = planQuery(def.indexes, filters);
+  const plan = planOrdered(def, filters);
   const limit = limits.narrowLimit;
   assertUnderLimit(
     plan

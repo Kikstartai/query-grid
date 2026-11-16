@@ -1,4 +1,11 @@
-import type { DataSource } from "./data-source.ts";
+import type {
+  CountResult,
+  DataSource,
+  FacetCount,
+  GroupsResult,
+  PageResult,
+  TotalResult,
+} from "./data-source.ts";
 import type {
   FieldOption,
   GridRow,
@@ -10,13 +17,6 @@ import { withLiteralFilters } from "./literal-filters.ts";
 import { encodeQuery } from "./query-url.ts";
 import { gridDefCapabilities, type IndexedGridDef } from "./indexes.ts";
 import type { GridLimits } from "./limits.ts";
-import type {
-  CountResult,
-  FacetCount,
-  GroupsResult,
-  PageResult,
-  TotalResult,
-} from "./data-source.ts";
 
 export const SUB_ROUTES = [
   "count",

@@ -1,15 +1,19 @@
 import {
   getField,
   isDefaultSort,
+  listRanges,
   type BaseGridDef,
   type MatchMode,
   type OfferContext,
   type QueryState,
+  type RangeInput,
   type RangeState,
   type SortDirection,
   type TextOp,
 } from "./field-types.ts";
 import { canExpandEquals, toExcludeValues } from "./field-values.ts";
+import { INDEXED_TEXT_OPS, TEXT_INDEX_MIN_LENGTH } from "./indexes.ts";
+import { toRange } from "./range-bounds.ts";
 
 export type QueryAction =
   | { type: "setEquals"; field: string; values: string[] }
@@ -37,6 +41,7 @@ export interface Offers {
   exclude: string[];
   sorts: string[];
   ranges: string[];
+  narrowRanges: string[];
   texts: string[];
   narrowTexts: string[];
   overlaps: string[];
@@ -81,13 +86,16 @@ export interface UnavailableReason {
 }
 
 const PROBE = ["x", "y"];
+const RANGE_PROBE = { min: "x", max: null } as const;
+// The text probe is one a text index answers, and the narrow probes ones no index does, so the two offers differ exactly where an index is the only way in.
 const TEXT_PROBE = {
   type: "setText",
-  op: "contains",
-  value: "xxx",
+  op: INDEXED_TEXT_OPS[0],
+  value: "x".repeat(TEXT_INDEX_MIN_LENGTH),
   at: 0,
 } as const;
 const NARROW_TEXT_PROBE = { ...TEXT_PROBE, op: "not_equals" } as const;
+const NARROW_RANGE_PROBE = { ...RANGE_PROBE, exclude: true } as const;
 
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
@@ -150,32 +158,6 @@ function proposeEquals(
   ];
 }
 
-export interface RangeInput {
-  min: string | null;
-  max: string | null;
-  preset?: string;
-  exclude?: boolean;
-  minExclusive?: boolean;
-  maxExclusive?: boolean;
-}
-
-function toRange(field: string, input: RangeInput): RangeState {
-  if (input.preset !== undefined) {
-    return { field, min: null, max: null, preset: input.preset };
-  }
-  const range: RangeState = { field, min: input.min, max: input.max };
-  if (input.exclude) {
-    range.exclude = true;
-  }
-  if (input.minExclusive && input.min !== null) {
-    range.minExclusive = true;
-  }
-  if (input.maxExclusive && input.max !== null) {
-    range.maxExclusive = true;
-  }
-  return range;
-}
-
 function proposeOverlap(
   query: QueryState,
   field: string,
@@ -190,18 +172,18 @@ function proposeOverlap(
 }
 
 function replaceRange(
-  ranges: RangeState[],
+  query: QueryState,
   range: RangeState,
   at: number,
 ): RangeState[] {
-  const target = ranges.filter((item) => item.field === range.field)[at];
+  const target = listRanges(query, range.field)[at];
   return target
-    ? ranges.map((item) => (item === target ? range : item))
-    : [...ranges, range];
+    ? query.ranges.map((item) => (item === target ? range : item))
+    : [...query.ranges, range];
 }
 
 function clearRanges(
-  ranges: RangeState[],
+  query: QueryState,
   field: string | undefined,
   at: number | undefined,
 ): RangeState[] {
@@ -209,10 +191,10 @@ function clearRanges(
     return [];
   }
   if (at === undefined) {
-    return ranges.filter((range) => range.field !== field);
+    return query.ranges.filter((range) => range.field !== field);
   }
-  const target = ranges.filter((range) => range.field === field)[at];
-  return ranges.filter((range) => range !== target);
+  const target = listRanges(query, field)[at];
+  return query.ranges.filter((range) => range !== target);
 }
 
 function proposeAction(
@@ -242,7 +224,7 @@ function proposeAction(
       const others = query.ranges.filter((item) => item.field !== range.field);
       if (action.at !== undefined) {
         return [
-          { ...top, ranges: replaceRange(query.ranges, range, action.at) },
+          { ...top, ranges: replaceRange(query, range, action.at) },
           { ...top, ranges: [range] },
         ];
       }
@@ -256,9 +238,7 @@ function proposeAction(
         { ...top, ranges: [...query.ranges, toRange(action.field, action)] },
       ];
     case "clearRange":
-      return [
-        { ...top, ranges: clearRanges(query.ranges, action.field, action.at) },
-      ];
+      return [{ ...top, ranges: clearRanges(query, action.field, action.at) }];
     case "setText": {
       const text = { field: action.field, op: action.op, value: action.value };
       const texts = [...query.texts];
@@ -408,7 +388,15 @@ export function listOffers(
       isOffered(
         def,
         query,
-        { type: "setRange", field, min: "x", max: null },
+        { type: "setRange", field, ...RANGE_PROBE },
+        context,
+      ),
+    ),
+    narrowRanges: context.capabilities.rangeFields.filter((field) =>
+      isOffered(
+        def,
+        query,
+        { type: "setRange", field, ...NARROW_RANGE_PROBE },
         context,
       ),
     ),
@@ -475,7 +463,7 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
         ...query,
         texts: [
           ...query.texts,
-          { field: target.field, op: "contains", value: "xxx" },
+          { field: target.field, op: TEXT_PROBE.op, value: TEXT_PROBE.value },
         ],
       };
     case "overlap":
@@ -524,19 +512,30 @@ function explainNarrowing(
   };
 }
 
-// Why a field takes only what its own text index answers: the reason a short value or a negation, which run over the narrowed set, is held.
-export function explainNarrowText(
+// Why a field takes only what an index answers: the reason the rest of its operators (a negation, a short text value), which run over the narrowed set, are held.
+export function explainNarrowed(
   query: QueryState,
-  field: string,
+  target: Extract<OfferTarget, { kind: "text" | "range" }>,
   context: OfferContext,
 ): UnavailableReason {
-  const candidate: QueryState = {
-    ...query,
-    texts: [...query.texts, { ...NARROW_TEXT_PROBE, field }],
-  };
+  const { field } = target;
+  const candidate: QueryState =
+    target.kind === "text"
+      ? { ...query, texts: [...query.texts, { ...NARROW_TEXT_PROBE, field }] }
+      : {
+          ...query,
+          ranges: [
+            ...query.ranges.filter((range) => range.field !== field),
+            { field, ...NARROW_RANGE_PROBE },
+          ],
+        };
   return (
-    explainNarrowing(query, { kind: "text", field }, context, candidate) ??
-    describeQuery(query, "no_filter_with", field)
+    explainNarrowing(query, target, context, candidate) ??
+    describeQuery(
+      query,
+      target.kind === "text" ? "no_filter_with" : "no_range_with",
+      field,
+    )
   );
 }
 

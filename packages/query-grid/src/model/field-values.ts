@@ -10,11 +10,16 @@ export const EXCLUDE_PREFIX = "!";
 
 export type ReservedValue = "empty" | "not_empty";
 
+// An array is filtered by the values it holds, so empty and not empty belong to the fields an equality reads.
+function takesReservedValues(field: BaseFieldDef): boolean {
+  return field.nullable === true && field.type !== "array";
+}
+
 export function getReservedValue(
   field: BaseFieldDef,
   value: string,
 ): ReservedValue | null {
-  if (!field.nullable) {
+  if (!takesReservedValues(field)) {
     return null;
   }
   if (value === EMPTY_VALUE) {
@@ -24,7 +29,7 @@ export function getReservedValue(
 }
 
 export function listReservedValues(field: BaseFieldDef): string[] {
-  return field.nullable ? [EMPTY_VALUE, NOT_EMPTY_VALUE] : [];
+  return takesReservedValues(field) ? [EMPTY_VALUE, NOT_EMPTY_VALUE] : [];
 }
 
 function standsAlone(field: BaseFieldDef, value: string): boolean {

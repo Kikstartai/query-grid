@@ -1,4 +1,5 @@
 import { isDatePreset } from "./date-presets.ts";
+import { toRange } from "./range-bounds.ts";
 import {
   isDefaultSort,
   TEXT_OPS,
@@ -127,17 +128,13 @@ function decodeRange(field: string, raw: string): RangeState {
   const at = body.indexOf(RANGE_SEPARATOR);
   const min = (at < 0 ? body : body.slice(0, at)) || null;
   const max = (at < 0 ? "" : body.slice(at + RANGE_SEPARATOR.length)) || null;
-  const range: RangeState = { field, min, max };
-  if (included !== raw) {
-    range.exclude = true;
-  }
-  if (closedMin !== included && min !== null) {
-    range.minExclusive = true;
-  }
-  if (body !== closedMin && max !== null) {
-    range.maxExclusive = true;
-  }
-  return range;
+  return toRange(field, {
+    min,
+    max,
+    exclude: included !== raw,
+    minExclusive: closedMin !== included,
+    maxExclusive: body !== closedMin,
+  });
 }
 
 function decodeSort(def: BaseGridDef, raw: string | null): QueryState["sort"] {
@@ -163,13 +160,6 @@ function decodeText(name: string, value: string): TextState | null {
   return op ? { field: name.slice(TEXT_PREFIXES[op].length), op, value } : null;
 }
 
-function addUnique<T>(items: T[], item: T): void {
-  const key = JSON.stringify(item);
-  if (!items.some((existing) => JSON.stringify(existing) === key)) {
-    items.push(item);
-  }
-}
-
 export function decodeQuery(
   def: BaseGridDef,
   params: URLSearchParams,
@@ -178,7 +168,13 @@ export function decodeQuery(
   const overlaps = new Map<string, string[]>();
   const ranges: RangeState[] = [];
   const texts: TextState[] = [];
+  const seen = new Set<string>();
   for (const [name, value] of params) {
+    const pair = `${name}\u0000${value}`;
+    if (seen.has(pair)) {
+      continue;
+    }
+    seen.add(pair);
     if (name.startsWith(EQUALS_PREFIX)) {
       addValue(equals, name.slice(EQUALS_PREFIX.length), value);
       continue;
@@ -189,12 +185,12 @@ export function decodeQuery(
     }
     if (name.startsWith(RANGE_PREFIX)) {
       const field = name.slice(RANGE_PREFIX.length);
-      addUnique(ranges, decodeRange(field, value));
+      ranges.push(decodeRange(field, value));
       continue;
     }
     const text = decodeText(name, value);
     if (text) {
-      addUnique(texts, text);
+      texts.push(text);
     }
   }
   return {

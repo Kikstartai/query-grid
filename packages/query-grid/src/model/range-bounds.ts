@@ -1,18 +1,14 @@
-import { isDateType, type BaseFieldDef } from "./field-types.ts";
-import type { RangeInput } from "./query-actions.ts";
+import {
+  isDateType,
+  type BaseFieldDef,
+  type RangeInput,
+  type RangeState,
+} from "./field-types.ts";
 
 const DAY_LENGTH = 10;
 
 export function toDayBound(day: string, end: boolean): string {
   return `${day}T${end ? "23:59:59.999999" : "00:00:00.000000"}Z`;
-}
-
-export function toDateBound(
-  field: BaseFieldDef,
-  day: string,
-  end: boolean,
-): string {
-  return field.type === "date" ? day : toDayBound(day, end);
 }
 
 export function fromDayBound(bound: string): string {
@@ -68,7 +64,25 @@ export function isPairRangeOp(op: RangeOp): boolean {
 }
 
 function toBound(field: BaseFieldDef, value: string, end: boolean): string {
-  return isDateType(field.type) ? toDateBound(field, value, end) : value;
+  return field.type === "datetime" ? toDayBound(value, end) : value;
+}
+
+// An open bound means something only beside its bound, so the flags are kept only where they do.
+export function toRange(field: string, input: RangeInput): RangeState {
+  if (input.preset !== undefined) {
+    return { field, min: null, max: null, preset: input.preset };
+  }
+  const range: RangeState = { field, min: input.min, max: input.max };
+  if (input.exclude) {
+    range.exclude = true;
+  }
+  if (input.minExclusive && input.min !== null) {
+    range.minExclusive = true;
+  }
+  if (input.maxExclusive && input.max !== null) {
+    range.maxExclusive = true;
+  }
+  return range;
 }
 
 function fromBound(field: BaseFieldDef, bound: string | null): string | null {

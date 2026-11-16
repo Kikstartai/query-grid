@@ -1,7 +1,13 @@
-import type { DataSource } from "./data-source.ts";
+import type {
+  CountResult,
+  DataSource,
+  FacetCount,
+  TotalResult,
+} from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import {
   getField,
+  hasFixedValues,
   type NarrowedResult,
   type NarrowedState,
   type QueryState,
@@ -17,7 +23,6 @@ import {
 } from "./query-resource.ts";
 import type { QueryStore } from "./query-store.ts";
 import { createStore } from "./store.ts";
-import type { CountResult, FacetCount, TotalResult } from "./data-source.ts";
 
 export type CountState = ResourceState<CountResult | null>;
 export type TotalState = ResourceState<TotalResult[]>;
@@ -186,7 +191,7 @@ export function createLabelStore(
   const requestSelected = () => {
     for (const [key, values] of Object.entries(store.getQuery().equals)) {
       const field = getField(store.def, key);
-      if (field && !field.options) {
+      if (field && !hasFixedValues(field)) {
         values
           .filter((value) => getReservedValue(field, value) === null)
           .forEach((value) => request(key, value));

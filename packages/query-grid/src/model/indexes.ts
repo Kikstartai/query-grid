@@ -155,7 +155,7 @@ export function isMatchAny(query: QueryState): boolean {
   return query.match === "any" && countFilterTerms(query) > 1;
 }
 
-function hasIndexedParts(query: QueryState): boolean {
+function hasTextOrOverlap(query: QueryState): boolean {
   return query.texts.length > 0 || Object.keys(query.overlaps).length > 0;
 }
 
@@ -231,14 +231,14 @@ export function isQueryIndexed(
   return (
     searchFields.length > 0 &&
     !isMatchAny(query) &&
-    !hasIndexedParts(query) &&
+    !hasTextOrOverlap(query) &&
     Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
     query.ranges.length === 0 &&
     listSortFields(indexes).includes(query.sort.field)
   );
 }
 
-function bare(query: QueryState): QueryState {
+export function withoutFilters(query: QueryState): QueryState {
   return {
     ...query,
     equals: {},
@@ -252,7 +252,7 @@ function bare(query: QueryState): QueryState {
 }
 
 function listTerms(indexes: IndexDef[], query: QueryState): QueryState[] {
-  const base = bare(query);
+  const base = withoutFilters(query);
   const terms: QueryState[] = [];
   for (const [key, values] of Object.entries(query.equals)) {
     const index = indexes.find((item) => sameSet(item.equals, [key]));
@@ -278,10 +278,10 @@ function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
   }
   const terms = listTerms(indexes, query);
   const countable =
-    !hasIndexedParts(query) &&
+    !hasTextOrOverlap(query) &&
     terms.every((term) => getIndex(indexes, term) !== null);
   return {
-    core: bare(query),
+    core: withoutFilters(query),
     narrowed: true,
     budgeted: false,
     terms: countable ? terms : null,
@@ -305,7 +305,7 @@ function planAll(
     .filter((range) => range.field === query.sort.field && !range.exclude)
     .slice(0, 1);
   const indexed =
-    hasIndexedParts(query) &&
+    hasTextOrOverlap(query) &&
     !hasUnindexedParts(query, extras) &&
     query.ranges.length === onSort.length;
   const cores: QueryState[] = [
@@ -326,9 +326,9 @@ function planAll(
   if (!core) {
     return null;
   }
-  const budgeted = hasIndexedParts(core);
+  const budgeted = hasTextOrOverlap(core);
   const narrowed =
-    (!budgeted && hasIndexedParts(query)) ||
+    (!budgeted && hasTextOrOverlap(query)) ||
     query.ranges.length > core.ranges.length;
   return { core, narrowed, budgeted, terms: null };
 }
@@ -424,11 +424,15 @@ export function isQueryRunnable(
   return isTierRunnable(tier, query);
 }
 
+// The search and a filter answered by a text or array index cost what they match, not what the page holds: these are the queries a source runs under its time budget.
 export function isQueryBudgeted(
   def: IndexedGridDef,
   query: QueryState,
 ): boolean {
-  return planQuery(def.indexes, query, def)?.budgeted ?? false;
+  return (
+    query.search !== null ||
+    (planQuery(def.indexes, query, def)?.budgeted ?? false)
+  );
 }
 
 export function isGroupNarrowed(
@@ -472,7 +476,7 @@ export function isFacetOnlyQuery(
     query.ranges.length === 0 &&
     query.search === null &&
     !isMatchAny(query) &&
-    !hasIndexedParts(query) &&
+    !hasTextOrOverlap(query) &&
     Object.entries(query.equals).every(
       ([key, values]) =>
         key === facetField &&

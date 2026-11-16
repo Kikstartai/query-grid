@@ -1,4 +1,4 @@
-import type { DataSource } from "./data-source.ts";
+import type { DataSource, GroupHeader } from "./data-source.ts";
 import {
   getFacetField,
   getField,
@@ -25,7 +25,6 @@ import {
 import { sameFilters } from "./load.ts";
 import { SourceError } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
-import type { GroupHeader } from "./data-source.ts";
 import { withoutKey } from "./query-actions.ts";
 import { sortRows, toComparable } from "./sort-rows.ts";
 
@@ -92,27 +91,28 @@ function matchesRange(
   return (above && below) !== (range.exclude === true);
 }
 
-function matchesText(row: GridRow, text: TextState): boolean {
-  const raw = row[text.field];
-  const part = text.value.trim();
-  if (raw === null || raw === undefined) {
-    return text.op === "not_contains" || text.op === "not_equals";
-  }
-  const cell = String(raw);
-  const lower = cell.toLowerCase();
+type CellTest = (cell: string | null) => boolean;
+
+function createTextTest({ op, value }: TextState): CellTest {
+  const part = value.trim();
   const needle = part.toLowerCase();
-  switch (text.op) {
+  switch (op) {
     case "contains":
-      return lower.includes(needle);
+      return (cell) => cell !== null && cell.toLowerCase().includes(needle);
     case "not_contains":
-      return !lower.includes(needle);
+      return (cell) => cell === null || !cell.toLowerCase().includes(needle);
     case "starts_with":
-      return lower.startsWith(needle);
+      return (cell) => cell !== null && cell.toLowerCase().startsWith(needle);
     case "ends_with":
-      return lower.endsWith(needle);
+      return (cell) => cell !== null && cell.toLowerCase().endsWith(needle);
     case "not_equals":
-      return cell !== part;
+      return (cell) => cell !== part;
   }
+}
+
+function toTextCell(row: GridRow, key: string): string | null {
+  const raw = row[key];
+  return raw === null || raw === undefined ? null : String(raw);
 }
 
 function matchesOverlap(row: GridRow, key: string, values: string[]): boolean {
@@ -144,7 +144,8 @@ function listRowTests(def: BaseGridDef, query: QueryState): RowTest[] {
     tests.push((row) => matchesRange(def, row, range));
   }
   for (const text of query.texts) {
-    tests.push((row) => matchesText(row, text));
+    const test = createTextTest(text);
+    tests.push((row) => test(toTextCell(row, text.field)));
   }
   for (const [key, values] of Object.entries(query.overlaps)) {
     tests.push((row) => matchesOverlap(row, key, values));

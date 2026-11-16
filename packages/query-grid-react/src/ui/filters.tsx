@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import {
-  explainNarrowText,
+  explainNarrowed,
   explainUnavailable,
   getField,
   INDEXED_TEXT_OPS,
@@ -22,6 +22,7 @@ import {
   resolveFilterKind,
   type BaseFieldDef,
   type FieldOption,
+  type RangeOp,
 } from "@kikstart/query-grid";
 
 import {
@@ -165,13 +166,11 @@ function BoundOverlapLookup({ field }: FieldFilterProps) {
   );
 }
 
-// An array cell is empty or it is not: the (empty) choices belong to equality, so the overlap control never lists them.
 function BoundOverlapFilter({ field }: FieldFilterProps) {
-  const plain = { ...field, nullable: false };
   if (field.options) {
-    return <BoundOverlapSelect field={plain} />;
+    return <BoundOverlapSelect field={field} />;
   }
-  return <BoundOverlapLookup field={plain} />;
+  return <BoundOverlapLookup field={field} />;
 }
 
 function BoundLookupFilter({ field }: FieldFilterProps) {
@@ -198,13 +197,36 @@ function BoundLookupFilter({ field }: FieldFilterProps) {
   );
 }
 
+const NARROW_RANGE_OPS: RangeOp[] = ["not_between", "neq"];
+
 function BoundRangeFilter({ field }: FieldFilterProps) {
+  const { def } = useQueryGridMeta();
+  const messages = useMessages();
+  const locale = useLocale();
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
+  const context = useOfferContext();
+  const offers = useOffers();
+  const held = !offers.narrowRanges.includes(field.key);
   return (
     <RangeFilter
       field={field}
       range={getRange(query, field.key)}
+      heldOps={held ? NARROW_RANGE_OPS : undefined}
+      heldReason={
+        held
+          ? formatReason(
+              messages,
+              def,
+              explainNarrowed(
+                query,
+                { kind: "range", field: field.key },
+                context,
+              ),
+              locale,
+            )
+          : null
+      }
       onRangeChange={(next) =>
         dispatch(
           next
@@ -358,7 +380,12 @@ export function TextFilter({ fields }: TextFilterProps) {
   }
   const held = offered.length === 0 && query.texts.length === 0;
   const explain = (key: string) =>
-    formatReason(messages, def, explainNarrowText(query, key, context), locale);
+    formatReason(
+      messages,
+      def,
+      explainNarrowed(query, { kind: "text", field: key }, context),
+      locale,
+    );
   return (
     <BaseTextFilter
       options={keys.map((key) => {

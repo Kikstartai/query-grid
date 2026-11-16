@@ -1,4 +1,4 @@
-import type { DataSource } from "./data-source.ts";
+import { mapSourceQueries, type DataSource } from "./data-source.ts";
 import {
   isDatePreset,
   resolveDatePreset,
@@ -6,6 +6,7 @@ import {
 } from "./date-presets.ts";
 import {
   getField,
+  isDateType,
   type BaseGridDef,
   type QueryState,
   type RangeState,
@@ -42,7 +43,7 @@ function resolveRange(
     return range;
   }
   const type = getField(def, field)?.type;
-  if (!isDatePreset(preset) || (type !== "datetime" && type !== "date")) {
+  if (!isDatePreset(preset) || type === undefined || !isDateType(type)) {
     return range;
   }
   if (now === null) {
@@ -124,24 +125,9 @@ export function withLiteralFilters(
         : { ...range, preset: undefined, min: range.preset, max: null },
     ),
   });
-  return {
-    ...source,
-    capabilities: {
-      ...source.capabilities,
-      canRun: (query) => source.capabilities.canRun(shape(query)),
-      isNarrowed: (query) => source.capabilities.isNarrowed(shape(query)),
-      narrowBasis: (query) => source.capabilities.narrowBasis(mark(query)),
-      isFacetCountExact: (query) =>
-        source.capabilities.isFacetCountExact(shape(query)),
-    },
-    fetchPage: (query, limit, signal) =>
-      source.fetchPage(resolve(query), limit, signal),
-    fetchCount: (query, exact, signal) =>
-      source.fetchCount(resolve(query), exact, signal),
-    fetchTotals: (query, signal) => source.fetchTotals(resolve(query), signal),
-    fetchFacets: (query, signal) => source.fetchFacets(resolve(query), signal),
-    fetchGroups: (query, signal) => source.fetchGroups(resolve(query), signal),
-    fetchNarrowed: (query, signal) =>
-      source.fetchNarrowed(resolve(query), signal),
-  };
+  return mapSourceQueries(source, {
+    fetch: resolve,
+    check: shape,
+    basis: mark,
+  });
 }

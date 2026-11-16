@@ -1,4 +1,4 @@
-import type { DataSource } from "./data-source.ts";
+import type { DataSource, GroupHeader, GroupsResult } from "./data-source.ts";
 import type { Listener } from "./emitter.ts";
 import {
   getField,
@@ -14,7 +14,6 @@ import { toProblem, type Problem } from "./problems.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
-import type { GroupHeader, GroupsResult } from "./data-source.ts";
 
 export const GROUP_PAGE_SIZE = 50;
 export const GROUP_LIMIT = 200;

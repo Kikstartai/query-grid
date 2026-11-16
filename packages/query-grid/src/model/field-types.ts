@@ -58,14 +58,17 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   search?: string[];
 }
 
-export interface RangeState {
-  field: string;
+export interface RangeInput {
   min: string | null;
   max: string | null;
   preset?: string;
   exclude?: boolean;
   minExclusive?: boolean;
   maxExclusive?: boolean;
+}
+
+export interface RangeState extends RangeInput {
+  field: string;
 }
 
 export const TEXT_OPS = [
@@ -203,6 +206,10 @@ export function getFieldLabel(def: BaseGridDef, key: string): string {
 
 export type FilterKind = "lookup" | "equals" | "range" | "overlap";
 
+export function hasFixedValues(field: BaseFieldDef): boolean {
+  return field.options !== undefined || field.type === "boolean";
+}
+
 export const TEXT_MAX_LENGTH = 80;
 export const TEXT_FILTER_MAX = 8;
 export const RANGE_FILTER_MAX = 12;
@@ -212,7 +219,7 @@ export function resolveFilterKind(
   capabilities: DataSourceCapabilities,
 ): FilterKind | null {
   if (capabilities.equalsFields.includes(field.key)) {
-    return field.options || field.type === "boolean" ? "equals" : "lookup";
+    return hasFixedValues(field) ? "equals" : "lookup";
   }
   if (capabilities.rangeFields.includes(field.key)) {
     return "range";

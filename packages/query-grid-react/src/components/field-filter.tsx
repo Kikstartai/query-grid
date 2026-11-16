@@ -67,7 +67,7 @@ import {
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
-import type { ControlState } from "./fields.ts";
+import type { ControlOption, ControlState } from "./fields.ts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
 import {
   formatReservedValue,
@@ -108,6 +108,8 @@ export interface LookupFilterProps extends EqualsSelectProps {
 export interface RangeFilterProps extends FilterProps {
   range: FieldRange | null;
   onRangeChange: (range: FieldRange | null) => void;
+  heldOps?: RangeOp[];
+  heldReason?: string | null;
 }
 
 interface FilterFrameProps {
@@ -484,7 +486,7 @@ function DateRange(props: RangeFilterProps) {
   const label = { label: field.label };
   const value = resolveRangeValue(field, range, picked);
   const op = range?.preset ? null : (value?.op ?? picked);
-  const periods = [
+  const periods: ControlOption[] = [
     ...DATE_PRESETS.map((preset) => ({
       value: preset as string,
       label: messages.datePresets[preset],
@@ -493,6 +495,8 @@ function DateRange(props: RangeFilterProps) {
     ...SINGLE_OPS.map((item) => ({
       value: `${OP_PREFIX}${item}`,
       label: messages.dateOps[item],
+      disabled: props.heldOps?.includes(item),
+      reason: props.heldReason,
     })),
   ];
   const choose = (next: string | null) => {
@@ -502,17 +506,11 @@ function DateRange(props: RangeFilterProps) {
       onRangeChange({ min: null, max: null, preset: next });
       return;
     }
-    const moved =
+    onRangeChange(
       nextOp !== null && value
-        ? fromRangeValue(field, {
-            op: nextOp,
-            first: value.first,
-            second: isPairRangeOp(nextOp) ? value.second : null,
-          })
-        : null;
-    if (moved || range) {
-      onRangeChange(moved);
-    }
+        ? fromRangeValue(field, { ...value, op: nextOp })
+        : null,
+    );
   };
   return (
     <>
@@ -589,31 +587,19 @@ function CalendarParts() {
   );
 }
 
-function DatePair({
-  field,
-  range,
-  disabled,
-  onRangeChange,
-  op,
-  value,
-}: OpRangeProps) {
+function DatePair({ field, disabled, onRangeChange, op, value }: OpRangeProps) {
   const messages = useMessages();
   const label = { label: field.label };
-  const change = (next: unknown) => {
-    if (Array.isArray(next) && next.length === 2) {
-      onRangeChange(
-        fromRangeValue(field, {
-          op,
-          first: String(next[0]),
-          second: String(next[1]),
-        }),
-      );
-      return;
-    }
-    if (range) {
-      onRangeChange(null);
-    }
-  };
+  const change = (next: unknown) =>
+    onRangeChange(
+      Array.isArray(next) && next.length === 2
+        ? fromRangeValue(field, {
+            op,
+            first: String(next[0]),
+            second: String(next[1]),
+          })
+        : null,
+    );
   return (
     <DatePicker
       mode="range"
@@ -646,7 +632,6 @@ function DatePair({
 
 function DateSingle({
   field,
-  range,
   disabled,
   onRangeChange,
   op,
@@ -654,15 +639,12 @@ function DateSingle({
 }: OpRangeProps) {
   const messages = useMessages();
   const label = { label: field.label };
-  const change = (next: unknown) => {
-    if (typeof next === "string" && next) {
-      onRangeChange(fromRangeValue(field, { op, first: next, second: null }));
-      return;
-    }
-    if (range) {
-      onRangeChange(null);
-    }
-  };
+  const change = (next: unknown) =>
+    onRangeChange(
+      typeof next === "string" && next
+        ? fromRangeValue(field, { op, first: next, second: null })
+        : null,
+    );
   return (
     <DatePicker
       value={value?.first ?? null}
@@ -792,7 +774,7 @@ function NumberOperands({
 }
 
 function NumberRange(props: RangeFilterProps) {
-  const { field, range, disabled, onRangeChange } = props;
+  const { field, range, disabled, onRangeChange, heldOps, heldReason } = props;
   const messages = useMessages();
   const [picked, setPicked] = useState<RangeOp>("between");
   const value = resolveRangeValue(field, range, picked);
@@ -810,19 +792,19 @@ function NumberRange(props: RangeFilterProps) {
     setFirst(fromNumberBound(field, value?.first ?? null));
     setSecond(fromNumberBound(field, value?.second ?? null));
   }
-  const apply = (next: RangeOp, lower: number | null, upper: number | null) => {
-    const changed = fromRangeValue(field, {
-      op: next,
-      first: toNumberBound(field, lower),
-      second: isPairRangeOp(next) ? toNumberBound(field, upper) : null,
-    });
-    if (changed || range) {
-      onRangeChange(changed);
-    }
-  };
-  const ops = RANGE_OPS.map((item) => ({
-    value: item as string,
+  const apply = (next: RangeOp, lower: number | null, upper: number | null) =>
+    onRangeChange(
+      fromRangeValue(field, {
+        op: next,
+        first: toNumberBound(field, lower),
+        second: toNumberBound(field, upper),
+      }),
+    );
+  const ops: ControlOption[] = RANGE_OPS.map((item) => ({
+    value: item,
     label: messages.rangeOps[item],
+    disabled: heldOps?.includes(item),
+    reason: heldReason,
   }));
   return (
     <div className="qg-range">
@@ -851,6 +833,8 @@ function NumberRange(props: RangeFilterProps) {
               key={option.value}
               value={option.value}
               label={option.label}
+              disabled={option.disabled}
+              reason={option.disabled ? option.reason : null}
             />
           ))}
         </SelectContent>
@@ -876,11 +860,17 @@ function LookupControl(props: LookupFilterProps) {
   return <LookupSingle {...props} />;
 }
 
+// A control clears only a range that is there, so an empty control that changes operator sends nothing.
 function RangeControl(props: RangeFilterProps) {
+  const onRangeChange = (next: FieldRange | null) => {
+    if (next || props.range) {
+      props.onRangeChange(next);
+    }
+  };
   if (isDateType(props.field.type)) {
-    return <DateRange {...props} />;
+    return <DateRange {...props} onRangeChange={onRangeChange} />;
   }
-  return <NumberRange {...props} />;
+  return <NumberRange {...props} onRangeChange={onRangeChange} />;
 }
 
 export function EqualsSelect(props: EqualsSelectProps) {

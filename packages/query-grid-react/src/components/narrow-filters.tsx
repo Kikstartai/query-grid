@@ -20,6 +20,7 @@ import {
   TEXT_OPS,
   type MatchMode,
   type TextOp,
+  type TextState as TextFilterValue,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
@@ -29,11 +30,7 @@ import { useMessages } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
 import { useMounted } from "./use-mounted.ts";
 
-export interface TextFilterValue {
-  field: string;
-  op: TextOp;
-  value: string;
-}
+export type { TextFilterValue };
 
 export interface TextFieldOption extends ControlOption {
   ops?: TextOp[];

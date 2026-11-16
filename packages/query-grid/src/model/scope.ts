@@ -1,4 +1,4 @@
-import type { DataSource } from "./data-source.ts";
+import { mapSourceQueries, type DataSource } from "./data-source.ts";
 import type { QueryState, RangeState, TextState } from "./field-types.ts";
 
 export interface QueryScope {
@@ -74,41 +74,31 @@ export function withScope(source: DataSource, scope: QueryScope): DataSource {
   if (isScopeEmpty(scope)) {
     return source;
   }
-  const { capabilities } = source;
+  const { facetCountsFollowFilters } = source.capabilities;
   const scoped = listScoped(scope);
-  const apply = createScoper(scope);
+  // The checks get a scoper of their own: an offer probes many queries, and each would push the fetches' merged filters out of the one that remembers them.
+  const mapped = mapSourceQueries(source, {
+    fetch: createScoper(scope),
+    check: createScoper(scope),
+  });
+  const { capabilities } = mapped;
   const isOwn = (query: QueryState) =>
     query.match !== "any" &&
-    [...Object.keys(query.equals), ...Object.keys(query.overlaps)].every(
-      (key) => !scoped.includes(key),
-    );
+    listScoped(query).every((key) => !scoped.includes(key));
   const free = (keys: string[]) => keys.filter((key) => !scoped.includes(key));
   return {
-    ...source,
+    ...mapped,
     capabilities: {
       ...capabilities,
       matchAny: false,
       equalsFields: free(capabilities.equalsFields),
       overlapFields: free(capabilities.overlapFields),
       groupFields: free(capabilities.groupFields),
-      canRun: (query) => isOwn(query) && capabilities.canRun(apply(query)),
-      isNarrowed: (query) => capabilities.isNarrowed(apply(query)),
-      narrowBasis: (query) => capabilities.narrowBasis(apply(query)),
+      canRun: (query) => isOwn(query) && capabilities.canRun(query),
       isFacetCountExact: (query) =>
-        capabilities.facetCountsFollowFilters &&
-        capabilities.isFacetCountExact(apply(query)),
+        facetCountsFollowFilters && capabilities.isFacetCountExact(query),
     },
-    fetchPage: (query, limit, signal) =>
-      source.fetchPage(apply(query), limit, signal),
-    fetchCount: (query, exact, signal) =>
-      source.fetchCount(apply(query), exact, signal),
-    fetchTotals: (query, signal) => source.fetchTotals(apply(query), signal),
     fetchFacets: async (query, signal) =>
-      capabilities.facetCountsFollowFilters
-        ? source.fetchFacets(apply(query), signal)
-        : [],
-    fetchGroups: (query, signal) => source.fetchGroups(apply(query), signal),
-    fetchNarrowed: (query, signal) =>
-      source.fetchNarrowed(apply(query), signal),
+      facetCountsFollowFilters ? mapped.fetchFacets(query, signal) : [],
   };
 }

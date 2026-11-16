@@ -4,6 +4,7 @@ import { listFilterChips } from "./chips.ts";
 import type {
   GridRow,
   QueryState,
+  RangeInput,
   RangeState,
   TextState,
 } from "./field-types.ts";
@@ -21,9 +22,8 @@ import { createMemorySource, memoryCapabilities } from "./memory-source.ts";
 import {
   applyAction,
   defaultQuery,
-  explainNarrowText,
+  explainNarrowed,
   listOffers,
-  type RangeInput,
 } from "./query-actions.ts";
 import {
   fromRangeValue,
@@ -662,9 +662,9 @@ describe("the actions of the new filters", () => {
     expect(offers.overlaps).toEqual(["tags"]);
     expect(offers.texts).toEqual(["name"]);
     expect(offers.narrowTexts).toEqual([]);
-    expect(explainNarrowText(BASE, "name", CONTEXT).code).toBe(
-      "narrow_counting",
-    );
+    expect(
+      explainNarrowed(BASE, { kind: "text", field: "name" }, CONTEXT).code,
+    ).toBe("narrow_counting");
     const basis = CAPABILITIES.narrowBasis({
       ...BASE,
       texts: [text("note", "contains", "x")],
@@ -682,12 +682,22 @@ describe("the actions of the new filters", () => {
     const over = sized(100, true);
     expect(listOffers(DEF, BASE, over).texts).toEqual(["name"]);
     expect(listOffers(DEF, BASE, over).narrowTexts).toEqual([]);
-    expect(explainNarrowText(BASE, "name", over)).toMatchObject({
+    expect(
+      explainNarrowed(BASE, { kind: "text", field: "name" }, over),
+    ).toMatchObject({
       code: "narrow_first",
       rows: 100,
       capped: true,
     });
+    expect(listOffers(DEF, BASE, over).ranges).toContain("created_at");
+    expect(listOffers(DEF, BASE, over).narrowRanges).toEqual([]);
+    expect(
+      explainNarrowed(BASE, { kind: "range", field: "created_at" }, over),
+    ).toMatchObject({ code: "narrow_first", field: "created_at", rows: 100 });
     const under = sized(40, false);
+    expect(listOffers(DEF, BASE, under).narrowRanges).toEqual(
+      CAPABILITIES.rangeFields,
+    );
     expect(listOffers(DEF, BASE, under).texts).toEqual(["name", "note"]);
     expect(listOffers(DEF, BASE, under).narrowTexts).toEqual(["name", "note"]);
     const indexed = applyAction(

@@ -77,48 +77,37 @@ function checkValue(
   return isValidValue(field, value) ? null : invalid(key);
 }
 
-function checkEquals(
-  def: BaseGridDef,
-  key: string,
-  values: string[],
-): Problem | null {
-  const field = getField(def, key);
-  if (!field) {
-    return unknown(key);
-  }
-  if (values.length === 0 || isOverlapField(field)) {
-    return invalid(key);
-  }
-  const max = resolveMaxValues(field);
-  if (values.length > max) {
-    return { code: "too_many_values", params: { field: key, max } };
-  }
-  const valid =
+function areValidEquals(field: BaseFieldDef, values: string[]): boolean {
+  return (
     canCombineValues(field, values) &&
     values.every(
       (value) =>
         getReservedValue(field, value) !== null || isValidValue(field, value),
-    );
-  return valid ? null : invalid(key);
+    )
+  );
 }
 
-function checkOverlap(
+function checkValues(
   def: BaseGridDef,
   key: string,
   values: string[],
+  overlap: boolean,
 ): Problem | null {
   const field = getField(def, key);
   if (!field) {
     return unknown(key);
   }
-  if (values.length === 0 || !isOverlapField(field)) {
+  if (values.length === 0 || isOverlapField(field) !== overlap) {
     return invalid(key);
   }
   const max = resolveMaxValues(field);
   if (values.length > max) {
     return { code: "too_many_values", params: { field: key, max } };
   }
-  return values.every(isValidText) ? null : invalid(key);
+  const valid = overlap
+    ? values.every(isValidText)
+    : areValidEquals(field, values);
+  return valid ? null : invalid(key);
 }
 
 function checkRange(def: BaseGridDef, range: RangeState): Problem | null {
@@ -187,10 +176,10 @@ function checkFilters(def: BaseGridDef, query: QueryState): Problem | null {
   }
   return (
     getFirstProblem(Object.entries(query.equals), ([key, values]) =>
-      checkEquals(def, key, values),
+      checkValues(def, key, values, false),
     ) ??
     getFirstProblem(Object.entries(query.overlaps), ([key, values]) =>
-      checkOverlap(def, key, values),
+      checkValues(def, key, values, true),
     ) ??
     getFirstProblem(query.ranges, (range) => checkRange(def, range)) ??
     getFirstProblem(query.texts, (text) => checkText(def, text))

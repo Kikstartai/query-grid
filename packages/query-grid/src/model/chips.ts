@@ -2,6 +2,7 @@ import {
   getField,
   isDateType,
   isDefaultSort,
+  listRanges,
   type BaseGridDef,
   type QueryState,
   type RangeState,
@@ -173,7 +174,7 @@ function rangeChip(
   locale: string | undefined,
 ): RangeChip {
   const { field } = range;
-  const at = query.ranges.filter((item) => item.field === field).indexOf(range);
+  const at = listRanges(query, field).indexOf(range);
   const target = getField(def, field);
   const value = target ? toRangeValue(target, range) : null;
   return {

@@ -5,6 +5,7 @@ import {
   GROUP_LIMIT,
   getReservedValue,
   isMatchAny,
+  isNumberType,
   isQueryBudgeted,
   isQueryRunnable,
   isValidFieldValue,
@@ -80,8 +81,6 @@ const SQL_CASTS: Record<FieldType, string> = {
   array: "text",
 };
 
-const FLOAT_TYPES: FieldType[] = ["integer", "decimal", "money"];
-
 const TABLE_ALIAS = "t";
 
 export function identifier(name: string): string {
@@ -129,7 +128,7 @@ function selectExpression(field: BaseFieldDef): string {
   if (field.type === "date") {
     return `to_char(${name}, 'YYYY-MM-DD') AS ${alias}`;
   }
-  if (FLOAT_TYPES.includes(field.type)) {
+  if (isNumberType(field.type)) {
     return `${name}::float8 AS ${alias}`;
   }
   return name;
@@ -226,12 +225,13 @@ function rangeClauses(
   return [sides.length > 1 ? `(${sides.join(" OR ")})` : sides[0]];
 }
 
-const LIKE_PATTERNS: Record<TextOp, (value: string) => string> = {
+type LikeOp = Exclude<TextOp, "not_equals">;
+
+const LIKE_PATTERNS: Record<LikeOp, (value: string) => string> = {
   contains: (value) => `%${value}%`,
   not_contains: (value) => `%${value}%`,
   starts_with: (value) => `${value}%`,
   ends_with: (value) => `%${value}`,
-  not_equals: (value) => value,
 };
 
 function textClause(
@@ -406,7 +406,6 @@ export function isTotalOrdered(
   query: QueryState,
 ): boolean {
   return (
-    query.search === null &&
     !isMatchAny(query) &&
     !isQueryBudgeted(def, query) &&
     Object.entries(query.equals).every(

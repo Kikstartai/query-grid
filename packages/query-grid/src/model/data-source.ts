@@ -64,6 +64,12 @@ export interface OptionSearch {
   value?: string;
 }
 
+export interface QueryMapping {
+  fetch: (query: QueryState) => QueryState;
+  check: (query: QueryState) => QueryState;
+  basis?: (query: QueryState) => QueryState;
+}
+
 export interface DataSource {
   capabilities: DataSourceCapabilities;
   fetchPage: (
@@ -100,4 +106,32 @@ export interface DataSource {
   fetchLimits: (signal: AbortSignal) => Promise<GridLimits | null>;
   fetchTransitions: (signal: AbortSignal) => Promise<[string, string][]>;
   changeFacetValue: (id: string, to: string) => Promise<GridRow>;
+}
+
+// Every member that takes a query is listed here once, so a wrapper that rewrites queries cannot miss one.
+export function mapSourceQueries(
+  source: DataSource,
+  { fetch, check, basis = check }: QueryMapping,
+): DataSource {
+  const { capabilities } = source;
+  return {
+    ...source,
+    capabilities: {
+      ...capabilities,
+      canRun: (query) => capabilities.canRun(check(query)),
+      isNarrowed: (query) => capabilities.isNarrowed(check(query)),
+      narrowBasis: (query) => capabilities.narrowBasis(basis(query)),
+      isFacetCountExact: (query) =>
+        capabilities.isFacetCountExact(check(query)),
+    },
+    fetchPage: (query, limit, signal) =>
+      source.fetchPage(fetch(query), limit, signal),
+    fetchCount: (query, exact, signal) =>
+      source.fetchCount(fetch(query), exact, signal),
+    fetchTotals: (query, signal) => source.fetchTotals(fetch(query), signal),
+    fetchFacets: (query, signal) => source.fetchFacets(fetch(query), signal),
+    fetchGroups: (query, signal) => source.fetchGroups(fetch(query), signal),
+    fetchNarrowed: (query, signal) =>
+      source.fetchNarrowed(fetch(query), signal),
+  };
 }

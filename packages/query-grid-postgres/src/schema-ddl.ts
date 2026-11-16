@@ -120,41 +120,35 @@ function indexDdl(
   };
 }
 
-function textIndex(
-  def: PostgresGridDef,
-  key: string,
-  concurrently: boolean,
-): IndexDdl {
-  const table = identifier(def.table);
-  const column = identifier(key);
-  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${column}_trgm`);
-  return {
-    note: describeTextIndex(column),
-    name,
-    kind: "text",
-    method: "gin",
-    columns: [column],
-    empty: [],
-    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column} ${TRGM_OPS});`,
-  };
+interface FieldIndexKind {
+  suffix: string;
+  ops: string;
+  describe: (column: string) => string;
 }
 
-function arrayIndex(
+const FIELD_INDEXES: Record<"text" | "array", FieldIndexKind> = {
+  text: { suffix: "trgm", ops: ` ${TRGM_OPS}`, describe: describeTextIndex },
+  array: { suffix: "overlap", ops: "", describe: describeArrayIndex },
+};
+
+function fieldIndex(
   def: PostgresGridDef,
   key: string,
+  kind: "text" | "array",
   concurrently: boolean,
 ): IndexDdl {
+  const { suffix, ops, describe } = FIELD_INDEXES[kind];
   const table = identifier(def.table);
   const column = identifier(key);
-  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${column}_overlap`);
+  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${column}_${suffix}`);
   return {
-    note: describeArrayIndex(column),
+    note: describe(column),
     name,
-    kind: "array",
+    kind,
     method: "gin",
     columns: [column],
     empty: [],
-    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column});`,
+    ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column}${ops});`,
   };
 }
 
@@ -170,9 +164,11 @@ export function listIndexDdl(
   return [
     ...ordered,
     ...(search.length > 0 ? [searchIndex(def, search, concurrently)] : []),
-    ...(def.textIndexes ?? []).map((key) => textIndex(def, key, concurrently)),
+    ...(def.textIndexes ?? []).map((key) =>
+      fieldIndex(def, key, "text", concurrently),
+    ),
     ...(def.arrayIndexes ?? []).map((key) =>
-      arrayIndex(def, key, concurrently),
+      fieldIndex(def, key, "array", concurrently),
     ),
   ];
 }

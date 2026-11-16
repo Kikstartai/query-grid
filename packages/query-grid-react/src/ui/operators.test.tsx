@@ -192,6 +192,20 @@ describe("a range and its operator", () => {
     expect(not).toContain('aria-label="Pick Created dates"');
   });
 
+  test("an operator the data cannot answer yet is listed, disabled, with the reason", () => {
+    const held = renderToStaticMarkup(
+      <RangeFilter
+        field={size}
+        range={{ min: "5", max: "9", exclude: true }}
+        onRangeChange={noop}
+        heldOps={["not_between", "neq"]}
+        heldReason="Narrow by Status first: 620,000+ rows."
+      />,
+    );
+    expect(held).toContain(">not between<");
+    expect(held).toContain('data-filter="size.max"');
+  });
+
   test("the bound filter reads the field's first range from the URL", () => {
     const html = render(
       <FilterBar fields={["size"]} />,
