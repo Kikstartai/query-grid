@@ -1,4 +1,4 @@
-import type { Listener } from "./emitter.ts";
+import type { Listener } from "./store.ts";
 import type { QueryState } from "./query-state.ts";
 import {
   createAbortable,

@@ -66,7 +66,6 @@ export {
   type DateBounds,
   type DatePreset,
 } from "./model/date-presets.ts";
-export { createEmitter, type Emitter, type Listener } from "./model/emitter.ts";
 export {
   DEFAULT_MAX_VALUES,
   FIELD_RENDERS,
@@ -273,7 +272,13 @@ export {
   type StoredDefOptions,
   type StoredDefResult,
 } from "./model/stored-def.ts";
-export { createStore, type Store } from "./model/store.ts";
+export {
+  createEmitter,
+  createStore,
+  type Emitter,
+  type Listener,
+  type Store,
+} from "./model/store.ts";
 export {
   createCountStore,
   createFacetStore,

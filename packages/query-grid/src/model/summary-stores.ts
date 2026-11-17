@@ -4,7 +4,7 @@ import type {
   FacetCount,
   TotalResult,
 } from "./data-source.ts";
-import type { Listener } from "./emitter.ts";
+import type { Listener } from "./store.ts";
 import { getField, hasFixedValues } from "./grid-def.ts";
 import type { QueryState } from "./query-state.ts";
 import type {

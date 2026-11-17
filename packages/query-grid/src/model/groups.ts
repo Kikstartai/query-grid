@@ -1,5 +1,5 @@
 import type { DataSource, GroupHeader, GroupsResult } from "./data-source.ts";
-import type { Listener } from "./emitter.ts";
+import type { Listener } from "./store.ts";
 import {
   getField,
   type BaseFieldDef,
