@@ -945,8 +945,8 @@
 
 @media (width <= 40rem) {
   :where(.qg-drawer) {
-    inline-size: 100vw;
-    max-inline-size: 100vw;
+    inline-size: 100%;
+    max-inline-size: 100%;
   }
 }
 
@@ -975,8 +975,6 @@
 
   :where(.qg-facet) {
     gap: calc(var(--ui-spacing) * 2);
-    border-color: var(--ui-border);
-    border-radius: 999px;
   }
 
   :where(.qg-facet-note) {
