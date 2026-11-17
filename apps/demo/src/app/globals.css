@@ -203,6 +203,7 @@ pre {
   display: flex;
   flex-direction: column;
   grid-area: body;
+  container: qg-layout / inline-size;
   gap: 10px;
   min-height: 0;
   margin-top: 10px;

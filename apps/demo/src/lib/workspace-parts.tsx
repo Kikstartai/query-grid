@@ -11,6 +11,7 @@ import {
   type ViewOption,
 } from "@kikstart/query-grid-react/ui";
 
+import { PhoneDefaultView } from "./phone-view";
 import { VIEWS } from "./site";
 
 interface WorkspacePartsProps {
@@ -30,6 +31,7 @@ export function WorkspaceParts({
 }: WorkspacePartsProps) {
   return (
     <>
+      <PhoneDefaultView />
       <div className="workspace-tools">
         <CountDisplay />
         <span className="workspace-spacer" />

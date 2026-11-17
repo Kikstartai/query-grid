@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import "@ui-sdk/core/web.css";
 import "@kikstart/query-grid-react/styles.css";
 import "./globals.css";
+import "./phone.css";
 
 import { THEME_SCRIPT } from "@/lib/theme";
 
