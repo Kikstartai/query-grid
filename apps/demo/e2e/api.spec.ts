@@ -84,6 +84,8 @@ test.describe("static shell", () => {
   for (const path of [
     "/orders",
     "/memory",
+    "/features",
+    "/localized/af",
     "/restyled",
     "/rtl",
     "/parts/grid",

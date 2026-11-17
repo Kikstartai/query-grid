@@ -39,6 +39,16 @@ export const DEMO_LINKS: DemoLink[] = [
     note: "the same parts over 400 rows held in the browser",
   },
   {
+    href: "/features",
+    label: "Grid features",
+    note: "sort by several columns, CSV export, selection for bulk actions, row open and actions, drag reorder, ready-made cells and stored defs, each with a note on how to try it",
+  },
+  {
+    href: "/localized/af",
+    label: "Localized",
+    note: "the same grid in English, Afrikaans and Arabic: translated messages and labels, and numbers, dates and plurals in the page's locale",
+  },
+  {
     href: "/restyled",
     label: "Restyled",
     note: "the same parts restyled by repointing UI SDK's tokens in one short stylesheet",

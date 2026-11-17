@@ -4,6 +4,8 @@ A composable filter and data grid for very large Postgres tables, built on [UI S
 
 Live demo: https://query-grid.vercel.app
 
+The demo's [`/features`](https://query-grid.vercel.app/features) route walks through the grid features (several sort columns, export, selection, row open and actions, reorder, cells and stored defs) over one in-memory grid, with a note on how to try each.
+
 ## Principles
 
 1. **The UI reflects what the data layer can do.** A filter, sort or combination is offered only when an index answers it fast, and the server refuses any other.
@@ -348,6 +350,8 @@ import { QueryGridMessagesProvider } from "@kikstart/query-grid-react/components
 - **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`), and every count, sum, money value, date, plural and list a component renders is formatted in it, so the messages and the numbers cannot disagree. `useLocale()` reads it. A def carries no locale. A nested provider keeps the locale and the messages its outer provider set and it does not name, so an app can set the locale once and a page can add messages, or the reverse.
 - **The currency is the data's.** A money field carries its own `currency` (default `USD`), so two money fields of one grid can differ. One field holds one currency.
 - Only English ships.
+
+The demo's [`/localized/af`](https://query-grid.vercel.app/localized/af) route is the in-memory grid in English, Afrikaans and Arabic. Each language is a full `QueryGridMessages` object, a locale and the host's own labels translated in its def; the Arabic page runs right to left and takes all six plural forms. Typing a message set as `QueryGridMessages`, not as overrides, makes the compiler name every key a translation lacks.
 
 ## Right to left
 

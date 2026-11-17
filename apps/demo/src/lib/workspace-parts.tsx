@@ -8,6 +8,7 @@ import {
   FilterSidebar,
   TotalFooter,
   ViewSwitch,
+  type ViewOption,
 } from "@kikstart/query-grid-react/ui";
 
 import { VIEWS } from "./site";
@@ -16,6 +17,7 @@ interface WorkspacePartsProps {
   filterFields?: string[];
   barFields?: string[];
   textFields?: string[];
+  views?: ViewOption[];
   children: ReactNode;
 }
 
@@ -23,6 +25,7 @@ export function WorkspaceParts({
   filterFields,
   barFields,
   textFields,
+  views = VIEWS,
   children,
 }: WorkspacePartsProps) {
   return (
@@ -30,7 +33,7 @@ export function WorkspaceParts({
       <div className="workspace-tools">
         <CountDisplay />
         <span className="workspace-spacer" />
-        <ViewSwitch views={VIEWS} />
+        <ViewSwitch views={views} />
       </div>
       <div className="workspace-body">
         <FilterBar fields={barFields ?? filterFields} texts={textFields} />

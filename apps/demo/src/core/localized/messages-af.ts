@@ -1,0 +1,272 @@
+import {
+  selectPlural,
+  type QueryGridMessages,
+} from "@kikstart/query-grid-react/components";
+
+export const AF_MESSAGES: QueryGridMessages = {
+  loading: "Laai…",
+  noRows: "Geen rye pas nie.",
+  rows: ({ count, formatted, locale }) =>
+    `${formatted} ${selectPlural(locale, count, { one: "ry", other: "rye" })}`,
+  rowsCapped: ({ formatted }) => `${formatted}+ rye`,
+  loaded: ({ rows }) => `${rows} gelaai`,
+  loadedInPages: ({ rows, pages, locale }) =>
+    `${rows} gelaai in ${pages} keyset-${selectPlural(locale, pages, { one: "bladsy", other: "bladsye" })}`,
+  view: "Aansig",
+  countUnavailable: "Telling nie beskikbaar nie",
+  counting: "Tel…",
+  exactCount: "Presiese telling",
+  countSources: {
+    counter: "presies, uit die tellertabel",
+    capped: "begrensde telling",
+    exact: "presiese telling",
+    underCap: "presies, onder die perk getel",
+  },
+  noTotal: "Geen totaal vir hierdie filter nie.",
+  totalling: "Tel op…",
+  totalSum: ({ label }) => `Som van ${label}`,
+  totalFromCounter: ({ rows }) => `uit die tellertabel, ${rows}`,
+  totalLive: ({ rows }) => `regstreeks opgetel oor ${rows}`,
+  filters: "Filters",
+  closeFilters: "Maak filters toe",
+  filtersDescription:
+    "'n Kontrole word net aangebied wanneer 'n indeks dit met die huidige filters en sortering beantwoord. 'n Gedeaktiveerde kontrole sê wat dit keer.",
+  reset: "Stel terug",
+  done: "Klaar",
+  all: "Alles",
+  facetNotes: {
+    following: "Tellings volg die ander filters.",
+    counter:
+      "Tellings kom uit 'n tellertabel wat deur 'n sneller onderhou word.",
+    hidden:
+      "Tellings is versteek terwyl 'n ander filter aktief is: geen teller beantwoord hulle nie.",
+  },
+  sort: "Sorteer",
+  sortBy: "Sorteer volgens",
+  ascending: "Stygend",
+  descending: "Dalend",
+  thenBy: "Dan volgens",
+  thenByDirection: ({ label, direction }) => `${label}: ${direction}`,
+  sortPosition: ({ label, position }) =>
+    `Sorteer volgens ${label}, sorteerkolom ${position}`,
+  chipSortThen: ({ label, direction }) => `, dan ${label} ${direction}`,
+  searchFilter: "Soek",
+  searchPlaceholder: ({ fields }) => `Soek: ${fields}`,
+  searchHint: ({ min, max }) => `${min} tot ${max} karakters`,
+  clearSearchFilter: "Maak soektog skoon",
+  activeFilters: "Aktiewe filters en sortering",
+  removeChip: ({ label }) => `Verwyder ${label}`,
+  chipEquals: ({ label }) => `${label}:`,
+  chipExclude: ({ label }) => `${label} ≠`,
+  chipPreset: ({ label, preset }) => `${label}: ${preset}`,
+  chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
+  chipRangeOps: {
+    not_between: ({ label, min, max }) => `${label}: nie ${min} – ${max} nie`,
+    eq: ({ label, min }) => `${label} = ${min}`,
+    neq: ({ label, min }) => `${label} ≠ ${min}`,
+    gt: ({ label, min }) => `${label} > ${min}`,
+    gte: ({ label, min }) => `${label} ≥ ${min}`,
+    lt: ({ label, min }) => `${label} < ${min}`,
+    lte: ({ label, min }) => `${label} ≤ ${min}`,
+  },
+  chipSearch: ({ value }) => `Soek: “${value}”`,
+  chipTexts: {
+    contains: ({ label, value }) => `${label} bevat “${value}”`,
+    not_contains: ({ label, value }) => `${label} bevat nie “${value}” nie`,
+    starts_with: ({ label, value }) => `${label} begin met “${value}”`,
+    ends_with: ({ label, value }) => `${label} eindig met “${value}”`,
+    not_equals: ({ label, value }) => `${label} is nie “${value}” nie`,
+  },
+  chipOverlap: ({ label }) => `${label} het:`,
+  chipMatchAny: "Pas enige",
+  chipSort: ({ label, direction }) => `Sorteer: ${label} ${direction}`,
+  openBound: "…",
+  any: "enige",
+  emptyValue: "(leeg)",
+  notEmptyValue: "(nie leeg nie)",
+  excludeField: ({ label }) => `Sluit die gekose ${label}-waardes uit`,
+  excludeMark: "≠",
+  datePresets: {
+    today: "Vandag",
+    yesterday: "Gister",
+    "last-7-days": "Laaste 7 dae",
+    "last-30-days": "Laaste 30 dae",
+    "this-month": "Hierdie maand",
+    "last-month": "Verlede maand",
+    "this-year": "Hierdie jaar",
+  },
+  customRange: "Pasgemaak…",
+  presetField: ({ label }) => `${label}-tydperk`,
+  dateOps: {
+    not_between: "Nie tussen nie…",
+    eq: "Op…",
+    neq: "Nie op nie…",
+    gt: "Ná…",
+    gte: "Op of ná…",
+    lt: "Voor…",
+    lte: "Op of voor…",
+  },
+  rangeOps: {
+    between: "tussen",
+    not_between: "nie tussen nie",
+    eq: "=",
+    neq: "≠",
+    gt: ">",
+    gte: "≥",
+    lt: "<",
+    lte: "≤",
+  },
+  rangeOperator: ({ label }) => `${label}-vergelyking`,
+  rangeValue: ({ label }) => `${label}-waarde`,
+  pickDate: ({ label }) => `Kies 'n ${label}-datum`,
+  value: "waarde",
+  booleanTrue: "Ja",
+  booleanFalse: "Nee",
+  textFilter: "Teks",
+  textField: "Veld om te pas",
+  textOperator: "Hoe om te pas",
+  textOps: {
+    contains: "bevat",
+    not_contains: "bevat nie",
+    starts_with: "begin met",
+    ends_with: "eindig met",
+    not_equals: "is nie",
+  },
+  textHint: ({ min }) => `${min} karakters of meer`,
+  textValue: ({ label, op }) => `${label} ${op}`,
+  textPlaceholder: "teks…",
+  matchMode: "Pas",
+  matchAll: "Pas alles",
+  matchAny: "Pas enige",
+  group: "Groepeer",
+  groupBy: "Groepeer volgens",
+  groupToggle: ({ label }) => `${label}-groep`,
+  groupLoadMore: "Laai meer",
+  chipGroup: ({ label }) => `Groep: ${label}`,
+  moreValues: ({ count }) => `nog ${count}`,
+  fieldFilter: ({ label }) => `${label}-filter`,
+  clearField: ({ label }) => `Maak ${label} skoon`,
+  searchField: ({ label }) => `${label}: soek…`,
+  noMatch: "Geen passing nie.",
+  rangeFrom: ({ label }) => `${label} van`,
+  rangeTo: ({ label }) => `${label} tot`,
+  from: "van",
+  to: "tot",
+  pickDates: ({ label }) => `Kies ${label}-datums`,
+  min: "min",
+  max: "maks",
+  selectRow: "Kies ry",
+  selectAll: "Kies alle gelaaide rye",
+  selectedRows: ({ formatted }) => `${formatted} gekies`,
+  selectAllMatching: ({ rows }) => `Kies al ${rows} wat pas`,
+  allMatchingSelected: ({ rows }) => `Al ${rows} wat pas, is gekies.`,
+  clearSelection: "Maak keuse skoon",
+  rowActions: ({ label }) => `Aksies vir ${label}`,
+  rowActionsColumn: "Aksies",
+  reorderRow: ({ label }) => `Herrangskik ${label}`,
+  reorderColumn: "Volgorde",
+  reorderHelp:
+    "Sleep 'n ry aan sy handvatsel, of druk Spasie op die handvatsel en gebruik die pyltjiesleutels, om dit te skuif. Spasie laat dit val en Escape sit dit terug.",
+  reorderFailed: ({ reason }) =>
+    `Die nuwe volgorde is nie gestoor nie: ${reason}`,
+  reorderSteps: {
+    grab: ({ label, position, total }) =>
+      `${label} opgetel, posisie ${position} van ${total}.`,
+    move: ({ label, position, total }) =>
+      `${label}, posisie ${position} van ${total}.`,
+    drop: ({ label, position, total }) =>
+      `${label} neergesit op posisie ${position} van ${total}.`,
+    cancel: ({ label }) => `${label} teruggesit.`,
+  },
+  reorderReasons: {
+    reorder_needs_order: ({ label }) =>
+      `Sorteer stygend volgens ${label}, en volgens niks anders nie, om te herrangskik.`,
+    reorder_needs_all_rows: () =>
+      "Herrangskikking vereis dat elke ry gelaai is: vernou eers die filters.",
+    reorder_grouped: () => "Verwyder die groepering om te herrangskik.",
+  },
+  moreItems: ({ count }) => `+${count}`,
+  columns: "Kolomme",
+  pinColumn: ({ label }) => `Speld ${label} vas`,
+  resetColumns: "Stel kolomme terug",
+  feedLoading: "laai…",
+  feedCapped: "resultaat begrens, verfyn die filter",
+  feedEnd: "einde van resultate",
+  selected: ({ count }) => `${count} gekies`,
+  activeCell: ({ cell }) => `sel ${cell}`,
+  cellRange: ({ range }) => `reeks ${range}`,
+  none: "geen",
+  sortByField: ({ label }) => `Sorteer volgens ${label}`,
+  filterField: ({ label }) => `Filtreer ${label}`,
+  resizeColumn: ({ label }) => `Verander grootte van ${label}`,
+  exportCsv: "Voer CSV uit",
+  exporting: "Voer uit…",
+  exportOverLimit: ({ limit, rows }) =>
+    `'n Uitvoer neem hoogstens ${limit}: ${rows} pas. Vernou eers die filters.`,
+  boardHelp:
+    "Sleep 'n kaart, of druk Spasie daarop en gebruik die pyltjiesleutels, om sy status te verander. 'n Kolom waarheen die kaart nie mag skuif nie, word oorgeslaan, en 'n val buite die kolom waarin dit gewys word, sit dit terug.",
+  boardUnavailable:
+    "Geen indeks beantwoord die bord met hierdie filters nie. Verwyder die filters wat die bord nie met 'n status kan kombineer nie.",
+  moveFailed: "Die skuif het misluk",
+  reasons: {
+    search_alone: () =>
+      "Die soektog kombineer net met gelykheidsfilters: verwyder eers die reeks, die teksfilter en Pas enige.",
+    search_unordered: () =>
+      "'n Soekresultaat is ongeorden totdat elke passing gelaai is: vernou dit tot onder die perk om te sorteer.",
+    search_no_combine: () => "Die soektog kombineer net met gelykheidsfilters.",
+    no_sort_index: ({ label }) => `Geen indeks sorteer volgens ${label} nie.`,
+    range_needs_sort: ({ label }) =>
+      `Geen indeks beantwoord 'n ${label}-reeks tensy die sortering ${label} is nie.`,
+    no_sort_with: ({ label, blockers }) =>
+      `Geen indeks sorteer volgens ${label} saam met ${blockers} nie.`,
+    no_filter_with: ({ label, blockers }) =>
+      `Geen indeks beantwoord ${label} saam met ${blockers} nie.`,
+    no_range_with: ({ label, blockers }) =>
+      `Geen indeks beantwoord 'n ${label}-reeks saam met ${blockers} nie.`,
+    narrow_first: ({ rows, narrowBy }) =>
+      narrowBy
+        ? `Vernou eers volgens ${narrowBy}: ${rows}.`
+        : `Vernou eers die filters: ${rows}.`,
+    narrow_counting: () => "Tel die rye wat hierdie filters oorlaat…",
+    no_match_any: ({ blockers }) =>
+      `Geen indeks beantwoord Pas enige saam met ${blockers} nie.`,
+    no_group_with: ({ label, blockers }) =>
+      `Geen indeks lees die rye van een ${label}-groep saam met ${blockers} nie.`,
+    sort_limit: () => "'n Sortering neem nie meer kolomme nie.",
+  },
+  reasonParts: {
+    filter: (label) => `die ${label}-filter`,
+    range: (label) => `die ${label}-reeks`,
+    sort: (label) => `sorteer ${label}`,
+  },
+  errors: {
+    unindexed_query: () =>
+      "Geen verklaarde indeks beantwoord hierdie filter en sortering nie.",
+    unknown_field: ({ field }) => `Onbekende veld ${field}.`,
+    invalid_value: ({ field }) => `Ongeldige waarde vir ${field}.`,
+    too_many_values: ({ field, max }) =>
+      `${field} neem hoogstens ${max} waardes.`,
+    search_length: ({ min, max }) =>
+      `Die soektog het ${min} tot ${max} karakters nodig.`,
+    invalid_sort_direction: () => "Ongeldige sorteerrigting.",
+    too_many_sorts: ({ max }) => `'n Sortering neem hoogstens ${max} kolomme.`,
+    invalid_cursor: () => "Die wyser kan nie gedekodeer word nie.",
+    invalid_limit: () => "Die bladsygrootte is nie 'n getal nie.",
+    too_many_filters: ({ max }) =>
+      `Hoogstens ${max} van hierdie filters op een slag.`,
+    too_broad: () =>
+      "Dit pas te veel om vinnig te beantwoord. Voeg meer karakters of nog 'n filter by.",
+    narrow_first: ({ limit }) =>
+      `Hierdie filters laat meer as ${limit} rye oor. Vernou hulle eers, of verwyder die reeks, die teksfilter of Pas enige.`,
+    export_too_large: ({ limit }) =>
+      `Meer as ${limit} rye pas. Vernou die filters om hulle uit te voer.`,
+    transition_refused: ({ to }) => `'n Skuif na ${to} word nie toegelaat nie.`,
+    unknown_row: () => "Daardie ry bestaan nie meer nie.",
+    over_cap: ({ cap }) =>
+      `Meer as ${cap} rye pas en geen teller tel hierdie filter op nie.`,
+    not_found: () => "Die bediener beantwoord nie hierdie versoek nie.",
+    internal: () => "Die navraag het misluk.",
+    request_failed: () => "Die versoek het misluk.",
+  },
+  errorFallback: ({ code }) => `Die versoek het misluk (${code}).`,
+};
