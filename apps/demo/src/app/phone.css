@@ -87,10 +87,11 @@
 
   .workspace-body:has(> .workspace-chips > [data-part="filter-sidebar-trigger"])
     > .qg-filter-bar
-    > .qg-field:not([data-kind="search"], [data-kind="sort"]),
-  .workspace-body:has(> .workspace-chips > [data-part="filter-sidebar-trigger"])
-    > .qg-filter-bar
-    :is([data-sort="then"], [data-sort-then]),
+    :is(
+      .qg-field:not([data-kind="search"], [data-kind="sort"]),
+      [data-sort="then"],
+      [data-sort-then]
+    ),
   [data-skeleton="workspace"]
     > .skeleton-filters
     > .skeleton-control:not([data-kind="search"], [data-kind="sort"]) {
