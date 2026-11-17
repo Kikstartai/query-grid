@@ -19,6 +19,7 @@ interface WorkspacePartsProps {
   barFields?: string[];
   textFields?: string[];
   views?: ViewOption[];
+  phoneView?: string | null;
   children: ReactNode;
 }
 
@@ -27,11 +28,15 @@ export function WorkspaceParts({
   barFields,
   textFields,
   views = VIEWS,
+  phoneView = "list",
   children,
 }: WorkspacePartsProps) {
+  const phoneDefault = views.some((option) => option.view === phoneView)
+    ? phoneView
+    : null;
   return (
     <>
-      <PhoneDefaultView />
+      {phoneDefault ? <PhoneDefaultView view={phoneDefault} /> : null}
       <div className="workspace-tools">
         <CountDisplay />
         <span className="workspace-spacer" />

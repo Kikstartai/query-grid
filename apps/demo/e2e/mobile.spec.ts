@@ -32,6 +32,15 @@ test("a phone opens the orders in the card list", async ({ page }) => {
   await expectNoSidewaysScroll(page);
 });
 
+test("the grid features page stays in the grid on a phone", async ({
+  page,
+}) => {
+  await open(page, "/features");
+  await expect(page.locator("[data-part=grid]")).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page).not.toHaveURL(/view=/);
+});
+
 test("a view named in the URL is kept", async ({ page }) => {
   await open(page, "/orders?view=board");
   await expect(page.locator("[data-part=board]")).toBeVisible();

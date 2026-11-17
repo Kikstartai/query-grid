@@ -41,6 +41,7 @@ export function FeaturesWorkspace() {
           <WorkspaceParts
             filterFields={TASK_FILTER_FIELDS}
             textFields={TASK_TEXT_FIELDS}
+            phoneView={null}
           >
             <FeaturesView />
           </WorkspaceParts>
