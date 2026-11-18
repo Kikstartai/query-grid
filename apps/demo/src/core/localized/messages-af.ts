@@ -10,8 +10,8 @@ export const AF_MESSAGES: QueryGridMessages = {
     `${formatted} ${selectPlural(locale, count, { one: "ry", other: "rye" })}`,
   rowsCapped: ({ formatted }) => `${formatted}+ rye`,
   loaded: ({ rows }) => `${rows} gelaai`,
-  loadedInPages: ({ rows, pages, locale }) =>
-    `${rows} gelaai in ${pages} keyset-${selectPlural(locale, pages, { one: "bladsy", other: "bladsye" })}`,
+  loadedInPages: ({ rows, pages }) =>
+    `${rows} gelaai in ${pages.formatted} keyset-${selectPlural(pages.locale, pages.count, { one: "bladsy", other: "bladsye" })}`,
   view: "Aansig",
   countUnavailable: "Telling nie beskikbaar nie",
   counting: "Tel…",

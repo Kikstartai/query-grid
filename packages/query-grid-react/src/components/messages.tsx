@@ -18,6 +18,8 @@ import {
   type TextOp,
 } from "@kikstart/query-grid";
 
+export { formatList } from "@kikstart/query-grid";
+
 type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & {
   other: string;
 };
@@ -60,11 +62,7 @@ export interface QueryGridMessages {
   rows: (params: CountParams) => string;
   rowsCapped: (params: CountParams) => string;
   loaded: (params: { rows: string }) => string;
-  loadedInPages: (params: {
-    rows: string;
-    pages: number;
-    locale: string;
-  }) => string;
+  loadedInPages: (params: { rows: string; pages: CountParams }) => string;
   view: string;
   countUnavailable: string;
   counting: string;
@@ -214,7 +212,6 @@ export type QueryGridMessageOverrides = Partial<
 } & { errors?: QueryGridMessages["errors"] };
 
 const pluralRules = new Map<string, Intl.PluralRules>();
-const listFormats = new Map<string, Intl.ListFormat>();
 
 export function selectPlural(
   locale: string,
@@ -226,19 +223,6 @@ export function selectPlural(
   return forms[rules.select(count)] ?? forms.other;
 }
 
-export function formatList(
-  locale: string,
-  items: string[],
-  type: Intl.ListFormatType = "conjunction",
-): string {
-  const key = `${locale}|${type}`;
-  const format =
-    listFormats.get(key) ??
-    new Intl.ListFormat(locale, { style: "long", type });
-  listFormats.set(key, format);
-  return format.format(items);
-}
-
 export const DEFAULT_MESSAGES: QueryGridMessages = {
   loading: "Loading…",
   noRows: "No rows match.",
@@ -246,8 +230,8 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     `${formatted} ${selectPlural(locale, count, { one: "row", other: "rows" })}`,
   rowsCapped: ({ formatted }) => `${formatted}+ rows`,
   loaded: ({ rows }) => `${rows} loaded`,
-  loadedInPages: ({ rows, pages, locale }) =>
-    `${rows} loaded in ${pages} keyset ${selectPlural(locale, pages, { one: "page", other: "pages" })}`,
+  loadedInPages: ({ rows, pages }) =>
+    `${rows} loaded in ${pages.formatted} keyset ${selectPlural(pages.locale, pages.count, { one: "page", other: "pages" })}`,
   view: "View",
   countUnavailable: "Count unavailable",
   counting: "Counting…",
@@ -620,7 +604,10 @@ export function formatLoaded(
   if (pages === undefined) {
     return messages.loaded({ rows: text });
   }
-  return messages.loadedInPages({ rows: text, pages, locale });
+  return messages.loadedInPages({
+    rows: text,
+    pages: countParams(pages, locale),
+  });
 }
 
 function formatParams(params: ProblemParams, locale: string): MessageParams {

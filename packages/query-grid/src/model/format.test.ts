@@ -6,6 +6,7 @@ import { formatCount, formatMoney, formatSum, formatValue } from "./format.ts";
 const PRICE: BaseFieldDef = { key: "price", label: "Price", type: "money" };
 const FEE: BaseFieldDef = { ...PRICE, key: "fee", currency: "EUR" };
 const UNITS: BaseFieldDef = { key: "units", label: "Units", type: "integer" };
+const TAGS: BaseFieldDef = { key: "tags", label: "Tags", type: "array" };
 
 describe("formatting", () => {
   test("the locale is an argument and the currency is the field's", () => {
@@ -18,7 +19,13 @@ describe("formatting", () => {
   test("a sum is money in the field's currency, or a grouped number", () => {
     expect(formatSum(FEE, 123456, "de-DE")).toBe("1.234,56\u00a0€");
     expect(formatSum(UNITS, 1234567, "de-DE")).toBe("1.234.567");
-    expect(formatValue(UNITS, 1234567, "de-DE")).toBe("1234567");
+    expect(formatValue(UNITS, 1234567, "de-DE")).toBe("1.234.567");
     expect(formatCount(1234567)).toBe("1,234,567");
+  });
+
+  test("an integer and a list follow the locale's digits and separators", () => {
+    expect(formatValue(UNITS, 137, "ar-EG")).toBe("١٣٧");
+    expect(formatValue(TAGS, ["a", "b"])).toBe("a, b");
+    expect(formatValue(TAGS, ["a", "b", "c"], "ar-EG")).toBe("a، وb، وc");
   });
 });

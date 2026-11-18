@@ -17,12 +17,12 @@ export const AR_MESSAGES: QueryGridMessages = {
     }),
   rowsCapped: ({ formatted }) => `أكثر من ${formatted} صف`,
   loaded: ({ rows }) => `تم تحميل ${rows}`,
-  loadedInPages: ({ rows, pages, locale }) =>
-    `تم تحميل ${rows} في ${selectPlural(locale, pages, {
+  loadedInPages: ({ rows, pages }) =>
+    `تم تحميل ${rows} في ${selectPlural(pages.locale, pages.count, {
       one: "صفحة keyset واحدة",
       two: "صفحتَي keyset",
-      few: `${pages} صفحات keyset`,
-      other: `${pages} صفحة keyset`,
+      few: `${pages.formatted} صفحات keyset`,
+      other: `${pages.formatted} صفحة keyset`,
     })}`,
   view: "العرض",
   countUnavailable: "العدد غير متاح",

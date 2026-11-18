@@ -721,6 +721,9 @@ describe("messages", () => {
     expect(formatLoaded(DEFAULT_MESSAGES, 500, 1, "en")).toBe(
       "500 rows loaded in 1 keyset page",
     );
+    expect(formatLoaded(DEFAULT_MESSAGES, 2000, 1200, "de-DE")).toBe(
+      "2.000 rows loaded in 1.200 keyset pages",
+    );
     const welsh = {
       ...DEFAULT_MESSAGES,
       rows: ({ count, locale }: { count: number; locale: string }) =>

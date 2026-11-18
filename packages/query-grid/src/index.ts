@@ -146,6 +146,7 @@ export {
   DEFAULT_CURRENCY,
   DEFAULT_LOCALE,
   formatCount,
+  formatList,
   formatMoney,
   formatSum,
   formatValue,

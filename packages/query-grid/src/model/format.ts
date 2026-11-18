@@ -6,10 +6,10 @@ export const DEFAULT_CURRENCY = "USD";
 const dateTimes = new Map<string, Intl.DateTimeFormat>();
 const dates = new Map<string, Intl.DateTimeFormat>();
 const decimals = new Map<string, Intl.NumberFormat>();
-const LIST_SEPARATOR = ", ";
 const DECIMAL_DIGITS = 9;
 const integers = new Map<string, Intl.NumberFormat>();
 const moneys = new Map<string, Intl.NumberFormat>();
+const lists = new Map<string, Intl.ListFormat>();
 
 function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
   const existing = cache.get(key);
@@ -41,6 +41,18 @@ export function formatCount(count: number, locale = DEFAULT_LOCALE): string {
   return cached(integers, locale, () => new Intl.NumberFormat(locale)).format(
     count,
   );
+}
+
+export function formatList(
+  locale: string,
+  items: string[],
+  type: Intl.ListFormatType = "conjunction",
+): string {
+  return cached(
+    lists,
+    `${locale}|${type}`,
+    () => new Intl.ListFormat(locale, { style: "long", type }),
+  ).format(items);
 }
 
 export function formatMoney(
@@ -110,7 +122,11 @@ export function formatValue(
     return "";
   }
   if (Array.isArray(value)) {
-    return value.map((item) => formatOption(field, item)).join(LIST_SEPARATOR);
+    return formatList(
+      locale,
+      value.map((item) => formatOption(field, item)),
+      "unit",
+    );
   }
   switch (field.type) {
     case "date": {
@@ -132,7 +148,9 @@ export function formatValue(
     case "money":
       return formatMoney(Number(value), locale, resolveCurrency(field));
     case "integer":
-      return String(value);
+      return Number.isNaN(Number(value))
+        ? String(value)
+        : formatCount(Number(value), locale);
     case "enum":
     case "array":
       return formatOption(field, String(value));
