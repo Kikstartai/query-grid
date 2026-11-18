@@ -17,7 +17,7 @@ export function TasksQueryProvider({ children }: TasksQueryProviderProps) {
     createMemorySource(TASKS_GRID_DEF, listTaskRows()),
   );
   return (
-    <QueryGridMessagesProvider locale="en-US">
+    <QueryGridMessagesProvider locale="en-US" currency="USD">
       <QueryGridProvider def={TASKS_GRID_DEF} source={source}>
         {children}
       </QueryGridProvider>

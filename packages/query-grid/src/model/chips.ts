@@ -112,6 +112,7 @@ function formatBound(
   key: string,
   bound: string | null,
   locale: string | undefined,
+  currency: string | undefined,
 ): string | null {
   const field = getField(def, key);
   if (!field || bound === null) {
@@ -120,7 +121,7 @@ function formatBound(
   if (isDateType(field.type)) {
     return fromDayBound(bound);
   }
-  return formatValue(field, bound, locale);
+  return formatValue(field, bound, locale, currency);
 }
 
 function formatEquals(
@@ -129,13 +130,14 @@ function formatEquals(
   value: string,
   labels: Record<string, string>,
   locale: string | undefined,
+  currency: string | undefined,
 ): string {
   const field = getField(def, key);
   const known = labels[labelKey(key, value)];
   if (known) {
     return known;
   }
-  return field ? formatValue(field, value, locale) : value;
+  return field ? formatValue(field, value, locale, currency) : value;
 }
 
 function getChipReserved(
@@ -153,6 +155,7 @@ function equalsChip(
   values: string[],
   labels: Record<string, string>,
   locale: string | undefined,
+  currency: string | undefined,
 ): EqualsChip {
   const field = getField(def, key);
   const excluded = field !== null && isExcluding(field, values);
@@ -164,7 +167,7 @@ function equalsChip(
     excluded,
     values: shown.map((value, index) => ({
       value,
-      text: formatEquals(def, key, value, labels, locale),
+      text: formatEquals(def, key, value, labels, locale, currency),
       reserved: getChipReserved(def, key, value),
       clear: { type: "removeEqualsValue", field: key, value: values[index] },
     })),
@@ -177,6 +180,7 @@ function rangeChip(
   query: QueryState,
   range: RangeState,
   locale: string | undefined,
+  currency: string | undefined,
 ): RangeChip {
   const { field } = range;
   const at = listRanges(query, field).indexOf(range);
@@ -186,8 +190,14 @@ function rangeChip(
     id: at === 0 ? `range:${field}` : `range:${field}:${at}`,
     kind: "range",
     field,
-    min: formatBound(def, field, value?.first ?? range.min, locale),
-    max: formatBound(def, field, value ? value.second : range.max, locale),
+    min: formatBound(def, field, value?.first ?? range.min, locale, currency),
+    max: formatBound(
+      def,
+      field,
+      value ? value.second : range.max,
+      locale,
+      currency,
+    ),
     preset: range.preset ?? null,
     op: value?.op ?? null,
     clear: { type: "clearRange", field, at },
@@ -200,6 +210,7 @@ function overlapChip(
   values: string[],
   labels: Record<string, string>,
   locale: string | undefined,
+  currency: string | undefined,
 ): OverlapChip {
   return {
     id: `overlap:${key}`,
@@ -207,7 +218,7 @@ function overlapChip(
     field: key,
     values: values.map((value) => ({
       value,
-      text: formatEquals(def, key, value, labels, locale),
+      text: formatEquals(def, key, value, labels, locale, currency),
       reserved: null,
       clear: { type: "removeOverlapValue", field: key, value },
     })),
@@ -220,15 +231,17 @@ export function listFilterChips(
   query: QueryState,
   labels: Record<string, string> = {},
   locale?: string,
+  currency?: string,
 ): FilterChip[] {
   const chips: FilterChip[] = Object.entries(query.equals).map(
-    ([field, values]) => equalsChip(def, field, values, labels, locale),
+    ([field, values]) =>
+      equalsChip(def, field, values, labels, locale, currency),
   );
   for (const [field, values] of Object.entries(query.overlaps)) {
-    chips.push(overlapChip(def, field, values, labels, locale));
+    chips.push(overlapChip(def, field, values, labels, locale, currency));
   }
   for (const range of query.ranges) {
-    chips.push(rangeChip(def, query, range, locale));
+    chips.push(rangeChip(def, query, range, locale, currency));
   }
   query.texts.forEach((text, at) => {
     chips.push({

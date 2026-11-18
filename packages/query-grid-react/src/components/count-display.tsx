@@ -10,7 +10,12 @@ import {
 } from "@kikstart/query-grid";
 
 import type { LoadStatus } from "./fields.ts";
-import { formatRows, useLocale, useMessages } from "./messages.tsx";
+import {
+  formatRows,
+  useCurrency,
+  useLocale,
+  useMessages,
+} from "./messages.tsx";
 
 export type CountValue = CountResult;
 
@@ -117,6 +122,7 @@ interface TotalCellProps {
 function TotalCellValue({ cell }: TotalCellProps) {
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   if (cell.reason) {
     return (
       <bdi className="qg-muted" data-total-reason>
@@ -129,7 +135,7 @@ function TotalCellValue({ cell }: TotalCellProps) {
   }
   return (
     <bdi className="qg-total-value" data-total-sum={cell.value.sum}>
-      {formatSum(cell.field, cell.value.sum, locale)}
+      {formatSum(cell.field, cell.value.sum, locale, currency)}
     </bdi>
   );
 }

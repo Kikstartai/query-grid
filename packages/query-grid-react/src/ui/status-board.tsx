@@ -13,6 +13,7 @@ import {
 
 import {
   formatProblemMessage,
+  useCurrency,
   useLocale,
   useMessages,
 } from "../components/messages.tsx";
@@ -49,6 +50,7 @@ function BoardLanes({
   const { moveRow } = useQueryGridActions();
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   const facetState = useFacetState();
   const [board] = useState(() =>
     createBoard(def, source, queries, transitions ?? null),
@@ -86,7 +88,9 @@ function BoardLanes({
         const facet = facetState.result.find((item) => item.value === status);
         return {
           id: status,
-          label: facetField ? formatValue(facetField, status, locale) : status,
+          label: facetField
+            ? formatValue(facetField, status, locale, currency)
+            : status,
           count: showCounts && facet ? facet.count : null,
           rows: lane.rows,
           hasNext: lane.hasNext,

@@ -30,6 +30,7 @@ interface SheetOptions {
   rows: GridRow[];
   columns: BaseFieldDef[];
   locale: string;
+  currency?: string;
   layout?: SheetLayout | null;
   keepRow?: number | null;
   onEndReached?: () => void;
@@ -135,6 +136,7 @@ export const sheet = definePrimitive({
     rows: "value",
     columns: "value",
     locale: "value",
+    currency: "value",
     layout: "value",
     keepRow: "value",
     onEndReached: "callback",
@@ -160,7 +162,12 @@ export const sheet = definePrimitive({
       const field = columns()[cell.col];
       const row = rows()[cell.row];
       return field && row
-        ? formatValue(field, row[field.key] ?? null, context.options().locale)
+        ? formatValue(
+            field,
+            row[field.key] ?? null,
+            context.options().locale,
+            context.options().currency,
+          )
         : "";
     };
     const virtual = createVirtualizer({

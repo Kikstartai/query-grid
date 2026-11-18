@@ -48,6 +48,7 @@ export function LocalizedMessages({ language, children }: LocalizedProps) {
   return (
     <QueryGridMessagesProvider
       locale={language.locale}
+      currency="USD"
       messages={MESSAGES[language.code]}
     >
       {children}

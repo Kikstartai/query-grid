@@ -533,7 +533,7 @@ describe("chips", () => {
         id: "range:total",
         kind: "range",
         field: "total",
-        min: "$10.00",
+        min: "10.00",
         max: null,
         preset: null,
         op: "gte",

@@ -21,7 +21,12 @@ import {
   type BoardMove,
   type BoardSource,
 } from "./board-primitive.ts";
-import { formatCell, useLocale, useMessages } from "./messages.tsx";
+import {
+  formatCell,
+  useCurrency,
+  useLocale,
+  useMessages,
+} from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { useLatest } from "./use-latest.ts";
 import { useVirtualItems } from "./use-virtual-items.ts";
@@ -65,6 +70,7 @@ interface BoardCardBodyProps {
 function BoardCardBody({ row, title, details }: BoardCardBodyProps) {
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   if (!row) {
     return null;
   }
@@ -73,13 +79,25 @@ function BoardCardBody({ row, title, details }: BoardCardBodyProps) {
       <div className="qg-board-card-title">
         <bdi>
           {title.label}{" "}
-          {formatCell(messages, title, row[title.key] ?? null, locale)}
+          {formatCell(
+            messages,
+            title,
+            row[title.key] ?? null,
+            locale,
+            currency,
+          )}
         </bdi>
       </div>
       {details.map((field) => (
         <div key={field.key} className="qg-board-card-detail">
           <bdi>
-            {formatCell(messages, field, row[field.key] ?? null, locale)}
+            {formatCell(
+              messages,
+              field,
+              row[field.key] ?? null,
+              locale,
+              currency,
+            )}
           </bdi>
         </div>
       ))}

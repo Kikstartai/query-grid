@@ -35,6 +35,7 @@ import {
   formatProblemMessage,
   formatReservedValue,
   formatRows,
+  useCurrency,
   useLocale,
   formatCell,
   useMessages,
@@ -232,6 +233,7 @@ function formatGroupLabel(
   field: BaseFieldDef | null,
   header: GroupHeader,
   locale: string,
+  currency: string | undefined,
 ): string {
   const reserved = field ? getReservedValue(field, header.value) : null;
   if (reserved) {
@@ -241,7 +243,7 @@ function formatGroupLabel(
     return header.label;
   }
   return field
-    ? formatCell(messages, field, header.value, locale)
+    ? formatCell(messages, field, header.value, locale, currency)
     : header.value;
 }
 
@@ -250,6 +252,7 @@ function formatGroupSums(
   totals: BaseFieldDef[],
   header: GroupHeader,
   locale: string,
+  currency: string | undefined,
 ): string | null {
   const { sums } = header;
   if (!sums || totals.length === 0) {
@@ -259,7 +262,7 @@ function formatGroupSums(
     locale,
     totals.map(
       (field) =>
-        `${messages.totalSum({ label: field.label })} ${formatSum(field, sums[field.key] ?? 0, locale)}`,
+        `${messages.totalSum({ label: field.label })} ${formatSum(field, sums[field.key] ?? 0, locale, currency)}`,
     ),
     "unit",
   );
@@ -270,6 +273,7 @@ function GroupedRoot({ children, ...host }: DataGridRootProps) {
   const query = useQueryState();
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   const controls = useGridControls();
   const { onSelectionChange, selectionKey } = useGridSelection();
   const [grouping] = useState(() => createGrouping(def, source, query));
@@ -294,14 +298,26 @@ function GroupedRoot({ children, ...host }: DataGridRootProps) {
       resetKey={grouping}
       groups={state.groups.map((group) => ({
         key: group.header.value,
-        label: formatGroupLabel(messages, field, group.header, locale),
+        label: formatGroupLabel(
+          messages,
+          field,
+          group.header,
+          locale,
+          currency,
+        ),
         count: formatRows(
           messages,
           group.header.count,
           locale,
           group.header.capped,
         ),
-        detail: formatGroupSums(messages, totals, group.header, locale),
+        detail: formatGroupSums(
+          messages,
+          totals,
+          group.header,
+          locale,
+          currency,
+        ),
         expanded: group.expanded,
         rows: group.rows,
         hasNext: group.hasNext,

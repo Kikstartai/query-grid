@@ -26,7 +26,13 @@ const FIELDS: BaseFieldDef[] = [
     options: KINDS,
     width: 140,
   },
-  { key: "price", label: "Price", type: "money", width: 120 },
+  {
+    key: "price",
+    label: "Price",
+    type: "money",
+    currency: "USD",
+    width: 120,
+  },
   { key: "stock", label: "Stock", type: "integer", width: 100 },
   { key: "id", label: "ID", type: "text", hidden: true },
 ];

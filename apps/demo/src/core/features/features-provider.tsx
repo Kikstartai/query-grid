@@ -21,7 +21,7 @@ export function FeaturesQueryProvider({
     createMemorySource(FEATURES_GRID_DEF, listTaskRows()),
   );
   return (
-    <QueryGridMessagesProvider locale="en-US">
+    <QueryGridMessagesProvider locale="en-US" currency="USD">
       <QueryGridProvider def={FEATURES_GRID_DEF} source={source}>
         {children}
       </QueryGridProvider>

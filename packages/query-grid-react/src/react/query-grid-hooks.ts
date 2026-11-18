@@ -30,7 +30,12 @@ import {
 } from "../components/column-state.ts";
 import type { FieldDef } from "../components/fields.ts";
 import type { ChipItem } from "../components/filter-bar.tsx";
-import { formatRows, useLocale, useMessages } from "../components/messages.tsx";
+import {
+  formatRows,
+  useCurrency,
+  useLocale,
+  useMessages,
+} from "../components/messages.tsx";
 import { useStoreValue } from "../components/use-store-value.ts";
 import { formatChip, formatReason } from "./query-grid-format.ts";
 import { useQueryGridMeta, useQueryGridState } from "./query-grid-context.tsx";
@@ -159,9 +164,10 @@ export function useFilterChips(): LabelledChip[] {
   const { def } = useQueryGridMeta();
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   const query = useQueryState();
   const known = useFieldLabels();
-  return listFilterChips(def, query, known, locale).map((chip) => ({
+  return listFilterChips(def, query, known, locale, currency).map((chip) => ({
     chip,
     item: formatChip(messages, def, chip),
   }));

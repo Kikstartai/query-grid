@@ -691,7 +691,7 @@ describe("each base component mounts alone, with plain props and no provider", (
     );
     expect(live).toContain('data-total-field="total"');
     expect(live).toContain("Total sum");
-    expect(live).toContain("$1,234.56");
+    expect(live).toContain("1,234.56");
     expect(live).toContain('data-total-field="number"');
     expect(live).toContain("Number sum");
     expect(live).toContain("2,001");
@@ -733,11 +733,11 @@ describe("messages", () => {
     expect(formatRows(welsh, 3, "cy")).toBe("few");
   });
 
-  test("the provider's locale formats every number, and each money field carries its own currency", () => {
+  test("the provider's locale formats every number, and a money field's own currency wins over the provider's", () => {
     const rand = { ...TOTAL, currency: "ZAR" };
     const euro = { ...TOTAL, key: "fee", label: "Fee", currency: "EUR" };
     const html = render(
-      <QueryGridMessagesProvider locale="de-DE">
+      <QueryGridMessagesProvider locale="de-DE" currency="USD">
         <CountDisplay
           status="idle"
           value={{ count: 620000, capped: false, source: "exact" }}
@@ -826,6 +826,27 @@ describe("messages", () => {
     expect(html).toContain("1.234 rows");
     expect(html.match(/genau/g)).toHaveLength(2);
     expect(html).toContain("5,678 rows");
+  });
+
+  test("a nested provider inherits the currency, and with none money is a plain two-digit number", () => {
+    const totals = (sum: number) => [
+      { field: TOTAL, value: { sum, rows: 1, source: "live" as const } },
+    ];
+    const html = render(
+      <QueryGridMessagesProvider currency="EUR">
+        <QueryGridMessagesProvider locale="de-DE">
+          <TotalFooter totals={totals(123456)} />
+        </QueryGridMessagesProvider>
+        <QueryGridMessagesProvider currency="JPY">
+          <TotalFooter totals={totals(500)} />
+        </QueryGridMessagesProvider>
+      </QueryGridMessagesProvider>,
+    );
+    expect(html).toContain("1.234,56 €");
+    expect(html).toContain("¥5");
+    const plain = render(<TotalFooter totals={totals(123400)} />);
+    expect(plain).toContain("1,234.00");
+    expect(plain).not.toContain("$");
   });
 
   test("an override keeps the defaults it does not name", () => {

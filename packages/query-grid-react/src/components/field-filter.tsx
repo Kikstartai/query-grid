@@ -56,6 +56,7 @@ import {
   listReservedValues,
   normalizeEqualsValues,
   RANGE_OPS,
+  moneyFormatOptions,
   resolveCurrency,
   resolveRangeValue,
   toNumberBound,
@@ -71,6 +72,7 @@ import type { ControlOption, ControlState } from "./fields.ts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
 import {
   formatReservedValue,
+  useCurrency,
   useLocale,
   useMessages,
   type QueryGridMessages,
@@ -685,6 +687,7 @@ function NumberBound({
 }: NumberBoundProps) {
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   const label = { label: field.label };
   const names = {
     min: messages.rangeFrom(label),
@@ -693,7 +696,7 @@ function NumberBound({
   };
   const numberFormat: Intl.NumberFormatOptions | undefined =
     field.type === "money"
-      ? { style: "currency", currency: resolveCurrency(field) }
+      ? moneyFormatOptions(resolveCurrency(field, currency))
       : undefined;
   return (
     <NumberInput

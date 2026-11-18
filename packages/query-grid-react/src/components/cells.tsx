@@ -10,7 +10,13 @@ import {
 } from "@kikstart/query-grid";
 
 import type { FieldDef } from "./fields.ts";
-import { formatCell, formatList, useLocale, useMessages } from "./messages.tsx";
+import {
+  formatCell,
+  formatList,
+  useCurrency,
+  useLocale,
+  useMessages,
+} from "./messages.tsx";
 
 const LIST_MAX_ITEMS = 3;
 
@@ -115,21 +121,24 @@ export interface FieldCellProps {
 export function FieldCell({ field, value, row }: FieldCellProps) {
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   if (field.cell) {
     return field.cell(value, row);
   }
   if (field.render === "badge") {
     return (
       <BadgeCell
-        label={formatCell(messages, field, value, locale)}
+        label={formatCell(messages, field, value, locale, currency)}
         tone={field.tones?.[String(value)]}
       />
     );
   }
   if (field.render === "list" && Array.isArray(value)) {
     return (
-      <ListCell items={value.map((item) => formatValue(field, item, locale))} />
+      <ListCell
+        items={value.map((item) => formatValue(field, item, locale, currency))}
+      />
     );
   }
-  return <bdi>{formatCell(messages, field, value, locale)}</bdi>;
+  return <bdi>{formatCell(messages, field, value, locale, currency)}</bdi>;
 }

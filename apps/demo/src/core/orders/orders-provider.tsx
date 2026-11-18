@@ -17,7 +17,7 @@ interface OrdersQueryProviderProps {
 
 export function OrdersQueryProvider({ children }: OrdersQueryProviderProps) {
   return (
-    <QueryGridMessagesProvider locale={ORDERS_LOCALE}>
+    <QueryGridMessagesProvider locale={ORDERS_LOCALE} currency="ZAR">
       <QueryGridProvider def={ORDERS_GRID_DEF} source={ORDERS_SOURCE}>
         {children}
       </QueryGridProvider>

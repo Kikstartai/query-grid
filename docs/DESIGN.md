@@ -44,12 +44,12 @@ Three npm packages in one repo, released together at one version.
 
 ### `@kikstart/query-grid-react`
 
-| Export         | Holds                                                                                                                               |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `./components` | controlled base components, `QueryGridMessagesProvider`, `useMessages`, `useLocale`, the column-state API, `FieldDef` and `GridDef` |
-| `.`            | `QueryGridProvider`, `StaticQueryGridProvider` and the hooks                                                                        |
-| `./ui`         | one bound wrapper per base component, under the same name                                                                           |
-| `./styles.css` | the package's own styles                                                                                                            |
+| Export         | Holds                                                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `./components` | controlled base components, `QueryGridMessagesProvider`, `useMessages`, `useLocale`, `useCurrency`, the column-state API, `FieldDef` and `GridDef` |
+| `.`            | `QueryGridProvider`, `StaticQueryGridProvider` and the hooks                                                                                       |
+| `./ui`         | one bound wrapper per base component, under the same name                                                                                          |
+| `./styles.css` | the package's own styles                                                                                                                           |
 
 - A base component takes props and calls back. It imports no provider hook and knows no query, source, index or URL. An option or a control may carry `disabled` and a `reason`.
 - A bound wrapper reads the provider and renders the base component of the same name.
@@ -248,7 +248,7 @@ interface QueryState {
 ## Localization
 
 - **The locale is the app's.** `QueryGridMessagesProvider` takes `locale` (default `en`) and `messages`. Every count, sum, money value, date, plural and list a component renders is formatted in that locale (an integer field's own value, such as an order number, is shown as written), so messages and numbers cannot disagree. A def carries no locale.
-- **The currency is the data's.** A money field carries its own `currency` (default `USD`), so two money fields of one grid can differ.
+- **The currency is the host's, never the locale's.** `QueryGridMessagesProvider` takes `currency` beside `locale`, nested providers inherit it, and core's `formatValue`, `formatSum` and `formatMoney` take it as an argument after the locale. A money field resolves `field.currency ?? currency`; with neither, it formats as a plain number with two fraction digits and no symbol.
 - **Every sentence a user reads comes from one messages object**, through `useMessages()`. English is built in, and with no provider a component renders English. An override names only what it changes, and a nested provider keeps the locale and the messages the outer one set and it does not name.
 - **Core and the Postgres package emit codes and params, never English.** A refusal reason, a `QueryRejected`, a failed request and an unavailable total are codes; a chip is data. The React package turns each into a sentence.
 - **Plurals** go through `Intl.PluralRules` and lists through `Intl.ListFormat`.

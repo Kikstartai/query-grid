@@ -513,22 +513,26 @@ function mergeMessages(
 interface MessagesContextValue {
   messages: QueryGridMessages;
   locale: string;
+  currency: string | undefined;
 }
 
 const MessagesContext = createContext<MessagesContextValue>({
   messages: DEFAULT_MESSAGES,
   locale: DEFAULT_LOCALE,
+  currency: undefined,
 });
 
 export interface QueryGridMessagesProviderProps {
   messages?: QueryGridMessageOverrides;
   locale?: string;
+  currency?: string;
   children: ReactNode;
 }
 
 export function QueryGridMessagesProvider({
   messages = {},
   locale,
+  currency,
   children,
 }: QueryGridMessagesProviderProps) {
   const outer = use(MessagesContext);
@@ -537,6 +541,7 @@ export function QueryGridMessagesProvider({
       value={{
         messages: mergeMessages(outer.messages, messages),
         locale: locale ?? outer.locale,
+        currency: currency ?? outer.currency,
       }}
     >
       {children}
@@ -550,6 +555,10 @@ export function useMessages(): QueryGridMessages {
 
 export function useLocale(): string {
   return use(MessagesContext).locale;
+}
+
+export function useCurrency(): string | undefined {
+  return use(MessagesContext).currency;
 }
 
 export function formatReservedValue(
@@ -573,11 +582,12 @@ export function formatCell(
   field: BaseFieldDef,
   value: GridValue,
   locale: string,
+  currency?: string,
 ): string {
   if (field.type === "boolean" && value !== null) {
     return formatBoolean(messages, value);
   }
-  return formatValue(field, value, locale);
+  return formatValue(field, value, locale, currency);
 }
 
 export function countParams(count: number, locale: string): CountParams {

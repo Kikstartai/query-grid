@@ -108,6 +108,7 @@ export {
   formatRows,
   QueryGridMessagesProvider,
   selectPlural,
+  useCurrency,
   useLocale,
   useMessages,
   type CountParams,

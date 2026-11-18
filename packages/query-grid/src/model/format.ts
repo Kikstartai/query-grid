@@ -1,7 +1,6 @@
 import type { BaseFieldDef, GridValue } from "./grid-def.ts";
 
 export const DEFAULT_LOCALE = "en";
-export const DEFAULT_CURRENCY = "USD";
 
 const dateTimes = new Map<string, Intl.DateTimeFormat>();
 const dates = new Map<string, Intl.DateTimeFormat>();
@@ -9,6 +8,7 @@ const decimals = new Map<string, Intl.NumberFormat>();
 const DECIMAL_DIGITS = 9;
 const integers = new Map<string, Intl.NumberFormat>();
 const moneys = new Map<string, Intl.NumberFormat>();
+const MONEY_DIGITS = 2;
 const lists = new Map<string, Intl.ListFormat>();
 
 function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
@@ -21,8 +21,11 @@ function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
   return created;
 }
 
-export function resolveCurrency(field: BaseFieldDef): string {
-  return field.currency ?? DEFAULT_CURRENCY;
+export function resolveCurrency(
+  field: BaseFieldDef,
+  currency?: string,
+): string | undefined {
+  return field.currency ?? currency;
 }
 
 export function isCurrencyCode(code: string): boolean {
@@ -55,15 +58,26 @@ export function formatList(
   ).format(items);
 }
 
+export function moneyFormatOptions(
+  currency: string | undefined,
+): Intl.NumberFormatOptions {
+  return currency
+    ? { style: "currency", currency }
+    : {
+        minimumFractionDigits: MONEY_DIGITS,
+        maximumFractionDigits: MONEY_DIGITS,
+      };
+}
+
 export function formatMoney(
   cents: number,
   locale = DEFAULT_LOCALE,
-  currency = DEFAULT_CURRENCY,
+  currency?: string,
 ): string {
   return cached(
     moneys,
-    `${locale}|${currency}`,
-    () => new Intl.NumberFormat(locale, { style: "currency", currency }),
+    `${locale}|${currency ?? ""}`,
+    () => new Intl.NumberFormat(locale, moneyFormatOptions(currency)),
   ).format(cents / 100);
 }
 
@@ -107,9 +121,10 @@ export function formatSum(
   field: BaseFieldDef,
   sum: number,
   locale = DEFAULT_LOCALE,
+  currency?: string,
 ): string {
   return field.type === "money"
-    ? formatMoney(sum, locale, resolveCurrency(field))
+    ? formatMoney(sum, locale, resolveCurrency(field, currency))
     : formatCount(sum, locale);
 }
 
@@ -117,6 +132,7 @@ export function formatValue(
   field: BaseFieldDef,
   value: GridValue,
   locale = DEFAULT_LOCALE,
+  currency?: string,
 ): string {
   if (value === null || value === "") {
     return "";
@@ -146,7 +162,11 @@ export function formatValue(
         : formatDateTime(date, locale);
     }
     case "money":
-      return formatMoney(Number(value), locale, resolveCurrency(field));
+      return formatMoney(
+        Number(value),
+        locale,
+        resolveCurrency(field, currency),
+      );
     case "integer":
       return Number.isNaN(Number(value))
         ? String(value)

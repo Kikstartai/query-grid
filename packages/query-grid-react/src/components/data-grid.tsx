@@ -65,7 +65,12 @@ import {
   GripIcon,
   MoreIcon,
 } from "./icons.tsx";
-import { countParams, useLocale, useMessages } from "./messages.tsx";
+import {
+  countParams,
+  useCurrency,
+  useLocale,
+  useMessages,
+} from "./messages.tsx";
 import { FILL_COLUMN_STYLE, withData } from "./part-props.ts";
 import { rowRail, type RailView } from "./row-rail.ts";
 import { useColumnState } from "./use-column-state.ts";
@@ -941,6 +946,7 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
   const grouped = props.groups ? layoutGroups(props.groups) : null;
   const rows = grouped?.rows ?? props.rows;
   const locale = useLocale();
+  const currency = useCurrency();
   const { columns: state, update } = useColumnState(props);
   const columns = layoutColumns(fields, state);
   const [menu] = useState(() => createMenuController<GridRow>());
@@ -987,6 +993,7 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
     rows,
     columns: columns.map((column) => column.field),
     locale,
+    currency,
     layout: grouped?.layout ?? null,
     keepRow,
     onEndReached: props.onEndReached,
@@ -1001,7 +1008,7 @@ function GridFrame({ children, rail, keepRow, ...props }: GridFrameProps) {
       : undefined,
   });
   const labelOf = (row: GridRow) =>
-    formatRowLabel(props, columns[0]?.field, row, locale);
+    formatRowLabel(props, columns[0]?.field, row, locale, currency);
 
   const entryCount = grouped?.entries.length ?? rows.length;
 
@@ -1069,11 +1076,14 @@ function formatRowLabel(
   first: FieldDef | undefined,
   row: GridRow,
   locale: string,
+  currency: string | undefined,
 ): string {
   if (props.rowLabel) {
     return props.rowLabel(row);
   }
-  return first ? formatValue(first, row[first.key] ?? null, locale) : row.id;
+  return first
+    ? formatValue(first, row[first.key] ?? null, locale, currency)
+    : row.id;
 }
 
 function orderRows(rows: GridRow[], order: string[]): GridRow[] {
@@ -1085,12 +1095,15 @@ function orderRows(rows: GridRow[], order: string[]): GridRow[] {
 function ReorderableGrid(props: DataGridRootProps) {
   const messages = useMessages();
   const locale = useLocale();
+  const currency = useCurrency();
   const { rows, onRowReorder } = props;
   const ids = rows.map((row) => row.id);
   const first = props.fields.find((field) => !field.hidden);
   const labelOf = (id: string) => {
     const row = rows.find((item) => item.id === id);
-    return row ? formatRowLabel(props, first, row, locale) : undefined;
+    return row
+      ? formatRowLabel(props, first, row, locale, currency)
+      : undefined;
   };
   const rail = usePrimitive(rowRail, {
     order: ids,

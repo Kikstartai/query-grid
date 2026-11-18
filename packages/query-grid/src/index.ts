@@ -143,7 +143,6 @@ export {
   type ReservedValue,
 } from "./model/field-values.ts";
 export {
-  DEFAULT_CURRENCY,
   DEFAULT_LOCALE,
   formatCount,
   formatList,
@@ -152,6 +151,7 @@ export {
   formatValue,
   isCurrencyCode,
   labelKey,
+  moneyFormatOptions,
   resolveCurrency,
 } from "./model/format.ts";
 export type { LoadStatus } from "./model/load.ts";
