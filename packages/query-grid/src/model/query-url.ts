@@ -117,7 +117,7 @@ export function encodeQuery(
   if (query.group !== null) {
     params.set(GROUP_PARAM, query.group);
   }
-  if (query.cursor) {
+  if (query.cursor !== null) {
     params.set(CURSOR_PARAM, query.cursor);
   }
   return params;
