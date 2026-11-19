@@ -30,7 +30,7 @@ export default defineConfig({
     {
       name: "read",
       use: browser,
-      testIgnore: ["board.spec.ts", "mobile.spec.ts", "shots.spec.ts"],
+      testIgnore: ["board.spec.ts", "mobile.spec.ts"],
     },
     // Board moves write to the database, so they run once every read-only check has finished.
     {
@@ -40,7 +40,6 @@ export default defineConfig({
       dependencies: ["read"],
     },
     { name: "mobile", use: phone, testMatch: "mobile.spec.ts" },
-    { name: "shots", use: browser, testMatch: "shots.spec.ts" },
   ],
   webServer: {
     command: `bun x next start -p ${PORT}`,

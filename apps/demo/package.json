@@ -12,7 +12,6 @@
     "db:setup": "bun --env-file=.env.local db/setup.ts",
     "dev": "next dev -p 3040",
     "e2e": "playwright test --project=read --project=mobile --project=board",
-    "e2e:shots": "playwright test --project=shots",
     "lint": "eslint .",
     "start": "next start -p 3040",
     "test": "bun test src",

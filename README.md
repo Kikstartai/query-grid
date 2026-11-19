@@ -1186,106 +1186,6 @@ Measured on the proof of concept this library came from: embedded Postgres 18.6 
 - Search by term, p95: `Smith` 9.2 ms; `Zanele Dlam` 71.1 ms; `Mokoena` 114.5 ms; `mok` 131.8 ms when answered, refused in 28 of 33 runs; `a M` refused in all 33. A refused run is the server returning 400 at the 120 ms budget.
 - Ordered indexes cost the same at 620,000 and at 10,000,000 rows. Substring search does not: sixteen times the data was ten to twenty times the time.
 
-## Walkthrough
-
-Captured with agent-browser at 1500 by 900 from a local production build (`next start`) of 0.2.0 against the Neon database, by the agent-browser script that [`apps/demo/e2e/shots.spec.ts`](apps/demo/e2e/shots.spec.ts) replaces (`bun run --filter demo e2e:shots` retakes them). They were not retaken for 0.3.0, so they predate two visible changes: the grid's selection readouts now sit beside the Columns button, and the cards show the status badge.
-
-![Landing page](docs/screenshots/01-landing.png)
-
-The landing page: what the library is, the three principles, the install line, the GitHub link and the live routes, in kikstart's brand.
-
-![Default grid](docs/screenshots/02-default-grid.png)
-
-The default query: the filter bar, the always-visible chip row, the status facets with counts from the counter table, the exact count, the first keyset page and the footer total. Total's range inputs are disabled because the sort is Created. The dot beside each status is the client def's own `cell`.
-
-![Filter sidebar](docs/screenshots/03-filter-sidebar.png)
-
-The filter sidebar, a non-modal Drawer: one control per filterable field over the same query state. Region is set, so the controls no index combines with it are disabled.
-
-![Chips and Reset](docs/screenshots/04-chips-reset.png)
-
-One chip per active filter and one for the sort, each with its own remove button, and Reset for the lot.
-
-![Disabled controls with reasons](docs/screenshots/05-disabled-with-reasons.png)
-
-Status Paid sorted by Total. Region, Channel, Customer, the Created range and the search are disabled, and each says which index is missing.
-
-![Capped count, no total](docs/screenshots/06-capped-count-no-total.png)
-
-A range on Total has no counter, so the count stops at `10 000+` and offers the exact count. More than 10,000 rows match, so the footer says no total is available and why: the server sent `over_cap` and the number, and the sentence is the client's.
-
-![Exact count](docs/screenshots/07-exact-count.png)
-
-The exact count runs only after the button is pressed: 10,874 rows.
-
-![Live total](docs/screenshots/08-total-live.png)
-
-A week of Paid orders is 1,539 rows, under the cap, so the footer sums them live in one bounded query.
-
-![Total from the counter table](docs/screenshots/09-total-from-counter.png)
-
-A status alone is a declared grouping: the count and the total are a one-row read of the trigger-maintained counter table.
-
-![Search, answered](docs/screenshots/10-search-answered.png)
-
-The search matched 34 orders across customer name and order number. Every match is loaded, so the sort is offered and runs in memory, here by Total; every other filter is disabled.
-
-![Search, refused](docs/screenshots/11-search-refused.png)
-
-The term `---` gives the trigram index nothing to narrow, so the server refuses it at its 120 ms budget with a 400 `too_broad`, and the grid, count and total render that code as a sentence.
-
-![Header filter](docs/screenshots/12-header-filter.png)
-
-A header carries its own filter popover and sort button, drawn from the same offers as the filter bar. The filter is a UI SDK Select inside a Popover.
-
-![Columns menu](docs/screenshots/13-columns-menu.png)
-
-The Columns menu shows, hides and pins columns with UI SDK Checkboxes; the state is one small array persisted through the host's save and load functions.
-
-![Range selection](docs/screenshots/14-range-selection.png)
-
-A 5 by 4 cell range made with Shift and the arrow keys; Ctrl+C copies it as TSV.
-
-![Resize and pinned column](docs/screenshots/15-resize-pinned-scrolled.png)
-
-Customer resized from 200 to 300 px by dragging its handle, then the grid scrolled 520 px right and 600 px down: the select column, the pinned Order column and the header stay in place.
-
-![List view](docs/screenshots/16-list-view.png)
-
-The card list over the same query: the chips and the URL are unchanged by the switch.
-
-![Status board](docs/screenshots/17-board.png)
-
-One virtualised, keyset-paged column per status, each headed by its trigger-maintained count.
-
-![Board drag](docs/screenshots/18-board-drag.png)
-
-A Paid card dragged over Shipped: it has left its column and Shipped has opened a slot for it. Dropping it posts the status change, which the server checks against the transitions table.
-
-![One part alone](docs/screenshots/19-part-facets-alone.png)
-
-`/parts/facets` mounts the facet panel alone over the query state restored from the URL.
-
-![In-memory route](docs/screenshots/20-in-memory.png)
-
-The same parts over 400 rows held in the browser: two teams, a priority and a sort that no index would need to exist for, with the count, facet counts and total computed in JavaScript.
-
-![Token restyle](docs/screenshots/21-token-restyle.png)
-
-The same parts restyled by one 33-line stylesheet that repoints UI SDK's `--ui-*` tokens and adds three grid rules: every control, popup and the grid change, the package does not.
-
-![Several values per field](docs/screenshots/22-several-values.png)
-
-Status is Paid and Shipped, with Region Gauteng. The Select stays open and ticks both; the chip lists both values, each with its own remove button; the URL repeats `f.status_code`; and the server runs one `= ANY` over the `status_code`, `region` index.
-
-![Right to left](docs/screenshots/23-right-to-left.png)
-
-`/rtl` is the orders grid under `dir="rtl"`. The select column and the pinned Order column sit on the right, the filter sidebar opens from the left, the chips and their remove buttons mirror, and the text inside each cell keeps its own order.
-
-![Base components alone](docs/screenshots/24-base-components.png)
-
-`/components` is the base `DataGrid`, `FacetPanel`, `FilterChips`, `SortControl` and `CountDisplay` over sixty rows in a constant: no provider, no query state and no request.
-
 ## Develop
 
 ```bash
@@ -1318,7 +1218,6 @@ The demo needs `apps/demo/.env.local` holding `QUERY_GRID_DATABASE_URL`, a direc
 | `test`                             | def validity, the control enumeration with one and several values, migration parity (no database)                                                                                                                                                  |
 | `test:db`                          | indexes and triggers exist, keyset pages are gap-free, counters and totals stay exact, several values per field                                                                                                                                    |
 | `e2e`                              | the browser suite against `next start` on port 3040 (or `E2E_PORT`): refusals, counts, filters, grid, sort columns, export, selection, row open and actions, reorder, views, board, right to left, theme, layout shift                             |
-| `e2e:shots`                        | retakes the README screenshots into `docs/screenshots`                                                                                                                                                                                             |
 | `db:bench`                         | p50 and p95 of every index with `EXPLAIN (ANALYZE)`, with one value and with several, empty values, the search with filters, each expensive operation over a 100,000-row narrowed set and an export at its limit, written to `db/bench-results.md` |
 | `db:bench:quick`                   | the per-release check: a handful of representative cases with 5 runs each, about a minute, nothing written                                                                                                                                         |
 
