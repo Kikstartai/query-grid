@@ -15,6 +15,7 @@ import {
   type SortDirection,
   type SortState,
 } from "./grid-def.ts";
+import { listIndexProblems } from "./index-rules.ts";
 import type { Problem, ProblemParams } from "./problems.ts";
 import { SORT_MAX } from "./query-state.ts";
 
@@ -694,6 +695,10 @@ export function normalizeStoredGridDef(
   }
   if (def === null || run.problems.length > 0) {
     return { ok: false, problems: run.problems };
+  }
+  const problems = listIndexProblems(def).slice(0, PROBLEM_MAX);
+  if (problems.length > 0) {
+    return { ok: false, problems };
   }
   return { ok: true, def };
 }

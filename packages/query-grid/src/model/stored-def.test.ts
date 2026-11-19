@@ -553,6 +553,168 @@ describe("normalizeStoredGridDef", () => {
   });
 });
 
+describe("a stored def that reads cleanly must also suit its indexes", () => {
+  function indexProblem(code: string, params: Record<string, string>): Problem {
+    return { code, params };
+  }
+
+  test("a nullable field is not a keyset sort", () => {
+    expect(
+      listProblems(storedWith({ indexes: [{ equals: [], sort: "note" }] })),
+    ).toEqual([
+      indexProblem("index_nullable_sort", {
+        path: "indexes.0.sort",
+        field: "note",
+      }),
+    ]);
+  });
+
+  test("a range needs a sort whose type has one", () => {
+    expect(
+      listProblems(
+        storedWith({
+          indexes: [{ equals: [], sort: "customer_name", range: true }],
+        }),
+      ),
+    ).toEqual([
+      indexProblem("index_no_range", {
+        path: "indexes.0.range",
+        field: "customer_name",
+        type: "text",
+      }),
+    ]);
+  });
+
+  test("the sort is not also an equality", () => {
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ equals: ["status"], sort: "status" }] }),
+      ),
+    ).toEqual([
+      indexProblem("index_sort_is_equality", {
+        path: "indexes.0.sort",
+        field: "status",
+      }),
+    ]);
+  });
+
+  test("an array is neither a sort nor an equality", () => {
+    expect(
+      listProblems(storedWith({ indexes: [{ equals: [], sort: "tags" }] })),
+    ).toEqual([
+      indexProblem("index_array_sort", {
+        path: "indexes.0.sort",
+        field: "tags",
+      }),
+    ]);
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ equals: ["tags"], sort: "created_at" }] }),
+      ),
+    ).toEqual([
+      indexProblem("index_array_equality", {
+        path: "indexes.0.equals.0",
+        field: "tags",
+      }),
+    ]);
+  });
+
+  test("a then column is a non-null, orderable column not already in the index", () => {
+    const cases: [Record<string, unknown>, string, string][] = [
+      [
+        { equals: [], sort: "created_at", then: ["note"] },
+        "index_nullable_sort",
+        "note",
+      ],
+      [
+        { equals: [], sort: "created_at", then: ["tags"] },
+        "index_array_sort",
+        "tags",
+      ],
+      [
+        { equals: ["status"], sort: "created_at", then: ["status"] },
+        "index_then_repeats",
+        "status",
+      ],
+      [
+        { equals: [], sort: "created_at", then: ["created_at"] },
+        "index_then_repeats",
+        "created_at",
+      ],
+      [
+        { equals: [], sort: "created_at", then: ["id"] },
+        "index_then_repeats",
+        "id",
+      ],
+    ];
+    for (const [index, code, field] of cases) {
+      expect(listProblems(storedWith({ indexes: [index] }))).toEqual([
+        indexProblem(code, { path: "indexes.0.then.0", field }),
+      ]);
+    }
+  });
+
+  test("an empty column is nullable and neither an equality nor the sort", () => {
+    expect(
+      listProblems(
+        storedWith({
+          indexes: [{ equals: [], sort: "created_at", empty: ["total"] }],
+        }),
+      ),
+    ).toEqual([
+      indexProblem("index_never_empty", {
+        path: "indexes.0.empty.0",
+        field: "total",
+      }),
+    ]);
+    expect(
+      listProblems(
+        storedWith({
+          indexes: [{ equals: ["note"], sort: "created_at", empty: ["note"] }],
+        }),
+      ),
+    ).toEqual([
+      indexProblem("index_empty_is_filtered", {
+        path: "indexes.0.empty.0",
+        field: "note",
+      }),
+    ]);
+  });
+
+  test("the same index declared twice is a duplicate", () => {
+    const index = { equals: ["status"], sort: "created_at" };
+    expect(listProblems(storedWith({ indexes: [index, index] }))).toEqual([
+      indexProblem("index_duplicate", {
+        path: "indexes.1",
+        value: "status|created_at",
+      }),
+    ]);
+  });
+
+  test("a text index names a text field without options, an array index an array", () => {
+    expect(listProblems(storedWith({ textIndexes: ["status"] }))).toEqual([
+      indexProblem("index_not_text", {
+        path: "textIndexes.0",
+        field: "status",
+      }),
+    ]);
+    expect(listProblems(storedWith({ arrayIndexes: ["note"] }))).toEqual([
+      indexProblem("index_not_array", {
+        path: "arrayIndexes.0",
+        field: "note",
+      }),
+    ]);
+  });
+
+  test("index problems are capped at fifty too", () => {
+    const indexes = Array.from({ length: 60 }, () => ({
+      equals: [],
+      sort: "note",
+    }));
+    expect(listProblems(storedWith({ indexes }))).toHaveLength(50);
+  });
+});
+
 describe("a host limits the fields a stored def may name", () => {
   test("a field outside the list is an unknown field, and the def is refused", () => {
     const allowed = FULL_DEF.fields.map((field) => field.key);

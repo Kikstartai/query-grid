@@ -1,17 +1,19 @@
 import {
   getField,
-  isCurrencyCode,
-  isOverlapField,
-  isRangeType,
-  isTextField,
-  KEY_FIELD,
   indexId,
-  SORT_MAX,
+  isCurrencyCode,
+  KEY_FIELD,
+  listIndexProblems,
   type BaseFieldDef,
   type IndexDef,
+  type IndexProblem,
+  type IndexRuleCode,
+  type ProblemParams,
 } from "@kikstart/query-grid";
 
 import type { PostgresGridDef } from "./storage.ts";
+
+type IndexMessage = (params: ProblemParams, role: string) => string;
 
 const SEARCH_TYPES: BaseFieldDef["type"][] = [
   "text",
@@ -65,128 +67,66 @@ function validateSearch(def: PostgresGridDef, columns: string[]): string[] {
   return problems;
 }
 
-function validateOrderedIndex(def: PostgresGridDef, index: IndexDef): string[] {
-  if (!Array.isArray(index.equals)) {
-    return [
-      "an index needs `equals` and `sort`; the search columns are `search` on the def",
-    ];
+const UNKNOWN_ROLES: Record<string, string> = {
+  sort: "sort field",
+  then: "sort field",
+  equals: "equality field",
+  empty: "empty field",
+};
+
+const INDEX_MESSAGES: Record<IndexRuleCode, IndexMessage> = {
+  index_unknown_field: ({ field }, role) =>
+    `unknown ${UNKNOWN_ROLES[role] ?? "field"} ${field}`,
+  index_duplicate: ({ value }, role) =>
+    role === "then"
+      ? `${value} is sorted on twice`
+      : `${value} is declared twice`,
+  index_nullable_sort: () => "a nullable field cannot be a keyset sort",
+  index_no_range: ({ field, type }) =>
+    `${field} is a ${type}, which has no range filter`,
+  index_sort_is_equality: ({ field }) =>
+    `${field} is both an equality and the sort`,
+  index_array_sort: ({ field }) => `${field} is an array, which has no order`,
+  index_array_equality: ({ field }) =>
+    `${field} is an array; its index is declared in arrayIndexes`,
+  index_then_repeats: ({ field }) =>
+    `${field} is already an equality, the sort or the key`,
+  index_order_too_long: ({ max }) => `an order has at most ${max} columns`,
+  index_never_empty: ({ field }) => `${field} is never empty`,
+  index_empty_is_filtered: ({ field }) =>
+    `${field} is empty in every row of the index, so it cannot also be an equality or the sort`,
+  index_not_text: ({ field }) => `${field} is not a text field without options`,
+  index_not_array: ({ field }) => `${field} is not an array field`,
+};
+
+function describeIndexProblem(
+  indexes: IndexDef[],
+  { code, params }: IndexProblem,
+): string {
+  const [list, at, role = ""] = String(params.path).split(".");
+  if (list !== "indexes") {
+    return `${list}: ${INDEX_MESSAGES[code](params, role)}`;
   }
-  const id = indexId(index);
-  const sort = getField(def, index.sort);
-  if (!sort) {
-    return [`index ${id}: unknown sort field ${index.sort}`];
+  const id = indexId(indexes[Number(at)]);
+  if (role === "") {
+    return `index ${id} is declared twice`;
   }
-  const problems: string[] = [];
-  if (sort.nullable) {
-    problems.push(`index ${id}: a nullable field cannot be a keyset sort`);
-  }
-  if (index.range && !isRangeType(sort.type)) {
-    problems.push(
-      `index ${id}: ${index.sort} is a ${sort.type}, which has no range filter`,
-    );
-  }
-  if (index.equals.includes(index.sort)) {
-    problems.push(
-      `index ${id}: ${index.sort} is both an equality and the sort`,
-    );
-  }
-  if (isOverlapField(sort)) {
-    problems.push(`index ${id}: ${index.sort} is an array, which has no order`);
-  }
-  for (const key of index.equals) {
-    const field = getField(def, key);
-    if (!field) {
-      problems.push(`index ${id}: unknown equality field ${key}`);
-      continue;
-    }
-    if (isOverlapField(field)) {
-      problems.push(
-        `index ${id}: ${key} is an array; its index is declared in arrayIndexes`,
-      );
-    }
-  }
-  const then = index.then ?? [];
-  for (const key of then) {
-    const field = getField(def, key);
-    if (!field) {
-      problems.push(`index ${id}: unknown sort field ${key}`);
-      continue;
-    }
-    if (field.nullable) {
-      problems.push(`index ${id}: a nullable field cannot be a keyset sort`);
-    }
-    if (isOverlapField(field)) {
-      problems.push(`index ${id}: ${key} is an array, which has no order`);
-    }
-    if (index.equals.includes(key) || key === index.sort || key === KEY_FIELD) {
-      problems.push(
-        `index ${id}: ${key} is already an equality, the sort or the key`,
-      );
-    }
-  }
-  for (const key of new Set(
-    then.filter((key, at) => then.indexOf(key) !== at),
-  )) {
-    problems.push(`index ${id}: ${key} is sorted on twice`);
-  }
-  if (then.length + 1 > SORT_MAX) {
-    problems.push(`index ${id}: an order has at most ${SORT_MAX} columns`);
-  }
-  for (const key of index.empty ?? []) {
-    const field = getField(def, key);
-    if (!field) {
-      problems.push(`index ${id}: unknown empty field ${key}`);
-      continue;
-    }
-    if (!field.nullable) {
-      problems.push(`index ${id}: ${key} is never empty`);
-    }
-    if (index.equals.includes(key) || key === index.sort) {
-      problems.push(
-        `index ${id}: ${key} is empty in every row of the index, so it cannot also be an equality or the sort`,
-      );
-    }
-  }
-  return problems;
+  return `index ${id}: ${INDEX_MESSAGES[code](params, role)}`;
 }
 
-function validateFieldIndexes(def: PostgresGridDef): string[] {
-  const problems: string[] = [];
-  const check = (
-    name: string,
-    keys: string[],
-    fits: (field: BaseFieldDef) => boolean,
-    needs: string,
-  ) => {
-    for (const key of keys) {
-      const field = getField(def, key);
-      if (!field) {
-        problems.push(`${name}: unknown field ${key}`);
-        continue;
-      }
-      if (!fits(field)) {
-        problems.push(`${name}: ${key} is not ${needs}`);
-      }
-    }
-    for (const key of new Set(
-      keys.filter((key, at) => keys.indexOf(key) !== at),
-    )) {
-      problems.push(`${name}: ${key} is declared twice`);
-    }
-  };
-  check(
-    "textIndexes",
-    def.textIndexes ?? [],
-    isTextField,
-    "a text field without options",
-  );
-  check(
-    "arrayIndexes",
-    def.arrayIndexes ?? [],
-    isOverlapField,
-    "an array field",
-  );
-  return problems;
+function validateIndexes(def: PostgresGridDef): string[] {
+  const indexes = def.indexes.filter((index) => Array.isArray(index.equals));
+  const shapes = def.indexes.length - indexes.length;
+  return [
+    ...Array.from(
+      { length: shapes },
+      () =>
+        "an index needs `equals` and `sort`; the search columns are `search` on the def",
+    ),
+    ...listIndexProblems({ ...def, indexes }).map((problem) =>
+      describeIndexProblem(indexes, problem),
+    ),
+  ];
 }
 
 function validateTotals(def: PostgresGridDef): string[] {
@@ -211,27 +151,16 @@ function validateTotals(def: PostgresGridDef): string[] {
 
 export function validateGridDef(def: PostgresGridDef): string[] {
   const problems: string[] = [];
-  const seen = new Set<string>();
   if (!getField(def, KEY_FIELD)) {
     problems.push(`the grid has no "${KEY_FIELD}" field`);
   }
   if (def.search) {
     problems.push(...validateSearch(def, def.search));
   }
-  for (const index of def.indexes) {
-    if (!Array.isArray(index.equals)) {
-      problems.push(...validateOrderedIndex(def, index));
-      continue;
-    }
-    const id = indexId(index);
-    if (seen.has(id)) {
-      problems.push(`index ${id} is declared twice`);
-    }
-    seen.add(id);
-    problems.push(...validateOrderedIndex(def, index));
-  }
+  problems.push(...validateIndexes(def));
   const base = def.indexes.some(
     (index) =>
+      Array.isArray(index.equals) &&
       index.equals.length === 0 &&
       !index.empty?.length &&
       !index.then?.length &&
@@ -241,7 +170,6 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     problems.push("the default sort with no filter is not a declared index");
   }
   problems.push(...validateTotals(def));
-  problems.push(...validateFieldIndexes(def));
   for (const field of def.fields) {
     if (field.currency !== undefined && !isCurrencyCode(field.currency)) {
       problems.push(`${field.key}: ${field.currency} is not a currency code`);

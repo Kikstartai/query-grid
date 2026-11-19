@@ -252,6 +252,12 @@ export {
   type IndexCapabilitiesOptions,
   type QueryPlan,
 } from "./model/indexes.ts";
+export {
+  INDEX_RULE_CODES,
+  listIndexProblems,
+  type IndexProblem,
+  type IndexRuleCode,
+} from "./model/index-rules.ts";
 export type {
   IndexDef,
   IndexedGridDef,
