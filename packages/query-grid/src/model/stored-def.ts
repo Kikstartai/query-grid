@@ -73,7 +73,13 @@ const WIDTH_MIN = 20;
 const WIDTH_MAX = 2000;
 
 const SORT_DIRECTIONS: readonly SortDirection[] = ["asc", "desc"];
-const FIELD_FLAGS = ["nullable", "pinned", "hidden", "wrap"] as const;
+const FIELD_FLAGS = [
+  "nullable",
+  "grouping",
+  "pinned",
+  "hidden",
+  "wrap",
+] as const;
 const INDEX_FLAGS = ["range", "multi"] as const;
 
 const ROOT_KEYS = [
@@ -97,6 +103,7 @@ const FIELD_KEYS = [
   "lookup",
   "maxValues",
   "currency",
+  "grouping",
   "width",
   "pinned",
   "hidden",

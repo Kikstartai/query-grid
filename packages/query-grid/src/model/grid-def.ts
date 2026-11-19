@@ -51,6 +51,7 @@ export interface BaseFieldDef {
   lookup?: FieldLookup;
   maxValues?: number;
   currency?: string;
+  grouping?: boolean;
   width?: number;
   pinned?: boolean;
   hidden?: boolean;

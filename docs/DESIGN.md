@@ -94,7 +94,7 @@ A host writes one object per grid and checks it with `satisfies GridDef & Postgr
 | `GridDef`         | React    | a `cell` on any field                                                    |
 | `PostgresGridDef` | Postgres | `table` and `facet.counterTable`                                         |
 
-- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `array`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, and the layout hints `width`, `pinned`, `hidden`, `wrap`, `render` (`text`, `badge`, `list`) and `tones`.
+- A field is `key`, `label`, `type` (`id`, `text`, `enum`, `integer`, `decimal`, `money`, `boolean`, `date`, `datetime`, `array`), `nullable`, `options`, a `lookup` for a large option list, `maxValues`, `currency` on a money field, `grouping: false` on an integer that names a row (an order number) so it drops the thousands separator, and the layout hints `width`, `pinned`, `hidden`, `wrap`, `render` (`text`, `badge`, `list`) and `tones`.
 - `orderField` names the number a manual order is kept in. Only a def with one reorders.
 - `nullable` is what makes a field optional: only such a field takes the empty and not-empty values.
 - The React package ignores `table` and `counterTable`. The Postgres package ignores `cell`. The memory source ignores indexes and storage.

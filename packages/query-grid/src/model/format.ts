@@ -7,6 +7,7 @@ const dates = new Map<string, Intl.DateTimeFormat>();
 const decimals = new Map<string, Intl.NumberFormat>();
 const DECIMAL_DIGITS = 9;
 const integers = new Map<string, Intl.NumberFormat>();
+const ungrouped = new Map<string, Intl.NumberFormat>();
 const moneys = new Map<string, Intl.NumberFormat>();
 const MONEY_DIGITS = 2;
 const lists = new Map<string, Intl.ListFormat>();
@@ -44,6 +45,21 @@ export function formatCount(count: number, locale = DEFAULT_LOCALE): string {
   return cached(integers, locale, () => new Intl.NumberFormat(locale)).format(
     count,
   );
+}
+
+function formatInteger(
+  field: BaseFieldDef,
+  value: number,
+  locale: string,
+): string {
+  if (field.grouping !== false) {
+    return formatCount(value, locale);
+  }
+  return cached(
+    ungrouped,
+    locale,
+    () => new Intl.NumberFormat(locale, { useGrouping: false }),
+  ).format(value);
 }
 
 export function formatList(
@@ -170,7 +186,7 @@ export function formatValue(
     case "integer":
       return Number.isNaN(Number(value))
         ? String(value)
-        : formatCount(Number(value), locale);
+        : formatInteger(field, Number(value), locale);
     case "enum":
     case "array":
       return formatOption(field, String(value));

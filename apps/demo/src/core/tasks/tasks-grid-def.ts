@@ -98,6 +98,7 @@ export const TASKS_GRID_DEF: BaseGridDef = {
       key: "number",
       label: "Task",
       type: "integer",
+      grouping: false,
       width: 90,
       pinned: true,
     },

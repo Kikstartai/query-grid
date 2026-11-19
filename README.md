@@ -889,7 +889,7 @@ A source carries its own capabilities. Create it once per mount, because it hold
 
 ### Field defs and indexes
 
-One field description drives the grid and the filters. Core's `BaseFieldDef` carries `key`, `label`, `type`, `options`, a `lookup` for large option lists, `maxValues`, `nullable`, a `currency` on a money field and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `FieldDef` extends it with `cell`; the Postgres package never reads it. A core `BaseGridDef` is an `id`, the fields, the default sort, the facet field and the total fields. A host writes one object per grid that satisfies the layers it uses. A field says nothing about filtering: the indexes do, on a server grid, and on a client grid every field is a filter.
+One field description drives the grid and the filters. Core's `BaseFieldDef` carries `key`, `label`, `type`, `options`, a `lookup` for large option lists, `maxValues`, `nullable`, a `currency` on a money field, `grouping: false` on an integer that names a row rather than counts, and layout hints (`width`, `pinned`, `hidden`, `wrap`). The React package's `FieldDef` extends it with `cell`; the Postgres package never reads it. A core `BaseGridDef` is an `id`, the fields, the default sort, the facet field and the total fields. A host writes one object per grid that satisfies the layers it uses. A field says nothing about filtering: the indexes do, on a server grid, and on a client grid every field is a filter.
 
 The def then declares its **indexes**. An index is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
 

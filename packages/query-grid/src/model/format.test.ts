@@ -47,4 +47,11 @@ describe("formatting", () => {
     expect(formatValue(TAGS, ["a", "b"])).toBe("a, b");
     expect(formatValue(TAGS, ["a", "b", "c"], "ar-EG")).toBe("a، وb، وc");
   });
+
+  test("an integer that names a row keeps its digits but drops the grouping", () => {
+    const ORDER: BaseFieldDef = { ...UNITS, grouping: false };
+    expect(formatValue(ORDER, 569801, "en-ZA")).toBe("569801");
+    expect(formatValue(ORDER, 5698, "ar-EG")).toBe("٥٦٩٨");
+    expect(formatValue(UNITS, 569801, "en-US")).toBe("569,801");
+  });
 });

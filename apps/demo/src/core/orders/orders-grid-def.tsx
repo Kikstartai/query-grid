@@ -51,6 +51,7 @@ const ORDER_FIELDS: FieldDef[] = [
     key: "order_number",
     label: "Order",
     type: "integer",
+    grouping: false,
     width: 110,
     pinned: true,
   },
