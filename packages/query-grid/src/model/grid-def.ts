@@ -1,22 +1,4 @@
-export type FieldType =
-  | "id"
-  | "text"
-  | "enum"
-  | "integer"
-  | "decimal"
-  | "money"
-  | "boolean"
-  | "date"
-  | "datetime"
-  | "array";
-
-export type SortDirection = "asc" | "desc";
-
-export type GridValue = string | number | boolean | string[] | null;
-
-export type GridRow = Record<string, GridValue> & { id: string };
-
-export const FIELD_TYPES: readonly FieldType[] = [
+export const FIELD_TYPES = [
   "id",
   "text",
   "enum",
@@ -27,7 +9,15 @@ export const FIELD_TYPES: readonly FieldType[] = [
   "date",
   "datetime",
   "array",
-];
+] as const;
+
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+export type SortDirection = "asc" | "desc";
+
+export type GridValue = string | number | boolean | string[] | null;
+
+export type GridRow = Record<string, GridValue> & { id: string };
 
 export const FIELD_RENDERS = ["text", "badge", "list"] as const;
 
