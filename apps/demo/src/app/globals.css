@@ -120,6 +120,27 @@ pre {
   text-decoration: none;
 }
 
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 4px;
+  padding-inline: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--foreground);
+}
+
+.back-link-icon:dir(rtl) {
+  transform: scaleX(-1);
+}
+
 .brand-logo {
   display: inline-block;
   flex-shrink: 0;

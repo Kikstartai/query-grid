@@ -23,6 +23,14 @@
     display: none;
   }
 
+  .workspace-head .back-link {
+    padding-inline: 6px;
+  }
+
+  .workspace-head .back-link-label {
+    display: none;
+  }
+
   .workspace-head h1 {
     flex: 1;
     order: 1;

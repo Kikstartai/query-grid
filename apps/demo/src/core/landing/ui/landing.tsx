@@ -14,7 +14,7 @@ import { PRINCIPLES } from "../landing-copy";
 export function LandingNav() {
   return (
     <nav className="landing-nav" aria-label="Site">
-      <SiteBrand />
+      <SiteBrand back={false} />
       <a href={REPO_URL}>GitHub</a>
     </nav>
   );

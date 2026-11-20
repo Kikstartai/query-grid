@@ -113,3 +113,29 @@ test.describe("localized page", () => {
     expect(missing.status()).toBe(404);
   });
 });
+
+test.describe("back link", () => {
+  for (const path of [
+    "/orders",
+    "/memory",
+    "/features",
+    "/components",
+    "/restyled",
+    "/rtl",
+    "/localized/af",
+    "/parts/filter-bar",
+  ]) {
+    test(`${path} links back to the start`, async ({ page }) => {
+      await page.goto(path);
+      const back = page.locator("[data-back-link]:visible");
+      await expect(back).toHaveAttribute("href", "/");
+      await back.click();
+      await expect(page).toHaveURL(/\/$/);
+    });
+  }
+
+  test("the start page has no back link", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator("[data-back-link]")).toHaveCount(0);
+  });
+});
