@@ -219,6 +219,17 @@ function proposeSetFilter(
     return proposeRemove(def, query, given.field, at);
   }
   const field = getField(def, filter.field);
+  const target = listFieldFilters(query, filter.field)[at];
+  const twin =
+    "values" in filter &&
+    query.filters.some(
+      (item) =>
+        item !== target && item.field === filter.field && item.op === filter.op,
+    );
+  // Two lists with one field and operator would read back from the URL as one list, an OR in place of the AND.
+  if (twin) {
+    return [];
+  }
   if (field && "values" in filter) {
     const literal = isLiteralOp(field, filter.op);
     const fits = literal
@@ -529,7 +540,7 @@ export function listOffers(
   query: QueryState,
   context: OfferContext,
 ): Offers {
-  const filters: Record<string, OpOffer[]> = {};
+  const filters = Object.create(null) as Record<string, OpOffer[]>;
   for (const listing of listOpListings(def, query, context)) {
     const { field, op, offered } = listing;
     const minLength = resolveMinLength(def, query, listing, context);

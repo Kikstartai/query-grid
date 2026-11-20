@@ -908,7 +908,10 @@ export function FieldFilter(props: FieldFilterProps) {
   const { field, ops, filter, disabled, reason, onFilterChange } = props;
   const [picked, setPicked] = useState<FilterOp | null>(null);
   const op = filter?.op ?? picked ?? resolveDefaultOp(field, ops);
-  const offer = ops.find((item) => item.op === op);
+  const listed = ops.some((item) => item.op === op)
+    ? ops
+    : [...ops, { op, disabled: true }];
+  const offer = listed.find((item) => item.op === op);
   const chooseOp = (next: FilterOp) => {
     setPicked(next);
     if (getOperatorShape(next) === "none") {
@@ -929,7 +932,7 @@ export function FieldFilter(props: FieldFilterProps) {
     >
       <OpSelect
         field={field}
-        ops={ops}
+        ops={listed}
         op={op}
         disabled={disabled}
         onOpChange={chooseOp}

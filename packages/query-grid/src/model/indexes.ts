@@ -162,7 +162,6 @@ export function isCombineOr(query: QueryState): boolean {
   return query.combine === "or" && query.filters.length > 1;
 }
 
-// Each operator names the kinds of index that can answer it; the first kind the grid declares for the field decides where the filter runs.
 function classify(planner: Planner, filter: Filter): Access {
   const { field } = filter;
   for (const kind of listIndexKinds(filter.op)) {
@@ -363,7 +362,7 @@ export function planQuery(
   return isCombineOr(query) ? planAny(planner, query) : planAll(planner, query);
 }
 
-// What a field may ever be filtered by on an indexed source: the operators some tier answers. A choice set needs a filter index of its own; every other operator falls back to the narrowed set.
+// A choice set needs a filter index of its own, while every other operator falls back to the narrowed set.
 function listTierOps(planner: Planner, field: BaseFieldDef): FilterOp[] {
   const filtered = planner.filtered.includes(field.key);
   const kind = resolveFieldKind(field);
@@ -376,9 +375,7 @@ function listTierOps(planner: Planner, field: BaseFieldDef): FilterOp[] {
   });
 }
 
-export function listFilterOps(
-  def: IndexedGridDef,
-): Record<string, FilterOp[]> {
+export function listFilterOps(def: IndexedGridDef): Record<string, FilterOp[]> {
   const planner = readPlanner(def);
   return Object.fromEntries(
     def.fields
