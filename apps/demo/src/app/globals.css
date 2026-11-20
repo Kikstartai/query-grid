@@ -365,10 +365,14 @@ pre {
 
 .skeleton-facets {
   display: flex;
-  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.skeleton-facets > .skeleton-line {
   flex-shrink: 0;
-  gap: 10px;
-  width: 12rem;
+  width: 6rem;
+  height: 2rem;
 }
 
 .skeleton-grid {

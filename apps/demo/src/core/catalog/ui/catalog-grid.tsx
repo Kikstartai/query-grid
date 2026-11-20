@@ -87,6 +87,17 @@ export function CatalogGrid() {
         />
       </div>
       <div className="workspace-body">
+        <FacetPanel
+          label="Kind"
+          options={KINDS.map((kind) => ({
+            ...kind,
+            count: countOf(kind.value),
+          }))}
+          values={kinds}
+          onValuesChange={setKinds}
+          multiple
+          total={ROWS.length}
+        />
         <div className="workspace-chips">
           <SortControl
             options={FIELDS.filter((field) => !field.hidden).map((field) => ({
@@ -118,17 +129,6 @@ export function CatalogGrid() {
           />
         </div>
         <div className="workspace-main">
-          <FacetPanel
-            label="Kind"
-            options={KINDS.map((kind) => ({
-              ...kind,
-              count: countOf(kind.value),
-            }))}
-            values={kinds}
-            onValuesChange={setKinds}
-            multiple
-            total={ROWS.length}
-          />
           <DataGrid
             fields={FIELDS}
             rows={rows}

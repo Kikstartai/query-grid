@@ -162,20 +162,6 @@
     min-width: 0;
   }
 
-  .workspace-main {
-    flex-direction: column;
-  }
-
-  .skeleton-facets {
-    flex-direction: row;
-    width: auto;
-  }
-
-  .skeleton-facets > .skeleton-line {
-    width: 5rem;
-    height: 2rem;
-  }
-
   .workspace-total,
   .workspace-foot {
     min-height: 28px;

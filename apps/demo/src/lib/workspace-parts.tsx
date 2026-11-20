@@ -43,15 +43,13 @@ export function WorkspaceParts({
         <ViewSwitch views={views} />
       </div>
       <div className="workspace-body">
+        <FacetPanel />
         <FilterBar fields={barFields ?? filterFields} texts={textFields} />
         <div className="workspace-chips">
           <FilterSidebar fields={filterFields} texts={textFields} />
           <FilterChips />
         </div>
-        <div className="workspace-main">
-          <FacetPanel />
-          {children}
-        </div>
+        <div className="workspace-main">{children}</div>
       </div>
       <div className="workspace-total">
         <TotalFooter />

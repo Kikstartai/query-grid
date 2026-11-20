@@ -128,6 +128,7 @@ export function WorkspaceSkeleton({
         role="status"
         aria-label="The grid is on its way"
       >
+        <SkeletonFacets def={def} />
         <SkeletonFilters
           def={def}
           capabilities={capabilities}
@@ -136,7 +137,6 @@ export function WorkspaceSkeleton({
         />
         <SkeletonChips />
         <div className="workspace-main">
-          <SkeletonFacets def={def} />
           <SkeletonGrid />
         </div>
       </div>
