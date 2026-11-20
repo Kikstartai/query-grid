@@ -60,7 +60,7 @@ export function SkeletonFilters({
         />
       ))}
       <SkeletonControl kind="text" shown={searchable} />
-      <SkeletonControl kind="match" shown={capabilities.matchAny} />
+      <SkeletonControl kind="combine" shown={capabilities.combineOr} />
       <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
   );

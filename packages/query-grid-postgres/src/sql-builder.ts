@@ -4,7 +4,7 @@ import {
   getField,
   GROUP_LIMIT,
   getReservedValue,
-  isMatchAny,
+  isCombineOr,
   isNumberType,
   isQueryBudgeted,
   isQueryRunnable,
@@ -281,7 +281,7 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
     const field = requireField(def, key);
     terms.push([`${column(field.key)} && ${params.addList(values, field)}`]);
   }
-  const clauses = isMatchAny(query) ? anyOf(terms) : terms.flat();
+  const clauses = isCombineOr(query) ? anyOf(terms) : terms.flat();
   if (query.search !== null) {
     const pattern = `%${escapeLike(query.search.trim())}%`;
     clauses.push(
@@ -398,13 +398,13 @@ export function buildPageSql(
 ): SqlQuery {
   const filtered = filter(def, query);
   const { params } = filtered;
-  const any = isMatchAny(query);
+  const or = isCombineOr(query);
   const select = selectList(def);
   // An OR across fields has no index that also gives the order, so its rows are read first, behind OFFSET 0, and sorted after: an ordered walk of the sort index would not stop when few rows match.
-  const table = any
+  const table = or
     ? `(SELECT ${def.fields.map((field) => column(field.key)).join(", ")} FROM ${from(def)}${whereClause(filtered.clauses)} OFFSET 0) ${TABLE_ALIAS}`
     : from(def);
-  const clauses = any ? [] : filtered.clauses;
+  const clauses = or ? [] : filtered.clauses;
   if (query.search !== null) {
     return {
       text: `SELECT ${select} FROM ${table}${whereClause(clauses)} LIMIT ${limits.searchLimit + 1}`,
@@ -472,7 +472,7 @@ export function isTotalOrdered(
   query: QueryState,
 ): boolean {
   return (
-    !isMatchAny(query) &&
+    !isCombineOr(query) &&
     !isQueryBudgeted(def, query) &&
     Object.entries(query.equals).every(
       ([key, values]) =>

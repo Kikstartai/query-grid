@@ -16,7 +16,7 @@ import { matchesEquals } from "./field-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {
   hasValidThenBy,
-  isMatchAny,
+  isCombineOr,
   listGroupFields,
   listNarrowRangeFields,
   listOverlapFields,
@@ -48,7 +48,7 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
     searchIsOrdered: true,
     facetCountsFollowFilters: true,
     narrowLimited: false,
-    matchAny: true,
+    combineOr: true,
     isNarrowed: () => false,
     narrowBasis: () => "",
     textFields,
@@ -56,7 +56,7 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
     groupFields,
     canRun: (query) =>
       (query.group === null ||
-        (!isMatchAny(query) && groupFields.includes(query.group))) &&
+        (!isCombineOr(query) && groupFields.includes(query.group))) &&
       Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
       query.ranges.every((range) => rangeFields.includes(range.field)) &&
       query.texts.every((text) => textFields.includes(text.field)) &&
@@ -165,11 +165,11 @@ export function filterRows(
   searchFields: string[] = [],
 ): GridRow[] {
   const tests = listRowTests(def, query);
-  const any = isMatchAny(query);
+  const or = isCombineOr(query);
   const needle = query.search?.trim().toLowerCase() ?? null;
   return rows.filter(
     (row) =>
-      (any
+      (or
         ? tests.some((test) => test(row))
         : tests.every((test) => test(row))) &&
       (needle === null || matchesSearch(row, searchFields, needle)),

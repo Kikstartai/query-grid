@@ -96,8 +96,8 @@ function toNarrowedState(
 ): NarrowedState {
   return {
     ...result,
-    allBasis: capabilities.narrowBasis({ ...query, match: "all" }),
-    anyBasis: capabilities.narrowBasis({ ...query, match: "any" }),
+    andBasis: capabilities.narrowBasis({ ...query, combine: "and" }),
+    orBasis: capabilities.narrowBasis({ ...query, combine: "or" }),
   };
 }
 

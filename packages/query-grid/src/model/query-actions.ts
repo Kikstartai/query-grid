@@ -10,7 +10,7 @@ import {
   listThenBy,
   SORT_MAX,
   withThenBy,
-  type MatchMode,
+  type Combinator,
   type QueryState,
   type RangeInput,
   type RangeState,
@@ -34,7 +34,7 @@ export type QueryAction =
   | { type: "setOverlap"; field: string; values: string[] }
   | { type: "removeOverlapValue"; field: string; value: string }
   | { type: "clearOverlap"; field: string }
-  | { type: "setMatch"; mode: MatchMode }
+  | { type: "setCombine"; combine: Combinator }
   | { type: "setGroup"; field: string | null }
   | { type: "setSort"; field: string; direction: SortDirection }
   | { type: "addSort"; field: string; direction: SortDirection }
@@ -54,7 +54,7 @@ export interface Offers {
   texts: string[];
   narrowTexts: string[];
   overlaps: string[];
-  matchAny: boolean;
+  combineOr: boolean;
   groups: string[];
   search: boolean;
 }
@@ -66,7 +66,7 @@ export type OfferTarget =
   | { kind: "overlap"; field: string }
   | { kind: "sort"; field: string }
   | { kind: "thenBy"; field: string }
-  | { kind: "match" }
+  | { kind: "combine" }
   | { kind: "group"; field: string }
   | { kind: "search" };
 
@@ -82,7 +82,7 @@ export type ReasonCode =
   | "narrow_first"
   | "narrow_counting"
   | "no_group_with"
-  | "no_match_any"
+  | "no_combine_or"
   | "sort_limit";
 
 export interface UnavailableReason {
@@ -114,7 +114,7 @@ export function defaultQuery(def: BaseGridDef): QueryState {
     ranges: [],
     texts: [],
     overlaps: {},
-    match: "all",
+    combine: "and",
     search: null,
     sort: def.defaultSort,
     group: null,
@@ -322,8 +322,8 @@ function proposeAction(
       );
     case "clearOverlap":
       return proposeOverlap(query, action.field, []);
-    case "setMatch":
-      return [{ ...top, match: action.mode }];
+    case "setCombine":
+      return [{ ...top, combine: action.combine }];
     case "setGroup":
       return [{ ...top, group: action.field }];
     case "setSort": {
@@ -389,11 +389,11 @@ function fitNarrowLimit(
     return "fits";
   }
   const basis = capabilities.narrowBasis(candidate);
-  if (narrowed && basis === narrowed.allBasis) {
-    return narrowed.all.over ? "over" : "fits";
+  if (narrowed && basis === narrowed.andBasis) {
+    return narrowed.and.over ? "over" : "fits";
   }
-  if (narrowed?.any && basis === narrowed.anyBasis) {
-    return narrowed.any.over ? "over" : "fits";
+  if (narrowed?.or && basis === narrowed.orBasis) {
+    return narrowed.or.over ? "over" : "fits";
   }
   return "unknown";
 }
@@ -508,9 +508,9 @@ export function listOffers(
         context,
       ),
     ),
-    matchAny:
-      context.capabilities.matchAny &&
-      isOffered(def, query, { type: "setMatch", mode: "any" }, context),
+    combineOr:
+      context.capabilities.combineOr &&
+      isOffered(def, query, { type: "setCombine", combine: "or" }, context),
     groups: context.capabilities.groupFields.filter((field) =>
       isOffered(def, query, { type: "setGroup", field }, context),
     ),
@@ -565,8 +565,8 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
         ...query,
         overlaps: { ...query.overlaps, [target.field]: PROBE.slice(0, 1) },
       };
-    case "match":
-      return { ...query, match: "any" };
+    case "combine":
+      return { ...query, combine: "or" };
     case "group":
       return { ...query, group: target.field };
     case "thenBy":
@@ -597,13 +597,13 @@ function explainNarrowing(
   if (fit === "unknown" || !narrowed) {
     return describeQuery(query, "narrow_counting", field);
   }
-  const size = target.kind === "match" ? narrowed.any : narrowed.all;
+  const size = target.kind === "combine" ? narrowed.or : narrowed.and;
   return {
     ...describeQuery(query, "narrow_first", field),
     rows: size?.rows ?? narrowed.limit,
     capped: size?.capped ?? true,
     narrowBy:
-      target.kind === "match"
+      target.kind === "combine"
         ? []
         : capabilities.equalsFields
             .filter((key) => query.equals[key] === undefined)
@@ -646,7 +646,7 @@ export function explainUnavailable(
   if (target.kind === "search") {
     return describeQuery(query, "search_alone", null);
   }
-  if (query.search !== null && target.kind === "match") {
+  if (query.search !== null && target.kind === "combine") {
     return describeQuery(query, "search_no_combine", null);
   }
   const narrowing =
@@ -654,8 +654,8 @@ export function explainUnavailable(
   if (narrowing) {
     return narrowing;
   }
-  if (target.kind === "match") {
-    return describeQuery(query, "no_match_any", null);
+  if (target.kind === "combine") {
+    return describeQuery(query, "no_combine_or", null);
   }
   if (target.kind === "group") {
     return describeQuery(
@@ -711,7 +711,7 @@ function stateKey(query: QueryState): string {
       .map((key) => `overlap:${key}`)
       .sort()
       .join("+"),
-    query.match,
+    query.combine,
     query.group ?? "",
     query.search !== null ? "search" : "",
     listSorts(query)
@@ -759,11 +759,11 @@ export function listControlActions(
   for (const field of Object.keys(query.overlaps)) {
     actions.push({ type: "clearOverlap", field });
   }
-  if (offers.matchAny) {
-    actions.push({ type: "setMatch", mode: "any" });
+  if (offers.combineOr) {
+    actions.push({ type: "setCombine", combine: "or" });
   }
-  if (query.match === "any") {
-    actions.push({ type: "setMatch", mode: "all" });
+  if (query.combine === "or") {
+    actions.push({ type: "setCombine", combine: "and" });
   }
   for (const field of offers.groups) {
     actions.push({ type: "setGroup", field });

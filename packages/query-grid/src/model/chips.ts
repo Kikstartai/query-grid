@@ -20,7 +20,7 @@ import {
   type ReservedValue,
 } from "./field-values.ts";
 import { formatValue, labelKey } from "./format.ts";
-import { isMatchAny } from "./indexes.ts";
+import { isCombineOr } from "./indexes.ts";
 import type { QueryAction } from "./query-actions.ts";
 import { fromDayBound, toRangeValue, type RangeOp } from "./range-bounds.ts";
 
@@ -84,9 +84,9 @@ export interface OverlapChip {
   clear: QueryAction;
 }
 
-export interface MatchChip {
+export interface CombineChip {
   id: string;
-  kind: "match";
+  kind: "combine";
   clear: QueryAction;
 }
 
@@ -103,7 +103,7 @@ export type FilterChip =
   | RangeChip
   | TextChip
   | OverlapChip
-  | MatchChip
+  | CombineChip
   | SearchChip
   | SortChip;
 
@@ -253,11 +253,11 @@ export function listFilterChips(
       clear: { type: "removeText", at },
     });
   });
-  if (isMatchAny(query)) {
+  if (isCombineOr(query)) {
     chips.push({
-      id: "match",
-      kind: "match",
-      clear: { type: "setMatch", mode: "all" },
+      id: "combine",
+      kind: "combine",
+      clear: { type: "setCombine", combine: "and" },
     });
   }
   if (query.search !== null) {

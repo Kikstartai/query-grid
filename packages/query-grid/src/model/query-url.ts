@@ -55,11 +55,11 @@ export function listQueryKeys(
       TEXT_OPS.map((op) => `${TEXT_PREFIXES[op]}${key}`),
     ),
   ];
-  const match = capabilities.matchAny ? [MATCH_PARAM] : [];
+  const combine = capabilities.combineOr ? [MATCH_PARAM] : [];
   const group = capabilities.groupFields.length > 0 ? [GROUP_PARAM] : [];
   return [
     ...repeated.map((name) => ({ name, repeated: true })),
-    ...[...match, ...group, SEARCH_PARAM, SORT_PARAM, CURSOR_PARAM].map(
+    ...[...combine, ...group, SEARCH_PARAM, SORT_PARAM, CURSOR_PARAM].map(
       (name) => ({ name, repeated: false }),
     ),
   ];
@@ -100,7 +100,7 @@ export function encodeQuery(
   for (const text of query.texts) {
     params.append(`${TEXT_PREFIXES[text.op]}${text.field}`, text.value);
   }
-  if (query.match === "any") {
+  if (query.combine === "or") {
     params.set(MATCH_PARAM, "any");
   }
   if (query.search !== null) {
@@ -214,7 +214,7 @@ export function decodeQuery(
       ranges,
       texts,
       overlaps: Object.fromEntries(overlaps),
-      match: params.get(MATCH_PARAM) === "any" ? "any" : "all",
+      combine: params.get(MATCH_PARAM) === "any" ? "or" : "and",
       search: params.get(SEARCH_PARAM),
       sort,
       group: params.get(GROUP_PARAM),

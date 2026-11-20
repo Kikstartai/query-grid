@@ -242,7 +242,7 @@ const arbitraryQuery: fc.Arbitrary<QueryState> = fc
       maxLength: TEXT_FILTER_MAX,
       selector: (item) => JSON.stringify(item),
     }),
-    match: fc.constantFrom("all" as const, "any" as const),
+    combine: fc.constantFrom("and" as const, "or" as const),
     search: fc.option(searchValue),
     sorts: arbitrarySorts,
     group: fc.option(fc.constantFrom(...CAPABILITIES.groupFields)),

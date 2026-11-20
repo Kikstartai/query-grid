@@ -90,7 +90,7 @@ describe("the bound filter containers", () => {
       "search",
       "region",
       "status",
-      "match",
+      "combine",
       "sort",
       "group",
     ]);
@@ -148,9 +148,9 @@ describe("the narrowed-set controls, bound", () => {
   test("a client grid offers Contains and Match any with no limit", () => {
     const html = render(<FilterBar />);
     expect(html).toContain('data-field="text"');
-    expect(html).toContain('data-field="match"');
+    expect(html).toContain('data-field="combine"');
     expect(html).not.toMatch(/data-field="contains"[^>]*data-unavailable/);
-    expect(html).not.toMatch(/data-match="any"[^>]*disabled/);
+    expect(html).not.toMatch(/data-combine="or"[^>]*disabled/);
   });
 
   test("the URL sets them and the chips word them", () => {
@@ -161,10 +161,10 @@ describe("the narrowed-set controls, bound", () => {
       </>,
       "f.status=open&r.total=100..&c.note=gift&match=any",
     );
-    expect(html).toMatch(/data-match="any"[^>]*aria-checked="true"/);
+    expect(html).toMatch(/data-combine="or"[^>]*aria-checked="true"/);
     expect(html).toContain('value="gift"');
     expect(html).toContain("Note contains “gift”");
-    expect(html).toContain('data-chip="match"');
+    expect(html).toContain('data-chip="combine"');
     expect(html).toContain("Match any");
   });
 });

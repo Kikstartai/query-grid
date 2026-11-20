@@ -17,7 +17,7 @@ import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
 import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
 import { ReasonDisplayContext } from "./field-frame.tsx";
-import { MatchToggle, TextFilter } from "./narrow-filters.tsx";
+import { CombineToggle, TextFilter } from "./narrow-filters.tsx";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -562,22 +562,22 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(html).toContain('aria-label="Name starts with"');
   });
 
-  test("MatchToggle keeps Match all reachable when Match any is held", () => {
-    const free = render(<MatchToggle value="any" onValueChange={noop} />);
+  test("CombineToggle keeps Match all reachable when Match any is held", () => {
+    const free = render(<CombineToggle value="or" onValueChange={noop} />);
     expect(free).toContain("Match all");
     expect(free).toContain("Match any");
-    expect(free).toMatch(/data-match="any"[^>]*aria-checked="true"/);
+    expect(free).toMatch(/data-combine="or"[^>]*aria-checked="true"/);
     const held = render(
-      <MatchToggle
-        value="all"
+      <CombineToggle
+        value="and"
         onValueChange={noop}
         disabled
         reason="Narrow the filters first."
       />,
     );
     expect(held).toContain('title="Narrow the filters first."');
-    expect(held).toMatch(/data-match="any"[^>]*disabled/);
-    expect(held).not.toMatch(/data-match="all"[^>]*disabled/);
+    expect(held).toMatch(/data-combine="or"[^>]*disabled/);
+    expect(held).not.toMatch(/data-combine="and"[^>]*disabled/);
   });
 
   test("FilterChips with one chip per field and one remove per value", () => {

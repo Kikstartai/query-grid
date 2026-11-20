@@ -240,8 +240,8 @@ export function validateQueryValues(
   if (query.group !== null && !getField(def, query.group)) {
     return unknown(query.group);
   }
-  if (query.match !== "all" && query.match !== "any") {
-    return invalid("match");
+  if (query.combine !== "and" && query.combine !== "or") {
+    return invalid("combine");
   }
   if (query.search !== null && !isValidSearchValue(query.search)) {
     return {

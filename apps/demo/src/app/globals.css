@@ -328,7 +328,7 @@ pre {
   width: 9rem;
 }
 
-.skeleton-control[data-kind="match"] {
+.skeleton-control[data-kind="combine"] {
   width: 12rem;
 }
 

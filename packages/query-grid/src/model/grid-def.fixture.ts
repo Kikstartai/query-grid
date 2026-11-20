@@ -58,7 +58,7 @@ export const TEST_DEF: BaseGridDef = {
 
 export const UNTIERED = {
   narrowLimited: false,
-  matchAny: false,
+  combineOr: false,
   isNarrowed: () => false,
   narrowBasis: () => "",
   textFields: [],

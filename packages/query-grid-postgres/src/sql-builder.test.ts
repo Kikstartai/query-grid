@@ -45,7 +45,7 @@ const BASE: QueryState = {
   texts: [],
   overlaps: {},
   group: null,
-  match: "all",
+  combine: "and",
   search: null,
   sort: TEST_DEF.defaultSort,
   cursor: null,

@@ -18,7 +18,7 @@ import {
   TEXT_FILTER_MAX,
   TEXT_MAX_LENGTH,
   TEXT_OPS,
-  type MatchMode,
+  type Combinator,
   type TextOp,
   type TextState as TextFilterValue,
 } from "@kikstart/query-grid";
@@ -262,12 +262,12 @@ export function TextFilter({
   );
 }
 
-export interface MatchToggleProps extends ControlState {
-  value: MatchMode;
-  onValueChange: (mode: MatchMode) => void;
+export interface CombineToggleProps extends ControlState {
+  value: Combinator;
+  onValueChange: (combine: Combinator) => void;
 }
 
-function MatchIndicator() {
+function CombineIndicator() {
   // The indicator is measured in the browser, so one in the server HTML would jump to its item on hydration.
   const mounted = useMounted();
   if (!mounted) {
@@ -276,39 +276,39 @@ function MatchIndicator() {
   return <SegmentedControlIndicator />;
 }
 
-export function MatchToggle({
+export function CombineToggle({
   value,
   onValueChange,
   disabled,
   reason,
-}: MatchToggleProps) {
+}: CombineToggleProps) {
   const messages = useMessages();
   return (
     <FieldFrame
-      name="match"
-      kind="match"
+      name="combine"
+      kind="combine"
       label={messages.matchMode}
       disabled={disabled}
       reason={reason}
     >
       <SegmentedControl
         aria-label={messages.matchMode}
-        data-filter="match"
+        data-filter="combine"
         value={value}
         onValueChange={(next: string | null) => {
-          if (next === "all" || next === "any") {
+          if (next === "and" || next === "or") {
             onValueChange(next);
           }
         }}
       >
-        <MatchIndicator />
-        <SegmentedControlItem value="all" data-match="all">
+        <CombineIndicator />
+        <SegmentedControlItem value="and" data-combine="and">
           {messages.matchAll}
         </SegmentedControlItem>
         <SegmentedControlItem
-          value="any"
-          data-match="any"
-          disabled={disabled && value !== "any"}
+          value="or"
+          data-combine="or"
+          disabled={disabled && value !== "or"}
         >
           {messages.matchAny}
         </SegmentedControlItem>

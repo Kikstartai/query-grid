@@ -40,7 +40,7 @@ import {
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
 import {
-  MatchToggle as BaseMatchToggle,
+  CombineToggle as BaseCombineToggle,
   TextFilter as BaseTextFilter,
 } from "../components/narrow-filters.tsx";
 import {
@@ -449,18 +449,18 @@ export function TextFilter({ fields }: TextFilterProps) {
   );
 }
 
-export function MatchToggle() {
+export function CombineToggle() {
   const { source } = useQueryGridMeta();
   const query = useQueryState();
   const { dispatch } = useQueryGridActions();
-  const offer = useOfferState({ kind: "match" });
-  if (!source.capabilities.matchAny) {
+  const offer = useOfferState({ kind: "combine" });
+  if (!source.capabilities.combineOr) {
     return null;
   }
   return (
-    <BaseMatchToggle
-      value={query.match}
-      onValueChange={(mode) => dispatch({ type: "setMatch", mode })}
+    <BaseCombineToggle
+      value={query.combine}
+      onValueChange={(combine) => dispatch({ type: "setCombine", combine })}
       disabled={!offer.offered}
       reason={offer.reason}
     />
@@ -503,7 +503,7 @@ function DefaultFilters({ fields, texts }: DefaultFiltersProps) {
         <FieldFilter key={field.key} field={field} />
       ))}
       <TextFilter fields={texts ?? fields} />
-      <MatchToggle />
+      <CombineToggle />
       <SortControl />
       <GroupControl />
     </>

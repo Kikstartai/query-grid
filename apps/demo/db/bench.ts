@@ -699,7 +699,7 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
   );
   const either: QueryState = {
     ...BASE,
-    match: "any",
+    combine: "or",
     sort: { field: "total", direction: "desc" },
     equals: { status_code: [smallest?.value ?? ""] },
     ranges: [

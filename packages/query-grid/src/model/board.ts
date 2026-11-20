@@ -4,7 +4,7 @@ import { getFacetField, type BaseGridDef, type GridRow } from "./grid-def.ts";
 import type { QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
 import { expandEquals } from "./field-values.ts";
-import { isMatchAny } from "./indexes.ts";
+import { isCombineOr } from "./indexes.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
@@ -100,7 +100,7 @@ export function getLaneQueries(
     Object.keys(query.overlaps).length === 0 &&
     query.ranges.length === 0;
   const combinable =
-    !isMatchAny(query) && (holdsAllRows || (query.search === null && plain));
+    !isCombineOr(query) && (holdsAllRows || (query.search === null && plain));
   const answerable =
     combinable && [...queries.values()].every(capabilities.canRun);
   return answerable ? queries : null;

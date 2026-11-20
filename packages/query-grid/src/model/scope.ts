@@ -61,7 +61,7 @@ function createScoper(scope: QueryScope): Merge<QueryState> {
     overlaps: overlaps(query.overlaps),
     ranges: ranges(query.ranges),
     texts: texts(query.texts),
-    match: "all",
+    combine: "and",
   });
 }
 
@@ -83,14 +83,14 @@ export function withScope(source: DataSource, scope: QueryScope): DataSource {
   });
   const { capabilities } = mapped;
   const isOwn = (query: QueryState) =>
-    query.match !== "any" &&
+    query.combine !== "or" &&
     listScoped(query).every((key) => !scoped.includes(key));
   const free = (keys: string[]) => keys.filter((key) => !scoped.includes(key));
   return {
     ...mapped,
     capabilities: {
       ...capabilities,
-      matchAny: false,
+      combineOr: false,
       equalsFields: free(capabilities.equalsFields),
       overlapFields: free(capabilities.overlapFields),
       groupFields: free(capabilities.groupFields),

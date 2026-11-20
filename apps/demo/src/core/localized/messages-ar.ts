@@ -237,7 +237,7 @@ export const AR_MESSAGES: QueryGridMessages = {
         ? `ضيّق حسب ${narrowBy} أولًا: ${rows}.`
         : `ضيّق عوامل التصفية أولًا: ${rows}.`,
     narrow_counting: () => "جارٍ عدّ الصفوف التي تبقيها عوامل التصفية هذه…",
-    no_match_any: ({ blockers }) =>
+    no_combine_or: ({ blockers }) =>
       `لا فهرس يجيب عن «مطابقة أيٍّ منها» مع ${blockers}.`,
     no_group_with: ({ label, blockers }) =>
       `لا فهرس يقرأ صفوف مجموعة ${label} واحدة مع ${blockers}.`,

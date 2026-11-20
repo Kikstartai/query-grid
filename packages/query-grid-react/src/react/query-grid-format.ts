@@ -129,7 +129,7 @@ export function formatChip(
         label: messages.chipTexts[chip.op]({ label, value: chip.value }),
         removable,
       };
-    case "match":
+    case "combine":
       return {
         id: chip.id,
         kind: chip.kind,

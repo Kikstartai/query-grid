@@ -228,7 +228,7 @@ export const AF_MESSAGES: QueryGridMessages = {
         ? `Vernou eers volgens ${narrowBy}: ${rows}.`
         : `Vernou eers die filters: ${rows}.`,
     narrow_counting: () => "Tel die rye wat hierdie filters oorlaat…",
-    no_match_any: ({ blockers }) =>
+    no_combine_or: ({ blockers }) =>
       `Geen indeks beantwoord Pas enige saam met ${blockers} nie.`,
     no_group_with: ({ label, blockers }) =>
       `Geen indeks lees die rye van een ${label}-groep saam met ${blockers} nie.`,

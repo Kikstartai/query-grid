@@ -7,7 +7,7 @@ import {
   NOT_EMPTY_VALUE,
   toGroupValue,
   isFacetOnlyQuery,
-  isMatchAny,
+  isCombineOr,
   isQueryBudgeted,
   planQuery,
   withoutFilters,
@@ -152,7 +152,7 @@ function planOrdered(
   return planQuery(def.indexes, query);
 }
 
-async function sizeOfAny(
+async function sizeOfOr(
   def: PostgresGridDef,
   execute: SqlExecutor,
   query: QueryState,
@@ -182,8 +182,8 @@ function sizeOfPlan(
   limit: number,
   signal?: AbortSignal,
 ): Promise<SizeResult> {
-  return isMatchAny(query)
-    ? sizeOfAny(def, execute, query, plan, limit, signal)
+  return isCombineOr(query)
+    ? sizeOfOr(def, execute, query, plan, limit, signal)
     : sizeOf(def, execute, plan.core, limit, signal);
 }
 
@@ -202,25 +202,31 @@ export async function getNarrowedSizes(
     group: null,
     cursor: null,
   };
-  const all = planOrdered(def, { ...filters, match: "all" });
-  const any =
+  const andPlan = planOrdered(def, { ...filters, combine: "and" });
+  const orPlan =
     countFilterTerms(filters) > 1
-      ? planOrdered(def, { ...filters, match: "any" })
+      ? planOrdered(def, { ...filters, combine: "or" })
       : null;
-  const [allSize, anySize] = await Promise.all([
-    sizeOf(def, execute, all?.core ?? wholeTable(def, filters), limit, signal),
-    any
-      ? sizeOfAny(
+  const [andSize, orSize] = await Promise.all([
+    sizeOf(
+      def,
+      execute,
+      andPlan?.core ?? wholeTable(def, filters),
+      limit,
+      signal,
+    ),
+    orPlan
+      ? sizeOfOr(
           def,
           execute,
-          { ...filters, match: "any" },
-          any,
+          { ...filters, combine: "or" },
+          orPlan,
           limit,
           signal,
         )
       : null,
   ]);
-  return { limit, all: allSize, any: anySize };
+  return { limit, and: andSize, or: orSize };
 }
 
 async function listNarrowSettings(

@@ -93,9 +93,9 @@ export {
 } from "./filter-bar.tsx";
 export { FilterSidebar, type FilterSidebarProps } from "./filter-sidebar.tsx";
 export {
-  MatchToggle,
+  CombineToggle,
   TextFilter,
-  type MatchToggleProps,
+  type CombineToggleProps,
   type TextFieldOption,
   type TextFilterProps,
   type TextFilterValue,

@@ -55,7 +55,7 @@ describe("offers from declared indexes", () => {
       texts: [],
       narrowTexts: [],
       overlaps: [],
-      matchAny: false,
+      combineOr: false,
       groups: [],
       search: true,
     });
@@ -116,7 +116,7 @@ describe("offers from declared indexes", () => {
       texts: [],
       narrowTexts: [],
       overlaps: [],
-      matchAny: false,
+      combineOr: false,
       groups: [],
       search: true,
     });

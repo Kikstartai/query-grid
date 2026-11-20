@@ -29,14 +29,14 @@ export interface TextState {
   value: string;
 }
 
-export type MatchMode = "all" | "any";
+export type Combinator = "and" | "or";
 
 export interface QueryState {
   equals: Record<string, string[]>;
   ranges: RangeState[];
   texts: TextState[];
   overlaps: Record<string, string[]>;
-  match: MatchMode;
+  combine: Combinator;
   search: string | null;
   sort: SortState;
   thenBy?: SortState[];

@@ -474,11 +474,11 @@ test.describe("the narrowed-set tier", () => {
   }) => {
     await openGrid(page, "/orders?f.status_code=failed&f.channel=phone");
     const both = await apiCount(page, "f.status_code=failed&f.channel=phone");
-    const any = bar(page).locator('[data-match="any"]');
+    const any = bar(page).locator('[data-combine="or"]');
     await expect(any).toBeEnabled();
     await any.click();
     await expect(page).toHaveURL(/match=any/);
-    await expect(chip(page, "match")).toHaveText(/Match any/);
+    await expect(chip(page, "combine")).toHaveText(/Match any/);
     const either = await apiCount(
       page,
       "f.status_code=failed&f.channel=phone&match=any",
@@ -498,13 +498,13 @@ test.describe("the narrowed-set tier", () => {
     ).toBe(true);
     expect(body.rows.some((row) => row.status_code !== "failed")).toBe(true);
 
-    await bar(page).locator('[data-match="all"]').click();
+    await bar(page).locator('[data-combine="and"]').click();
     await expect(page).not.toHaveURL(/match=any/);
     await expectCount(page, both, "capped");
 
     await openGrid(page, "/orders?f.status_code=completed&f.region=gauteng");
-    await expect(bar(page).locator('[data-match="any"]')).toBeDisabled();
-    await expect(field(page, "match")).toHaveAttribute(
+    await expect(bar(page).locator('[data-combine="or"]')).toBeDisabled();
+    await expect(field(page, "combine")).toHaveAttribute(
       "title",
       /^Narrow the filters first: .* rows\.$/,
     );
@@ -565,12 +565,12 @@ test.describe("the narrowed-set tier", () => {
     );
     const body = (await sizes.json()) as {
       limit: number;
-      all: { rows: number; over: boolean };
-      any: { rows: number; over: boolean };
+      and: { rows: number; over: boolean };
+      or: { rows: number; over: boolean };
     };
     expect(body.limit).toBe(100000);
-    expect(body.all.over).toBe(false);
-    expect(body.any.rows).toBeGreaterThan(body.all.rows);
+    expect(body.and.over).toBe(false);
+    expect(body.or.rows).toBeGreaterThan(body.and.rows);
   });
 
   test("the in-memory grid takes contains, a second range and match any with no limit", async ({
@@ -597,7 +597,7 @@ test.describe("the narrowed-set tier", () => {
     const narrowed = Number(await countValue(page).getAttribute("data-count"));
     await pick(page, "status", "todo");
     const all = Number(await countValue(page).getAttribute("data-count"));
-    await bar(page).locator('[data-match="any"]').click();
+    await bar(page).locator('[data-combine="or"]').click();
     await expect(page).toHaveURL(/match=any/);
     await expect
       .poll(async () =>

@@ -198,7 +198,7 @@ describe("the SQL of a text filter", () => {
     expect(where({ texts }).text).toBe(
       "t.note ILIKE $1 AND (t.note NOT ILIKE $2 OR t.note IS NULL)",
     );
-    expect(where({ texts, match: "any" }).text).toBe(
+    expect(where({ texts, combine: "or" }).text).toBe(
       "(t.note ILIKE $1 OR (t.note NOT ILIKE $2 OR t.note IS NULL))",
     );
   });
@@ -325,7 +325,7 @@ describe("a filter with an index of its own", () => {
       undefined,
       LIMITS,
     );
-    expect(sizes.all).toEqual({ rows: 7, over: false, capped: false });
+    expect(sizes.and).toEqual({ rows: 7, over: false, capped: false });
     expect(calls[0].sql.text).toContain("WHERE t.starred = $1::boolean LIMIT");
     expect(calls.every((call) => !call.sql.text.includes("ILIKE"))).toBe(true);
     calls.length = 0;

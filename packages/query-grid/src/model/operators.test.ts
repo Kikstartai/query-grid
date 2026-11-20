@@ -496,7 +496,7 @@ describe("the memory source runs every operator", () => {
   test("match any ORs the new filters too", async () => {
     expect(
       await ids({
-        match: "any",
+        combine: "or",
         texts: [text("name", "starts_with", "rec")],
         overlaps: { tags: ["red"] },
       }),
@@ -673,10 +673,10 @@ describe("the actions of the new filters", () => {
       ...CONTEXT,
       narrowed: {
         limit: 100,
-        all: { rows, over, capped: over },
-        any: null,
-        allBasis: basis,
-        anyBasis: "",
+        and: { rows, over, capped: over },
+        or: null,
+        andBasis: basis,
+        orBasis: "",
       },
     });
     const over = sized(100, true);
@@ -785,12 +785,12 @@ describe("a scope", () => {
     const { capabilities } = withScope(createTestSource(CAPABILITIES), scope);
     expect(capabilities.equalsFields).toEqual(["starred"]);
     expect(capabilities.groupFields).toEqual(["starred"]);
-    expect(capabilities.matchAny).toBe(false);
+    expect(capabilities.combineOr).toBe(false);
     expect(capabilities.canRun(BASE)).toBe(true);
     expect(
       capabilities.canRun({ ...BASE, equals: { folder_id: [FOLDER] } }),
     ).toBe(false);
-    expect(capabilities.canRun({ ...BASE, match: "any" })).toBe(false);
+    expect(capabilities.canRun({ ...BASE, combine: "or" })).toBe(false);
     expect(listQueryKeys(capabilities).map((key) => key.name)).not.toContain(
       "f.folder_id",
     );

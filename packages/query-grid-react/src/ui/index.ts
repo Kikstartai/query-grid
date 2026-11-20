@@ -13,7 +13,7 @@ export {
   FilterChips,
   FilterSidebar,
   GroupControl,
-  MatchToggle,
+  CombineToggle,
   SearchFilter,
   SortControl,
   TextFilter,

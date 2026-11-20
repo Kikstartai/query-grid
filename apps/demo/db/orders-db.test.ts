@@ -307,7 +307,7 @@ describe("the narrowed-set tier", () => {
   test("match any is the union of its filters, paged by keyset", async () => {
     const query: QueryState = {
       ...base,
-      match: "any",
+      combine: "or",
       equals: { status_code: ["failed"], channel: ["phone"] },
     };
     const first = await listGridPage(ORDERS_GRID_DEF, execute, query, 100);
@@ -340,23 +340,23 @@ describe("the narrowed-set tier", () => {
     const failedRows = await countWhere("status_code = 'failed'");
     const phoneRows = await countWhere("channel = 'phone'");
     expect(sizes.limit).toBe(DEFAULT_LIMITS.narrowLimit);
-    expect(sizes.all).toEqual({
+    expect(sizes.and).toEqual({
       rows: await countWhere("status_code = 'failed' AND channel = 'phone'"),
       over: false,
       capped: false,
     });
-    expect(sizes.any).toEqual({
+    expect(sizes.or).toEqual({
       rows: failedRows + phoneRows,
       over: false,
       capped: false,
     });
     const whole = await getNarrowedSizes(ORDERS_GRID_DEF, execute, base);
-    expect(whole.all).toEqual({
+    expect(whole.and).toEqual({
       rows: await countWhere("true"),
       over: true,
       capped: false,
     });
-    expect(whole.any).toBeNull();
+    expect(whole.or).toBeNull();
   }, 60_000);
 
   test("over the limit an expensive operation is refused before its statement runs", async () => {
@@ -373,7 +373,7 @@ describe("the narrowed-set tier", () => {
       { ...base, ranges: [{ field: "total", min: "20000", max: null }] },
       {
         ...base,
-        match: "any",
+        combine: "or",
         equals: { status_code: ["completed"], region: ["gauteng"] },
       },
     ];

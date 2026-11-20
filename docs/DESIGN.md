@@ -64,7 +64,7 @@ Three npm packages in one repo, released together at one version.
 - `DataGrid` also takes `groups`. Each group is a header row, the rows of an open group and a load-more row, all mixed into the one virtual list. The cell focus, the range and the selection run over the data rows alone, so the arrow keys step from row to row past a header, and a header is a button on its own tab stop.
 - Column state (order, width, visibility, pin) is internal by default and can be controlled. It persists through a `ColumnPersistence`; the provider's default is local storage keyed by the def's `id`.
 - `StatusBoard` knows lanes, `onMove` and `canMove`. The lane feeds live in core's board model.
-- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `TextFilter`, `MatchToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the capabilities, the field's `type` and its `options`: an array field gets the select or the lookup as an overlap, and a boolean the select with its two values.
+- The filter controls are `EqualsSelect`, `LookupFilter`, `RangeFilter`, `TextFilter`, `CombineToggle` and `GroupControl`. The bound `FieldFilter` picks one of the first three from the capabilities, the field's `type` and its `options`: an array field gets the select or the lookup as an overlap, and a boolean the select with its two values.
 - `RangeFilter` carries an operator: a select beside one number or two, and for a date the period select with On…, Before…, After… and their kin after the presets. An excluded operator the offers do not hold for the field (`Offers.ranges` but not `Offers.narrowRanges`) is listed, disabled, with the narrowing reason. `TextFilter` is one row per text filter (a field, an operator and the text) and an empty row to add the next. A field offered only through its text index (`Offers.texts` but not `Offers.narrowTexts`) has its negations disabled with the narrowing reason and asks for three characters, so nothing a row can send is refused.
 - `EqualsSelect` and `LookupFilter` list `(empty)` and `(not empty)` first on a nullable field. `EqualsSelect` carries an Exclude toggle on a field with a fixed list of values. A date `RangeFilter` is a period select (Today to This year, then Custom…) that shows the date picker only for Custom.
 - The bound `FilterBar` and `FilterSidebar` take `fields`, a list of field keys: the search, the default control of each named field in that order, then the text filter, the Match toggle, the sort and the group. Without it they show every filterable field. `texts` names the text fields the text filter lists, and defaults to `fields`. `children` replaces everything.
@@ -117,7 +117,7 @@ interface DataSourceCapabilities {
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
   narrowLimited: boolean;
-  matchAny: boolean;
+  combineOr: boolean;
   canRun: (query: QueryState) => boolean;
   isNarrowed: (query: QueryState) => boolean;
   narrowBasis: (query: QueryState) => string;
@@ -164,7 +164,7 @@ interface QueryState {
   }[];
   texts: { field: string; op: TextOp; value: string }[];
   overlaps: Record<string, string[]>;
-  match: "all" | "any";
+  combine: "and" | "or";
   search: string | null;
   sort: { field: string; direction: "asc" | "desc" };
   thenBy?: { field: string; direction: "asc" | "desc" }[];
@@ -173,7 +173,7 @@ interface QueryState {
 }
 ```
 
-- Filters combine with AND, or with OR under `match: "any"` once two fields are filtered. Within one field, equality takes several values, up to the field's `maxValues` (default 20).
+- Filters combine with AND, or with OR under `combine: "or"` once two fields are filtered. Within one field, equality takes several values, up to the field's `maxValues` (default 20).
 - **Empty.** On a nullable field an equality filter takes two reserved values: `_empty` (no value) and `_not_empty` (any value). Empty mixes with real values ("Glen or nobody"); not empty stands alone.
 - **Exclude.** On a field with a fixed list of values, `!value` in the filter leaves that value out. It is intent: the URL and the query keep it, and it becomes the remaining values (and empty, on a nullable field) when the query runs, so an option added later is included. It is refused when nothing would remain or more than `maxValues` would.
 - **Ranges.** A range may leave a bound's own value out (`minExclusive`, `maxExclusive`) or be turned inside out (`exclude`): not between, and with one value in both bounds, not equal. A field takes several. On a server grid the first plain range on the sort field of an index with `range` is answered by that index; any other, and every excluded one, runs over the narrowed set.
@@ -186,7 +186,7 @@ interface QueryState {
 - **Sort.** `sort` is the first column and `thenBy` up to two more, each with its own direction; the key breaks ties the first column's way. `setSort` replaces the sort, and reaches a declared composite order when its first column has no index of its own; `addSort` adds or turns a column; `removeSort` drops one and falls back to the default sort when what is left does not run.
 - The search takes 3 to 80 characters. On a server grid it combines with equality filters on any indexed field, including empty and excluded values, and with nothing else: no range, text filter or overlap.
 - The search is an unranked, case-insensitive substring match (`ILIKE '%term%'`) over the def's `search` columns joined with spaces, backed by a `pg_trgm` GIN index. It is not full-text search: no stemming, no ranking, no order.
-- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `o.<field>` repeated per array value, `r.<field>=min..max` or `r.<field>=<preset>` repeated per range, with `!` before an excluded range and `(` or `)` beside an open bound (`r.total=!(5..9)`), one key per text operator (`c.`, `nc.`, `sw.`, `ew.`, `ne.<field>=text`), `match=any`, `group=<field>`, `q`, `sort=<field>.<direction>` with further columns after commas (`sort=item_count.desc,total.desc`) and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
+- The URL is the source of truth: `f.<field>` repeated per value (`f.status=!cancelled`, `f.owner=_empty`), `o.<field>` repeated per array value, `r.<field>=min..max` or `r.<field>=<preset>` repeated per range, with `!` before an excluded range and `(` or `)` beside an open bound (`r.total=!(5..9)`), one key per text operator (`c.`, `nc.`, `sw.`, `ew.`, `ne.<field>=text`), `match=any` (`combine: "or"`), `group=<field>`, `q`, `sort=<field>.<direction>` with further columns after commas (`sort=item_count.desc,total.desc`) and `view`. Core's `encodeQuery` and `decodeQuery` are the only codec, in the browser and on the server.
 - A filter, range, sort, view or reset pushes a history entry. The search replaces. A URL nothing answers is rewritten to the default.
 - Column layout stays out of the URL.
 
@@ -201,7 +201,7 @@ interface QueryState {
 | `GET /total`       | one result per total field: `{ field, available: true, sum, rows, source }` or `{ field, available: false, code, params }` | built in                     |
 | `GET /facets`      | `[{ value, count, sums }]` from the counter table, `sums` keyed by total field                                             | built in                     |
 | `GET /groups`      | `{ groups: [{ value, label, count, capped, sums }], source, truncated }` for the query's `group`                           | built in                     |
-| `GET /narrowed`    | `{ limit, all: { rows, over }, any }`: the rows the indexed filters leave, and the sum of the terms under match any        | built in                     |
+| `GET /narrowed`    | `{ limit, and: { rows, over }, or }`: the rows the indexed filters leave, and the sum of the terms under match any         | built in                     |
 | `GET /limits`      | the limits the handler runs under                                                                                          | built in                     |
 | `GET /export`      | the whole filtered result as `text/csv`, streamed; `columns` names the fields                                              | built in                     |
 | `GET /options`     | `[{ value, label }]` for a lookup field                                                                                    | the `options` hook           |

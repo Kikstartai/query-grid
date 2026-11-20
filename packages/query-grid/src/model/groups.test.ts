@@ -42,10 +42,10 @@ function header(value: string, count: number): GroupHeader {
 function contextFor(query: QueryState, over: boolean): OfferContext {
   const narrowed: NarrowedState = {
     limit: 1000,
-    all: { rows: over ? 1000 : 40, over, capped: over },
-    any: null,
-    allBasis: CAPABILITIES.narrowBasis({ ...query, match: "all" }),
-    anyBasis: CAPABILITIES.narrowBasis({ ...query, match: "any" }),
+    and: { rows: over ? 1000 : 40, over, capped: over },
+    or: null,
+    andBasis: CAPABILITIES.narrowBasis({ ...query, combine: "and" }),
+    orBasis: CAPABILITIES.narrowBasis({ ...query, combine: "or" }),
   };
   return {
     capabilities: CAPABILITIES,
@@ -111,7 +111,7 @@ describe("what may be grouped", () => {
     expect(
       CAPABILITIES.canRun({
         ...BASE,
-        match: "any",
+        combine: "or",
         equals: { status: ["open"], region: ["north"] },
         group: "status",
       }),
@@ -153,12 +153,12 @@ describe("review fixes", () => {
     const memory = createMemorySource(TEST_DEF, []).capabilities;
     const either: QueryState = {
       ...BASE,
-      match: "any",
+      combine: "or",
       equals: { status: ["open"], region: ["north"] },
     };
     expect(memory.canRun(either)).toBe(true);
     expect(memory.canRun({ ...either, group: "status" })).toBe(false);
-    expect(memory.canRun({ ...BASE, match: "any", group: "status" })).toBe(
+    expect(memory.canRun({ ...BASE, combine: "or", group: "status" })).toBe(
       true,
     );
   });
@@ -188,7 +188,7 @@ describe("review fixes", () => {
     const any = planQuery(TEST_INDEXES, {
       ...BASE,
       group: "region",
-      match: "any",
+      combine: "or",
       equals: { status: ["open"], region: ["north"] },
     });
     expect(any?.terms?.every((term) => term.group === null)).toBe(true);

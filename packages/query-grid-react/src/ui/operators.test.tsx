@@ -313,13 +313,13 @@ describe("a scope on the provider", () => {
     expect(html).not.toContain('data-field="folder"');
     expect(html).not.toContain('data-field="tags"');
     expect(html).toContain('data-field="labels"');
-    expect(html).not.toContain('data-field="match"');
+    expect(html).not.toContain('data-field="combine"');
   });
 
   test("leaves the same grid untouched without one", () => {
     const html = render(<FilterBar />, "f.folder=other");
     expect(html).toContain('data-field="folder"');
-    expect(html).toContain('data-field="match"');
+    expect(html).toContain('data-field="combine"');
   });
 });
 

@@ -13,7 +13,7 @@ export interface FieldFrameProps extends ControlState {
     | "sort"
     | "search"
     | "text"
-    | "match"
+    | "combine"
     | "group";
   label: string;
   children: ReactNode;

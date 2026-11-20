@@ -11,7 +11,7 @@ export interface DataSourceCapabilities {
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
   narrowLimited: boolean;
-  matchAny: boolean;
+  combineOr: boolean;
   canRun: (query: QueryState) => boolean;
   isNarrowed: (query: QueryState) => boolean;
   narrowBasis: (query: QueryState) => string;
@@ -35,13 +35,13 @@ export interface SizeResult {
 
 export interface NarrowedResult {
   limit: number;
-  all: SizeResult;
-  any: SizeResult | null;
+  and: SizeResult;
+  or: SizeResult | null;
 }
 
 export interface NarrowedState extends NarrowedResult {
-  allBasis: string;
-  anyBasis: string;
+  andBasis: string;
+  orBasis: string;
 }
 
 export interface OfferContext {

@@ -85,7 +85,7 @@ describe("the SQL of the expensive operations", () => {
   test("match any is one OR group, a two-sided range bracketed inside it, and the cursor still ANDs", () => {
     const either: QueryState = {
       ...BASE,
-      match: "any",
+      combine: "or",
       equals: { status: ["open"], region: ["north", "south"] },
       ranges: [{ field: "total", min: "100", max: "900" }],
     };
@@ -110,7 +110,7 @@ describe("the SQL of the expensive operations", () => {
     );
     const first = buildPageSql(TEST_DEF, either, 1);
     expect(first.text).toEndWith("LIMIT 2");
-    const one = buildPageSql(TEST_DEF, { ...OPEN, match: "any" }, 50);
+    const one = buildPageSql(TEST_DEF, { ...OPEN, combine: "or" }, 50);
     expect(one.text).toContain("WHERE t.status = $1::text ORDER BY");
   });
 
@@ -217,7 +217,7 @@ describe("the narrowed-set limit on the server", () => {
   test("match any sums the count of each term, each through its own index", async () => {
     const either: QueryState = {
       ...BASE,
-      match: "any",
+      combine: "or",
       equals: { region: ["north"] },
       ranges: [{ field: "total", min: "100", max: null }],
     };
@@ -248,7 +248,7 @@ describe("the narrowed-set limit on the server", () => {
   test("match any with a term no index counts is sized by the whole table", async () => {
     const either: QueryState = {
       ...BASE,
-      match: "any",
+      combine: "or",
       equals: { region: ["north"] },
       texts: [{ field: "note", op: "contains", value: "gift" }],
     };
@@ -290,8 +290,8 @@ describe("/narrowed", () => {
     const response = await get("/narrowed?f.region=north");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 12, over: false, capped: false },
-      any: null,
+      and: { rows: 12, over: false, capped: false },
+      or: null,
     } satisfies NarrowedResult);
     expect(calls).toHaveLength(1);
     expect(calls[0].sql.text).toContain("LIMIT 51");
@@ -302,8 +302,8 @@ describe("/narrowed", () => {
     const response = await get("/narrowed?f.region=north&r.total=100..");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 30, over: false, capped: false },
-      any: { rows: 60, over: true, capped: false },
+      and: { rows: 30, over: false, capped: false },
+      or: { rows: 60, over: true, capped: false },
     });
   });
 
@@ -312,8 +312,8 @@ describe("/narrowed", () => {
     const response = await get("/narrowed");
     expect(await response.json()).toEqual({
       limit: 50,
-      all: { rows: 400, over: true, capped: false },
-      any: null,
+      and: { rows: 400, over: true, capped: false },
+      or: null,
     });
   });
 
@@ -351,8 +351,8 @@ describe("getNarrowedSizes", () => {
       undefined,
       LIMITS,
     );
-    expect(sizes.all).toEqual({ rows: 10, over: false, capped: false });
-    expect(sizes.any).toEqual({ rows: 20, over: false, capped: false });
+    expect(sizes.and).toEqual({ rows: 10, over: false, capped: false });
+    expect(sizes.or).toEqual({ rows: 20, over: false, capped: false });
     expect(calls).toHaveLength(3);
   });
 
@@ -367,7 +367,7 @@ describe("getNarrowedSizes", () => {
       execute,
       {
         ...BASE,
-        match: "any",
+        combine: "or",
         equals: { status: ["open"], region: ["north"] },
       },
       undefined,
@@ -375,8 +375,8 @@ describe("getNarrowedSizes", () => {
     );
     expect(sizes).toEqual({
       limit: 50,
-      all: { rows: 400, over: true, capped: false },
-      any: { rows: 410, over: true, capped: false },
+      and: { rows: 400, over: true, capped: false },
+      or: { rows: 410, over: true, capped: false },
     });
   });
 });
@@ -419,7 +419,7 @@ describe("the capped total and the order it is read in", () => {
       { ...BASE, equals: { note: ["_empty", "gift"] } },
       {
         ...BASE,
-        match: "any",
+        combine: "or",
         equals: { region: ["north"] },
         ranges: [{ field: "total", min: "100", max: null }],
       },

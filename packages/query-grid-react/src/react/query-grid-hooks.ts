@@ -125,8 +125,8 @@ function isOffered(offers: Offers, target: OfferTarget): boolean {
   if (target.kind === "search") {
     return offers.search;
   }
-  if (target.kind === "match") {
-    return offers.matchAny;
+  if (target.kind === "combine") {
+    return offers.combineOr;
   }
   const fields = {
     equals: offers.equals,

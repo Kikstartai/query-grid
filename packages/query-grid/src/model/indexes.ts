@@ -174,8 +174,8 @@ export function countFilterTerms(query: QueryState): number {
   );
 }
 
-export function isMatchAny(query: QueryState): boolean {
-  return query.match === "any" && countFilterTerms(query) > 1;
+export function isCombineOr(query: QueryState): boolean {
+  return query.combine === "or" && countFilterTerms(query) > 1;
 }
 
 function hasTextOrOverlap(query: QueryState): boolean {
@@ -191,7 +191,7 @@ function hasUnindexedParts(query: QueryState, extras: IndexExtras): boolean {
 
 function hasNarrowParts(query: QueryState, extras: IndexExtras): boolean {
   return (
-    isMatchAny(query) ||
+    isCombineOr(query) ||
     hasUnindexedParts(query, extras) ||
     query.ranges.some((range) => range.exclude)
   );
@@ -267,7 +267,7 @@ export function isQueryIndexed(
   const equalsFields = listAnswerableFields(indexes);
   return (
     searchFields.length > 0 &&
-    !isMatchAny(query) &&
+    !isCombineOr(query) &&
     !hasTextOrOverlap(query) &&
     Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
     query.ranges.length === 0 &&
@@ -282,7 +282,7 @@ export function withoutFilters(query: QueryState): QueryState {
     ranges: [],
     texts: [],
     overlaps: {},
-    match: "all",
+    combine: "and",
     group: null,
     cursor: null,
   };
@@ -337,7 +337,7 @@ function planAll(
     ...query,
     texts: [],
     overlaps: {},
-    match: "all",
+    combine: "and",
     group: null,
   };
   const onSort = query.ranges
@@ -380,7 +380,7 @@ export function planQuery(
   if (query.search !== null) {
     return null;
   }
-  return isMatchAny(query)
+  return isCombineOr(query)
     ? planAny(indexes, query)
     : planAll(indexes, query, extras);
 }
@@ -429,7 +429,7 @@ function isGroupRunnable(tier: Tier, query: QueryState): boolean {
   };
   return (
     query.search === null &&
-    !isMatchAny(query) &&
+    !isCombineOr(query) &&
     tier.groupFields.includes(group) &&
     planQuery(tier.indexes, grouped, tier.extras) !== null
   );
@@ -495,15 +495,15 @@ function describeBasis(
   if (!plan) {
     return "";
   }
-  if (!isMatchAny(query)) {
+  if (!isCombineOr(query)) {
     return JSON.stringify([
-      "all",
+      "and",
       Object.entries(plan.core.equals).sort(),
       plan.core.ranges,
     ]);
   }
   return JSON.stringify([
-    "any",
+    "or",
     Object.entries(query.equals).sort(),
     query.ranges,
     query.texts,
@@ -519,7 +519,7 @@ export function isFacetOnlyQuery(
     facetField !== undefined &&
     query.ranges.length === 0 &&
     query.search === null &&
-    !isMatchAny(query) &&
+    !isCombineOr(query) &&
     !hasTextOrOverlap(query) &&
     Object.entries(query.equals).every(
       ([key, values]) =>
@@ -547,7 +547,7 @@ export function indexCapabilities(
     searchIsOrdered: false,
     facetCountsFollowFilters: false,
     narrowLimited: tier !== null,
-    matchAny: tier !== null,
+    combineOr: tier !== null,
     canRun: (query) =>
       tier
         ? isTierRunnable(tier, query)

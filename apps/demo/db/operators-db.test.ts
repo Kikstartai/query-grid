@@ -439,7 +439,7 @@ describe("every operator answers as the memory source does", () => {
     [
       "match any across the new filters",
       {
-        match: "any",
+        combine: "or",
         texts: [text("note", "starts_with", "under")],
         overlaps: { tags: ["blue"] },
         ranges: [range("size", { max: "10", maxExclusive: true })],

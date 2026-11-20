@@ -16,7 +16,7 @@ import {
 } from "./grid-def.fixture.ts";
 import {
   indexCapabilities,
-  isMatchAny,
+  isCombineOr,
   isQueryRunnable,
   planQuery,
 } from "./indexes.ts";
@@ -52,11 +52,11 @@ function narrowedFor(
 ): NarrowedState {
   return {
     limit: 1000,
-    all: { rows: 40, over: false, capped: false },
-    any: null,
+    and: { rows: 40, over: false, capped: false },
+    or: null,
     ...result,
-    allBasis: CAPABILITIES.narrowBasis({ ...query, match: "all" }),
-    anyBasis: CAPABILITIES.narrowBasis({ ...query, match: "any" }),
+    andBasis: CAPABILITIES.narrowBasis({ ...query, combine: "and" }),
+    orBasis: CAPABILITIES.narrowBasis({ ...query, combine: "or" }),
   };
 }
 
@@ -124,13 +124,13 @@ describe("the plan of a query", () => {
   });
 
   test("match any needs two filters, and counts each one through its own index", () => {
-    expect(isMatchAny({ ...OPEN, match: "any" })).toBe(false);
-    expect(planQuery(TEST_INDEXES, { ...OPEN, match: "any" })?.narrowed).toBe(
+    expect(isCombineOr({ ...OPEN, combine: "or" })).toBe(false);
+    expect(planQuery(TEST_INDEXES, { ...OPEN, combine: "or" })?.narrowed).toBe(
       false,
     );
     const either: QueryState = {
       ...BASE,
-      match: "any",
+      combine: "or",
       equals: { status: ["open"], region: ["north"] },
       ranges: [TOTAL_RANGE],
     };
@@ -152,7 +152,7 @@ describe("the plan of a query", () => {
   test("a term no index counts leaves the whole table as the set", () => {
     const plan = planQuery(TEST_INDEXES, {
       ...OPEN,
-      match: "any",
+      combine: "or",
       texts: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(plan).toMatchObject({ narrowed: true, terms: null });
@@ -181,7 +181,7 @@ describe("the plan of a query", () => {
       isQueryRunnable(DEF, {
         ...BASE,
         search: "abc",
-        match: "any",
+        combine: "or",
         equals: { status: ["open"], region: ["north"] },
       }),
     ).toBe(false);
@@ -201,7 +201,7 @@ describe("offers under the narrowed-set limit", () => {
 
   test("over the limit only what the index answers is offered, with the size as the reason", () => {
     const base = contextFor(BASE, {
-      all: { rows: 1000, over: true, capped: true },
+      and: { rows: 1000, over: true, capped: true },
     });
     const offers = listOffers(DEF, BASE, base);
     expect(offers.ranges).toEqual(["created_at"]);
@@ -248,26 +248,27 @@ describe("offers under the narrowed-set limit", () => {
       equals: { status: ["open"], region: ["north"] },
     };
     const unpaired: OfferContext = {
-      ...contextFor(two, { any: { rows: 70, over: false, capped: false } }),
+      ...contextFor(two, { or: { rows: 70, over: false, capped: false } }),
     };
-    expect(listOffers(DEF, two, unpaired).matchAny).toBe(true);
+    expect(listOffers(DEF, two, unpaired).combineOr).toBe(true);
     expect(
-      applyAction(DEF, two, { type: "setMatch", mode: "any" }, unpaired).match,
-    ).toBe("any");
+      applyAction(DEF, two, { type: "setCombine", combine: "or" }, unpaired)
+        .combine,
+    ).toBe("or");
     const over = contextFor(two, {
-      any: { rows: 4000, over: true, capped: false },
+      or: { rows: 4000, over: true, capped: false },
     });
-    expect(listOffers(DEF, two, over).matchAny).toBe(false);
-    expect(explainUnavailable(two, { kind: "match" }, over)).toMatchObject({
+    expect(listOffers(DEF, two, over).combineOr).toBe(false);
+    expect(explainUnavailable(two, { kind: "combine" }, over)).toMatchObject({
       code: "narrow_first",
       rows: 4000,
       capped: false,
     });
-    expect(listOffers(DEF, OPEN, contextFor(OPEN)).matchAny).toBe(true);
+    expect(listOffers(DEF, OPEN, contextFor(OPEN)).combineOr).toBe(true);
     const capped = contextFor(two, {
-      any: { rows: 1800, over: true, capped: true },
+      or: { rows: 1800, over: true, capped: true },
     });
-    expect(explainUnavailable(two, { kind: "match" }, capped)).toMatchObject({
+    expect(explainUnavailable(two, { kind: "combine" }, capped)).toMatchObject({
       rows: 1800,
       capped: true,
       narrowBy: [],
@@ -364,8 +365,8 @@ describe("the narrowed-size store", () => {
         asked.push(query);
         return {
           limit: 1000,
-          all: { rows: asked.length, over: false, capped: false },
-          any: null,
+          and: { rows: asked.length, over: false, capped: false },
+          or: null,
         };
       },
     });
@@ -375,8 +376,8 @@ describe("the narrowed-size store", () => {
     narrowed.connect();
     await settle();
     expect(store.getOfferContext().narrowed).toMatchObject({
-      all: { rows: 1, over: false, capped: false },
-      allBasis: CAPABILITIES.narrowBasis(BASE),
+      and: { rows: 1, over: false, capped: false },
+      andBasis: CAPABILITIES.narrowBasis(BASE),
     });
     expect(listOffers(DEF, BASE, store.getOfferContext()).texts).toEqual([
       "name",
@@ -400,7 +401,7 @@ describe("the narrowed-size store", () => {
 describe("the URL, validation and chips", () => {
   const query: QueryState = {
     ...BASE,
-    match: "any",
+    combine: "or",
     equals: { status: ["open"] },
     ranges: [TOTAL_RANGE, CREATED_RANGE],
     texts: [{ field: "note", op: "contains", value: "gift wrap" }],
@@ -469,7 +470,7 @@ describe("the URL, validation and chips", () => {
       "range:total",
       "range:created_at",
       "text:0",
-      "match",
+      "combine",
       "sort",
     ]);
     expect(chips.find((chip) => chip.kind === "text")).toMatchObject({
@@ -478,13 +479,13 @@ describe("the URL, validation and chips", () => {
       op: "contains",
       clear: { type: "removeText", at: 0 },
     });
-    expect(chips.find((chip) => chip.kind === "match")?.clear).toEqual({
-      type: "setMatch",
-      mode: "all",
+    expect(chips.find((chip) => chip.kind === "combine")?.clear).toEqual({
+      type: "setCombine",
+      combine: "and",
     });
     expect(
-      listFilterChips(DEF, { ...OPEN, match: "any" }).some(
-        (chip) => chip.kind === "match",
+      listFilterChips(DEF, { ...OPEN, combine: "or" }).some(
+        (chip) => chip.kind === "combine",
       ),
     ).toBe(false);
   });
@@ -519,11 +520,11 @@ describe("the in-memory source takes all three with no limit", () => {
       ranges: [{ field: "total", min: "800", max: null }],
     };
     expect(await ids(filters)).toEqual([]);
-    expect(await ids({ ...filters, match: "any" })).toEqual(["a", "c", "d"]);
+    expect(await ids({ ...filters, combine: "or" })).toEqual(["a", "c", "d"]);
     expect(
       await ids({
         ...filters,
-        match: "any",
+        combine: "or",
         texts: [{ field: "note", op: "contains", value: "fragile" }],
         search: null,
       }),
@@ -544,7 +545,7 @@ describe("the in-memory source takes all three with no limit", () => {
       allSearchMatchesLoaded: false,
     };
     const offers = listOffers(TEST_DEF, BASE, context);
-    expect(offers.matchAny).toBe(true);
+    expect(offers.combineOr).toBe(true);
     expect(offers.texts).toEqual(["name", "note"]);
     expect(source.capabilities.narrowLimited).toBe(false);
     expect(await source.fetchNarrowed(BASE, signal)).toBeNull();

@@ -244,7 +244,7 @@ interface DataSourceCapabilities {
   searchIsOrdered: boolean;
   facetCountsFollowFilters: boolean;
   narrowLimited: boolean;
-  matchAny: boolean;
+  combineOr: boolean;
   canRun(query: QueryState): boolean;
   isNarrowed(query: QueryState): boolean;
   narrowBasis(query: QueryState): string;
@@ -950,7 +950,7 @@ The search is `(<columns joined with spaces>) ILIKE '%term%'` through the trigra
 
 ### Query state
 
-`createQueryStore` is one external store in core holding the equality filters, the overlaps, the ranges, the text filters, the match mode, the search, the sort, the group, the keyset cursor and the view. `QueryGridProvider` creates it from the URL and builds the stores beside it that subscribe to it: the row feed (`createFeed`), the count, the total, the facet counts and the lookup labels from core, and the column state. Each starts fetching only when a part subscribes. Every store is `createStore` over one emitter, read through `useSyncExternalStore`; the count, the total and the facet counts are one `createQueryResource` each; no component holds a copy of the query, and the base components never see a store.
+`createQueryStore` is one external store in core holding the equality filters, the overlaps, the ranges, the text filters, the combinator, the search, the sort, the group, the keyset cursor and the view. `QueryGridProvider` creates it from the URL and builds the stores beside it that subscribe to it: the row feed (`createFeed`), the count, the total, the facet counts and the lookup labels from core, and the column state. Each starts fetching only when a part subscribes. Every store is `createStore` over one emitter, read through `useSyncExternalStore`; the count, the total and the facet counts are one `createQueryResource` each; no component holds a copy of the query, and the base components never see a store.
 
 ### Counts
 

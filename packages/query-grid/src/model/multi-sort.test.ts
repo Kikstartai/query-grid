@@ -46,10 +46,10 @@ function context(rows: number | null): OfferContext {
       ? null
       : {
           limit: 100,
-          all: { rows, over: rows > 100, capped: rows > 100 },
-          any: null,
-          allBasis: basis,
-          anyBasis: "",
+          and: { rows, over: rows > 100, capped: rows > 100 },
+          or: null,
+          andBasis: basis,
+          orBasis: "",
         };
   return {
     capabilities: CAPABILITIES,
@@ -130,7 +130,7 @@ describe("a further sort column with no index", () => {
   test("match any still counts each filter through its own index", () => {
     const either: QueryState = {
       ...query,
-      match: "any",
+      combine: "or",
       equals: { status: ["open"], region: ["north"] },
     };
     const plan = planQuery(INDEXES, either);
