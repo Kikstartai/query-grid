@@ -12,7 +12,7 @@ import {
   texts,
 } from "./fixtures";
 
-const NARROW = "f.status_code=failed&f.channel=phone";
+const NARROW = "f.status_code.any_of=failed&f.channel.any_of=phone";
 const note = (page: Page) => page.locator("[data-grid-note]");
 const headerSort = (page: Page, field: string) =>
   page.locator(`[data-header-sort="${field}"]`);
@@ -199,7 +199,7 @@ test.describe("export", () => {
   test("a client grid exports from memory what its filters leave", async ({
     page,
   }) => {
-    await openGrid(page, "/memory?f.team=growth&sort=rank.asc");
+    await openGrid(page, "/memory?f.team.any_of=growth&sort=rank.asc");
     const shown = Number(await loaded(page).getAttribute("data-value"));
     const lines = await download(page);
     expect(lines).toHaveLength(shown + 1);
@@ -214,7 +214,7 @@ test.describe("selection for bulk actions", () => {
   test("everything matching is selected as the query, from the count the page already has", async ({
     page,
   }) => {
-    await openGrid(page, "/orders?f.region=gauteng");
+    await openGrid(page, "/orders?f.region.any_of=gauteng");
     const counted: string[] = [];
     page.on("request", (request) => {
       if (request.url().includes("/api/orders")) {
@@ -244,7 +244,7 @@ test.describe("selection for bulk actions", () => {
     );
     await page.locator("[data-bulk-action]").click();
     await expect(note(page)).toHaveText(
-      'Bulk action on every row matching "f.region=gauteng"',
+      'Bulk action on every row matching "f.region.any_of=gauteng"',
     );
     await expect(bar).toBeHidden();
     await expect(page.locator("[data-status=selected]")).toHaveAttribute(
@@ -435,7 +435,7 @@ test.describe("row reorder", () => {
   });
 
   test("a row is dragged by its handle to a new place", async ({ page }) => {
-    await openGrid(page, "/memory?sort=rank.asc&f.team=growth");
+    await openGrid(page, "/memory?sort=rank.asc&f.team.any_of=growth");
     const before = await column(page, "number", 4);
     const from = await center(handles(page).nth(0));
     const to = await center(handles(page).nth(2));
@@ -456,7 +456,7 @@ test.describe("ready-made cells", () => {
   test("a badge field and a list field render through the package's cells", async ({
     page,
   }) => {
-    await openGrid(page, "/memory?f.priority=high&o.labels=bug");
+    await openGrid(page, "/memory?f.priority.any_of=high&f.labels.any_of=bug");
     const badge = cells(page, "priority").first().locator(".qg-badge");
     await expect(badge).toHaveAttribute("data-tone", "danger");
     await expect(badge).toHaveText("High");

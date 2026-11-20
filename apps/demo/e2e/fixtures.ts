@@ -53,7 +53,7 @@ export async function pick(page: Page, field: string, ...options: string[]) {
   await bar(page).locator(`[data-filter="${field}"]`).click();
   for (const option of options) {
     await page.locator(`[data-option="${option}"]`).click();
-    await expect(page).toHaveURL(new RegExp(`f\\.${field}=${option}`));
+    await expect(page).toHaveURL(new RegExp(`f\\.${field}\\.any_of=${option}`));
   }
   await page.keyboard.press("Escape");
 }

@@ -65,7 +65,7 @@ test.describe("grouping by the counted field", () => {
       "refunded",
       "failed",
     ]);
-    const failed = await apiCount(page, "f.status_code=failed");
+    const failed = await apiCount(page, "f.status_code.any_of=failed");
     await expect
       .poll(async () =>
         (await groupCount(page, "failed").textContent())?.replace(/\D/g, ""),
@@ -86,7 +86,7 @@ test.describe("grouping by the counted field", () => {
     );
     await expect(loaded(page)).toHaveAttribute("data-value", "50");
     expect(pages.length).toBe(before + 1);
-    expect(pages[before]).toContain("f.status_code=failed");
+    expect(pages[before]).toContain("f.status_code.any_of=failed");
     expect(pages[before]).not.toContain("group=");
     expect(new Set(await cells(page, "status_code"))).toEqual(
       new Set(["Failed"]),
@@ -119,12 +119,12 @@ test.describe("grouping by the counted field", () => {
   test("under another filter the headers fall back to capped live counts", async ({
     page,
   }) => {
-    await openGrid(page, "/orders?f.region=gauteng&group=status_code");
+    await openGrid(page, "/orders?f.region.any_of=gauteng&group=status_code");
     await expect(page.locator("[data-group]")).toHaveCount(7);
     await expect(groupCount(page, "completed")).toHaveText(/^10.000\+ rows$/);
     const failed = await apiCount(
       page,
-      "f.region=gauteng&f.status_code=failed",
+      "f.region.any_of=gauteng&f.status_code.any_of=failed",
     );
     await expect
       .poll(async () =>
@@ -184,12 +184,12 @@ test.describe("grouping by another equality field", () => {
       })
       .toBeNull();
     await groupBy(page, "region");
-    const failed = await apiCount(page, "f.status_code=failed");
+    const failed = await apiCount(page, "f.status_code.any_of=failed");
     await expect
       .poll(async () => page.locator("[data-group]").count())
       .toBeGreaterThan(5);
     const response = await page.request.get(
-      "/api/orders/groups?f.status_code=failed&group=region",
+      "/api/orders/groups?f.status_code.any_of=failed&group=region",
     );
     const body = (await response.json()) as {
       source: string;
@@ -215,8 +215,11 @@ test.describe("grouping by another equality field", () => {
   });
 
   test("an empty value is its own group", async ({ page }) => {
-    await openGrid(page, "/orders?r.created_at=last-30-days&group=assignee");
-    await expect(group(page, "_empty")).toContainText("(empty)");
+    await openGrid(
+      page,
+      "/orders?f.created_at.in_period=last-30-days&group=assignee",
+    );
+    await expect(group(page, "_empty")).toContainText("(blank)");
     await expect(group(page, "glen")).toContainText("Glen Kitchen");
     await toggle(page, "_empty").click();
     await expect(loaded(page)).toHaveAttribute("data-value", "50");

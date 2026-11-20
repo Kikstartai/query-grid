@@ -31,7 +31,8 @@ const FEATURES = [
 ];
 
 const SERVER_SORT = "/orders?sort=item_count.desc,total.desc";
-const SERVER_NARROW = "/orders?f.status_code=failed&f.channel=phone";
+const SERVER_NARROW =
+  "/orders?f.status_code.any_of=failed&f.channel.any_of=phone";
 
 function SortPanel() {
   const { dispatch } = useQueryGridActions();

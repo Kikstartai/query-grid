@@ -19,10 +19,10 @@ test("default and Paid counts come from the counter table", async ({
   const facets = await texts(page.locator("[data-facet]"));
   expect(facets[0]).toMatch(/^All620\s000$/);
   expect(facets).toHaveLength(8);
-  const paid = await apiCount(page, "f.status_code=paid");
+  const paid = await apiCount(page, "f.status_code.any_of=paid");
   await pick(page, "status_code", "paid");
   await expectCount(page, paid);
-  expect(await urlPath(page)).toBe("/orders?f.status_code=paid");
+  expect(await urlPath(page)).toBe("/orders?f.status_code.any_of=paid");
   await expect(total(page)).toHaveAttribute("data-total", "counter");
   await expect(total(page)).toContainText("Total sum");
   await expect(total(page)).toContainText("Items sum");
@@ -30,7 +30,7 @@ test("default and Paid counts come from the counter table", async ({
 });
 
 test("facet counts hide once another filter is active", async ({ page }) => {
-  await openGrid(page, "/orders?f.region=gauteng");
+  await openGrid(page, "/orders?f.region.any_of=gauteng");
   await expect(page.locator("[data-facet]").first()).toBeVisible();
   await expect(page.locator("[data-facet-count]").first()).toBeEmpty();
   for (const count of await texts(page.locator("[data-facet-count]"))) {
@@ -42,7 +42,7 @@ test("facet counts hide once another filter is active", async ({ page }) => {
 test("capped count, then exact", async ({ page }) => {
   await openGrid(
     page,
-    "/orders?f.status_code=paid&r.total=20000..60000&sort=total.desc",
+    "/orders?f.status_code.any_of=paid&f.total.between=20000..60000&sort=total.desc",
   );
   await expectCount(page, 10000, "capped");
   await expect(countValue(page)).toHaveText(/^10\s000\+ rows$/);
@@ -61,7 +61,7 @@ test("capped count, then exact", async ({ page }) => {
 test("Paid in a week is summed live", async ({ page }) => {
   await openGrid(
     page,
-    "/orders?f.status_code=paid&r.created_at=2026-11-01T00:00:00.000000Z..2026-11-07T23:59:59.999999Z",
+    "/orders?f.status_code.any_of=paid&f.created_at.between=2026-11-01T00:00:00.000000Z..2026-11-07T23:59:59.999999Z",
   );
   const rows = await countValue(page).getAttribute("data-count");
   expect(Number(rows)).toBeGreaterThan(0);

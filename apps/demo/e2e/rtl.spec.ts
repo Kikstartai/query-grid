@@ -112,7 +112,7 @@ test("right to left places the sidebar and the chips", async ({ page }) => {
 
   await pick(page, "status_code", "paid", "shipped");
   await expect(
-    page.locator('[data-chip="eq:status_code"] .qg-chip-value'),
+    page.locator('[data-chip="filter:status_code:any_of"] .qg-chip-value'),
   ).toHaveCount(2);
   const placement = await page.evaluate(() => {
     const chip = document.querySelector("[data-chip]")!.getBoundingClientRect();

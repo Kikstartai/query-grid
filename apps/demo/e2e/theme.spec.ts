@@ -130,9 +130,13 @@ for (const scheme of SCHEMES) {
       await expectAA(page);
       await page.keyboard.press("Escape");
       await bar(page).locator('[data-filter="created_at.preset"]').click();
-      await expect(page.locator('[data-option="custom"]')).toBeVisible();
+      await expect(page.locator('[data-option="last-7-days"]')).toBeVisible();
       await expectAA(page);
-      await page.locator('[data-option="custom"]').click();
+      await page.keyboard.press("Escape");
+      await bar(page).locator('[data-filter="created_at.op"]').click();
+      await expect(page.locator('[data-option="between"]')).toBeVisible();
+      await expectAA(page);
+      await page.locator('[data-option="between"]').click();
       await bar(page).locator('[data-filter="created_at.calendar"]').click();
       await expect(
         page.locator("[role=dialog], [role=grid]").first(),

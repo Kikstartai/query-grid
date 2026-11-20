@@ -17,16 +17,16 @@ import {
 } from "./fixtures";
 
 test("filter sidebar", async ({ page }) => {
-  await openGrid(page, "/orders?f.status_code=paid&sort=total.desc");
+  await openGrid(page, "/orders?f.status_code.any_of=paid&sort=total.desc");
   await page.locator("[data-part=filter-sidebar-trigger]").click();
   const sidebar = page.locator("[data-part=filter-sidebar]");
-  await expect(sidebar.locator("[data-field]")).toHaveCount(17);
+  await expect(sidebar.locator("[data-field]")).toHaveCount(19);
   const disabled = sidebar.locator("[data-unavailable]");
-  await expect(disabled).toHaveCount(4);
+  await expect(disabled).toHaveCount(3);
   for (const reason of await texts(disabled.locator("[data-field-reason]"))) {
     expect(reason).not.toBe("");
   }
-  await expect(disabled.locator("[data-field-reason]")).toHaveCount(4);
+  await expect(disabled.locator("[data-field-reason]")).toHaveCount(3);
   await sidebar.locator("[data-sort=direction]").click();
   await expect(page).toHaveURL(/sort=total\.asc/);
   await expect(
@@ -45,9 +45,9 @@ test("chips and Reset", async ({ page }) => {
   await pick(page, "region", "gauteng");
   await expect(page.locator("[data-chip]")).toHaveCount(3);
   await expect(countValue(page)).toHaveAttribute("data-count-source", /.+/);
-  await page.locator('[data-chip-remove="eq:region"]').click();
+  await page.locator('[data-chip-remove="filter:region:any_of"]').click();
   await expect(page.locator("[data-chip]")).toHaveCount(2);
-  await expectCount(page, await apiCount(page, "f.status_code=shipped"));
+  await expectCount(page, await apiCount(page, "f.status_code.any_of=shipped"));
   await page.locator("[data-chips-reset]").click();
   await expect(page.locator("[data-chip]")).toHaveCount(1);
   expect(await urlPath(page)).toBe("/orders");
@@ -59,17 +59,17 @@ test("several values per field", async ({ page }) => {
   await openGrid(page, "/orders");
   const [paid, shipped, refunded, failed] = await Promise.all(
     ["paid", "shipped", "refunded", "failed"].map((status) =>
-      apiCount(page, `f.status_code=${status}`),
+      apiCount(page, `f.status_code.any_of=${status}`),
     ),
   );
   await pick(page, "status_code", "paid", "shipped");
   expect(await urlPath(page)).toBe(
-    "/orders?f.status_code=paid&f.status_code=shipped",
+    "/orders?f.status_code.any_of=paid&f.status_code.any_of=shipped",
   );
   await expect(bar(page).locator("[data-filter=status_code]")).toContainText(
     "Paid",
   );
-  const chip = page.locator('[data-chip="eq:status_code"]');
+  const chip = page.locator('[data-chip="filter:status_code:any_of"]');
   await expect(chip.locator(".qg-chip-value")).toHaveCount(2);
   await expect
     .poll(() => attrs(chip.locator("[data-chip-remove]"), "data-chip-value"))
@@ -95,9 +95,11 @@ test("several values per field", async ({ page }) => {
     .toEqual(["paid", "shipped"]);
 
   await page
-    .locator('[data-chip-remove="eq:status_code"][data-chip-value="paid"]')
+    .locator(
+      '[data-chip-remove="filter:status_code:any_of"][data-chip-value="paid"]',
+    )
     .click();
-  expect(await urlPath(page)).toBe("/orders?f.status_code=shipped");
+  expect(await urlPath(page)).toBe("/orders?f.status_code.any_of=shipped");
   await expectCount(page, shipped);
   await page.locator('[data-facet="refunded"]').click();
   await expect(page).toHaveURL(/refunded/);
@@ -114,16 +116,16 @@ test("several values restore from the URL and narrow the board", async ({
 }) => {
   await openGrid(
     page,
-    "/orders?f.region=gauteng&f.region=limpopo&f.status_code=paid",
+    "/orders?f.region.any_of=gauteng&f.region.any_of=limpopo&f.status_code.any_of=paid",
   );
   await expect(
-    page.locator('[data-chip="eq:region"] .qg-chip-value'),
+    page.locator('[data-chip="filter:region:any_of"] .qg-chip-value'),
   ).toHaveCount(2);
   await expectCount(
     page,
     await apiCount(
       page,
-      "f.region=gauteng&f.region=limpopo&f.status_code=paid",
+      "f.region.any_of=gauteng&f.region.any_of=limpopo&f.status_code.any_of=paid",
     ),
     "capped",
   );
@@ -133,7 +135,7 @@ test("several values restore from the URL and narrow the board", async ({
   expect([...regions].sort()).toEqual(["Gauteng", "Limpopo"]);
   await open(
     page,
-    "/orders?view=board&f.status_code=paid&f.status_code=shipped",
+    "/orders?view=board&f.status_code.any_of=paid&f.status_code.any_of=shipped",
   );
   await expect(page.locator("[data-column] [data-card]").first()).toBeVisible();
   await expect
@@ -161,13 +163,15 @@ test("URL history", async ({ page }) => {
   await page.goBack();
   await expect(page).not.toHaveURL(/f\.region/);
   await expect(page.locator("[data-chip]")).toHaveCount(2);
-  await expectCount(page, await apiCount(page, "f.status_code=paid"));
+  await expectCount(page, await apiCount(page, "f.status_code.any_of=paid"));
   await page.goBack();
   expect(await urlPath(page)).toBe("/orders");
   await expectCount(page, 620000);
   await page.goForward();
-  expect(await urlPath(page)).toBe("/orders?f.status_code=paid");
-  await expect(page.locator('[data-chip="eq:status_code"]')).toBeVisible();
+  expect(await urlPath(page)).toBe("/orders?f.status_code.any_of=paid");
+  await expect(
+    page.locator('[data-chip="filter:status_code:any_of"]'),
+  ).toBeVisible();
 
   await openGrid(page, "/orders");
   const before = await page.evaluate(() => history.length);
@@ -241,7 +245,7 @@ test("customer picker", async ({ page }) => {
   const items = page.locator("[data-slot=combobox-item]");
   await expect(items).toHaveCount(20);
   await items.first().click();
-  await expect(page).toHaveURL(/f\.customer_id=/);
+  await expect(page).toHaveURL(/f\.customer_id\.any_of=/);
   await expect(items).toHaveCount(20);
   await page
     .locator('[data-slot=combobox-item]:not([aria-selected="true"])')
@@ -251,13 +255,14 @@ test("customer picker", async ({ page }) => {
     .poll(() =>
       page.evaluate(
         () =>
-          new URLSearchParams(location.search).getAll("f.customer_id").length,
+          new URLSearchParams(location.search).getAll("f.customer_id.any_of")
+            .length,
       ),
     )
     .toBe(2);
   await page.keyboard.press("Escape");
   await expect(countValue(page)).toHaveAttribute("data-count", /\d+/);
-  const chip = page.locator('[data-chip="eq:customer_id"]');
+  const chip = page.locator('[data-chip="filter:customer_id:any_of"]');
   await expect(chip.locator(".qg-chip-value")).toHaveCount(2);
   await page.reload();
   await expect(chip.locator(".qg-chip-value")).toHaveCount(2);

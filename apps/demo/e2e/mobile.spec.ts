@@ -82,13 +82,13 @@ test("a bar with no drawer keeps every filter on one scrolling row", async ({
 });
 
 test("the facets and the chips each stay on one row", async ({ page }) => {
-  await openList(page, "/orders?f.region=gauteng&f.channel=web");
+  await openList(page, "/orders?f.region.any_of=gauteng&f.channel.any_of=web");
   const facets = await box(page, "[data-part=facet-panel]");
   const chips = await box(page, "[data-part=filter-chips]");
   expect(facets.height).toBeLessThan(48);
   expect(chips.height).toBeLessThan(48);
   await page.locator('[data-facet="paid"]').click();
-  await expect(page).toHaveURL(/f\.status_code=paid/);
+  await expect(page).toHaveURL(/f\.status_code\.any_of=paid/);
   await expectNoSidewaysScroll(page);
 });
 
@@ -102,12 +102,14 @@ test("the drawer fills the screen and applies a filter", async ({ page }) => {
     .toBe(viewport?.width);
   await sidebar(page).locator('[data-filter="status_code"]').click();
   await page.locator('[data-option="shipped"]').click();
-  await expect(page).toHaveURL(/f\.status_code=shipped/);
+  await expect(page).toHaveURL(/f\.status_code\.any_of=shipped/);
   await page.keyboard.press("Escape");
   await sidebar(page).locator("[data-slot=drawer-close]").last().click();
   await expect(sidebar(page)).toBeHidden();
-  await expect(page.locator('[data-chip="eq:status_code"]')).toBeVisible();
-  await expectCount(page, await apiCount(page, "f.status_code=shipped"));
+  await expect(
+    page.locator('[data-chip="filter:status_code:any_of"]'),
+  ).toBeVisible();
+  await expectCount(page, await apiCount(page, "f.status_code.any_of=shipped"));
   await expectNoSidewaysScroll(page);
 });
 

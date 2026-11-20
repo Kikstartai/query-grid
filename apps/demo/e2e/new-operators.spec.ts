@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 
 import {
   apiCount,
+  attrs,
   bar,
   countValue,
   expect,
@@ -17,8 +18,8 @@ function chip(page: Page, id: string) {
   return page.locator(`[data-chip="${id}"]`);
 }
 
-function textRow(page: Page, at: number) {
-  return bar(page).locator(`[data-text-row="${at}"]`);
+function option(page: Page, value: string) {
+  return page.locator(`[data-option="${value}"]:visible`);
 }
 
 async function cells(page: Page, field: string): Promise<string[]> {
@@ -29,193 +30,220 @@ async function count(page: Page): Promise<number> {
   return Number(await countValue(page).getAttribute("data-count"));
 }
 
-async function choose(page: Page, filter: string, option: string) {
-  await bar(page).locator(`[data-filter="${filter}"]`).click();
-  await page.locator(`[data-option="${option}"]`).click();
+async function chooseOp(page: Page, field: string, op: string) {
+  await bar(page).locator(`[data-filter="${field}.op"]`).click();
+  await option(page, op).click();
 }
 
-async function fillText(page: Page, at: number, text: string) {
-  const input = textRow(page, at).locator('[data-filter="text"]');
+async function fillValue(page: Page, field: string, text: string) {
+  const input = bar(page).locator(`[data-filter="${field}.value"]`);
   await input.fill(text);
   await input.press("Enter");
 }
 
-async function setOperator(page: Page, at: number, op: string) {
-  await textRow(page, at).locator('[data-filter="text.op"]').click();
-  await page.locator(`[data-option="${op}"]`).click();
-}
-
 test.describe("a text filter with an index of its own", () => {
-  test("pages the whole table in order, and asks for three characters", async ({
+  test("contains pages the whole table in order, and asks for three characters", async ({
     page,
   }) => {
     await openGrid(page, "/orders");
-    await fillText(page, 0, "mo");
-    await expect(textRow(page, 0).locator("[data-text-hint]")).toHaveText(
+    const name = bar(page).locator('[data-field="customer_name"]');
+    await expect(name).toHaveAttribute("data-kind", "text");
+    await expect(
+      bar(page).locator('[data-filter="customer_name.op"]'),
+    ).toContainText("contains");
+    await fillValue(page, "customer_name", "mo");
+    await expect(name.locator("[data-text-hint]")).toHaveText(
       "3 characters or more",
     );
-    await expect(page).not.toHaveURL(/c\.customer_name/);
+    await expect(page).not.toHaveURL(/f\.customer_name/);
 
-    await fillText(page, 0, "mokoena");
-    await expect(page).toHaveURL(/c\.customer_name=mokoena/);
-    await expect(chip(page, "text:0")).toHaveText(
-      /Customer contains “mokoena”/,
+    await fillValue(page, "customer_name", "mokoena");
+    await expect(name.locator("[data-text-hint]")).toHaveCount(0);
+    await expect(page).toHaveURL(/f\.customer_name\.contains=mokoena/);
+    await expect(chip(page, "filter:customer_name:contains")).toHaveText(
+      "Customer contains “mokoena”",
     );
     await expect(page.locator("[data-feed-state=error]")).toHaveCount(0);
     await expect(loaded(page)).toBeVisible();
     const names = await cells(page, "customer_name");
     expect(names.length).toBeGreaterThan(0);
-    for (const name of names) {
-      expect(name.toLowerCase()).toContain("mokoena");
+    for (const shown of names) {
+      expect(shown.toLowerCase()).toContain("mokoena");
     }
     await expectCount(
       page,
-      await apiCount(page, "c.customer_name=mokoena"),
+      await apiCount(page, "f.customer_name.contains=mokoena"),
       "capped",
     );
   });
 
-  test("takes starts with and ends with, and holds the negations to the narrowed set", async ({
+  test("takes starts with and ends with, and holds equals and the negations to the narrowed set", async ({
     page,
   }) => {
     await openGrid(page, "/orders");
-    await textRow(page, 0).locator('[data-filter="text.op"]').click();
-    await expect(page.locator('[data-option="not_contains"]')).toHaveAttribute(
-      "aria-disabled",
-      "true",
+    await bar(page).locator('[data-filter="customer_name.op"]').click();
+    for (const held of ["equals", "not_equals", "not_contains"]) {
+      await expect(option(page, held)).toHaveAttribute("aria-disabled", "true");
+      await expect(option(page, held)).toHaveAttribute(
+        "title",
+        /Narrow by Status or Region first/,
+      );
+    }
+    await option(page, "starts_with").click();
+    await fillValue(page, "customer_name", "Zan");
+    await expect(page).toHaveURL(/f\.customer_name\.starts_with=Zan/);
+    await expect(chip(page, "filter:customer_name:starts_with")).toHaveText(
+      "Customer starts with “Zan”",
     );
-    await expect(page.locator('[data-option="not_equals"]')).toHaveAttribute(
-      "title",
-      /Narrow by Status or Customer account first/,
-    );
-    await page.locator('[data-option="starts_with"]').click();
-    await fillText(page, 0, "Zan");
-    await expect(page).toHaveURL(/sw\.customer_name=Zan/);
-    await expect(chip(page, "text:0")).toHaveText(/Customer starts with “Zan”/);
-    for (const name of await cells(page, "customer_name")) {
-      expect(name.toLowerCase().startsWith("zan")).toBe(true);
+    await expect(loaded(page)).toBeVisible();
+    for (const shown of await cells(page, "customer_name")) {
+      expect(shown.toLowerCase().startsWith("zan")).toBe(true);
     }
 
-    await setOperator(page, 0, "ends_with");
-    await expect(page).toHaveURL(/ew\.customer_name=Zan/);
-    await fillText(page, 0, "ena");
-    await expect(page).toHaveURL(/ew\.customer_name=ena/);
+    await chooseOp(page, "customer_name", "ends_with");
+    await expect(page).toHaveURL(/f\.customer_name\.ends_with=Zan/);
+    await fillValue(page, "customer_name", "ena");
+    await expect(page).toHaveURL(/f\.customer_name\.ends_with=ena/);
     await expect(loaded(page)).toBeVisible();
-    for (const name of await cells(page, "customer_name")) {
-      expect(name.toLowerCase().endsWith("ena")).toBe(true);
+    for (const shown of await cells(page, "customer_name")) {
+      expect(shown.toLowerCase().endsWith("ena")).toBe(true);
     }
   });
 
-  test("a second filter on the same field narrows it further once the set is small", async ({
+  test("equals matches the whole value once a filter narrows the set", async ({
     page,
   }) => {
-    await openGrid(
-      page,
-      "/orders?f.status_code=failed&c.customer_name=mokoena",
+    const response = await page.request.get(
+      "/api/orders?f.status_code.any_of=failed&limit=1",
     );
-    const first = await apiCount(
-      page,
-      "f.status_code=failed&c.customer_name=mokoena",
+    const { rows } = (await response.json()) as {
+      rows: { customer_name: string }[];
+    };
+    const [{ customer_name: name }] = rows;
+    await openGrid(page, "/orders?f.status_code.any_of=failed");
+    await chooseOp(page, "customer_name", "equals");
+    await fillValue(page, "customer_name", name);
+    await expect(page).toHaveURL(
+      new RegExp(`f\\.customer_name\\.equals=${name.replace(" ", "\\+")}`),
     );
-    await expectCount(page, first, "capped");
-    await expect(textRow(page, 1)).toBeVisible();
-    await setOperator(page, 1, "not_contains");
-    await fillText(page, 1, "th");
-    await expect(page).toHaveURL(/nc\.customer_name=th/);
-    await expect(chip(page, "text:1")).toHaveText(
-      /Customer does not contain “th”/,
+    await expect(chip(page, "filter:customer_name:equals")).toHaveText(
+      `Customer equals “${name}”`,
     );
-    const both = await apiCount(
-      page,
-      "f.status_code=failed&c.customer_name=mokoena&nc.customer_name=th",
+    await expect
+      .poll(async () => [...new Set(await cells(page, "customer_name"))])
+      .toEqual([name]);
+  });
+
+  test("a second filter on the same field, from the URL, narrows it further", async ({
+    page,
+  }) => {
+    const first =
+      "f.status_code.any_of=failed&f.customer_name.contains=mokoena";
+    const second = `${first}&f.customer_name.not_contains=th`;
+    await openGrid(page, `/orders?${second}`);
+    await expect(chip(page, "filter:customer_name:contains")).toHaveText(
+      "Customer contains “mokoena”",
     );
-    expect(both).toBeLessThan(first);
+    await expect(chip(page, "filter:customer_name:not_contains:1")).toHaveText(
+      "Customer not contains “th”",
+    );
+    const one = await apiCount(page, first);
+    const both = await apiCount(page, second);
+    expect(both).toBeLessThan(one);
     await expectCount(page, both, "capped");
     for (const name of await cells(page, "customer_name")) {
       expect(name.toLowerCase()).toContain("mokoena");
       expect(name.toLowerCase()).not.toContain("th");
     }
-    await page.locator('[data-chip-remove="text:0"]').click();
-    await expect(page).not.toHaveURL(/[?&]c\.customer_name/);
-    await expect(page).toHaveURL(/nc\.customer_name=th/);
+    await page
+      .locator('[data-chip-remove="filter:customer_name:contains"]')
+      .click();
+    await expect(page).not.toHaveURL(/customer_name\.contains/);
+    await expect(page).toHaveURL(/f\.customer_name\.not_contains=th/);
   });
 });
 
-test.describe("a range and its operator, on the server", () => {
-  test("more than leaves the bound out, and not between is everything outside", async ({
+test.describe("comparisons and ranges, on the server", () => {
+  test("greater than leaves the bound out, and not between is everything outside", async ({
     page,
   }) => {
-    await openGrid(page, "/orders?f.status_code=failed");
-    await choose(page, "total.op", "gt");
-    const value = bar(page).locator('[data-filter="total.value"]');
-    await value.fill("200");
-    await value.press("Enter");
-    await expect(page).toHaveURL(/r\.total=(\(|%28)20000\.\./);
-    await expect(chip(page, "range:total")).toHaveText(/Total > /);
-    const over = await apiCount(page, "f.status_code=failed&r.total=(20000..");
-    const from = await apiCount(page, "f.status_code=failed&r.total=20000..");
+    const failed = "f.status_code.any_of=failed";
+    await openGrid(page, `/orders?${failed}`);
+    await expect(bar(page).locator('[data-filter="total.op"]')).toContainText(
+      "between",
+    );
+    await chooseOp(page, "total", "greater_than");
+    await fillValue(page, "total", "200");
+    await expect(page).toHaveURL(/f\.total\.greater_than=20000/);
+    await expect(chip(page, "filter:total:greater_than")).toHaveText(
+      /^Total greater than R\s200,00$/,
+    );
+    const over = await apiCount(page, `${failed}&f.total.greater_than=20000`);
+    const from = await apiCount(
+      page,
+      `${failed}&f.total.greater_or_equal=20000`,
+    );
     expect(over).toBeLessThanOrEqual(from);
     await expectCount(page, over, "capped");
 
-    await choose(page, "total.op", "not_between");
+    await chooseOp(page, "total", "not_between");
     const min = bar(page).locator('[data-filter="total.min"]');
     const max = bar(page).locator('[data-filter="total.max"]');
     await min.fill("100");
     await min.press("Enter");
     await max.fill("900");
     await max.press("Enter");
-    await expect(page).toHaveURL(/r\.total=(!|%21)10000\.\.90000/);
-    await expect(chip(page, "range:total")).toHaveText(/Total: not /);
+    await expect(page).toHaveURL(/f\.total\.not_between=10000\.\.90000/);
+    await expect(chip(page, "filter:total:not_between")).toHaveText(
+      /^Total not between R\s100,00 and R\s900,00$/,
+    );
     const outside = await apiCount(
       page,
-      "f.status_code=failed&r.total=!10000..90000",
+      `${failed}&f.total.not_between=10000..90000`,
     );
     const inside = await apiCount(
       page,
-      "f.status_code=failed&r.total=10000..90000",
+      `${failed}&f.total.between=10000..90000`,
     );
-    const all = await apiCount(page, "f.status_code=failed");
-    expect(outside + inside).toBe(all);
+    expect(outside + inside).toBe(await apiCount(page, failed));
     await expectCount(page, outside, "capped");
   });
 
-  test("a date takes On… with one day, and the index answers its range on the sort", async ({
+  test("a date takes on with one day, and the index answers it on the sort", async ({
     page,
   }) => {
     await openGrid(page, "/orders");
-    await choose(page, "created_at.preset", "op:eq");
-    const day = bar(page).locator('[data-filter="created_at.value"]');
-    await expect(day).toBeVisible();
-    await page.goto(
-      "/orders?r.created_at=2026-01-10T00:00:00.000000Z..2026-01-10T23:59:59.999999Z",
-    );
-    await expect(loaded(page)).toBeVisible();
-    await expect(chip(page, "range:created_at")).toHaveText(
-      "Created = 2026-01-10",
-    );
+    await chooseOp(page, "created_at", "equals");
+    await expect(
+      bar(page).locator('[data-filter="created_at.value"]'),
+    ).toBeVisible();
     await expect(
       bar(page).locator('[data-filter="created_at.preset"]'),
-    ).toContainText("On…");
+    ).toHaveCount(0);
+    await openGrid(page, "/orders?f.created_at.equals=2026-01-10");
+    await expect(chip(page, "filter:created_at:equals")).toHaveText(
+      "Created on 2026-01-10",
+    );
+    await expect(
+      bar(page).locator('[data-filter="created_at.op"]'),
+    ).toContainText("on");
     await expectCount(
       page,
-      await apiCount(
-        page,
-        "r.created_at=2026-01-10T00:00:00.000000Z..2026-01-10T23:59:59.999999Z",
-      ),
+      await apiCount(page, "f.created_at.equals=2026-01-10"),
       "capped",
     );
   });
 });
 
-test.describe("the new field types, in memory", () => {
-  test("a boolean, an array, a date and a decimal each filter the rows", async ({
+test.describe("the field kinds, in memory", () => {
+  test("a boolean, an array, and a decimal each filter the rows", async ({
     page,
   }) => {
     await openGrid(page, "/memory");
     const all = await count(page);
 
     await pick(page, "blocked", "true");
-    await expect(chip(page, "eq:blocked")).toContainText("Yes");
+    await expect(chip(page, "filter:blocked:any_of")).toContainText("Yes");
     const blocked = await count(page);
     expect(blocked).toBeGreaterThan(0);
     expect(blocked).toBeLessThan(all);
@@ -223,39 +251,80 @@ test.describe("the new field types, in memory", () => {
       expect(cell).toBe("Yes");
     }
 
+    await expect(bar(page).locator('[data-field="labels"]')).toHaveAttribute(
+      "data-kind",
+      "array",
+    );
     await bar(page).locator('[data-filter="labels"]').click();
-    await page.locator('[data-option="bug"]').click();
-    await expect(page).toHaveURL(/o\.labels=bug/);
-    await page.locator('[data-option="urgent"]').click();
-    await expect(page).toHaveURL(/o\.labels=urgent/);
+    await option(page, "bug").click();
+    await expect(page).toHaveURL(/f\.labels\.any_of=bug/);
+    await option(page, "urgent").click();
+    await expect(page).toHaveURL(/f\.labels\.any_of=urgent/);
     await page.keyboard.press("Escape");
-    await expect(chip(page, "overlap:labels")).toContainText("Labels has:");
+    await expect(chip(page, "filter:labels:any_of")).toContainText(
+      "Labels any of:",
+    );
     await expect
       .poll(async () => {
-        const labels = await cells(page, "labels");
+        const labels = await attrs(
+          page.locator(".qg-cell[data-field=labels] .qg-list-cell"),
+          "title",
+        );
         return (
           labels.length > 0 && labels.every((label) => /Bug|Urgent/.test(label))
         );
       })
       .toBe(true);
-    expect(await count(page)).toBeLessThan(blocked);
+    const either = await count(page);
+    expect(either).toBeLessThan(blocked);
+
+    await chooseOp(page, "labels", "all_of");
+    await expect(page).toHaveURL(
+      /f\.labels\.all_of=bug&f\.labels\.all_of=urgent/,
+    );
+    await expect
+      .poll(async () => {
+        const labels = await attrs(
+          page.locator(".qg-cell[data-field=labels] .qg-list-cell"),
+          "title",
+        );
+        return (
+          labels.length > 0 &&
+          labels.every(
+            (label) => label.includes("Bug") && label.includes("Urgent"),
+          )
+        );
+      })
+      .toBe(true);
+    expect(await count(page)).toBeLessThanOrEqual(either);
 
     for (const value of ["bug", "urgent"]) {
       await page
         .locator(
-          `[data-chip-remove="overlap:labels"][data-chip-value="${value}"]`,
+          `[data-chip-remove="filter:labels:all_of"][data-chip-value="${value}"]`,
         )
         .click();
     }
-    await page.locator('[data-chip-remove="eq:blocked"]').first().click();
+    await page
+      .locator('[data-chip-remove="filter:blocked:any_of"]')
+      .first()
+      .click();
     await expect(countValue(page)).toHaveAttribute("data-count", String(all));
 
-    await choose(page, "rate.op", "lt");
-    const rate = bar(page).locator('[data-filter="rate.value"]');
-    await rate.fill("50.5");
-    await rate.press("Enter");
-    await expect(page).toHaveURL(/r\.rate=\.\.50\.5(\)|%29)/);
-    await expect(chip(page, "range:rate")).toHaveText("Rate < 50.5");
+    await chooseOp(page, "labels", "blank");
+    await expect(page).toHaveURL(/f\.labels\.blank=/);
+    await expect(chip(page, "filter:labels:blank")).toHaveText("Labels blank");
+    await expect
+      .poll(async () => [...new Set(await cells(page, "labels"))])
+      .toEqual([""]);
+    await page.locator('[data-chip-remove="filter:labels:blank"]').click();
+
+    await chooseOp(page, "rate", "less_than");
+    await fillValue(page, "rate", "50.5");
+    await expect(page).toHaveURL(/f\.rate\.less_than=50\.5/);
+    await expect(chip(page, "filter:rate:less_than")).toHaveText(
+      "Rate less than 50.5",
+    );
     await expect
       .poll(async () => {
         const rates = await cells(page, "rate");
@@ -264,42 +333,64 @@ test.describe("the new field types, in memory", () => {
       .toBe(true);
   });
 
-  test("a date field reads a day from the URL as On…, and an excluded day as Not on…", async ({
+  test("a date field reads on, not on, blank and not blank from the URL", async ({
     page,
   }) => {
-    await openGrid(page, "/memory?r.start_on=2026-11-20..2026-11-20");
-    await expect(chip(page, "range:start_on")).toHaveText("Start = 2026-11-20");
+    await openGrid(page, "/memory");
+    const all = await count(page);
+    await openGrid(page, "/memory?f.start_on.equals=2026-11-20");
+    await expect(chip(page, "filter:start_on:equals")).toHaveText(
+      "Start on 2026-11-20",
+    );
     await expect(
-      bar(page).locator('[data-filter="start_on.preset"]'),
-    ).toContainText("On…");
+      bar(page).locator('[data-filter="start_on.op"]'),
+    ).toContainText("on");
+    await expect(
+      bar(page).locator('[data-filter="start_on.value"]'),
+    ).toBeVisible();
     const on = await count(page);
+    expect(on).toBeGreaterThan(0);
     for (const start of await cells(page, "start_on")) {
       expect(start).toBe("Nov 20, 2026");
     }
-    await openGrid(page, "/memory?r.start_on=!2026-11-20..2026-11-20");
-    await expect(chip(page, "range:start_on")).toHaveText("Start ≠ 2026-11-20");
+    await openGrid(page, "/memory?f.start_on.not_equals=2026-11-20");
+    await expect(chip(page, "filter:start_on:not_equals")).toHaveText(
+      "Start not on 2026-11-20",
+    );
     await expect(
-      bar(page).locator('[data-filter="start_on.preset"]'),
-    ).toContainText("Not on…");
-    const off = await count(page);
-    await openGrid(page, "/memory");
-    expect(on + off).toBe(await count(page));
+      bar(page).locator('[data-filter="start_on.op"]'),
+    ).toContainText("not on");
+    expect(on + (await count(page))).toBe(all);
+
+    await openGrid(page, "/memory?f.start_on.blank=");
+    await expect(chip(page, "filter:start_on:blank")).toHaveText("Start blank");
+    const blank = await count(page);
+    expect(blank).toBeGreaterThan(0);
+    await openGrid(page, "/memory?f.start_on.not_blank=");
+    expect(blank + (await count(page))).toBe(all);
   });
 
   test("two text filters on one field, each with its own operator and chip", async ({
     page,
   }) => {
-    await openGrid(page, "/memory");
-    await setOperator(page, 0, "starts_with");
-    await fillText(page, 0, "fix");
-    await expect(page).toHaveURL(/sw\.title=fix/);
-    await setOperator(page, 1, "not_contains");
-    await fillText(page, 1, "login");
-    await expect(page).toHaveURL(/nc\.title=login/);
-    await expect(chip(page, "text:0")).toHaveText(
-      /Title (starts with “fix”|does not contain “login”)/,
+    await openGrid(page, "/memory?f.title.starts_with=fix");
+    await expect(chip(page, "filter:title:starts_with")).toHaveText(
+      "Title starts with “fix”",
     );
-    await expect(page.locator('[data-chip^="text:"]')).toHaveCount(2);
+    await expect(bar(page).locator('[data-filter="title.op"]')).toContainText(
+      "starts with",
+    );
+    await expect(bar(page).locator('[data-filter="title.value"]')).toHaveValue(
+      "fix",
+    );
+    await openGrid(
+      page,
+      "/memory?f.title.starts_with=fix&f.title.not_contains=login",
+    );
+    await expect(
+      page.locator('[data-chip^="filter:title:not_contains"]'),
+    ).toHaveText("Title not contains “login”");
+    await expect(page.locator('[data-chip^="filter:title:"]')).toHaveCount(2);
     await expect
       .poll(async () => {
         const titles = await cells(page, "title");
@@ -313,6 +404,5 @@ test.describe("the new field types, in memory", () => {
         );
       })
       .toBe(true);
-    await expect(textRow(page, 2)).toBeVisible();
   });
 });

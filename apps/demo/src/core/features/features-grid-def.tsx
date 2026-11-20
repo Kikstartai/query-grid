@@ -10,7 +10,7 @@ export const FEATURES_ORDER_FIELD = "rank";
 const assigneeLink = createLinkCell((value) =>
   value === null
     ? null
-    : `/memory?f.assignee=${encodeURIComponent(String(value))}`,
+    : `/memory?f.assignee.any_of=${encodeURIComponent(String(value))}`,
 );
 
 export const FEATURES_GRID_DEF: GridDef = {

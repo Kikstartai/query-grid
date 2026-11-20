@@ -63,7 +63,7 @@ test("the in-memory route filters, sorts and totals with no request", async ({
   await pick(page, "team", "platform");
   await expect(countValue(page)).toHaveAttribute("data-count", "11");
   await expect(
-    page.locator('[data-chip="eq:team"] .qg-chip-value'),
+    page.locator('[data-chip="filter:team:any_of"] .qg-chip-value'),
   ).toHaveCount(2);
   await page.locator("[data-view=board]").click();
   await expect(page.locator("[data-column]").first()).toBeVisible();
@@ -75,7 +75,7 @@ test("the in-memory route filters, sorts and totals with no request", async ({
 test.describe("parts mount alone", () => {
   for (const [part, root] of Object.entries(PART_ROOTS)) {
     test(part, async ({ page }) => {
-      await open(page, `/parts/${part}?f.status_code=refunded`);
+      await open(page, `/parts/${part}?f.status_code.any_of=refunded`);
       const solo = page.locator(`[data-solo-part="${part}"]`);
       await expect(solo.locator(`[data-part="${root}"]`).first()).toBeVisible();
       await expect(solo.locator("[data-part=query-readout]")).toContainText(
@@ -94,10 +94,10 @@ test.describe("parts mount alone", () => {
   test("a facet click on the facets part reaches the query and the URL", async ({
     page,
   }) => {
-    await open(page, "/parts/facets?f.status_code=refunded");
+    await open(page, "/parts/facets?f.status_code.any_of=refunded");
     await page.locator('[data-facet="paid"]').click();
     await expect(page).toHaveURL(
-      /f\.status_code=refunded&f\.status_code=paid|f\.status_code=paid/,
+      /f\.status_code\.any_of=refunded&f\.status_code\.any_of=paid|f\.status_code\.any_of=paid/,
     );
     await expect(page.locator("[data-part=query-readout]")).toContainText(
       '"paid"',
@@ -110,9 +110,11 @@ test("grid, list and board keep the query", async ({ page }) => {
   await pick(page, "region", "gauteng");
   await page.locator("[data-view=list]").click();
   await expect(page).toHaveURL(
-    /f\.region=gauteng.*view=list|view=list.*f\.region=gauteng/,
+    /f\.region\.any_of=gauteng.*view=list|view=list.*f\.region\.any_of=gauteng/,
   );
-  await expect(page.locator('[data-chip="eq:region"]')).toBeVisible();
+  await expect(
+    page.locator('[data-chip="filter:region:any_of"]'),
+  ).toBeVisible();
   await expect(page.locator("[data-card]").first()).toBeVisible();
   await page.locator("[data-view=board]").click();
   await expect(page).toHaveURL(/view=board/);
@@ -121,17 +123,21 @@ test("grid, list and board keep the query", async ({ page }) => {
   for (const text of await texts(page.locator("[data-column-count]"))) {
     expect(text).toBe("");
   }
-  await expect(page.locator('[data-chip="eq:region"]')).toBeVisible();
+  await expect(
+    page.locator('[data-chip="filter:region:any_of"]'),
+  ).toBeVisible();
   await page.locator("[data-view=grid]").click();
   await expect(page).not.toHaveURL(/view=/);
-  await expect(page).toHaveURL(/f\.region=gauteng/);
-  await expect(page.locator('[data-chip="eq:region"]')).toBeVisible();
+  await expect(page).toHaveURL(/f\.region\.any_of=gauteng/);
+  await expect(
+    page.locator('[data-chip="filter:region:any_of"]'),
+  ).toBeVisible();
 });
 
 test("URL round-trip", async ({ page }) => {
   await open(
     page,
-    "/orders?f.status_code=shipped&f.region=gauteng&sort=created_at.asc&view=list",
+    "/orders?f.status_code.any_of=shipped&f.region.any_of=gauteng&sort=created_at.asc&view=list",
   );
   await expect(page.locator("[data-part=list]")).toBeVisible();
   await expect(page.locator("[data-chip]")).toHaveCount(3);
@@ -139,9 +145,9 @@ test("URL round-trip", async ({ page }) => {
     page.locator("[data-chip]").filter({ hasText: "Created" }),
   ).toContainText("↑");
   expect(await urlPath(page)).toBe(
-    "/orders?f.status_code=shipped&f.region=gauteng&sort=created_at.asc&view=list",
+    "/orders?f.status_code.any_of=shipped&f.region.any_of=gauteng&sort=created_at.asc&view=list",
   );
-  await openGrid(page, "/orders?f.channel=web&sort=total.desc");
+  await openGrid(page, "/orders?f.channel.any_of=web&sort=total.desc");
   await expect.poll(() => urlPath(page)).toBe("/orders");
   await expect(page.locator("[data-chip]")).toHaveCount(1);
   await expect(countValue(page)).toHaveAttribute("data-count", "620000");

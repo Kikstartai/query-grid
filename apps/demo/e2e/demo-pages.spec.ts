@@ -48,7 +48,10 @@ test.describe("grid features page", () => {
     const link = page
       .locator('.qg-row .qg-cell[data-field="assignee"] a')
       .first();
-    await expect(link).toHaveAttribute("href", /^\/memory\?f\.assignee=/);
+    await expect(link).toHaveAttribute(
+      "href",
+      /^\/memory\?f\.assignee\.any_of=/,
+    );
   });
 
   test("a stored def is accepted clean or refused with its problems", async ({

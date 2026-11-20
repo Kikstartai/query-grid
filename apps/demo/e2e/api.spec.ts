@@ -8,9 +8,14 @@ interface ErrorBody {
 }
 
 const REFUSALS: [string, number, string, Record<string, unknown>][] = [
-  ["/api/orders?f.channel=web&sort=total.desc", 400, "unindexed_query", {}],
   [
-    "/api/orders?f.status_code=nope",
+    "/api/orders?f.channel.any_of=web&sort=total.desc",
+    400,
+    "unindexed_query",
+    {},
+  ],
+  [
+    "/api/orders?f.status_code.any_of=nope",
     400,
     "invalid_value",
     { field: "status_code" },
@@ -44,7 +49,7 @@ test.describe("the server refuses the rest", () => {
     const query = Array.from(
       { length: 21 },
       (_, i) =>
-        `f.customer_id=00000000-0000-7000-8000-${String(i + 1).padStart(12, "0")}`,
+        `f.customer_id.any_of=00000000-0000-7000-8000-${String(i + 1).padStart(12, "0")}`,
     ).join("&");
     const response = await request.get(`/api/orders?${query}`);
     expect(response.status()).toBe(400);
@@ -55,7 +60,7 @@ test.describe("the server refuses the rest", () => {
 
   test("a completed order cannot move back to pending", async ({ request }) => {
     const page = await request.get(
-      "/api/orders?f.status_code=completed&limit=1",
+      "/api/orders?f.status_code.any_of=completed&limit=1",
     );
     const { rows } = (await page.json()) as { rows: { id: string }[] };
     const response = await request.post("/api/orders/status", {
