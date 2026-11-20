@@ -741,7 +741,10 @@ describe("search with equality filters", () => {
   test("an empty value and several values combine with the search too", async () => {
     const def = {
       ...TEST_DEF,
-      indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+      indexes: [
+        ...TEST_DEF.indexes,
+        { filter: ["note"], sort: ["created_at"] },
+      ],
     };
     const seen: SqlQuery[] = [];
     const handler = createGridHandler({

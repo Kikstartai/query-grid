@@ -6,7 +6,7 @@ import {
   DEFAULT_LIMITS,
   encodeQuery,
   type Filter,
-  type OneFilter,
+  type ValueFilter,
   type QueryState,
 } from "@kikstart/query-grid";
 
@@ -57,12 +57,12 @@ const DEF: PostgresGridDef = {
     { key: "labels", label: "Labels", type: "array", nullable: true },
   ],
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: ["starred"], sort: "created_at" },
-    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["starred"], sort: ["created_at"] },
+    { filter: ["folder_id"], sort: ["created_at"] },
+    { text: "name" },
+    { array: "tags" },
   ],
-  textIndexes: ["name"],
-  arrayIndexes: ["tags"],
 };
 
 const BASE = defaultQuery(DEF);
@@ -77,7 +77,7 @@ function where(query: Partial<QueryState>): SqlQuery {
   };
 }
 
-function text(field: string, op: OneFilter["op"], value: string): Filter {
+function text(field: string, op: ValueFilter["op"], value: string): Filter {
   return { field, op, value };
 }
 
@@ -203,7 +203,7 @@ describe("the SQL of the new field types", () => {
     });
   });
 
-  test("a boolean is cast, and a partial index's field is IS NULL", () => {
+  test("a boolean is cast, and a blank is IS NULL", () => {
     expect(
       where({
         filters: [{ field: "starred", op: "any_of", values: ["true"] }],
@@ -369,11 +369,11 @@ describe("a filter with an index of its own", () => {
 });
 
 describe("the DDL of the new indexes", () => {
-  test("a text index is a trigram GIN, an array index a plain GIN, a partial index has its WHERE", () => {
+  test("a text index is a trigram GIN and an array index a plain GIN, after the sort indexes", () => {
     expect(listIndexDdl(DEF).map((index) => index.ddl)).toEqual([
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_created_at ON files USING btree (created_at, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_starred__created_at ON files USING btree (starred, created_at, id);",
-      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_folder_id__created_at__empty_deleted_at ON files USING btree (folder_id, created_at, id) WHERE deleted_at IS NULL;",
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_folder_id__created_at ON files USING btree (folder_id, created_at, id);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_name_trgm ON files USING gin (name gin_trgm_ops);",
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_tags_overlap ON files USING gin (tags);",
     ]);
@@ -381,7 +381,10 @@ describe("the DDL of the new indexes", () => {
       "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
     );
     expect(
-      generateGridMigration({ ...DEF, textIndexes: undefined }),
+      generateGridMigration({
+        ...DEF,
+        indexes: DEF.indexes.filter((index) => !("text" in index)),
+      }),
     ).not.toContain("pg_trgm");
   });
 
@@ -389,7 +392,7 @@ describe("the DDL of the new indexes", () => {
     const rows = [
       "CREATE INDEX a ON public.files USING btree (created_at, id)",
       "CREATE INDEX b ON public.files USING btree (starred, created_at, id)",
-      "CREATE INDEX c ON public.files USING btree (folder_id, created_at, id) WHERE (deleted_at IS NULL)",
+      "CREATE INDEX c ON public.files USING btree (folder_id, created_at, id)",
       "CREATE INDEX d ON public.files USING gin (name gin_trgm_ops)",
       "CREATE INDEX e ON public.files USING gin (tags)",
     ].map((indexdef, at) => ({ indexname: `i${at}`, indexdef }));
@@ -398,9 +401,9 @@ describe("the DDL of the new indexes", () => {
       rows[0],
       rows[1],
       {
-        indexname: "whole",
+        indexname: "reversed",
         indexdef:
-          "CREATE INDEX whole ON public.files USING btree (folder_id, created_at, id)",
+          "CREATE INDEX reversed ON public.files USING btree (created_at, folder_id, id)",
       },
       {
         indexname: "joined",
@@ -413,27 +416,84 @@ describe("the DDL of the new indexes", () => {
       },
     ];
     expect(listMissingIndexes(DEF, wrong).map((index) => index.name)).toEqual([
-      "auto_files_folder_id__created_at__empty_deleted_at",
+      "auto_files_folder_id__created_at",
       "auto_files_name_trgm",
       "auto_files_tags_overlap",
     ]);
   });
 
-  test("a partial index over two fields matches in either order", () => {
+  test("an existing partial index answers no declared index", () => {
+    const rows = [
+      "CREATE INDEX a ON public.files USING btree (created_at, id) WHERE (deleted_at IS NULL)",
+      "CREATE INDEX b ON public.files USING btree (starred, created_at, id)",
+      "CREATE INDEX c ON public.files USING btree (folder_id, created_at, id) WHERE ((note IS NULL) AND (deleted_at IS NULL))",
+      "CREATE INDEX d ON public.files USING gin (name gin_trgm_ops)",
+      "CREATE INDEX e ON public.files USING gin (tags) WHERE (tags IS NOT NULL)",
+    ].map((indexdef, at) => ({ indexname: `i${at}`, indexdef }));
+    expect(listMissingIndexes(DEF, rows).map((index) => index.name)).toEqual([
+      "auto_files_created_at",
+      "auto_files_folder_id__created_at",
+      "auto_files_tags_overlap",
+    ]);
+  });
+});
+
+describe("a blank filter", () => {
+  test("is answered by an index that filters its field, in sort order with no narrowed count", async () => {
     const def: PostgresGridDef = {
       ...DEF,
       indexes: [
-        DEF.indexes[0],
-        { equals: [], sort: "created_at", blank: ["note", "deleted_at"] },
+        ...DEF.indexes,
+        { filter: ["deleted_at"], sort: ["created_at"] },
       ],
     };
-    const rows = [
-      "CREATE INDEX a ON public.files USING btree (created_at, id)",
-      "CREATE INDEX b ON public.files USING btree (created_at, id) WHERE ((note IS NULL) AND (deleted_at IS NULL))",
-      "CREATE INDEX d ON public.files USING gin (name gin_trgm_ops)",
-      "CREATE INDEX e ON public.files USING gin (tags)",
-    ].map((indexdef, at) => ({ indexname: `i${at}`, indexdef }));
-    expect(listMissingIndexes(def, rows)).toEqual([]);
+    for (const op of ["blank", "not_blank"] as const) {
+      const { calls, execute } = recording(() => []);
+      await listGridPage(
+        def,
+        execute,
+        { ...BASE, filters: [{ field: "deleted_at", op }] },
+        20,
+        undefined,
+        LIMITS,
+      );
+      expect(calls).toHaveLength(1);
+      expect(calls[0].sql.text).toContain(
+        `WHERE t.deleted_at ${op === "blank" ? "IS NULL" : "IS NOT NULL"} ORDER BY t.created_at DESC, t.id DESC LIMIT 21`,
+      );
+    }
+    expect(listIndexDdl(def).map((index) => index.ddl)).toContain(
+      "CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_files_deleted_at__created_at ON files USING btree (deleted_at, created_at, id);",
+    );
+  });
+
+  test("on a field no index filters runs over the narrowed set, and is refused past its limit", async () => {
+    const query = {
+      ...BASE,
+      filters: [
+        { field: "folder_id", op: "any_of", values: [FOLDER] },
+        { field: "deleted_at", op: "blank" },
+      ] satisfies Filter[],
+    };
+    const { calls, execute } = recording(() => [{ count: 7 }]);
+    await listGridPage(DEF, execute, query, 20, undefined, LIMITS);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].sql.text).toContain(
+      "WHERE t.folder_id = $1::uuid LIMIT 51) capped",
+    );
+    expect(calls[1].sql.text).toContain(
+      "t.folder_id = $1::uuid AND t.deleted_at IS NULL",
+    );
+    const over = recording(() => [{ count: 51 }]);
+    const refusal = await listGridPage(
+      DEF,
+      over.execute,
+      query,
+      20,
+      undefined,
+      LIMITS,
+    ).catch((error: unknown) => error);
+    expect((refusal as QueryRejected).code).toBe("narrow_first");
   });
 });
 
@@ -442,53 +502,56 @@ describe("the def rules of the new indexes", () => {
     expect(validateGridDef(DEF)).toEqual([]);
   });
 
-  test("a partial index is not the index of the unfiltered grid", () => {
+  test("a filtered index is not the index of the unfiltered grid", () => {
     expect(
       validateGridDef({
         ...DEF,
         indexes: [
-          { equals: [], sort: "created_at", blank: ["deleted_at"] },
+          { filter: ["deleted_at"], sort: ["created_at"] },
           ...DEF.indexes.slice(1),
         ],
       }),
     ).toEqual(["the default sort with no filter is not a declared index"]);
   });
 
-  test("an array is neither an equality nor a sort, and its index needs an array", () => {
+  test("an array is neither a filter nor a sort column, and its index needs an array", () => {
     expect(
       validateGridDef({
         ...DEF,
-        indexes: [...DEF.indexes, { equals: ["tags"], sort: "created_at" }],
-        arrayIndexes: ["name", "tags", "tags", "nope"],
-      }),
-    ).toEqual([
-      "index tags|created_at: tags is an array; its index is declared in arrayIndexes",
-      "arrayIndexes: name is not an array field",
-      "arrayIndexes: unknown field nope",
-      "arrayIndexes: tags is declared twice",
-    ]);
-  });
-
-  test("a text index needs a text field, and a partial index a nullable one", () => {
-    expect(
-      validateGridDef({
-        ...DEF,
-        textIndexes: ["size"],
         indexes: [
           ...DEF.indexes,
-          { equals: ["starred"], sort: "created_at", blank: ["name", "nope"] },
-          {
-            equals: ["folder_id"],
-            sort: "created_at",
-            blank: ["folder_id"],
-          },
+          { filter: ["tags"], sort: ["created_at"] },
+          { filter: [], sort: ["tags"] },
+          { array: "name" },
+          { array: "tags" },
+          { array: "nope" },
         ],
       }),
     ).toEqual([
-      "index starred|created_at|empty:name+nope: name is never blank",
-      "index starred|created_at|empty:name+nope: unknown blank field nope",
-      "index folder_id|created_at|empty:folder_id: folder_id is blank in every row of the index, so it cannot also be an equality or the sort",
-      "textIndexes: size is not a text field without options",
+      'index tags|created_at: tags is an array; its index is { array: "tags" }',
+      "index |tags: a nullable field cannot be a keyset sort",
+      "index |tags: tags is an array, which has no order",
+      "index array:name: name is not an array field",
+      "index array:tags is declared twice",
+      "index array:nope: unknown array field nope",
+    ]);
+  });
+
+  test("a text index needs a text field without options", () => {
+    expect(
+      validateGridDef({
+        ...DEF,
+        indexes: [
+          ...DEF.indexes,
+          { text: "size" },
+          { text: "starred" },
+          { text: "nope" },
+        ],
+      }),
+    ).toEqual([
+      "index text:size: size is not a text field without options",
+      "index text:starred: starred is not a text field without options",
+      "index text:nope: unknown text field nope",
     ]);
   });
 });

@@ -58,14 +58,13 @@ const DEF: IndexedGridDef = {
     { key: "labels", label: "Labels", type: "array", nullable: true },
   ],
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: ["starred"], sort: "created_at" },
-    { equals: ["folder_id"], sort: "created_at", range: true },
-    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
-    { equals: [], sort: "size", range: true },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["starred"], sort: ["created_at"] },
+    { filter: ["folder_id"], sort: ["created_at"] },
+    { filter: [], sort: ["size"] },
+    { text: "name" },
+    { array: "tags" },
   ],
-  textIndexes: ["name"],
-  arrayIndexes: ["tags"],
 };
 
 const BASE = defaultQuery(DEF);
@@ -110,7 +109,7 @@ function withFilters(
 }
 
 function plan(filters: Filter[], sort?: string) {
-  return planQuery(DEF.indexes, withFilters(filters, sort), DEF);
+  return planQuery(DEF, withFilters(filters, sort));
 }
 
 type Tier = "index" | "budgeted" | "narrowed" | "none";
@@ -121,7 +120,7 @@ function resolveTier(
   def: IndexedGridDef = DEF,
 ): Tier {
   const query = toLiteralQuery(def, withFilters(filters, sort), null);
-  const result = planQuery(def.indexes, query, def);
+  const result = planQuery(def, query);
   if (!isQueryRunnable(def, query) || !result) {
     return "none";
   }
@@ -545,57 +544,73 @@ describe("the tier of every operator", () => {
     expect(resolveTier([none("due", "not_blank")])).toBe("narrowed");
   });
 
-  test("a partial index answers its fields only when they are blank", () => {
+  test("blank and not blank on a field a filter index holds are answered by that index", () => {
+    const def: IndexedGridDef = {
+      ...DEF,
+      indexes: [
+        ...DEF.indexes,
+        { filter: ["folder_id", "deleted_at"], sort: ["created_at"] },
+      ],
+    };
     const live = [
       list("folder_id", "any_of", [FOLDER]),
       none("deleted_at", "blank"),
     ];
-    expect(plan(live)).toMatchObject({ narrowed: false });
-    expect(plan(live)?.core.filters).toEqual(live);
+    expect(planQuery(def, withFilters(live))).toMatchObject({
+      narrowed: false,
+    });
+    expect(planQuery(def, withFilters(live))?.core.filters).toEqual(live);
     expect(
-      resolveTier([
-        list("folder_id", "any_of", [FOLDER]),
-        none("deleted_at", "not_blank"),
-      ]),
-    ).toBe("narrowed");
-    expect(CAPABILITIES.groupFields).not.toContain("deleted_at");
-    expect(CAPABILITIES.filterOps.deleted_at).not.toContain("any_of");
-    expect(CAPABILITIES.filterOps.deleted_at).toContain("blank");
+      resolveTier(
+        [
+          list("folder_id", "any_of", [FOLDER]),
+          none("deleted_at", "not_blank"),
+        ],
+        undefined,
+        def,
+      ),
+    ).toBe("index");
+    expect(resolveTier(live)).toBe("narrowed");
+    expect(gridDefCapabilities(def).filterOps.deleted_at).toContain("blank");
     expect(
       isQueryRunnable(
-        { ...DEF, search: ["name"] },
+        { ...def, search: ["name"] },
         { ...withFilters(live), search: "invoice" },
       ),
     ).toBe(true);
-    expect(indexId(DEF.indexes[3])).toBe(
-      "folder_id|created_at|empty:deleted_at",
-    );
-    expect(indexId(DEF.indexes[2])).toBe("folder_id|created_at");
   });
 
-  test(
-    "a partial index's blank field without its equality runs narrowed, like blank on any nullable field",
-    () => {
-      expect(resolveTier([none("deleted_at", "blank")])).toBe("narrowed");
-      const under = {
-        ...CONTEXT,
-        narrowed: {
-          limit: 100,
-          and: { rows: 40, over: false, capped: false },
-          or: null,
-          andBasis: CAPABILITIES.narrowBasis(BASE),
-          orBasis: "",
-        },
-      };
-      expect(
-        listOffers(DEF, BASE, under).filters.deleted_at.find(
-          (offer) => offer.op === "blank",
-        )?.offered,
-      ).toBe(true);
-    },
-  );
+  test("each index has one identity: its filter set and sort order, or its own column", () => {
+    expect(DEF.indexes.map(indexId)).toEqual([
+      "|created_at",
+      "starred|created_at",
+      "folder_id|created_at",
+      "|size",
+      "text:name",
+      "array:tags",
+    ]);
+  });
 
-  test("a bound on the sort of a range index is the index's own range", () => {
+  test("blank on a nullable field no filter index holds runs narrowed, and is offered under the limit", () => {
+    expect(resolveTier([none("deleted_at", "blank")])).toBe("narrowed");
+    const under = {
+      ...CONTEXT,
+      narrowed: {
+        limit: 100,
+        and: { rows: 40, over: false, capped: false },
+        or: null,
+        andBasis: CAPABILITIES.narrowBasis(BASE),
+        orBasis: "",
+      },
+    };
+    expect(
+      listOffers(DEF, BASE, under).filters.deleted_at.find(
+        (offer) => offer.op === "blank",
+      )?.offered,
+    ).toBe(true);
+  });
+
+  test("a bound on a date or number sort is that index's own range", () => {
     for (const filter of [
       one("created_at", "equals", "2026-03-03"),
       one("created_at", "greater_than", "2026-01-01"),
@@ -614,6 +629,30 @@ describe("the tier of every operator", () => {
       "index",
     );
     expect(resolveTier([one("size", "equals", "5")], "size")).toBe("index");
+  });
+
+  test("a range on a date or number sort is answered by every index on that sort, with no flag", () => {
+    const starred = list("starred", "any_of", ["true"]);
+    const after = one("created_at", "greater_or_equal", "2026-01-01");
+    expect(resolveTier([starred, after])).toBe("index");
+    expect(plan([starred, after])?.core.filters).toEqual([starred, after]);
+    const folder = list("folder_id", "any_of", [FOLDER]);
+    const within = pair("created_at", "between", "2026-01-01", "2026-02-01");
+    expect(resolveTier([folder, within])).toBe("index");
+  });
+
+  test("a text sort is never a range", () => {
+    const def: IndexedGridDef = {
+      ...DEF,
+      indexes: [...DEF.indexes, { filter: [], sort: ["name"] }],
+    };
+    expect(resolveTier([], "name", def)).toBe("index");
+    expect(resolveTier([one("name", "starts_with", "inv")], "name", def)).toBe(
+      "budgeted",
+    );
+    expect(resolveTier([one("name", "equals", "invoice")], "name", def)).toBe(
+      "narrowed",
+    );
   });
 
   test("a bound off the sort, an exclusion and a second bound run narrowed", () => {
@@ -640,9 +679,9 @@ describe("the tier of every operator", () => {
     const def: IndexedGridDef = {
       ...DEF,
       indexes: [
-        { equals: [], sort: "created_at" },
-        { equals: ["size"], sort: "created_at" },
-        { equals: ["name"], sort: "created_at" },
+        { filter: [], sort: ["created_at"] },
+        { filter: ["size"], sort: ["created_at"] },
+        { filter: ["name"], sort: ["created_at"] },
       ],
     };
     expect(resolveTier([one("size", "equals", "5")], undefined, def)).toBe(

@@ -16,7 +16,7 @@ import {
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import {
-  indexCapabilities,
+  gridDefCapabilities,
   isCombineOr,
   isQueryRunnable,
   planQuery,
@@ -38,11 +38,7 @@ import { createNarrowedStore } from "./summary-stores.ts";
 
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: TEST_INDEXES };
 const BASE = defaultQuery(DEF);
-const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
-  facetField: "status",
-  searchFields: ["name", "number"],
-  fields: DEF.fields,
-});
+const CAPABILITIES = gridDefCapabilities(DEF);
 const STATUS_OPEN: Filter = { field: "status", op: "any_of", values: ["open"] };
 const REGION_NORTH: Filter = {
   field: "region",
@@ -127,7 +123,7 @@ const UNKNOWN: OfferContext = {
 
 describe("the plan of a query", () => {
   test("an indexed query is its own core and is not narrowed", () => {
-    const plan = planQuery(TEST_INDEXES, OPEN);
+    const plan = planQuery(DEF, OPEN);
     expect(plan).toEqual({
       core: OPEN,
       narrowed: false,
@@ -137,19 +133,19 @@ describe("the plan of a query", () => {
   });
 
   test("a range off the sort, a second range and a contains run over the core's rows", () => {
-    const offSort = planQuery(TEST_INDEXES, {
+    const offSort = planQuery(DEF, {
       ...BASE,
       filters: [STATUS_OPEN, TOTAL_RANGE],
     });
     expect(offSort?.narrowed).toBe(true);
     expect(offSort?.core.filters).toEqual([STATUS_OPEN]);
-    const two = planQuery(TEST_INDEXES, {
+    const two = planQuery(DEF, {
       ...BASE,
       filters: [CREATED_RANGE, TOTAL_RANGE],
     });
     expect(two?.narrowed).toBe(true);
     expect(two?.core.filters).toEqual([CREATED_RANGE]);
-    const contains = planQuery(TEST_INDEXES, {
+    const contains = planQuery(DEF, {
       ...BASE,
       filters: [STATUS_OPEN, NOTE_GIFT],
     });
@@ -157,18 +153,19 @@ describe("the plan of a query", () => {
     expect(contains?.core.filters).toEqual([STATUS_OPEN]);
   });
 
-  test("a range on the sort of an index with no range falls into the narrowed part", () => {
-    const plan = planQuery(TEST_INDEXES, {
+  test("a range on the date sort of a filter index is answered by that index, with no flag", () => {
+    const query: QueryState = {
       ...BASE,
       filters: [STATUS_OPEN, CREATED_RANGE],
-    });
-    expect(plan?.narrowed).toBe(true);
-    expect(plan?.core.filters).toEqual([STATUS_OPEN]);
+    };
+    const plan = planQuery(DEF, query);
+    expect(plan?.narrowed).toBe(false);
+    expect(plan?.core).toEqual(query);
   });
 
   test("a query whose equality filters no index pairs has no plan", () => {
     expect(
-      planQuery(TEST_INDEXES, {
+      planQuery(DEF, {
         ...BASE,
         filters: [STATUS_OPEN, REGION_NORTH, NOTE_GIFT],
       }),
@@ -177,15 +174,13 @@ describe("the plan of a query", () => {
 
   test("match any needs two filters, and counts each one through its own index", () => {
     expect(isCombineOr({ ...OPEN, combine: "or" })).toBe(false);
-    expect(planQuery(TEST_INDEXES, { ...OPEN, combine: "or" })?.narrowed).toBe(
-      false,
-    );
+    expect(planQuery(DEF, { ...OPEN, combine: "or" })?.narrowed).toBe(false);
     const either: QueryState = {
       ...BASE,
       combine: "or",
       filters: [STATUS_OPEN, REGION_NORTH, TOTAL_RANGE],
     };
-    const plan = planQuery(TEST_INDEXES, either);
+    const plan = planQuery(DEF, either);
     expect(plan?.narrowed).toBe(true);
     expect(plan?.terms?.map((term) => term.filters)).toEqual([
       [STATUS_OPEN],
@@ -201,7 +196,7 @@ describe("the plan of a query", () => {
   });
 
   test("a term no index counts leaves the whole table as the set", () => {
-    const plan = planQuery(TEST_INDEXES, {
+    const plan = planQuery(DEF, {
       ...BASE,
       combine: "or",
       filters: [STATUS_OPEN, NOTE_GIFT],
@@ -244,10 +239,6 @@ describe("the plan of a query", () => {
       name: TEXT_OPS,
       note: [...TEXT_OPS, "blank", "not_blank"],
     });
-    const bare = indexCapabilities(TEST_INDEXES);
-    expect(bare.filterOps.name).toBeUndefined();
-    expect(bare.filterOps.note).toBeUndefined();
-    expect(bare.canRun(ranged)).toBe(false);
   });
 });
 
@@ -321,9 +312,9 @@ describe("offers under the narrowed-set limit", () => {
     ).toBe(BASE);
   });
 
-  test("before the size is known nothing expensive is offered", () => {
+  test("before the size is known nothing expensive is offered, and a range on the indexed date sort is not expensive", () => {
     const offers = listOffers(DEF, OPEN, UNKNOWN);
-    expect(listOfferedFields(offers, "between")).toEqual([]);
+    expect(listOfferedFields(offers, "between")).toEqual(["created_at"]);
     expect(listOfferedFields(offers, "contains")).toEqual([]);
     expect(
       explainUnavailable(

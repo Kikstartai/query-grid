@@ -1,20 +1,24 @@
 import {
+  getField,
+  isRangeType,
   KEY_FIELD,
+  listArrayIndexed,
   listSearchFields,
+  listSortIndexes,
+  listTextIndexed,
   type BaseFieldDef,
   type IndexDef,
   type IndexedGridDef,
-  type IndexExtras,
+  type SortIndexDef,
 } from "./grid-def.ts";
 import {
   isLiteralOp,
   listFieldOps,
+  listIndexKinds,
   resolveFieldKind,
-  TEXT_MATCH_OPS,
   type FilterOp,
 } from "./operators.ts";
 import {
-  isListFilter,
   listSorts,
   listThenBy,
   SORT_MAX,
@@ -24,22 +28,7 @@ import {
 } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
 
-export interface IndexCapabilitiesOptions extends IndexExtras {
-  facetField?: string;
-  searchFields?: string[];
-  fields?: BaseFieldDef[];
-}
-
 const GROUP_PROBE = ["x"];
-const NO_EXTRAS: IndexExtras = {};
-const RANGE_OPS: FilterOp[] = [
-  "greater_than",
-  "greater_or_equal",
-  "less_than",
-  "less_or_equal",
-  "between",
-  "in_period",
-];
 
 export const TEXT_INDEX_MIN_LENGTH = 3;
 
@@ -52,17 +41,22 @@ export interface QueryPlan {
 
 type Access = "equality" | "range" | "budgeted" | "narrow";
 
-interface IndexFields {
-  equals: string[];
-  ranges: string[];
+interface Planner {
+  sorts: SortIndexDef[];
+  filtered: string[];
+  ranged: string[];
+  texts: string[];
+  arrays: string[];
 }
 
 export function indexId(index: IndexDef): string {
-  const order = [index.sort, ...(index.then ?? [])].join(">");
-  const id = `${[...index.equals].sort().join("+")}|${order}`;
-  return index.blank?.length
-    ? `${id}|empty:${[...index.blank].sort().join("+")}`
-    : id;
+  if ("text" in index) {
+    return `text:${index.text}`;
+  }
+  if ("array" in index) {
+    return `array:${index.array}`;
+  }
+  return `${[...index.filter].sort().join("+")}|${index.sort.join(">")}`;
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
@@ -73,33 +67,46 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-const indexFields = new WeakMap<IndexDef[], IndexFields>();
+function isRangeSort(def: IndexedGridDef, key: string): boolean {
+  const field = getField(def, key);
+  return field !== null && isRangeType(field.type);
+}
 
-function readIndexFields(indexes: IndexDef[]): IndexFields {
-  const known = indexFields.get(indexes);
+const planners = new WeakMap<IndexedGridDef, Planner>();
+const orderedPlanners = new WeakMap<IndexedGridDef, Planner>();
+
+// A size is of the rows the ordered indexes leave, so the ordered planner knows no text or array index and never counts through one.
+function readPlanner(def: IndexedGridDef, ordered = false): Planner {
+  const cache = ordered ? orderedPlanners : planners;
+  const known = cache.get(def);
   if (known) {
     return known;
   }
-  const fields: IndexFields = {
-    equals: unique(indexes.flatMap((index) => index.equals)),
-    ranges: unique(
-      indexes.filter((index) => index.range).map((index) => index.sort),
+  const sorts = listSortIndexes(def.indexes);
+  const planner: Planner = {
+    sorts,
+    filtered: unique(sorts.flatMap((index) => index.filter)),
+    ranged: unique(
+      sorts
+        .map((index) => index.sort[0])
+        .filter((key) => isRangeSort(def, key)),
     ),
+    texts: ordered ? [] : listTextIndexed(def.indexes),
+    arrays: ordered ? [] : listArrayIndexed(def.indexes),
   };
-  indexFields.set(indexes, fields);
-  return fields;
+  cache.set(def, planner);
+  return planner;
 }
 
 export function listSortFields(indexes: IndexDef[]): string[] {
-  return unique(indexes.map((index) => index.sort));
+  return unique(listSortIndexes(indexes).map((index) => index.sort[0]));
 }
 
 export function listSortOrders(indexes: IndexDef[]): string[][] {
   const orders = new Map<string, string[]>();
-  for (const index of indexes) {
-    if (index.then?.length) {
-      const order = [index.sort, ...index.then];
-      orders.set(order.join(">"), order);
+  for (const index of listSortIndexes(indexes)) {
+    if (index.sort.length > 1) {
+      orders.set(index.sort.join(">"), index.sort);
     }
   }
   return [...orders.values()];
@@ -145,105 +152,54 @@ export function isOverlapField(field: BaseFieldDef): boolean {
   return field.type === "array";
 }
 
-export function isTextIndexed(extras: IndexExtras, filter: Filter): boolean {
+function isLongEnough(filter: Filter): boolean {
   return (
-    (extras.textIndexes ?? []).includes(filter.field) &&
-    TEXT_MATCH_OPS.includes(filter.op) &&
-    "value" in filter &&
-    filter.value.trim().length >= TEXT_INDEX_MIN_LENGTH
+    "value" in filter && filter.value.trim().length >= TEXT_INDEX_MIN_LENGTH
   );
-}
-
-export function isOverlapIndexed(extras: IndexExtras, field: string): boolean {
-  return (extras.arrayIndexes ?? []).includes(field);
 }
 
 export function isCombineOr(query: QueryState): boolean {
   return query.combine === "or" && query.filters.length > 1;
 }
 
-// A partial index's blank field is answered by that index only beside the equalities it is keyed on; alone it runs over the narrowed set.
-function isPartialBlank(
-  indexes: IndexDef[],
-  key: string,
-  filters: Filter[],
-): boolean {
-  const filtered = filters.map((filter) => filter.field);
-  return indexes.some(
-    (index) =>
-      (index.blank ?? []).includes(key) &&
-      index.equals.every((equal) => filtered.includes(equal)),
-  );
-}
-
-function classify(
-  indexes: IndexDef[],
-  extras: IndexExtras,
-  filter: Filter,
-  filters: Filter[] = [filter],
-): Access {
-  const fields = readIndexFields(indexes);
+// Each operator names the kinds of index that can answer it; the first kind the grid declares for the field decides where the filter runs.
+function classify(planner: Planner, filter: Filter): Access {
   const { field } = filter;
-  switch (filter.op) {
-    case "any_of":
-      if (fields.equals.includes(field)) {
-        return "equality";
-      }
-      return isOverlapIndexed(extras, field) ? "budgeted" : "narrow";
-    case "all_of":
-      return isOverlapIndexed(extras, field) ? "budgeted" : "narrow";
-    case "blank":
-      return fields.equals.includes(field) ||
-        isPartialBlank(indexes, field, filters)
-        ? "equality"
-        : "narrow";
-    case "not_blank":
-      return fields.equals.includes(field) ? "equality" : "narrow";
-    case "equals":
-      if (fields.equals.includes(field)) {
-        return "equality";
-      }
-      return fields.ranges.includes(field) ? "range" : "narrow";
-    case "contains":
-    case "starts_with":
-    case "ends_with":
-      return isTextIndexed(extras, filter) ? "budgeted" : "narrow";
-    default:
-      return RANGE_OPS.includes(filter.op) ? "range" : "narrow";
+  for (const kind of listIndexKinds(filter.op)) {
+    if (kind === "filter" && planner.filtered.includes(field)) {
+      return "equality";
+    }
+    if (kind === "sort" && planner.ranged.includes(field)) {
+      return "range";
+    }
+    if (
+      kind === "text" &&
+      planner.texts.includes(field) &&
+      isLongEnough(filter)
+    ) {
+      return "budgeted";
+    }
+    if (kind === "array" && planner.arrays.includes(field)) {
+      return "budgeted";
+    }
   }
+  return "narrow";
 }
 
-function pick(
-  indexes: IndexDef[],
-  extras: IndexExtras,
-  filters: Filter[],
-  access: Access,
-): Filter[] {
-  return filters.filter(
-    (filter) => classify(indexes, extras, filter, filters) === access,
-  );
+function pick(planner: Planner, filters: Filter[], access: Access): Filter[] {
+  return filters.filter((filter) => classify(planner, filter) === access);
 }
 
-function answersEquality(index: IndexDef, filters: Filter[]): boolean {
-  const blank = index.blank ?? [];
-  const keys = unique(
-    filters.map((filter) => filter.field).filter((key) => !blank.includes(key)),
-  );
-  return (
-    sameSet(index.equals, keys) &&
-    blank.every((key) => {
-      const own = filters.filter((filter) => filter.field === key);
-      return own.length === 1 && own[0].op === "blank";
-    })
-  );
+function answersEquality(index: SortIndexDef, filters: Filter[]): boolean {
+  return sameSet(index.filter, unique(filters.map((filter) => filter.field)));
 }
 
 // One btree read forward or backward gives every column the same direction, so a composite order is answered only when its columns all run the way the first does.
-function answersSort(index: IndexDef, query: QueryState): boolean {
-  const then = index.then ?? [];
+function answersSort(index: SortIndexDef, query: QueryState): boolean {
+  const [first, ...then] = index.sort;
   const thenBy = listThenBy(query);
   return (
-    index.sort === query.sort.field &&
+    first === query.sort.field &&
     then.length === thenBy.length &&
     thenBy.every(
       (sort, at) =>
@@ -253,62 +209,57 @@ function answersSort(index: IndexDef, query: QueryState): boolean {
 }
 
 function answersQuery(
-  index: IndexDef,
+  index: SortIndexDef,
   query: QueryState,
   equality: Filter[],
   ranges: Filter[],
 ): boolean {
   const [range] = ranges;
-  if (!answersSort(index, query) || !answersEquality(index, equality)) {
-    return false;
-  }
-  if (range && (!index.range || range.field !== index.sort)) {
-    return false;
-  }
-  const several = equality.some(
-    (filter) => isListFilter(filter) && filter.values.length > 1,
+  return (
+    answersSort(index, query) &&
+    answersEquality(index, equality) &&
+    (!range || range.field === index.sort[0])
   );
-  return !(several && index.multi === false);
 }
 
-export function getIndex(
-  indexes: IndexDef[],
-  query: QueryState,
-  extras: IndexExtras = NO_EXTRAS,
-): IndexDef | null {
-  const ranges = pick(indexes, extras, query.filters, "range");
+function findIndex(planner: Planner, query: QueryState): SortIndexDef | null {
+  const ranges = pick(planner, query.filters, "range");
   if (
     query.search !== null ||
     ranges.length > 1 ||
     isCombineOr(query) ||
-    pick(indexes, extras, query.filters, "narrow").length > 0
+    pick(planner, query.filters, "narrow").length > 0
   ) {
     return null;
   }
-  const equality = pick(indexes, extras, query.filters, "equality");
+  const equality = pick(planner, query.filters, "equality");
   return (
-    indexes.find((index) => answersQuery(index, query, equality, ranges)) ??
-    null
+    planner.sorts.find((index) =>
+      answersQuery(index, query, equality, ranges),
+    ) ?? null
   );
 }
 
-export function isQueryIndexed(
-  indexes: IndexDef[],
-  searchFields: string[],
+export function getIndex(
+  def: IndexedGridDef,
   query: QueryState,
-  extras: IndexExtras = NO_EXTRAS,
+): SortIndexDef | null {
+  return findIndex(readPlanner(def), query);
+}
+
+export function isQueryIndexed(
+  def: IndexedGridDef,
+  query: QueryState,
 ): boolean {
+  const planner = readPlanner(def);
   if (query.search === null) {
-    return getIndex(indexes, query, extras) !== null;
+    return findIndex(planner, query) !== null;
   }
   return (
-    searchFields.length > 0 &&
+    listSearchFields(def).length > 0 &&
     !isCombineOr(query) &&
-    query.filters.every(
-      (filter) =>
-        classify(indexes, extras, filter, query.filters) === "equality",
-    ) &&
-    listSortFields(indexes).includes(query.sort.field)
+    query.filters.every((filter) => classify(planner, filter) === "equality") &&
+    listSortFields(def.indexes).includes(query.sort.field)
   );
 }
 
@@ -322,22 +273,19 @@ export function withoutFilters(query: QueryState): QueryState {
   };
 }
 
-function listTerms(
-  indexes: IndexDef[],
-  query: QueryState,
-): QueryState[] | null {
+function listTerms(planner: Planner, query: QueryState): QueryState[] | null {
   const base = withThenBy(withoutFilters(query), []);
   const terms: QueryState[] = [];
   for (const filter of query.filters) {
-    const access = classify(indexes, NO_EXTRAS, filter, query.filters);
+    const access = classify(planner, filter);
     if (access !== "equality" && access !== "range") {
       return null;
     }
-    const index = indexes.find(
-      (item) => sameSet(item.equals, [filter.field]) && !item.then?.length,
+    const index = planner.sorts.find(
+      (item) => sameSet(item.filter, [filter.field]) && item.sort.length === 1,
     );
     const sort =
-      access === "range" ? filter.field : (index?.sort ?? base.sort.field);
+      access === "range" ? filter.field : (index?.sort[0] ?? base.sort.field);
     terms.push({
       ...base,
       filters: [filter],
@@ -347,13 +295,13 @@ function listTerms(
   return terms;
 }
 
-function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
-  if (!listSortFields(indexes).includes(query.sort.field)) {
+function planAny(planner: Planner, query: QueryState): QueryPlan | null {
+  if (!planner.sorts.some((index) => index.sort[0] === query.sort.field)) {
     return null;
   }
-  const terms = listTerms(indexes, query);
+  const terms = listTerms(planner, query);
   const countable =
-    terms !== null && terms.every((term) => getIndex(indexes, term) !== null);
+    terms !== null && terms.every((term) => findIndex(planner, term) !== null);
   return {
     core: withoutFilters(query),
     narrowed: true,
@@ -363,16 +311,12 @@ function planAny(indexes: IndexDef[], query: QueryState): QueryPlan | null {
 }
 
 // A text or array filter stays in the core only when its own index answers it and nothing else needs the narrowed set: a narrowed core is counted up to the limit, which no trigram scan should be asked to do.
-function planAll(
-  indexes: IndexDef[],
-  query: QueryState,
-  extras: IndexExtras,
-): QueryPlan | null {
+function planAll(planner: Planner, query: QueryState): QueryPlan | null {
   const base: QueryState = { ...query, combine: "and", group: null };
-  const equality = pick(indexes, extras, query.filters, "equality");
-  const ranges = pick(indexes, extras, query.filters, "range");
-  const budgeted = pick(indexes, extras, query.filters, "budgeted");
-  const narrow = pick(indexes, extras, query.filters, "narrow");
+  const equality = pick(planner, query.filters, "equality");
+  const ranges = pick(planner, query.filters, "range");
+  const budgeted = pick(planner, query.filters, "budgeted");
+  const narrow = pick(planner, query.filters, "narrow");
   const onSort = ranges
     .filter((range) => range.field === query.sort.field)
     .slice(0, 1);
@@ -393,7 +337,7 @@ function planAll(
     plain,
     ...(sorted ? [withThenBy(plain, [])] : []),
   ];
-  const core = cores.find((candidate) => getIndex(indexes, candidate, extras));
+  const core = cores.find((candidate) => findIndex(planner, candidate));
   if (!core) {
     return null;
   }
@@ -408,84 +352,39 @@ function planAll(
 }
 
 export function planQuery(
-  indexes: IndexDef[],
+  def: IndexedGridDef,
   query: QueryState,
-  extras: IndexExtras = NO_EXTRAS,
+  ordered = false,
 ): QueryPlan | null {
   if (query.search !== null) {
     return null;
   }
-  return isCombineOr(query)
-    ? planAny(indexes, query)
-    : planAll(indexes, query, extras);
+  const planner = readPlanner(def, ordered);
+  return isCombineOr(query) ? planAny(planner, query) : planAll(planner, query);
 }
 
-// What a field may ever be filtered by on an indexed source: the operators some tier answers. An equality set needs an index of its own; every other operator falls back to the narrowed set.
-function listTierOps(indexes: IndexDef[], field: BaseFieldDef): FilterOp[] {
-  const equality = readIndexFields(indexes).equals.includes(field.key);
+// What a field may ever be filtered by on an indexed source: the operators some tier answers. A choice set needs a filter index of its own; every other operator falls back to the narrowed set.
+function listTierOps(planner: Planner, field: BaseFieldDef): FilterOp[] {
+  const filtered = planner.filtered.includes(field.key);
   const kind = resolveFieldKind(field);
   return listFieldOps(field).filter((op) => {
     if (isLiteralOp(field, op)) {
       return false;
     }
     const set = op === "any_of" || op === "none_of";
-    return !(kind === "choice" && set) || equality;
+    return !(kind === "choice" && set) || filtered;
   });
 }
 
 export function listFilterOps(
-  indexes: IndexDef[],
-  fields: BaseFieldDef[],
+  def: IndexedGridDef,
 ): Record<string, FilterOp[]> {
+  const planner = readPlanner(def);
   return Object.fromEntries(
-    fields
-      .map((field) => [field.key, listTierOps(indexes, field)] as const)
+    def.fields
+      .map((field) => [field.key, listTierOps(planner, field)] as const)
       .filter(([, ops]) => ops.length > 0),
   );
-}
-
-function listIndexOps(indexes: IndexDef[]): Record<string, FilterOp[]> {
-  const fields = readIndexFields(indexes);
-  const ops: Record<string, FilterOp[]> = {};
-  for (const key of fields.equals) {
-    ops[key] = ["any_of"];
-  }
-  for (const key of fields.ranges) {
-    ops[key] = [
-      ...(ops[key] ?? []),
-      "equals",
-      ...RANGE_OPS.filter((op) => op !== "in_period"),
-    ];
-  }
-  return ops;
-}
-
-interface Tier {
-  indexes: IndexDef[];
-  extras: IndexExtras;
-  searchFields: string[];
-  filterOps: Record<string, FilterOp[]>;
-  groupFields: string[];
-  thenByFields: string[];
-}
-
-function createTier(
-  indexes: IndexDef[],
-  extras: IndexExtras,
-  searchFields: string[],
-  fields: BaseFieldDef[],
-): Tier {
-  return {
-    indexes,
-    extras: {
-      textIndexes: extras.textIndexes,
-      arrayIndexes: extras.arrayIndexes,
-    },
-    searchFields,
-    filterOps: listFilterOps(indexes, fields),
-    groupFields: listGroupFields(fields, readIndexFields(indexes).equals),
-    thenByFields: listThenByFields(fields),
-  };
 }
 
 export function hasFilterOps(
@@ -497,6 +396,30 @@ export function hasFilterOps(
       Object.hasOwn(filterOps, filter.field) &&
       filterOps[filter.field].includes(filter.op),
   );
+}
+
+interface Tier {
+  def: IndexedGridDef;
+  filterOps: Record<string, FilterOp[]>;
+  groupFields: string[];
+  thenByFields: string[];
+}
+
+const tiers = new WeakMap<IndexedGridDef, Tier>();
+
+function readTier(def: IndexedGridDef): Tier {
+  const known = tiers.get(def);
+  if (known) {
+    return known;
+  }
+  const tier: Tier = {
+    def,
+    filterOps: listFilterOps(def),
+    groupFields: listGroupFields(def.fields, readPlanner(def).filtered),
+    thenByFields: listThenByFields(def.fields),
+  };
+  tiers.set(def, tier);
+  return tier;
 }
 
 function isGroupRunnable(tier: Tier, query: QueryState): boolean {
@@ -516,7 +439,7 @@ function isGroupRunnable(tier: Tier, query: QueryState): boolean {
     query.search === null &&
     !isCombineOr(query) &&
     tier.groupFields.includes(group) &&
-    planQuery(tier.indexes, grouped, tier.extras) !== null
+    planQuery(tier.def, grouped) !== null
   );
 }
 
@@ -529,19 +452,9 @@ function isTierRunnable(tier: Tier, query: QueryState): boolean {
     return false;
   }
   if (query.search !== null) {
-    return isQueryIndexed(tier.indexes, tier.searchFields, query, tier.extras);
+    return isQueryIndexed(tier.def, query);
   }
-  return planQuery(tier.indexes, query, tier.extras) !== null;
-}
-
-const tiers = new WeakMap<IndexedGridDef, Tier>();
-
-function readTier(def: IndexedGridDef): Tier {
-  const tier =
-    tiers.get(def) ??
-    createTier(def.indexes, def, listSearchFields(def), def.fields);
-  tiers.set(def, tier);
-  return tier;
+  return planQuery(tier.def, query) !== null;
 }
 
 export function isQueryRunnable(
@@ -556,10 +469,7 @@ export function isQueryBudgeted(
   def: IndexedGridDef,
   query: QueryState,
 ): boolean {
-  return (
-    query.search !== null ||
-    (planQuery(def.indexes, query, def)?.budgeted ?? false)
-  );
+  return query.search !== null || (planQuery(def, query)?.budgeted ?? false);
 }
 
 export function isGroupNarrowed(
@@ -573,18 +483,15 @@ function canonical(filters: Filter[]): string[] {
   return filters.map((filter) => JSON.stringify(filter)).sort();
 }
 
-function describeBasis(
-  indexes: IndexDef[],
-  query: QueryState,
-  extras: IndexExtras,
-): string {
-  const plan = planQuery(indexes, query, extras);
+function describeBasis(def: IndexedGridDef, query: QueryState): string {
+  const plan = planQuery(def, query);
   if (!plan) {
     return "";
   }
   if (!isCombineOr(query)) {
+    const planner = readPlanner(def);
     const bounding = plan.core.filters.filter((filter) => {
-      const access = classify(indexes, extras, filter, plan.core.filters);
+      const access = classify(planner, filter);
       return access === "equality" || access === "range";
     });
     return JSON.stringify(["and", canonical(bounding)]);
@@ -609,53 +516,28 @@ export function isFacetOnlyQuery(
   );
 }
 
-export function indexCapabilities(
-  indexes: IndexDef[],
-  options: IndexCapabilitiesOptions = {},
+export function gridDefCapabilities(
+  def: IndexedGridDef,
 ): DataSourceCapabilities {
-  const searchFields = options.searchFields ?? [];
-  const tier = options.fields
-    ? createTier(indexes, options, searchFields, options.fields)
-    : null;
-  const extras = tier?.extras ?? NO_EXTRAS;
-  const thenByFields = tier?.thenByFields ?? [
-    ...new Set(indexes.flatMap((index) => index.then ?? [])),
-  ];
+  const tier = readTier(def);
+  const facetField = def.facet?.field;
   return {
     holdsAllRows: false,
     searchIsOrdered: false,
     facetCountsFollowFilters: false,
-    narrowLimited: tier !== null,
-    combineOr: tier !== null,
-    canRun: (query) =>
-      tier
-        ? isTierRunnable(tier, query)
-        : query.group === null &&
-          hasValidThenBy(query, thenByFields) &&
-          isQueryIndexed(indexes, searchFields, query),
+    narrowLimited: true,
+    combineOr: true,
+    canRun: (query) => isTierRunnable(tier, query),
     isNarrowed: (query) =>
-      tier !== null &&
-      (isGroupNarrowed(options.facetField, query) ||
-        (planQuery(indexes, query, extras)?.narrowed ?? false)),
-    narrowBasis: (query) => describeBasis(indexes, query, extras),
-    filterOps: tier?.filterOps ?? listIndexOps(indexes),
-    groupFields: tier?.groupFields ?? [],
-    sortFields: listSortFields(indexes),
-    thenByFields,
-    sortOrders: listSortOrders(indexes),
-    searchFields,
-    isFacetCountExact: (query) => isFacetOnlyQuery(options.facetField, query),
-  };
-}
-
-export function gridDefCapabilities(
-  def: IndexedGridDef,
-): DataSourceCapabilities {
-  return indexCapabilities(def.indexes, {
-    facetField: def.facet?.field,
+      isGroupNarrowed(facetField, query) ||
+      (planQuery(def, query)?.narrowed ?? false),
+    narrowBasis: (query) => describeBasis(def, query),
+    filterOps: tier.filterOps,
+    groupFields: tier.groupFields,
+    sortFields: listSortFields(def.indexes),
+    thenByFields: tier.thenByFields,
+    sortOrders: listSortOrders(def.indexes),
     searchFields: listSearchFields(def),
-    fields: def.fields,
-    textIndexes: def.textIndexes,
-    arrayIndexes: def.arrayIndexes,
-  });
+    isFacetCountExact: (query) => isFacetOnlyQuery(facetField, query),
+  };
 }

@@ -72,14 +72,12 @@ export function useFilterOps(key: string): FilterOpOption[] {
 export function useFieldFilter(key: string) {
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
-  const offers = useOffers();
   const ops = useFilterOps(key);
   const filter = getFieldFilter(query, key);
   const held = filter === null && ops.every((item) => item.disabled);
   return {
     ops,
     filter,
-    multiple: offers.multi.includes(key),
     disabled: held,
     reason: held ? (ops[0]?.reason ?? null) : null,
     onFilterChange: (next: Filter | null) =>

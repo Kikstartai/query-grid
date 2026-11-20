@@ -109,7 +109,6 @@ export interface FieldFilterProps extends ControlState {
   ops: FilterOpOption[];
   filter: Filter | null;
   onFilterChange: (filter: Filter | null) => void;
-  multiple?: boolean;
   loadOptions?: LoadOptions;
   valueLabels?: Record<string, string>;
   onOptionPick?: (option: FieldOption) => void;
@@ -773,7 +772,6 @@ function PresetSelect({
 }
 
 interface ListEditorProps extends EditorProps {
-  multiple?: boolean;
   loadOptions?: LoadOptions;
   valueLabels?: Record<string, string>;
   onOptionPick?: (option: FieldOption) => void;
@@ -786,7 +784,7 @@ function ListEditor(props: ListEditorProps) {
     field,
     values,
     disabled: props.disabled,
-    multiple: op === "any_of" ? props.multiple : true,
+    multiple: true,
     blank:
       values.includes(null) ||
       (op === "any_of" && field.nullable === true && field.type !== "array"),
@@ -942,7 +940,6 @@ export function FieldFilter(props: FieldFilterProps) {
         filter={filter}
         minLength={offer?.minLength}
         disabled={disabled || (offer?.disabled === true && filter === null)}
-        multiple={props.multiple}
         loadOptions={props.loadOptions}
         valueLabels={props.valueLabels}
         onOptionPick={props.onOptionPick}

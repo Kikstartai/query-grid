@@ -6,42 +6,47 @@ import {
   type OpOfShape,
 } from "./operators.ts";
 
-export interface OneFilter {
+// One value compared with the field.
+export interface ValueFilter {
   field: string;
   op: OpOfShape<"one">;
   value: string;
 }
 
-export interface PairFilter {
+// Two bounds, both included.
+export interface BetweenFilter {
   field: string;
   op: OpOfShape<"pair">;
   min: string;
   max: string;
 }
 
+// A named date period, resolved in the browser.
+export interface PeriodFilter {
+  field: string;
+  op: OpOfShape<"preset">;
+  preset: DatePreset;
+}
+
+// A set of values; null stands for blank.
 export interface ListFilter {
   field: string;
   op: OpOfShape<"list">;
   values: (string | null)[];
 }
 
-export interface PresetFilter {
-  field: string;
-  op: OpOfShape<"preset">;
-  preset: DatePreset;
-}
-
-export interface NoneFilter {
+// Whether the field holds a value.
+export interface BlankFilter {
   field: string;
   op: OpOfShape<"none">;
 }
 
 export type Filter =
-  | OneFilter
-  | PairFilter
+  | ValueFilter
+  | BetweenFilter
+  | PeriodFilter
   | ListFilter
-  | PresetFilter
-  | NoneFilter;
+  | BlankFilter;
 
 export type Combinator = "and" | "or";
 
@@ -87,15 +92,15 @@ export function isListFilter(filter: Filter): filter is ListFilter {
   return getOperatorShape(filter.op) === "list";
 }
 
-export function isOneFilter(filter: Filter): filter is OneFilter {
+export function isValueFilter(filter: Filter): filter is ValueFilter {
   return getOperatorShape(filter.op) === "one";
 }
 
-export function isPairFilter(filter: Filter): filter is PairFilter {
+export function isBetweenFilter(filter: Filter): filter is BetweenFilter {
   return getOperatorShape(filter.op) === "pair";
 }
 
-export function isPresetFilter(filter: Filter): filter is PresetFilter {
+export function isPeriodFilter(filter: Filter): filter is PeriodFilter {
   return getOperatorShape(filter.op) === "preset";
 }
 

@@ -81,7 +81,6 @@ export interface OpOffer {
 
 export interface Offers {
   filters: Record<string, OpOffer[]>;
-  multi: string[];
   sorts: string[];
   thenBy: string[];
   combineOr: boolean;
@@ -474,27 +473,6 @@ function listOpListings(
   );
 }
 
-function listMulti(
-  def: BaseGridDef,
-  query: QueryState,
-  context: OfferContext,
-): string[] {
-  return Object.entries(context.capabilities.filterOps)
-    .filter(([, ops]) => ops.includes("any_of"))
-    .map(([key]) => key)
-    .filter((key) =>
-      isOffered(
-        def,
-        query,
-        {
-          type: "setFilter",
-          filter: { field: key, op: "any_of", values: PROBE },
-        },
-        context,
-      ),
-    );
-}
-
 function resolveMinLength(
   def: BaseGridDef,
   query: QueryState,
@@ -516,7 +494,7 @@ function listCoreOffers(
   def: BaseGridDef,
   query: QueryState,
   context: OfferContext,
-): Omit<Offers, "filters" | "multi"> {
+): Omit<Offers, "filters"> {
   return {
     sorts: context.capabilities.sortFields.filter((field) =>
       proposeAction(
@@ -572,7 +550,6 @@ export function listOffers(
   }
   return {
     filters,
-    multi: listMulti(def, query, context),
     ...listCoreOffers(def, query, context),
   };
 }
@@ -783,17 +760,10 @@ export function listControlActions(
   context: OfferContext,
 ): QueryAction[] {
   const actions: QueryAction[] = [{ type: "reset" }];
-  const multi = listMulti(def, query, context);
   for (const { field, op, offered } of listOpListings(def, query, context)) {
     if (offered) {
       actions.push({ type: "setFilter", filter: createProbeFilter(field, op) });
     }
-  }
-  for (const field of multi) {
-    actions.push({
-      type: "setFilter",
-      filter: { field, op: "any_of", values: PROBE },
-    });
   }
   for (const filter of query.filters) {
     const at = listFieldFilters(query, filter.field).indexOf(filter);

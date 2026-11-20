@@ -200,7 +200,17 @@ describe("actions", () => {
         context,
       ),
     ).toBe(BASE);
-    expect(listOffers(capped, BASE, context).multi).toEqual(["id", "region"]);
+    expect(
+      applyAction(
+        capped,
+        BASE,
+        {
+          type: "setFilter",
+          filter: { field: "status", op: "any_of", values: ["open"] },
+        },
+        context,
+      ).filters,
+    ).toEqual([{ field: "status", op: "any_of", values: ["open"] }]);
   });
 
   test("an empty value list clears the field", () => {
@@ -221,17 +231,15 @@ describe("actions", () => {
     ).toEqual([]);
   });
 
-  test("several values are offered only where the capabilities answer them", () => {
+  test("any of is offered only where the capabilities answer it", () => {
     const capped = listOffers(TEST_DEF, BASE, CAPPED);
     expect(listOfferedFields(capped, "any_of")).toEqual(["status"]);
-    expect(capped.multi).toEqual([]);
     const memory = listOffers(TEST_DEF, BASE, MEMORY);
     expect(listOfferedFields(memory, "any_of")).toEqual([
       "id",
       "status",
       "region",
     ]);
-    expect(memory.multi).toEqual(["id", "status", "region"]);
   });
 
   test("setting the search returns to the default sort on a server", () => {
@@ -359,7 +367,7 @@ describe("the memory source", () => {
     expect(bare.searchFields).toEqual([]);
   });
 
-  test("every reachable state is answerable, with several values included", () => {
+  test("every reachable state is answerable, with several bounds included", () => {
     const keys = ["status", "total", "created_at"];
     const small = {
       ...TEST_DEF,
@@ -374,16 +382,6 @@ describe("the memory source", () => {
         (state) =>
           state.filters.filter((filter) => BOUND_OPS.includes(filter.op))
             .length > 1,
-      ),
-    ).toBe(true);
-    expect(
-      states.some((state) =>
-        state.filters.some(
-          (filter) =>
-            filter.field === "status" &&
-            "values" in filter &&
-            filter.values.length > 1,
-        ),
       ),
     ).toBe(true);
   });

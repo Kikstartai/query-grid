@@ -28,8 +28,8 @@ const PROBE: PostgresGridDef = {
     { key: "created_at", label: "Created", type: "datetime" },
   ],
   indexes: [
-    { equals: [], sort: "created_at" },
-    { equals: ["kind"], sort: "created_at" },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["kind"], sort: ["created_at"] },
   ],
 };
 

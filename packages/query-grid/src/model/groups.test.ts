@@ -16,7 +16,7 @@ import {
   getGroupQuery,
   sortGroups,
 } from "./groups.ts";
-import { indexCapabilities, isFacetOnlyQuery, planQuery } from "./indexes.ts";
+import { gridDefCapabilities, isFacetOnlyQuery, planQuery } from "./indexes.ts";
 import type { IndexedGridDef } from "./grid-def.ts";
 import { createMemorySource } from "./memory-source.ts";
 import {
@@ -32,11 +32,7 @@ import type { GroupHeader } from "./data-source.ts";
 
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: TEST_INDEXES };
 const BASE = defaultQuery(DEF);
-const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
-  facetField: "status",
-  searchFields: ["name", "number"],
-  fields: DEF.fields,
-});
+const CAPABILITIES = gridDefCapabilities(DEF);
 const signal = new AbortController().signal;
 
 function header(value: string, count: number): GroupHeader {
@@ -78,7 +74,6 @@ describe("what may be grouped", () => {
       "name",
       "note",
     ]);
-    expect(indexCapabilities(TEST_INDEXES).groupFields).toEqual([]);
   });
 
   test("the counted field groups at any size; another field only over a narrowed set", () => {
@@ -190,13 +185,13 @@ describe("review fixes", () => {
   });
 
   test("the core of a plan carries no group, so sizing a grouped query asks for no group index", () => {
-    const plan = planQuery(TEST_INDEXES, {
+    const plan = planQuery(DEF, {
       ...BASE,
       group: "region",
       filters: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(plan?.core.group).toBeNull();
-    const any = planQuery(TEST_INDEXES, {
+    const any = planQuery(DEF, {
       ...BASE,
       group: "region",
       combine: "or",

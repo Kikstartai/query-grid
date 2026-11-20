@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { IndexedGridDef } from "./grid-def.ts";
+import { INDEX_RULE_CODES, listIndexProblems } from "./index-rules.ts";
 import type { Problem } from "./problems.ts";
 import { SORT_MAX } from "./query-state.ts";
 import { normalizeStoredGridDef } from "./stored-def.ts";
@@ -49,17 +50,11 @@ const FULL_DEF: IndexedGridDef = {
   search: ["customer_name", "note"],
   orderField: "position",
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    {
-      equals: ["status"],
-      sort: "created_at",
-      multi: true,
-      blank: ["note"],
-      then: ["total", "quantity"],
-    },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["status"], sort: ["created_at", "total", "quantity"] },
+    { text: "customer_name" },
+    { array: "tags" },
   ],
-  textIndexes: ["customer_name"],
-  arrayIndexes: ["tags"],
 };
 
 function stored(change: (def: Record<string, unknown>) => void = () => {}) {
@@ -108,7 +103,7 @@ describe("normalizeStoredGridDef", () => {
     fields[1].label = "Changed";
     (fields[1].options as unknown[]).pop();
     (fields[1].tones as Record<string, string>).open = "danger";
-    (indexes[1].equals as string[]).push("note");
+    (indexes[1].filter as string[]).push("note");
     (input.totals as string[]).pop();
     fields.pop();
     input.id = "changed";
@@ -366,15 +361,10 @@ describe("normalizeStoredGridDef", () => {
       def.search = ["gone_d"];
       def.orderField = "gone_e";
       def.indexes = [
-        {
-          equals: ["gone_f"],
-          sort: "gone_g",
-          blank: ["gone_h"],
-          then: ["gone_i"],
-        },
+        { filter: ["gone_f"], sort: ["gone_g", "gone_h"] },
+        { text: "gone_i" },
+        { array: "gone_j" },
       ];
-      def.textIndexes = ["gone_j"];
-      def.arrayIndexes = ["gone_k"];
     });
     expect(
       listProblems(input).map((problem) => [
@@ -388,12 +378,11 @@ describe("normalizeStoredGridDef", () => {
       ["stored_unknown_field", "totals.1", "gone_c"],
       ["stored_unknown_field", "search.0", "gone_d"],
       ["stored_unknown_field", "orderField", "gone_e"],
-      ["stored_unknown_field", "textIndexes.0", "gone_j"],
-      ["stored_unknown_field", "arrayIndexes.0", "gone_k"],
-      ["stored_unknown_field", "indexes.0.equals.0", "gone_f"],
-      ["stored_unknown_field", "indexes.0.sort", "gone_g"],
-      ["stored_unknown_field", "indexes.0.blank.0", "gone_h"],
-      ["stored_unknown_field", "indexes.0.then.0", "gone_i"],
+      ["stored_unknown_field", "indexes.0.filter.0", "gone_f"],
+      ["stored_unknown_field", "indexes.0.sort.0", "gone_g"],
+      ["stored_unknown_field", "indexes.0.sort.1", "gone_h"],
+      ["stored_unknown_field", "indexes.1.text", "gone_i"],
+      ["stored_unknown_field", "indexes.2.array", "gone_j"],
     ]);
   });
 
@@ -422,20 +411,17 @@ describe("normalizeStoredGridDef", () => {
     ]);
   });
 
-  test("a repeated key, option, total, search column, own index or then column is a duplicate", () => {
+  test("a repeated key, option, total, search column or sort column is a duplicate", () => {
     const input = stored((def) => {
       const fields = def.fields as Record<string, unknown>[];
       fields.push({ key: "note", label: "Note again", type: "text" });
       (fields[1].options as unknown[]).push({ value: "open", label: "Open 2" });
       def.totals = ["total", "total"];
       def.search = ["note", "note"];
-      def.textIndexes = ["note", "note"];
-      def.arrayIndexes = ["tags", "tags"];
       def.indexes = [
         {
-          equals: ["status", "status"],
-          sort: "created_at",
-          then: ["total", "total"],
+          filter: ["status", "status"],
+          sort: ["created_at", "total", "total"],
         },
       ];
     });
@@ -455,15 +441,7 @@ describe("normalizeStoredGridDef", () => {
       { code: "stored_duplicate", params: { path: "search.1", value: "note" } },
       {
         code: "stored_duplicate",
-        params: { path: "textIndexes.1", value: "note" },
-      },
-      {
-        code: "stored_duplicate",
-        params: { path: "arrayIndexes.1", value: "tags" },
-      },
-      {
-        code: "stored_duplicate",
-        params: { path: "indexes.0.then.1", value: "total" },
+        params: { path: "indexes.0.sort.2", value: "total" },
       },
     ]);
   });
@@ -476,8 +454,6 @@ describe("normalizeStoredGridDef", () => {
       [storedWith({ totals: many(21, "total") }), "totals", 20],
       [storedWith({ search: many(21, "note") }), "search", 20],
       [storedWith({ indexes: many(101, {}) }), "indexes", 100],
-      [storedWith({ textIndexes: many(51, "note") }), "textIndexes", 50],
-      [storedWith({ arrayIndexes: many(51, "tags") }), "arrayIndexes", 50],
       [storedField(7, { options: many(501, {}) }), "fields.7.options", 500],
       [
         storedField(7, {
@@ -496,43 +472,58 @@ describe("normalizeStoredGridDef", () => {
     }
   });
 
-  test("an index pages by at most the sort maximum, so then holds one column fewer", () => {
-    const then = Array.from({ length: SORT_MAX }, () => "total");
-    const input = storedWith({
-      indexes: [{ equals: [], sort: "created_at", then }],
-    });
+  test("an index pages by at most the sort maximum", () => {
+    const sort = Array.from({ length: SORT_MAX + 1 }, () => "total");
+    const input = storedWith({ indexes: [{ filter: [], sort }] });
     expect(listProblems(input)).toEqual([
       {
         code: "stored_too_many",
-        params: { path: "indexes.0.then", max: SORT_MAX - 1 },
+        params: { path: "indexes.0.sort", max: SORT_MAX },
       },
     ]);
   });
 
-  test("an index needs its equals list and a sort, and its flags are booleans", () => {
+  test("an index is { filter, sort }, { text } or { array }, and the old keys are unknown", () => {
     const input = stored((def) => {
       def.indexes = [
         "x",
-        { sort: "created_at" },
-        { equals: [] },
+        { sort: ["created_at"] },
+        { filter: [] },
+        { filter: [7], sort: "created_at" },
         {
-          equals: [7],
-          sort: "created_at",
-          range: "yes",
-          multi: 1,
-          blank: "note",
+          filter: [],
+          sort: ["created_at"],
+          range: true,
+          multi: true,
+          blank: ["note"],
         },
+        { equals: [], sort: ["created_at"] },
+        { text: 7 },
+        { array: "tags", sort: ["created_at"] },
       ];
     });
     expect(listProblems(input)).toEqual([
       invalidAt("indexes.0"),
-      invalidAt("indexes.1.equals"),
+      invalidAt("indexes.1.filter"),
       invalidAt("indexes.2.sort"),
-      invalidAt("indexes.3.equals.0"),
-      invalidAt("indexes.3.range"),
-      invalidAt("indexes.3.multi"),
-      invalidAt("indexes.3.blank"),
+      invalidAt("indexes.3.filter.0"),
+      invalidAt("indexes.3.sort"),
+      unknownKeyAt("indexes.4.range"),
+      unknownKeyAt("indexes.4.multi"),
+      unknownKeyAt("indexes.4.blank"),
+      unknownKeyAt("indexes.5.equals"),
+      invalidAt("indexes.5.filter"),
+      invalidAt("indexes.6.text"),
+      unknownKeyAt("indexes.7.sort"),
     ]);
+  });
+
+  test("the old textIndexes and arrayIndexes root keys are unknown", () => {
+    expect(
+      listProblems(
+        storedWith({ textIndexes: ["customer_name"], arrayIndexes: ["tags"] }),
+      ),
+    ).toEqual([unknownKeyAt("textIndexes"), unknownKeyAt("arrayIndexes")]);
   });
 
   test("every problem is collected, up to fifty", () => {
@@ -558,158 +549,203 @@ describe("a stored def that reads cleanly must also suit its indexes", () => {
     return { code, params };
   }
 
-  test("a nullable field is not a keyset sort", () => {
+  test("a nullable field is not a keyset sort, in any position", () => {
     expect(
-      listProblems(storedWith({ indexes: [{ equals: [], sort: "note" }] })),
+      listProblems(storedWith({ indexes: [{ filter: [], sort: ["note"] }] })),
     ).toEqual([
       indexProblem("index_nullable_sort", {
-        path: "indexes.0.sort",
+        path: "indexes.0.sort.0",
+        field: "note",
+      }),
+    ]);
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ filter: [], sort: ["created_at", "note"] }] }),
+      ),
+    ).toEqual([
+      indexProblem("index_nullable_sort", {
+        path: "indexes.0.sort.1",
         field: "note",
       }),
     ]);
   });
 
-  test("a range needs a sort whose type has one", () => {
+  test("a text sort is a valid order and needs no flag", () => {
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ filter: [], sort: ["customer_name"] }] }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("an index has at least one sort column", () => {
+    expect(
+      listProblems(storedWith({ indexes: [{ filter: ["status"], sort: [] }] })),
+    ).toEqual([indexProblem("index_no_sort", { path: "indexes.0.sort" })]);
+  });
+
+  test("a sort column is not also a filter column", () => {
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ filter: ["status"], sort: ["status"] }] }),
+      ),
+    ).toEqual([
+      indexProblem("index_sort_is_filter", {
+        path: "indexes.0.sort.0",
+        field: "status",
+      }),
+    ]);
     expect(
       listProblems(
         storedWith({
-          indexes: [{ equals: [], sort: "customer_name", range: true }],
+          indexes: [{ filter: ["status"], sort: ["created_at", "status"] }],
         }),
       ),
     ).toEqual([
-      indexProblem("index_no_range", {
-        path: "indexes.0.range",
-        field: "customer_name",
-        type: "text",
-      }),
-    ]);
-  });
-
-  test("the sort is not also an equality", () => {
-    expect(
-      listProblems(
-        storedWith({ indexes: [{ equals: ["status"], sort: "status" }] }),
-      ),
-    ).toEqual([
-      indexProblem("index_sort_is_equality", {
-        path: "indexes.0.sort",
+      indexProblem("index_sort_is_filter", {
+        path: "indexes.0.sort.1",
         field: "status",
       }),
     ]);
   });
 
-  test("an array is neither a sort nor an equality", () => {
+  test("an array is neither a sort nor a filter column", () => {
     expect(
-      listProblems(storedWith({ indexes: [{ equals: [], sort: "tags" }] })),
+      listProblems(storedWith({ indexes: [{ filter: [], sort: ["tags"] }] })),
     ).toEqual([
       indexProblem("index_array_sort", {
-        path: "indexes.0.sort",
+        path: "indexes.0.sort.0",
         field: "tags",
       }),
     ]);
     expect(
       listProblems(
-        storedWith({ indexes: [{ equals: ["tags"], sort: "created_at" }] }),
+        storedWith({ indexes: [{ filter: ["tags"], sort: ["created_at"] }] }),
       ),
     ).toEqual([
-      indexProblem("index_array_equality", {
-        path: "indexes.0.equals.0",
+      indexProblem("index_array_filter", {
+        path: "indexes.0.filter.0",
         field: "tags",
       }),
     ]);
   });
 
-  test("a then column is a non-null, orderable column not already in the index", () => {
-    const cases: [Record<string, unknown>, string, string][] = [
-      [
-        { equals: [], sort: "created_at", then: ["note"] },
-        "index_nullable_sort",
-        "note",
-      ],
-      [
-        { equals: [], sort: "created_at", then: ["tags"] },
-        "index_array_sort",
-        "tags",
-      ],
-      [
-        { equals: ["status"], sort: "created_at", then: ["status"] },
-        "index_then_repeats",
-        "status",
-      ],
-      [
-        { equals: [], sort: "created_at", then: ["created_at"] },
-        "index_then_repeats",
-        "created_at",
-      ],
-      [
-        { equals: [], sort: "created_at", then: ["id"] },
-        "index_then_repeats",
-        "id",
-      ],
-    ];
-    for (const [index, code, field] of cases) {
-      expect(listProblems(storedWith({ indexes: [index] }))).toEqual([
-        indexProblem(code, { path: "indexes.0.then.0", field }),
-      ]);
-    }
-  });
-
-  test("an empty column is nullable and neither an equality nor the sort", () => {
+  test("the key inside a sort repeats what every index already ends with", () => {
     expect(
       listProblems(
-        storedWith({
-          indexes: [{ equals: [], sort: "created_at", blank: ["total"] }],
-        }),
+        storedWith({ indexes: [{ filter: [], sort: ["created_at", "id"] }] }),
       ),
     ).toEqual([
-      indexProblem("index_never_blank", {
-        path: "indexes.0.blank.0",
-        field: "total",
-      }),
-    ]);
-    expect(
-      listProblems(
-        storedWith({
-          indexes: [{ equals: ["note"], sort: "created_at", blank: ["note"] }],
-        }),
-      ),
-    ).toEqual([
-      indexProblem("index_blank_is_filtered", {
-        path: "indexes.0.blank.0",
-        field: "note",
+      indexProblem("index_sort_repeats", {
+        path: "indexes.0.sort.1",
+        field: "id",
       }),
     ]);
   });
 
-  test("the same index declared twice is a duplicate", () => {
-    const index = { equals: ["status"], sort: "created_at" };
-    expect(listProblems(storedWith({ indexes: [index, index] }))).toEqual([
+  test("a repeated filter column is a duplicate", () => {
+    expect(
+      listProblems(
+        storedWith({
+          indexes: [{ filter: ["status", "status"], sort: ["created_at"] }],
+        }),
+      ),
+    ).toEqual([
+      indexProblem("index_duplicate", {
+        path: "indexes.0.filter.1",
+        value: "status",
+      }),
+    ]);
+  });
+
+  test("the same index declared twice is a duplicate, whatever the order of its filter", () => {
+    expect(
+      listProblems(
+        storedWith({
+          indexes: [
+            { filter: ["status", "customer_id"], sort: ["created_at"] },
+            { filter: ["customer_id", "status"], sort: ["created_at"] },
+          ],
+        }),
+      ),
+    ).toEqual([
       indexProblem("index_duplicate", {
         path: "indexes.1",
-        value: "status|created_at",
+        value: "customer_id+status|created_at",
+      }),
+    ]);
+    expect(
+      listProblems(
+        storedWith({ indexes: [{ text: "note" }, { text: "note" }] }),
+      ),
+    ).toEqual([
+      indexProblem("index_duplicate", {
+        path: "indexes.1",
+        value: "text:note",
       }),
     ]);
   });
 
   test("a text index names a text field without options, an array index an array", () => {
-    expect(listProblems(storedWith({ textIndexes: ["status"] }))).toEqual([
-      indexProblem("index_not_text", {
-        path: "textIndexes.0",
-        field: "status",
-      }),
-    ]);
-    expect(listProblems(storedWith({ arrayIndexes: ["note"] }))).toEqual([
+    expect(listProblems(storedWith({ indexes: [{ text: "status" }] }))).toEqual(
+      [
+        indexProblem("index_not_text", {
+          path: "indexes.0.text",
+          field: "status",
+        }),
+      ],
+    );
+    expect(listProblems(storedWith({ indexes: [{ array: "note" }] }))).toEqual([
       indexProblem("index_not_array", {
-        path: "arrayIndexes.0",
+        path: "indexes.0.array",
         field: "note",
       }),
     ]);
   });
 
+  test("an unknown field and an order past the sort maximum are refused by the rules alone", () => {
+    expect(
+      listIndexProblems({
+        ...FULL_DEF,
+        indexes: [
+          {
+            filter: ["gone"],
+            sort: ["created_at", "total", "quantity", "position"],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        code: "index_order_too_long",
+        params: { path: "indexes.0.sort", max: SORT_MAX },
+      },
+      {
+        code: "index_unknown_field",
+        params: { path: "indexes.0.filter.0", field: "gone" },
+      },
+    ]);
+  });
+
+  test("the rules report these codes and no other", () => {
+    expect([...INDEX_RULE_CODES]).toEqual([
+      "index_unknown_field",
+      "index_duplicate",
+      "index_nullable_sort",
+      "index_no_sort",
+      "index_sort_is_filter",
+      "index_array_sort",
+      "index_array_filter",
+      "index_sort_repeats",
+      "index_order_too_long",
+      "index_not_text",
+      "index_not_array",
+    ]);
+  });
+
   test("index problems are capped at fifty too", () => {
     const indexes = Array.from({ length: 60 }, () => ({
-      equals: [],
-      sort: "note",
+      filter: [],
+      sort: ["note"],
     }));
     expect(listProblems(storedWith({ indexes }))).toHaveLength(50);
   });

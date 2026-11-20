@@ -574,7 +574,7 @@ export function buildCappedTotalSql(
     (key) =>
       `coalesce(sum(capped.${identifier(key)}), 0)::float8 AS ${sumColumn(key)}`,
   );
-  const core = planQuery(def.indexes, query, def)?.core ?? query;
+  const core = planQuery(def, query)?.core ?? query;
   const order = isTotalOrdered(def, query)
     ? ` ORDER BY ${[...listSorts(core).map((sort) => sort.field), KEY_FIELD].map(column).join(", ")}`
     : "";

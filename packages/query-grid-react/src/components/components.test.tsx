@@ -679,7 +679,6 @@ describe("each base component mounts alone, with plain props and no provider", (
         field={OWNER}
         ops={[{ op: "any_of" }, { op: "none_of" }]}
         filter={{ field: "owner", op: "any_of", values: [null, "ann"] }}
-        multiple
         onFilterChange={noop}
       />,
     );

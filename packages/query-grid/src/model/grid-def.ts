@@ -79,22 +79,42 @@ export interface BaseGridDef<F extends BaseFieldDef = BaseFieldDef> {
   orderField?: string;
 }
 
-export interface IndexDef {
-  equals: string[];
-  sort: string;
-  range?: boolean;
-  multi?: boolean;
-  blank?: string[];
-  then?: string[];
+// A btree over the filter columns, the sort columns and the key.
+export interface SortIndexDef {
+  filter: string[];
+  sort: string[];
 }
 
-export interface IndexExtras {
-  textIndexes?: string[];
-  arrayIndexes?: string[];
+// A GIN trigram index on one text column.
+export interface TextIndexDef {
+  text: string;
 }
 
-export interface IndexedGridDef extends BaseGridDef, IndexExtras {
+// A GIN index on one array column.
+export interface ArrayIndexDef {
+  array: string;
+}
+
+export type IndexDef = SortIndexDef | TextIndexDef | ArrayIndexDef;
+
+export interface IndexedGridDef extends BaseGridDef {
   indexes: IndexDef[];
+}
+
+export function isSortIndex(index: IndexDef): index is SortIndexDef {
+  return "sort" in index;
+}
+
+export function listSortIndexes(indexes: IndexDef[]): SortIndexDef[] {
+  return indexes.filter(isSortIndex);
+}
+
+export function listTextIndexed(indexes: IndexDef[]): string[] {
+  return indexes.flatMap((index) => ("text" in index ? [index.text] : []));
+}
+
+export function listArrayIndexed(indexes: IndexDef[]): string[] {
+  return indexes.flatMap((index) => ("array" in index ? [index.array] : []));
 }
 
 export const KEY_FIELD = "id";

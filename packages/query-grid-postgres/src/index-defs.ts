@@ -4,11 +4,13 @@ import {
   isCurrencyCode,
   KEY_FIELD,
   listIndexProblems,
+  listSortIndexes,
   type BaseFieldDef,
   type IndexDef,
   type IndexProblem,
   type IndexRuleCode,
   type ProblemParams,
+  type SortIndexDef,
 } from "@kikstart/query-grid";
 
 import type { PostgresGridDef } from "./storage.ts";
@@ -27,16 +29,13 @@ export function describeSearch(columns: string[]): string {
   return `search over ${columns.join(", ")}`;
 }
 
-export function describeIndex(index: IndexDef): string {
-  const filters = index.equals.length
-    ? index.equals.map((key) => `${key} =`).join(", ")
+export function describeIndex(index: SortIndexDef): string {
+  const filters = index.filter.length
+    ? index.filter.map((key) => `${key} =`).join(", ")
     : "no filter";
-  const range = index.range ? ` (range on ${index.sort})` : "";
-  const then = index.then?.length ? `, then ${index.then.join(", ")}` : "";
-  const blank = index.blank?.length
-    ? `, where ${index.blank.map((key) => `${key} is blank`).join(" and ")}`
-    : "";
-  return `${filters}, sort ${index.sort}${then}${range}${blank}`;
+  const [first, ...then] = index.sort;
+  const order = then.length ? `, then ${then.join(", ")}` : "";
+  return `${filters}, sort ${first ?? ""}${order}`;
 }
 
 export function describeTextIndex(column: string): string {
@@ -69,32 +68,24 @@ function validateSearch(def: PostgresGridDef, columns: string[]): string[] {
 
 const UNKNOWN_ROLES: Record<string, string> = {
   sort: "sort field",
-  then: "sort field",
-  equals: "equality field",
-  blank: "blank field",
+  filter: "filter field",
+  text: "text field",
+  array: "array field",
 };
 
 const INDEX_MESSAGES: Record<IndexRuleCode, IndexMessage> = {
   index_unknown_field: ({ field }, role) =>
     `unknown ${UNKNOWN_ROLES[role] ?? "field"} ${field}`,
   index_duplicate: ({ value }, role) =>
-    role === "then"
-      ? `${value} is sorted on twice`
-      : `${value} is declared twice`,
+    role === "sort" ? `${value} is sorted on twice` : `${value} is declared twice`,
   index_nullable_sort: () => "a nullable field cannot be a keyset sort",
-  index_no_range: ({ field, type }) =>
-    `${field} is a ${type}, which has no range filter`,
-  index_sort_is_equality: ({ field }) =>
-    `${field} is both an equality and the sort`,
+  index_no_sort: () => "an index needs at least one sort column",
+  index_sort_is_filter: ({ field }) => `${field} is both a filter and a sort column`,
   index_array_sort: ({ field }) => `${field} is an array, which has no order`,
-  index_array_equality: ({ field }) =>
-    `${field} is an array; its index is declared in arrayIndexes`,
-  index_then_repeats: ({ field }) =>
-    `${field} is already an equality, the sort or the key`,
+  index_array_filter: ({ field }) =>
+    `${field} is an array; its index is { array: "${field}" }`,
+  index_sort_repeats: ({ field }) => `${field} is the key, which ends every order`,
   index_order_too_long: ({ max }) => `an order has at most ${max} columns`,
-  index_never_blank: ({ field }) => `${field} is never blank`,
-  index_blank_is_filtered: ({ field }) =>
-    `${field} is blank in every row of the index, so it cannot also be an equality or the sort`,
   index_not_text: ({ field }) => `${field} is not a text field without options`,
   index_not_array: ({ field }) => `${field} is not an array field`,
 };
@@ -114,14 +105,24 @@ function describeIndexProblem(
   return `index ${id}: ${INDEX_MESSAGES[code](params, role)}`;
 }
 
+function isWellFormed(index: IndexDef): boolean {
+  if ("text" in index) {
+    return typeof index.text === "string";
+  }
+  if ("array" in index) {
+    return typeof index.array === "string";
+  }
+  return Array.isArray(index.filter) && Array.isArray(index.sort);
+}
+
 function validateIndexes(def: PostgresGridDef): string[] {
-  const indexes = def.indexes.filter((index) => Array.isArray(index.equals));
+  const indexes = def.indexes.filter(isWellFormed);
   const shapes = def.indexes.length - indexes.length;
   return [
     ...Array.from(
       { length: shapes },
       () =>
-        "an index needs `equals` and `sort`; the search columns are `search` on the def",
+        "an index is { filter, sort }, { text } or { array }; the search columns are `search` on the def",
     ),
     ...listIndexProblems({ ...def, indexes }).map((problem) =>
       describeIndexProblem(indexes, problem),
@@ -158,13 +159,13 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     problems.push(...validateSearch(def, def.search));
   }
   problems.push(...validateIndexes(def));
-  const base = def.indexes.some(
+  const base = listSortIndexes(def.indexes).some(
     (index) =>
-      Array.isArray(index.equals) &&
-      index.equals.length === 0 &&
-      !index.blank?.length &&
-      !index.then?.length &&
-      index.sort === def.defaultSort.field,
+      Array.isArray(index.filter) &&
+      index.filter.length === 0 &&
+      Array.isArray(index.sort) &&
+      index.sort.length === 1 &&
+      index.sort[0] === def.defaultSort.field,
   );
   if (!base) {
     problems.push("the default sort with no filter is not a declared index");

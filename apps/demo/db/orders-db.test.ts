@@ -6,6 +6,7 @@ import {
   BLANK_GROUP,
   defaultQuery,
   getGroupQuery,
+  listSortIndexes,
   type Filter,
   type GridRow,
   type QueryState,
@@ -125,10 +126,10 @@ describe("generated schema", () => {
 
 describe("keyset paging", () => {
   test("three keyset pages equal one page three times the size, for every ordered index", async () => {
-    for (const index of ORDERS_GRID_DEF.indexes) {
-      const sample = index.equals.length
+    for (const index of listSortIndexes(ORDERS_GRID_DEF.indexes)) {
+      const sample = index.filter.length
         ? await client.query<Record<string, string>>(
-            `SELECT ${index.equals.join(", ")} FROM orders WHERE ${index.equals.map((key) => `${key} IS NOT NULL`).join(" AND ")} LIMIT 1`,
+            `SELECT ${index.filter.join(", ")} FROM orders WHERE ${index.filter.map((key) => `${key} IS NOT NULL`).join(" AND ")} LIMIT 1`,
           )
         : { rows: [{}] };
       for (const direction of ["asc", "desc"] as const) {
@@ -137,8 +138,8 @@ describe("keyset paging", () => {
           filters: Object.entries(sample.rows[0]).map(([field, value]) =>
             anyOf(field, value),
           ),
-          sort: { field: index.sort, direction },
-          thenBy: index.then?.map((field) => ({ field, direction })),
+          sort: { field: index.sort[0], direction },
+          thenBy: index.sort.slice(1).map((field) => ({ field, direction })),
         };
         const whole = await listPage(query, 150);
         const paged: string[] = [];

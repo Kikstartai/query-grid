@@ -17,7 +17,7 @@ import { canExpandNoneOf, expandNoneOf } from "./filter-values.ts";
 import { getField, type BaseGridDef, type GridRow } from "./grid-def.ts";
 import type { Filter, QueryState } from "./query-state.ts";
 import { TEST_DEF, TEST_INDEXES } from "./grid-def.fixture.ts";
-import { indexCapabilities } from "./indexes.ts";
+import { gridDefCapabilities } from "./indexes.ts";
 import { createMemorySource } from "./memory-source.ts";
 import { isLiteralOp, type FilterOp } from "./operators.ts";
 import {
@@ -56,13 +56,10 @@ const WIDE: BaseGridDef = {
 
 const NOT_OPEN: Filter = { field: "status", op: "none_of", values: ["open"] };
 
-function indexed(def: BaseGridDef, multi: boolean) {
+function indexed(def: BaseGridDef) {
   return withLiteralFilters(def, {
     ...createMemorySource(def, []),
-    capabilities: indexCapabilities(
-      TEST_INDEXES.map((index) => ({ ...index, multi })),
-      { facetField: "status" },
-    ),
+    capabilities: gridDefCapabilities({ ...def, indexes: TEST_INDEXES }),
   }).capabilities;
 }
 
@@ -172,8 +169,8 @@ describe("none of", () => {
     ]);
   });
 
-  test("it is offered where the remaining values run, and the store keeps the intent", () => {
-    const capabilities = indexed(TEST_DEF, true);
+  test("it is offered where the remaining values run, however many remain, and the store keeps the intent", () => {
+    const capabilities = indexed(TEST_DEF);
     const context = { capabilities, allSearchMatchesLoaded: false };
     expect(
       listOfferedFields(listOffers(TEST_DEF, BASE, context), "none_of"),
@@ -181,12 +178,12 @@ describe("none of", () => {
     expect(
       listOfferedFields(
         listOffers(WIDE, BASE, {
-          capabilities: indexed(WIDE, false),
+          capabilities: indexed(WIDE),
           allSearchMatchesLoaded: false,
         }),
         "none_of",
       ),
-    ).toEqual(["status"]);
+    ).toEqual(["status", "region"]);
     const store = createQueryStore(TEST_DEF, capabilities, BASE);
     store.dispatch({ type: "setFilter", filter: NOT_OPEN });
     expect(store.getQuery().filters).toEqual([NOT_OPEN]);
@@ -453,8 +450,11 @@ describe("several bound filters", () => {
     ).toEqual([]);
   });
 
-  test("an index-backed source takes one bound filter, on its sort", () => {
-    const capabilities = indexCapabilities(TEST_INDEXES);
+  test("an index-backed source bounds one range by its sort and runs a second over the narrowed set", () => {
+    const capabilities = gridDefCapabilities({
+      ...TEST_DEF,
+      indexes: TEST_INDEXES,
+    });
     const server = { capabilities, allSearchMatchesLoaded: false };
     const byTotal: QueryState = {
       ...BASE,
@@ -462,15 +462,16 @@ describe("several bound filters", () => {
       filters: [{ field: "total", op: "greater_or_equal", value: "1" }],
     };
     expect(capabilities.canRun(byTotal)).toBe(true);
+    expect(capabilities.isNarrowed(byTotal)).toBe(false);
     expect(
-      capabilities.canRun({
+      capabilities.isNarrowed({
         ...byTotal,
         filters: [
           ...byTotal.filters,
           { field: "created_at", op: "greater_or_equal", value: "2026-01-01" },
         ],
       }),
-    ).toBe(false);
+    ).toBe(true);
     const next = applyAction(
       TEST_DEF,
       byTotal,

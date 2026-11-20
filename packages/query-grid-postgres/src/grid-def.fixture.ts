@@ -43,10 +43,10 @@ export const TEST_DEF: PostgresGridDef = {
   ],
   search: ["name", "number"],
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: [], sort: "total", range: true },
-    { equals: ["status"], sort: "created_at" },
-    { equals: ["status"], sort: "total", range: true },
-    { equals: ["region"], sort: "created_at" },
+    { filter: [], sort: ["created_at"] },
+    { filter: [], sort: ["total"] },
+    { filter: ["status"], sort: ["created_at"] },
+    { filter: ["status"], sort: ["total"] },
+    { filter: ["region"], sort: ["created_at"] },
   ],
 };

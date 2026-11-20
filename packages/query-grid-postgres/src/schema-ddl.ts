@@ -1,7 +1,10 @@
 import {
   KEY_FIELD,
+  listArrayIndexed,
   listSearchFields,
-  type IndexDef,
+  listSortIndexes,
+  listTextIndexed,
+  type SortIndexDef,
 } from "@kikstart/query-grid";
 
 import {
@@ -27,7 +30,6 @@ export interface IndexDdl {
   kind: IndexKind;
   method: "btree" | "gin";
   columns: string[];
-  empty: string[];
   ddl: string;
 }
 
@@ -85,39 +87,31 @@ function searchIndex(
     kind: "search",
     method: "gin",
     columns: search.map(identifier),
-    empty: [],
     ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin ((${searchExpression(def)}) ${TRGM_OPS});`,
   };
 }
 
 function indexDdl(
   def: PostgresGridDef,
-  index: IndexDef,
+  index: SortIndexDef,
   concurrently: boolean,
 ): IndexDdl {
   const table = identifier(def.table);
   const create = createIndex(concurrently);
-  const order = [...index.equals, index.sort, ...(index.then ?? [])];
+  const order = [...index.filter, ...index.sort];
   const columns = [...order, KEY_FIELD]
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
-  const empty = [...(index.blank ?? [])].map(identifier).sort();
-  const suffix = empty.length > 0 ? `__empty_${empty.join("_")}` : "";
   const name = shortenIdentifier(
-    `${AUTO_PREFIX}${table}_${order.join("__")}${suffix}`,
+    `${AUTO_PREFIX}${table}_${order.join("__")}`,
   );
-  const where =
-    empty.length > 0
-      ? ` WHERE ${empty.map((column) => `${column} IS NULL`).join(" AND ")}`
-      : "";
   return {
     note: describeIndex(index),
     name,
     kind: "ordered",
     method: "btree",
     columns,
-    empty,
-    ddl: `${create} ${name} ON ${table} USING btree (${columns.join(", ")})${where};`,
+    ddl: `${create} ${name} ON ${table} USING btree (${columns.join(", ")});`,
   };
 }
 
@@ -148,7 +142,6 @@ function fieldIndex(
     kind,
     method: "gin",
     columns: [column],
-    empty: [],
     ddl: `${createIndex(concurrently)} ${name} ON ${table} USING gin (${column}${ops});`,
   };
 }
@@ -158,17 +151,17 @@ export function listIndexDdl(
   options: MigrationOptions = {},
 ): IndexDdl[] {
   const concurrently = options.concurrently ?? true;
-  const ordered = def.indexes.map((index) =>
+  const ordered = listSortIndexes(def.indexes).map((index) =>
     indexDdl(def, index, concurrently),
   );
   const search = listSearchFields(def);
   return [
     ...ordered,
     ...(search.length > 0 ? [searchIndex(def, search, concurrently)] : []),
-    ...(def.textIndexes ?? []).map((key) =>
+    ...listTextIndexed(def.indexes).map((key) =>
       fieldIndex(def, key, "text", concurrently),
     ),
-    ...(def.arrayIndexes ?? []).map((key) =>
+    ...listArrayIndexed(def.indexes).map((key) =>
       fieldIndex(def, key, "array", concurrently),
     ),
   ];
@@ -462,31 +455,17 @@ export function validateGridDefs(defs: PostgresGridDef[]): string[] {
 interface ParsedIndex {
   method: string;
   body: string;
-  empty: string[] | null;
-}
-
-const WHERE = " WHERE ";
-const IS_NULL = /^\(*([a-z_][a-z0-9_]*) IS NULL\)*$/;
-
-function parseEmpty(predicate: string): string[] | null {
-  const names = predicate.split(" AND ").map((part) => IS_NULL.exec(part)?.[1]);
-  return names.every((name) => name !== undefined)
-    ? (names as string[]).sort()
-    : null;
+  partial: boolean;
 }
 
 function parseIndexDef(indexdef: string): ParsedIndex | null {
-  const at = indexdef.indexOf(WHERE);
+  const at = indexdef.indexOf(" WHERE ");
   const head = at < 0 ? indexdef : indexdef.slice(0, at);
   const match = /USING (\w+) \((.*)\)$/.exec(head);
   if (!match) {
     return null;
   }
-  return {
-    method: match[1],
-    body: match[2],
-    empty: at < 0 ? [] : parseEmpty(indexdef.slice(at + WHERE.length)),
-  };
+  return { method: match[1], body: match[2], partial: at >= 0 };
 }
 
 function answers(index: IndexDdl, row: PgIndexRow): boolean {
@@ -494,7 +473,7 @@ function answers(index: IndexDdl, row: PgIndexRow): boolean {
   if (!parsed || parsed.method !== index.method || row.valid === false) {
     return false;
   }
-  if (parsed.empty?.join(",") !== index.empty.join(",")) {
+  if (parsed.partial) {
     return false;
   }
   if (index.kind === "text") {

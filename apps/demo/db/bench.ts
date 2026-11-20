@@ -6,15 +6,18 @@ import {
   defaultQuery,
   getField,
   isListFilter,
+  isRangeType,
+  listSortIndexes,
   listSorts,
+  listTextIndexed,
   resolveMaxValues,
   withThenBy,
   type Filter,
   type GridRow,
-  type IndexDef,
   type ListFilter,
-  type OneFilter,
   type QueryState,
+  type SortIndexDef,
+  type ValueFilter,
 } from "@kikstart/query-grid";
 import {
   buildCappedCountSql,
@@ -119,7 +122,7 @@ function percentile(sorted: number[], fraction: number): number {
 
 async function measure(
   client: Client,
-  index: IndexDef | string,
+  index: SortIndexDef | string,
   variant: string,
   sql: SqlQuery,
   settings: string[] | null,
@@ -219,15 +222,15 @@ function since(bound: string): Filter {
 
 async function pickEqualsValues(
   client: Client,
-  index: IndexDef,
+  index: SortIndexDef,
 ): Promise<Filter[]> {
-  if (index.equals.length === 0) {
+  if (index.filter.length === 0) {
     return [];
   }
-  const columns = index.equals.join(", ");
+  const columns = index.filter.join(", ");
   const { rows } = await client.query<Record<string, string>>(
     `SELECT ${columns} FROM (SELECT ${columns} FROM orders LIMIT 200000) sample
-     WHERE ${index.equals.map((key) => `${key} IS NOT NULL`).join(" AND ")}
+     WHERE ${index.filter.map((key) => `${key} IS NOT NULL`).join(" AND ")}
      GROUP BY ${columns} ORDER BY count(*) DESC LIMIT 1`,
   );
   return Object.entries(rows[0]).map(([key, value]) => anyOf(key, value));
@@ -237,13 +240,13 @@ type Frequency = "common" | "rare";
 
 async function pickSeveralValues(
   client: Client,
-  index: IndexDef,
+  index: SortIndexDef,
   size: number,
   frequency: Frequency,
 ): Promise<ListFilter[]> {
   const filters: ListFilter[] = [];
   const order = frequency === "common" ? "DESC" : "ASC";
-  for (const column of index.equals) {
+  for (const column of index.filter) {
     const { rows } = await client.query<{ value: string }>(
       `SELECT ${column} AS value FROM (SELECT ${column} FROM orders LIMIT 200000) sample
        WHERE ${column} IS NOT NULL
@@ -254,8 +257,8 @@ async function pickSeveralValues(
   return filters;
 }
 
-function listMultiSizes(index: IndexDef): number[] {
-  const caps = index.equals.map((key) => {
+function listMultiSizes(index: SortIndexDef): number[] {
+  const caps = index.filter.map((key) => {
     const field = getField(ORDERS_GRID_DEF, key);
     return field ? resolveMaxValues(field) : 1;
   });
@@ -264,7 +267,7 @@ function listMultiSizes(index: IndexDef): number[] {
 
 async function benchSeveral(
   client: Client,
-  index: IndexDef,
+  index: SortIndexDef,
 ): Promise<Result[]> {
   const results: Result[] = [];
   const seen = new Set<string>();
@@ -282,7 +285,7 @@ async function benchSeveral(
       const query: QueryState = {
         ...defaultQuery(ORDERS_GRID_DEF),
         filters,
-        sort: { field: index.sort, direction: "desc" },
+        sort: { field: index.sort[0], direction: "desc" },
       };
       results.push(
         await measure(
@@ -305,6 +308,28 @@ async function benchSeveral(
     }
   }
   return results;
+}
+
+const NUMBER_RANGES: Record<string, [string, string]> = {
+  total: ["20000", "60000"],
+  item_count: ["2", "4"],
+};
+
+function createRange(key: string): Filter | null {
+  const field = getField(ORDERS_GRID_DEF, key);
+  if (!field || !isRangeType(field.type)) {
+    return null;
+  }
+  const bounds = NUMBER_RANGES[key];
+  if (bounds) {
+    return { field: key, op: "between", min: bounds[0], max: bounds[1] };
+  }
+  return {
+    field: key,
+    op: "between",
+    min: new Date(Date.now() - 200 * 86_400_000).toISOString(),
+    max: new Date(Date.now() - 100 * 86_400_000).toISOString(),
+  };
 }
 
 async function pickDeepCursor(
@@ -340,7 +365,7 @@ async function pickDeepCursor(
 
 async function benchOrdered(
   client: Client,
-  index: IndexDef,
+  index: SortIndexDef,
 ): Promise<Result[]> {
   const filters = await pickEqualsValues(client, index);
   const results: Result[] = [];
@@ -349,9 +374,9 @@ async function benchOrdered(
       {
         ...defaultQuery(ORDERS_GRID_DEF),
         filters,
-        sort: { field: index.sort, direction },
+        sort: { field: index.sort[0], direction },
       },
-      (index.then ?? []).map((field) => ({ field, direction })),
+      index.sort.slice(1).map((field) => ({ field, direction })),
     );
   for (const direction of ["desc", "asc"] as const) {
     const query = ordered(direction);
@@ -393,16 +418,8 @@ async function benchOrdered(
   if (QUICK) {
     return results;
   }
-  if (index.range) {
-    const range: Filter =
-      index.sort === "total"
-        ? { field: "total", op: "between", min: "20000", max: "60000" }
-        : {
-            field: index.sort,
-            op: "between",
-            min: new Date(Date.now() - 200 * 86_400_000).toISOString(),
-            max: new Date(Date.now() - 100 * 86_400_000).toISOString(),
-          };
+  const range = createRange(index.sort[0]);
+  if (range) {
     const ranged: QueryState = { ...base, filters: [...base.filters, range] };
     results.push(
       await measure(
@@ -421,7 +438,7 @@ async function benchOrdered(
       ),
     );
   }
-  if (index.equals.length > 0 && index.multi !== false) {
+  if (index.filter.length > 0) {
     results.push(...(await benchSeveral(client, index)));
   }
   return results;
@@ -452,7 +469,7 @@ async function benchSearch(
   return results;
 }
 
-const TEXT_CASES: [OneFilter["op"], string][] = [
+const TEXT_CASES: [ValueFilter["op"], string][] = [
   ["contains", "Smith"],
   ["contains", "Mokoena"],
   ["contains", "mok"],
@@ -464,7 +481,7 @@ const TEXT_CASES: [OneFilter["op"], string][] = [
 async function benchTextIndexes(client: Client): Promise<Result[]> {
   const results: Result[] = [];
   const cases = QUICK ? TEXT_CASES.slice(1, 3) : TEXT_CASES;
-  for (const field of ORDERS_GRID_DEF.textIndexes) {
+  for (const field of listTextIndexed(ORDERS_GRID_DEF.indexes)) {
     for (const [op, value] of cases) {
       const query: QueryState = { ...BASE, filters: [{ field, op, value }] };
       const variant = `${op} “${value}”`;
@@ -513,16 +530,19 @@ async function benchCounters(client: Client): Promise<Result[]> {
 
 const BASE = defaultQuery(ORDERS_GRID_DEF);
 
-function listNullableIndexes(): IndexDef[] {
-  return ORDERS_GRID_DEF.indexes.filter(
+function listNullableIndexes(): SortIndexDef[] {
+  return listSortIndexes(ORDERS_GRID_DEF.indexes).filter(
     (index) =>
-      index.equals.length === 1 &&
-      getField(ORDERS_GRID_DEF, index.equals[0])?.nullable === true,
+      index.filter.length === 1 &&
+      getField(ORDERS_GRID_DEF, index.filter[0])?.nullable === true,
   );
 }
 
-async function benchEmpty(client: Client, index: IndexDef): Promise<Result[]> {
-  const [key] = index.equals;
+async function benchEmpty(
+  client: Client,
+  index: SortIndexDef,
+): Promise<Result[]> {
+  const [key] = index.filter;
   const options = getField(ORDERS_GRID_DEF, key)?.options ?? [];
   const [common] = options;
   const rare = options[options.length - 1];
@@ -540,7 +560,7 @@ async function benchEmpty(client: Client, index: IndexDef): Promise<Result[]> {
     const query: QueryState = {
       ...BASE,
       filters: [filter],
-      sort: { field: index.sort, direction: "desc" },
+      sort: { field: index.sort[0], direction: "desc" },
     };
     results.push(
       await measure(
@@ -823,9 +843,6 @@ function toMarkdown(results: Result[], total: number): string {
   const narrowed = results.filter((result) => result.kind === "narrow");
   const texts = results.filter((result) => result.kind === "text");
   const exported = results.filter((result) => result.kind === "export");
-  const optedOut = ORDERS_GRID_DEF.indexes
-    .filter((index) => index.multi === false)
-    .map(describeIndex);
   const lines = [
     `Measured ${new Date().toISOString().slice(0, 10)} over ${total.toLocaleString("en-US")} orders, ${RUNS} runs per query after ${WARM_UPS} warm-ups; time is planning plus execution from \`EXPLAIN (ANALYZE)\`, in ms.`,
     "",
@@ -845,10 +862,6 @@ function toMarkdown(results: Result[], total: number): string {
     "",
     ...toTable(counters),
     "",
-    optedOut.length > 0
-      ? `Indexes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
-      : "No index is declared `multi: false`.",
-    "",
     `## Blank values: ${summarize(empty)}`,
     "",
     "Each index on a nullable field, with blank, not blank, and blank beside real values, as a first page, a capped count and a capped total. The bar is the p95 budget alone: a mixed list reads through whichever plan stops first, and the plan is shown.",
@@ -863,7 +876,7 @@ function toMarkdown(results: Result[], total: number): string {
     "",
     `## Text filters with an index of their own: ${summarize(texts)}`,
     "",
-    `A contains, a starts-with and an ends-with on a field in \`textIndexes\`, as an ordered first page and a capped count, under the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget. The bar is that budget and an index scan; a run the server refuses at the budget is counted in the plan column.`,
+    `A contains, a starts-with and an ends-with on a field with a text index, as an ordered first page and a capped count, under the ${DEFAULT_LIMITS.searchBudgetMs} ms search budget. The bar is that budget and an index scan; a run the server refuses at the budget is counted in the plan column.`,
     "",
     ...toTable(texts),
     "",
@@ -892,12 +905,13 @@ async function main(): Promise<void> {
   );
   const total = Number(count.rows[0].count);
   const results: Result[] = [];
+  const sortIndexes = listSortIndexes(ORDERS_GRID_DEF.indexes);
   const indexes = QUICK
     ? [
-        ...ORDERS_GRID_DEF.indexes.slice(0, 3),
-        ...ORDERS_GRID_DEF.indexes.filter((index) => index.then?.length),
+        ...sortIndexes.slice(0, 3),
+        ...sortIndexes.filter((index) => index.sort.length > 1),
       ]
-    : ORDERS_GRID_DEF.indexes;
+    : sortIndexes;
   for (const index of indexes) {
     const batch = await benchOrdered(client, index);
     results.push(...batch);
@@ -906,7 +920,7 @@ async function main(): Promise<void> {
   for (const index of listNullableIndexes()) {
     const batch = await benchEmpty(client, index);
     results.push(...batch);
-    console.log(`blank values on ${index.equals[0]}: ${batch.length} queries`);
+    console.log(`blank values on ${index.filter[0]}: ${batch.length} queries`);
   }
   const filtered = await benchFilteredSearch(client);
   results.push(...filtered);

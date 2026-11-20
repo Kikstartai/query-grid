@@ -8,16 +8,15 @@ import {
   createTestSource,
   settle,
   TEST_DEF,
-  TEST_SEARCH_FIELDS,
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
 import { SourceError } from "./problems.ts";
 import { defaultQuery } from "./query-actions.ts";
-import { indexCapabilities } from "./indexes.ts";
+import { gridDefCapabilities } from "./indexes.ts";
 
-const CAPABILITIES = indexCapabilities(TEST_INDEXES, {
-  facetField: "status",
-  searchFields: TEST_SEARCH_FIELDS,
+const CAPABILITIES = gridDefCapabilities({
+  ...TEST_DEF,
+  indexes: TEST_INDEXES,
 });
 const BASE = defaultQuery(TEST_DEF);
 

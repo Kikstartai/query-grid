@@ -26,7 +26,6 @@ export type StoredDefResult =
 type Source = Record<string, unknown>;
 type FieldTest = (field: BaseFieldDef) => boolean;
 type FieldExtras = Omit<BaseFieldDef, "key" | "label" | "type">;
-type IndexExtrasDef = Omit<IndexDef, "equals" | "sort">;
 type DefExtras = Omit<
   IndexedGridDef,
   "id" | "fields" | "defaultSort" | "indexes"
@@ -80,7 +79,6 @@ const FIELD_FLAGS = [
   "hidden",
   "wrap",
 ] as const;
-const INDEX_FLAGS = ["range", "multi"] as const;
 
 const ROOT_KEYS = [
   "id",
@@ -91,8 +89,6 @@ const ROOT_KEYS = [
   "search",
   "orderField",
   "indexes",
-  "textIndexes",
-  "arrayIndexes",
 ];
 const FIELD_KEYS = [
   "key",
@@ -115,13 +111,14 @@ const OPTION_KEYS = ["value", "label"];
 const LOOKUP_KEYS = ["labelField"];
 const SORT_KEYS = ["field", "direction"];
 const FACET_KEYS = ["field"];
-const INDEX_KEYS = ["equals", "sort", "range", "multi", "blank", "then"];
+const SORT_INDEX_KEYS = ["filter", "sort"];
+const TEXT_INDEX_KEYS = ["text"];
+const ARRAY_INDEX_KEYS = ["array"];
 
 const TOTALS_RULE: RefRule = { max: 20, unique: true, accepts: isSummable };
 const SEARCH_RULE: RefRule = { max: 20, unique: true };
 const INDEX_COLUMNS_RULE: RefRule = { max: FIELDS_MAX, unique: false };
-const THEN_RULE: RefRule = { max: SORT_MAX - 1, unique: true };
-const OWN_INDEXES_RULE: RefRule = { max: 50, unique: true };
+const SORT_RULE: RefRule = { max: SORT_MAX, unique: true };
 
 function isSummable(field: BaseFieldDef): boolean {
   return (
@@ -592,34 +589,48 @@ function readFacet(value: unknown, path: string, run: Run): FacetDef | null {
   return field === null ? null : { field };
 }
 
-function readIndex(value: unknown, path: string, run: Run): IndexDef | null {
-  const source = readObject(value, path, INDEX_KEYS, run);
-  if (source === null) {
-    return null;
-  }
-  const equals = readFieldRefs(
-    pick(source, "equals"),
-    joinPath(path, "equals"),
+function readSortIndex(source: Source, path: string, run: Run): IndexDef | null {
+  readObject(source, path, SORT_INDEX_KEYS, run);
+  const filter = readFieldRefs(
+    pick(source, "filter"),
+    joinPath(path, "filter"),
     INDEX_COLUMNS_RULE,
     run,
   );
-  const sort = readFieldRef(pick(source, "sort"), joinPath(path, "sort"), run);
-  const extras: IndexExtrasDef = {};
-  for (const flag of INDEX_FLAGS) {
-    readOptional(extras, flag, source, path, (item, at) =>
-      readBoolean(item, at, run),
-    );
-  }
-  readOptional(extras, "blank", source, path, (item, at) =>
-    readFieldRefs(item, at, INDEX_COLUMNS_RULE, run),
+  const sort = readFieldRefs(
+    pick(source, "sort"),
+    joinPath(path, "sort"),
+    SORT_RULE,
+    run,
   );
-  readOptional(extras, "then", source, path, (item, at) =>
-    readFieldRefs(item, at, THEN_RULE, run),
-  );
-  if (equals === null || sort === null) {
+  return filter === null || sort === null ? null : { filter, sort };
+}
+
+function readOwnIndex(
+  source: Source,
+  path: string,
+  key: "text" | "array",
+  run: Run,
+): IndexDef | null {
+  readObject(source, path, key === "text" ? TEXT_INDEX_KEYS : ARRAY_INDEX_KEYS, run);
+  const column = readFieldRef(pick(source, key), joinPath(path, key), run);
+  if (column === null) {
     return null;
   }
-  return { equals, sort, ...extras };
+  return key === "text" ? { text: column } : { array: column };
+}
+
+function readIndex(value: unknown, path: string, run: Run): IndexDef | null {
+  if (!isPlainObject(value)) {
+    return invalid(run, path);
+  }
+  if (Object.hasOwn(value, "text")) {
+    return readOwnIndex(value, path, "text", run);
+  }
+  if (Object.hasOwn(value, "array")) {
+    return readOwnIndex(value, path, "array", run);
+  }
+  return readSortIndex(value, path, run);
 }
 
 function readIndexes(value: unknown, run: Run): IndexDef[] | null {
@@ -650,11 +661,6 @@ function readDefExtras(source: Source, run: Run): DefExtras {
   readOptional(extras, "orderField", source, ROOT_PATH, (value, at) =>
     readFieldRef(value, at, run, isOrderable),
   );
-  for (const key of ["textIndexes", "arrayIndexes"] as const) {
-    readOptional(extras, key, source, ROOT_PATH, (value, at) =>
-      readFieldRefs(value, at, OWN_INDEXES_RULE, run),
-    );
-  }
   return extras;
 }
 

@@ -2,19 +2,19 @@
 -- Run each statement on its own, outside a transaction: an index is built CONCURRENTLY, and the counter steps open their own transactions.
 -- The search and the text indexes are trigram indexes.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
--- no filter, sort created_at (range on created_at)
+-- no filter, sort created_at
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_created_at ON orders USING btree (created_at, id);
 -- Mark auto_orders_created_at as auto-created.
 COMMENT ON INDEX auto_orders_created_at IS 'Auto-created.';
--- no filter, sort total (range on total)
+-- no filter, sort total
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_total ON orders USING btree (total, id);
 -- Mark auto_orders_total as auto-created.
 COMMENT ON INDEX auto_orders_total IS 'Auto-created.';
--- status_code =, sort created_at (range on created_at)
+-- status_code =, sort created_at
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__created_at ON orders USING btree (status_code, created_at, id);
 -- Mark auto_orders_status_code__created_at as auto-created.
 COMMENT ON INDEX auto_orders_status_code__created_at IS 'Auto-created.';
--- status_code =, sort total (range on total)
+-- status_code =, sort total
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_status_code__total ON orders USING btree (status_code, total, id);
 -- Mark auto_orders_status_code__total as auto-created.
 COMMENT ON INDEX auto_orders_status_code__total IS 'Auto-created.';
@@ -22,7 +22,7 @@ COMMENT ON INDEX auto_orders_status_code__total IS 'Auto-created.';
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_customer_id__created_at ON orders USING btree (customer_id, created_at, id);
 -- Mark auto_orders_customer_id__created_at as auto-created.
 COMMENT ON INDEX auto_orders_customer_id__created_at IS 'Auto-created.';
--- region =, sort created_at (range on created_at)
+-- region =, sort created_at
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_region__created_at ON orders USING btree (region, created_at, id);
 -- Mark auto_orders_region__created_at as auto-created.
 COMMENT ON INDEX auto_orders_region__created_at IS 'Auto-created.';
@@ -30,7 +30,7 @@ COMMENT ON INDEX auto_orders_region__created_at IS 'Auto-created.';
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_channel__created_at ON orders USING btree (channel, created_at, id);
 -- Mark auto_orders_channel__created_at as auto-created.
 COMMENT ON INDEX auto_orders_channel__created_at IS 'Auto-created.';
--- assignee =, sort created_at (range on created_at)
+-- assignee =, sort created_at
 CREATE INDEX CONCURRENTLY IF NOT EXISTS auto_orders_assignee__created_at ON orders USING btree (assignee, created_at, id);
 -- Mark auto_orders_assignee__created_at as auto-created.
 COMMENT ON INDEX auto_orders_assignee__created_at IS 'Auto-created.';

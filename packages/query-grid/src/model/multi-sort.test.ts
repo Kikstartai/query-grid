@@ -22,7 +22,7 @@ import { listSorts, type QueryState } from "./query-state.ts";
 import { decodeQuery, encodeQuery } from "./query-url.ts";
 import { validateQueryValues } from "./query-validate.ts";
 
-const COMPOSITE: IndexDef = { equals: [], sort: "number", then: ["total"] };
+const COMPOSITE: IndexDef = { filter: [], sort: ["number", "total"] };
 const INDEXES: IndexDef[] = [...TEST_INDEXES, COMPOSITE];
 const DEF: IndexedGridDef = { ...TEST_DEF, indexes: INDEXES };
 const BASE = defaultQuery(DEF);
@@ -61,7 +61,7 @@ function context(rows: number | null): OfferContext {
 describe("an index declares a composite order", () => {
   test("the order is part of the index's identity", () => {
     expect(indexId(COMPOSITE)).toBe("|number>total");
-    expect(indexId({ equals: [], sort: "number" })).toBe("|number");
+    expect(indexId({ filter: [], sort: ["number"] })).toBe("|number");
   });
 
   test("it answers its columns in one direction, either way", () => {
@@ -70,18 +70,18 @@ describe("an index declares a composite order", () => {
         ["number", direction],
         ["total", direction],
       ]);
-      expect(getIndex(INDEXES, query)).toBe(COMPOSITE);
-      expect(planQuery(INDEXES, query)?.narrowed).toBe(false);
+      expect(getIndex(DEF, query)).toBe(COMPOSITE);
+      expect(planQuery(DEF, query)?.narrowed).toBe(false);
     }
   });
 
   test("it does not answer its first column alone, or mixed directions", () => {
-    expect(getIndex(INDEXES, sorted([["number", "asc"]]))).toBeNull();
+    expect(getIndex(DEF, sorted([["number", "asc"]]))).toBeNull();
     const mixed = sorted([
       ["number", "asc"],
       ["total", "desc"],
     ]);
-    expect(getIndex(INDEXES, mixed)).toBeNull();
+    expect(getIndex(DEF, mixed)).toBeNull();
     expect(isQueryRunnable(DEF, mixed)).toBe(false);
   });
 
@@ -106,7 +106,7 @@ describe("a further sort column with no index", () => {
   ]);
 
   test("runs over the narrowed set, on the first column's index", () => {
-    const plan = planQuery(INDEXES, query);
+    const plan = planQuery(DEF, query);
     expect(plan?.narrowed).toBe(true);
     expect(plan?.core.thenBy).toBeUndefined();
     expect(plan?.core.sort.field).toBe("created_at");
@@ -115,15 +115,18 @@ describe("a further sort column with no index", () => {
   });
 
   test("a text filter with an index joins the narrowed set, so the size probe never reads that index", () => {
-    const extras = { textIndexes: ["name"] };
+    const def: IndexedGridDef = {
+      ...DEF,
+      indexes: [...INDEXES, { text: "name" }],
+    };
     const texted: QueryState = {
       ...query,
       filters: [{ field: "name", op: "contains", value: "acme" }],
     };
-    const plan = planQuery(INDEXES, texted, extras);
+    const plan = planQuery(def, texted);
     expect(plan).toMatchObject({ narrowed: true, budgeted: false });
     expect(plan?.core.filters).toEqual([]);
-    const alone = planQuery(INDEXES, { ...texted, thenBy: undefined }, extras);
+    const alone = planQuery(def, { ...texted, thenBy: undefined });
     expect(alone).toMatchObject({ narrowed: false, budgeted: true });
   });
 
@@ -136,12 +139,12 @@ describe("a further sort column with no index", () => {
         { field: "region", op: "any_of", values: ["north"] },
       ],
     };
-    const plan = planQuery(INDEXES, either);
+    const plan = planQuery(DEF, either);
     expect(plan?.terms).toHaveLength(2);
     expect(plan?.terms?.every((term) => term.thenBy === undefined)).toBe(true);
   });
 
-  test("the core keeps a range on the first column before it keeps the order", () => {
+  test("a range on the first column of a composite order is answered by that index", () => {
     const ranged: QueryState = {
       ...sorted([
         ["number", "asc"],
@@ -149,11 +152,11 @@ describe("a further sort column with no index", () => {
       ]),
       filters: [{ field: "number", op: "between", min: "5", max: "9" }],
     };
-    const indexes = [...INDEXES, { equals: [], sort: "number", range: true }];
-    const plan = planQuery(indexes, ranged);
-    expect(plan?.narrowed).toBe(true);
+    expect(getIndex(DEF, ranged)).toBe(COMPOSITE);
+    const plan = planQuery(DEF, ranged);
+    expect(plan?.narrowed).toBe(false);
     expect(plan?.core.filters).toHaveLength(1);
-    expect(plan?.core.thenBy).toBeUndefined();
+    expect(plan?.core.thenBy).toHaveLength(1);
   });
 
   test("a nullable, an array or a repeated column is refused", () => {

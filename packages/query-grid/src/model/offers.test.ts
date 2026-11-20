@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { FilterOp } from "./operators.ts";
 import type { QueryState } from "./query-state.ts";
-import type { OfferContext } from "./capabilities.ts";
+import type { DataSourceCapabilities, OfferContext } from "./capabilities.ts";
 import {
   createTestSource,
   TEST_DEF,
-  TEST_SEARCH_FIELDS,
   TEST_INDEXES,
+  UNTIERED,
 } from "./grid-def.fixture.ts";
 import {
   applyAction,
@@ -19,26 +19,15 @@ import {
 import {
   isQueryIndexed,
   getIndex,
-  indexCapabilities,
+  gridDefCapabilities,
   indexId,
 } from "./indexes.ts";
-import type { IndexDef } from "./grid-def.ts";
+import type { IndexedGridDef } from "./grid-def.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
 
 const INDEXES = TEST_INDEXES;
+const DEF: IndexedGridDef = { ...TEST_DEF, indexes: INDEXES };
 const BASE = defaultQuery(TEST_DEF);
-const CAPABILITIES = indexCapabilities(INDEXES, {
-  facetField: "status",
-  searchFields: TEST_SEARCH_FIELDS,
-});
-const CAPPED: OfferContext = {
-  capabilities: CAPABILITIES,
-  allSearchMatchesLoaded: false,
-};
-const COMPLETE: OfferContext = {
-  capabilities: CAPABILITIES,
-  allSearchMatchesLoaded: true,
-};
 const RANGE_OPS: FilterOp[] = [
   "equals",
   "greater_than",
@@ -47,7 +36,25 @@ const RANGE_OPS: FilterOp[] = [
   "less_or_equal",
   "between",
 ];
-
+const CAPABILITIES: DataSourceCapabilities = {
+  ...gridDefCapabilities(DEF),
+  ...UNTIERED,
+  filterOps: {
+    created_at: RANGE_OPS,
+    total: RANGE_OPS,
+    status: ["any_of"],
+    region: ["any_of"],
+  },
+  canRun: (query) => query.group === null && isQueryIndexed(DEF, query),
+};
+const CAPPED: OfferContext = {
+  capabilities: CAPABILITIES,
+  allSearchMatchesLoaded: false,
+};
+const COMPLETE: OfferContext = {
+  capabilities: CAPABILITIES,
+  allSearchMatchesLoaded: true,
+};
 function listOffered(offers: Offers): Record<string, FilterOp[]> {
   return Object.fromEntries(
     Object.entries(offers.filters)
@@ -74,7 +81,6 @@ describe("offers from declared indexes", () => {
     });
     expect(offers).toEqual({
       filters: expect.any(Object),
-      multi: ["status"],
       sorts: ["created_at", "total"],
       thenBy: [],
       combineOr: false,
@@ -152,7 +158,7 @@ describe("offers from declared indexes", () => {
     expect(cleared.filters.some((filter) => filter.field === "status")).toBe(
       false,
     );
-    expect(getIndex(INDEXES, cleared)).not.toBeNull();
+    expect(getIndex(DEF, cleared)).not.toBeNull();
   });
 
   test("a search keeps the equality filters and holds the sort and the ranges", () => {
@@ -170,7 +176,6 @@ describe("offers from declared indexes", () => {
     });
     expect(offers).toEqual({
       filters: expect.any(Object),
-      multi: ["status", "region"],
       sorts: [],
       thenBy: [],
       combineOr: false,
@@ -251,20 +256,7 @@ describe("offers from declared indexes", () => {
     ).toBe(ranged);
   });
 
-  test("an index that opts out offers one value only", () => {
-    const single: IndexDef[] = INDEXES.map((index) =>
-      index.equals.includes("region") ? { ...index, multi: false } : index,
-    );
-    const context: OfferContext = {
-      capabilities: indexCapabilities(single),
-      allSearchMatchesLoaded: false,
-    };
-    const offers = listOffers(TEST_DEF, BASE, context);
-    expect(listOffered(offers)).toMatchObject({
-      status: ["any_of"],
-      region: ["any_of"],
-    });
-    expect(offers.multi).toEqual(["status"]);
+  test("any of always takes several values", () => {
     const one: QueryState = {
       ...BASE,
       filters: [{ field: "region", op: "any_of", values: ["north"] }],
@@ -277,9 +269,9 @@ describe("offers from declared indexes", () => {
           type: "setFilter",
           filter: { field: "region", op: "any_of", values: ["north", "south"] },
         },
-        context,
-      ),
-    ).toBe(one);
+        CAPPED,
+      ).filters,
+    ).toEqual([{ field: "region", op: "any_of", values: ["north", "south"] }]);
   });
 });
 
@@ -289,22 +281,12 @@ describe("reachable states", () => {
       const reached = new Set<string>();
       const states = enumerateReachableStates(TEST_DEF, context);
       for (const state of states) {
-        expect(isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, state)).toBe(true);
+        expect(isQueryIndexed(DEF, state)).toBe(true);
         if (state.search === null) {
-          reached.add(indexId(getIndex(INDEXES, state)!));
+          reached.add(indexId(getIndex(DEF, state)!));
         }
       }
       expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
-      expect(
-        states.some((state) =>
-          state.filters.some(
-            (filter) =>
-              filter.field === "status" &&
-              "values" in filter &&
-              filter.values.length > 1,
-          ),
-        ),
-      ).toBe(true);
     }
   });
 });

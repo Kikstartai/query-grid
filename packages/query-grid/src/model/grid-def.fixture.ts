@@ -6,11 +6,11 @@ import type { IndexDef } from "./grid-def.ts";
 export const TEST_SEARCH_FIELDS = ["name", "number"];
 
 export const TEST_INDEXES: IndexDef[] = [
-  { equals: [], sort: "created_at", range: true },
-  { equals: [], sort: "total", range: true },
-  { equals: ["status"], sort: "created_at" },
-  { equals: ["status"], sort: "total", range: true },
-  { equals: ["region"], sort: "created_at" },
+  { filter: [], sort: ["created_at"] },
+  { filter: [], sort: ["total"] },
+  { filter: ["status"], sort: ["created_at"] },
+  { filter: ["status"], sort: ["total"] },
+  { filter: ["region"], sort: ["created_at"] },
 ];
 
 export const TEST_DEF: BaseGridDef = {

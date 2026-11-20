@@ -10,9 +10,11 @@ import {
   getIndex,
   indexId,
   isListFilter,
+  listSortIndexes,
   TEXT_MATCH_OPS,
   toLiteralQuery,
   type OfferContext,
+  type QueryState,
 } from "@kikstart/query-grid";
 import { createHttpSource } from "@kikstart/query-grid/http";
 import {
@@ -23,7 +25,7 @@ import {
 import { GRID_DEFS, resolveMigrationFile } from "../grid-defs";
 import { ORDERS_API, ORDERS_GRID_DEF } from "./orders-grid-def";
 
-const INDEXES = ORDERS_GRID_DEF.indexes;
+const INDEXES = listSortIndexes(ORDERS_GRID_DEF.indexes);
 const CAPABILITIES = createHttpSource(ORDERS_GRID_DEF, ORDERS_API).capabilities;
 
 const CONTEXTS: OfferContext[] = [
@@ -55,16 +57,9 @@ describe("orders grid def", () => {
       const states = enumerateReachableStates(ORDERS_GRID_DEF, context);
       for (const state of states) {
         const literal = toLiteralQuery(ORDERS_GRID_DEF, state, null);
-        expect(
-          isQueryIndexed(
-            INDEXES,
-            ORDERS_GRID_DEF.search,
-            literal,
-            ORDERS_GRID_DEF,
-          ),
-        ).toBe(true);
+        expect(isQueryIndexed(ORDERS_GRID_DEF, literal)).toBe(true);
         if (state.search === null) {
-          reached.add(indexId(getIndex(INDEXES, literal, ORDERS_GRID_DEF)!));
+          reached.add(indexId(getIndex(ORDERS_GRID_DEF, literal)!));
         }
       }
       expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
@@ -84,32 +79,28 @@ describe("orders grid def", () => {
               .length > 1,
         ),
       ).toBe(false);
-      const several = states.filter(
-        (state) =>
-          state.search === null &&
-          state.filters.some(
-            (filter) => isListFilter(filter) && filter.values.length > 1,
-          ),
-      );
       expect(
         states.some(
           (state) => state.search !== null && state.filters.some(isListFilter),
         ),
       ).toBe(true);
-      const multiIndexes = INDEXES.filter(
-        (index) => index.equals.length > 0 && index.multi !== false,
-      );
-      expect(several.length > 0).toBe(multiIndexes.length > 0);
-      for (const state of several) {
-        const index = getIndex(
-          INDEXES,
-          toLiteralQuery(ORDERS_GRID_DEF, state, null),
-          ORDERS_GRID_DEF,
-        );
-        expect(index).not.toBeNull();
-      }
     }
   }, 30_000);
+
+  test("any of takes several values on every filter index", () => {
+    for (const index of INDEXES.filter((item) => item.filter.length > 0)) {
+      const query: QueryState = {
+        ...defaultQuery(ORDERS_GRID_DEF),
+        filters: index.filter.map((field) => ({
+          field,
+          op: "any_of",
+          values: ["x", "y"],
+        })),
+        sort: { field: index.sort[0], direction: "desc" },
+      };
+      expect(indexId(getIndex(ORDERS_GRID_DEF, query)!)).toBe(indexId(index));
+    }
+  });
 
   test("each table's migration is the one its defs generate", () => {
     const migrations = listTableMigrations(GRID_DEFS);

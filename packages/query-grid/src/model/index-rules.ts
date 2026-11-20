@@ -1,10 +1,10 @@
 import {
   getField,
-  isRangeType,
   KEY_FIELD,
   type BaseFieldDef,
   type IndexDef,
   type IndexedGridDef,
+  type SortIndexDef,
 } from "./grid-def.ts";
 import { indexId, isOverlapField, isTextField } from "./indexes.ts";
 import type { Problem, ProblemParams } from "./problems.ts";
@@ -14,14 +14,12 @@ export const INDEX_RULE_CODES = [
   "index_unknown_field",
   "index_duplicate",
   "index_nullable_sort",
-  "index_no_range",
-  "index_sort_is_equality",
+  "index_no_sort",
+  "index_sort_is_filter",
   "index_array_sort",
-  "index_array_equality",
-  "index_then_repeats",
+  "index_array_filter",
+  "index_sort_repeats",
   "index_order_too_long",
-  "index_never_blank",
-  "index_blank_is_filtered",
   "index_not_text",
   "index_not_array",
 ] as const;
@@ -67,48 +65,16 @@ function reportRepeats(check: Check, keys: string[], path: string): void {
   }
 }
 
-function checkSort(check: Check, index: IndexDef, path: string): boolean {
-  const at = `${path}.sort`;
-  const sort = getKnownField(check, index.sort, at);
-  if (!sort) {
-    return false;
+function checkSortColumns(
+  check: Check,
+  index: SortIndexDef,
+  path: string,
+): void {
+  if (index.sort.length === 0) {
+    report(check, "index_no_sort", { path: `${path}.sort` });
   }
-  const params = { path: at, field: index.sort };
-  if (sort.nullable) {
-    report(check, "index_nullable_sort", params);
-  }
-  if (index.range && !isRangeType(sort.type)) {
-    report(check, "index_no_range", {
-      path: `${path}.range`,
-      field: index.sort,
-      type: sort.type,
-    });
-  }
-  if (index.equals.includes(index.sort)) {
-    report(check, "index_sort_is_equality", params);
-  }
-  if (isOverlapField(sort)) {
-    report(check, "index_array_sort", params);
-  }
-  return true;
-}
-
-function checkEquals(check: Check, index: IndexDef, path: string): void {
-  for (const [at, key] of index.equals.entries()) {
-    const field = getKnownField(check, key, `${path}.equals.${at}`);
-    if (field && isOverlapField(field)) {
-      report(check, "index_array_equality", {
-        path: `${path}.equals.${at}`,
-        field: key,
-      });
-    }
-  }
-}
-
-function checkThen(check: Check, index: IndexDef, path: string): void {
-  const then = index.then ?? [];
-  for (const [at, key] of then.entries()) {
-    const params = { path: `${path}.then.${at}`, field: key };
+  for (const [at, key] of index.sort.entries()) {
+    const params = { path: `${path}.sort.${at}`, field: key };
     const field = getKnownField(check, key, params.path);
     if (!field) {
       continue;
@@ -119,58 +85,73 @@ function checkThen(check: Check, index: IndexDef, path: string): void {
     if (isOverlapField(field)) {
       report(check, "index_array_sort", params);
     }
-    if (index.equals.includes(key) || key === index.sort || key === KEY_FIELD) {
-      report(check, "index_then_repeats", params);
+    if (index.filter.includes(key)) {
+      report(check, "index_sort_is_filter", params);
+    }
+    if (at > 0 && key === KEY_FIELD) {
+      report(check, "index_sort_repeats", params);
     }
   }
-  reportRepeats(check, then, `${path}.then`);
-  if (then.length + 1 > SORT_MAX) {
+  reportRepeats(check, index.sort, `${path}.sort`);
+  if (index.sort.length > SORT_MAX) {
     report(check, "index_order_too_long", {
-      path: `${path}.then`,
+      path: `${path}.sort`,
       max: SORT_MAX,
     });
   }
 }
 
-function checkBlank(check: Check, index: IndexDef, path: string): void {
-  for (const [at, key] of (index.blank ?? []).entries()) {
-    const params = { path: `${path}.blank.${at}`, field: key };
-    const field = getKnownField(check, key, params.path);
-    if (!field) {
-      continue;
-    }
-    if (!field.nullable) {
-      report(check, "index_never_blank", params);
-    }
-    if (index.equals.includes(key) || key === index.sort) {
-      report(check, "index_blank_is_filtered", params);
-    }
-  }
-}
-
-function checkIndex(check: Check, index: IndexDef, path: string): void {
-  if (!checkSort(check, index, path)) {
-    return;
-  }
-  checkEquals(check, index, path);
-  checkThen(check, index, path);
-  checkBlank(check, index, path);
-}
-
-function checkOwnIndexes(
+function checkFilterColumns(
   check: Check,
-  keys: string[],
+  index: SortIndexDef,
+  path: string,
+): void {
+  for (const [at, key] of index.filter.entries()) {
+    const columnPath = `${path}.filter.${at}`;
+    const field = getKnownField(check, key, columnPath);
+    if (field && isOverlapField(field)) {
+      report(check, "index_array_filter", { path: columnPath, field: key });
+    }
+  }
+  reportRepeats(check, index.filter, `${path}.filter`);
+}
+
+function checkOwnIndex(
+  check: Check,
+  key: string,
   path: string,
   fits: FieldTest,
   code: IndexRuleCode,
 ): void {
-  for (const [at, key] of keys.entries()) {
-    const field = getKnownField(check, key, `${path}.${at}`);
-    if (field && !fits(field)) {
-      report(check, code, { path: `${path}.${at}`, field: key });
-    }
+  const field = getKnownField(check, key, path);
+  if (field && !fits(field)) {
+    report(check, code, { path, field: key });
   }
-  reportRepeats(check, keys, path);
+}
+
+function checkIndex(check: Check, index: IndexDef, path: string): void {
+  if ("text" in index) {
+    checkOwnIndex(
+      check,
+      index.text,
+      `${path}.text`,
+      isTextField,
+      "index_not_text",
+    );
+    return;
+  }
+  if ("array" in index) {
+    checkOwnIndex(
+      check,
+      index.array,
+      `${path}.array`,
+      isOverlapField,
+      "index_not_array",
+    );
+    return;
+  }
+  checkSortColumns(check, index, path);
+  checkFilterColumns(check, index, path);
 }
 
 export function listIndexProblems(def: IndexedGridDef): IndexProblem[] {
@@ -185,19 +166,5 @@ export function listIndexProblems(def: IndexedGridDef): IndexProblem[] {
     seen.add(id);
     checkIndex(check, index, path);
   }
-  checkOwnIndexes(
-    check,
-    def.textIndexes ?? [],
-    "textIndexes",
-    isTextField,
-    "index_not_text",
-  );
-  checkOwnIndexes(
-    check,
-    def.arrayIndexes ?? [],
-    "arrayIndexes",
-    isOverlapField,
-    "index_not_array",
-  );
   return check.problems;
 }

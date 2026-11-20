@@ -20,33 +20,46 @@ export const OPERATOR_SHAPES = [
 
 export type OperatorShape = (typeof OPERATOR_SHAPES)[number];
 
+export type IndexKind = "filter" | "sort" | "text" | "array";
+
 export interface OperatorDef {
   shape: OperatorShape;
   kinds: readonly FieldKind[];
+  index: readonly IndexKind[] | null;
 }
 
 const COMPARED = ["number", "date"] as const;
 const SETS = ["choice", "array"] as const;
+const TEXT_INDEX = ["text"] as const;
+const SORT_INDEX = ["sort"] as const;
 
 export const OPERATORS = {
-  equals: { shape: "one", kinds: ["text", ...COMPARED] },
-  not_equals: { shape: "one", kinds: ["text", ...COMPARED] },
-  contains: { shape: "one", kinds: ["text"] },
-  not_contains: { shape: "one", kinds: ["text"] },
-  starts_with: { shape: "one", kinds: ["text"] },
-  ends_with: { shape: "one", kinds: ["text"] },
-  greater_than: { shape: "one", kinds: COMPARED },
-  greater_or_equal: { shape: "one", kinds: COMPARED },
-  less_than: { shape: "one", kinds: COMPARED },
-  less_or_equal: { shape: "one", kinds: COMPARED },
-  between: { shape: "pair", kinds: COMPARED },
-  not_between: { shape: "pair", kinds: COMPARED },
-  in_period: { shape: "preset", kinds: ["date"] },
-  any_of: { shape: "list", kinds: SETS },
-  none_of: { shape: "list", kinds: SETS },
-  all_of: { shape: "list", kinds: ["array"] },
-  blank: { shape: "none", kinds: FIELD_KINDS },
-  not_blank: { shape: "none", kinds: ["text", ...COMPARED, "choice"] },
+  equals: {
+    shape: "one",
+    kinds: ["text", ...COMPARED],
+    index: ["filter", "sort"],
+  },
+  not_equals: { shape: "one", kinds: ["text", ...COMPARED], index: null },
+  contains: { shape: "one", kinds: ["text"], index: TEXT_INDEX },
+  not_contains: { shape: "one", kinds: ["text"], index: null },
+  starts_with: { shape: "one", kinds: ["text"], index: TEXT_INDEX },
+  ends_with: { shape: "one", kinds: ["text"], index: TEXT_INDEX },
+  greater_than: { shape: "one", kinds: COMPARED, index: SORT_INDEX },
+  greater_or_equal: { shape: "one", kinds: COMPARED, index: SORT_INDEX },
+  less_than: { shape: "one", kinds: COMPARED, index: SORT_INDEX },
+  less_or_equal: { shape: "one", kinds: COMPARED, index: SORT_INDEX },
+  between: { shape: "pair", kinds: COMPARED, index: SORT_INDEX },
+  not_between: { shape: "pair", kinds: COMPARED, index: null },
+  in_period: { shape: "preset", kinds: ["date"], index: SORT_INDEX },
+  any_of: { shape: "list", kinds: SETS, index: ["filter", "array"] },
+  none_of: { shape: "list", kinds: SETS, index: null },
+  all_of: { shape: "list", kinds: ["array"], index: ["array"] },
+  blank: { shape: "none", kinds: FIELD_KINDS, index: ["filter"] },
+  not_blank: {
+    shape: "none",
+    kinds: ["text", ...COMPARED, "choice"],
+    index: ["filter"],
+  },
 } as const satisfies Record<string, OperatorDef>;
 
 export type FilterOp = keyof typeof OPERATORS;
@@ -69,6 +82,10 @@ export function isFilterOp(value: string): value is FilterOp {
 
 export function getOperatorShape(op: FilterOp): OperatorShape {
   return OPERATORS[op].shape;
+}
+
+export function listIndexKinds(op: FilterOp): readonly IndexKind[] {
+  return OPERATORS[op].index ?? [];
 }
 
 export function resolveFieldKind(field: BaseFieldDef): FieldKind {

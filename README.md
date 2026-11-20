@@ -24,16 +24,16 @@ Three packages, released together at the same version.
 
 There is one query contract, in core. The React package encodes a query with core's `encodeQuery`, the Postgres package decodes it with core's `decodeQuery`, and both validate with core's `validateQueryValues`.
 
-| Entry point                             | Holds                                                                                                                                                                                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@kikstart/query-grid`                  | field and query types, `DataSourceCapabilities`, indexes and `indexCapabilities`, URL codec, validation, actions and offers, the stores, feeds and `createBoard`, chips, formatting, problem codes, the wire result types |
-| `@kikstart/query-grid/http`             | `createHttpSource`, and the protocol it shares with `createGridHandler`: route names, query parameters, the error and move bodies                                                                                         |
-| `@kikstart/query-grid/memory`           | `createMemorySource` and `memoryCapabilities`                                                                                                                                                                             |
-| `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState`, `useQueryGridActions`                                                                                                                    |
-| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, `useLocale`, `useCurrency`, the column-state API, `FieldDef` and `GridDef`                                                                    |
-| `@kikstart/query-grid-react/ui`         | the same components, by the same names, bound to the provider                                                                                                                                                             |
-| `@kikstart/query-grid-react/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                               |
-| `@kikstart/query-grid-postgres`         | `createGridHandler`, `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes`                                                                                      |
+| Entry point                             | Holds                                                                                                                                                                                                                       |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@kikstart/query-grid`                  | field and query types, `DataSourceCapabilities`, indexes and `gridDefCapabilities`, URL codec, validation, actions and offers, the stores, feeds and `createBoard`, chips, formatting, problem codes, the wire result types |
+| `@kikstart/query-grid/http`             | `createHttpSource`, and the protocol it shares with `createGridHandler`: route names, query parameters, the error and move bodies                                                                                           |
+| `@kikstart/query-grid/memory`           | `createMemorySource` and `memoryCapabilities`                                                                                                                                                                               |
+| `@kikstart/query-grid-react`            | `QueryGridProvider`, `StaticQueryGridProvider`, the read hooks, `useOfferState`, `useQueryGridActions`                                                                                                                      |
+| `@kikstart/query-grid-react/components` | the controlled base components, `QueryGridMessagesProvider`, `useMessages`, `useLocale`, `useCurrency`, the column-state API, `FieldDef` and `GridDef`                                                                      |
+| `@kikstart/query-grid-react/ui`         | the same components, by the same names, bound to the provider                                                                                                                                                               |
+| `@kikstart/query-grid-react/styles.css` | layout and look for the package's own elements, on UI SDK's `--ui-*` tokens                                                                                                                                                 |
+| `@kikstart/query-grid-postgres`         | `createGridHandler`, `validateGridDef`, the SQL builder and runner, the keyset cursor, `generateGridMigration`, `listMissingIndexes`                                                                                        |
 
 Every symbol has one home: nothing is exported from two entry points.
 
@@ -94,9 +94,10 @@ export const ORDERS_GRID_DEF = {
     { key: "item_count", label: "Items", type: "integer" },
   ],
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: ["status_code"], sort: "created_at", range: true },
-    { equals: ["status_code"], sort: "total", range: true },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["status_code"], sort: ["created_at"] },
+    { filter: ["status_code"], sort: ["total"] },
+    { text: "customer_name" },
   ],
   search: ["customer_name", "order_number"],
 } satisfies GridDef & PostgresGridDef;
@@ -258,11 +259,11 @@ interface DataSourceCapabilities {
 }
 ```
 
-- Core's `indexCapabilities(indexes, { facetField, searchFields, fields, textIndexes, arrayIndexes })` builds it from the same indexes the server enforces, so the controls offer exactly what the handler accepts. `createHttpSource` calls it with the def's indexes and facet, once per source. The index types and `getIndex` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
+- Core's `gridDefCapabilities(def)` builds it from the same indexes the server enforces, so the controls offer exactly what the handler accepts. `createHttpSource` calls it with the def, once per source. The index types and `getIndex` live in core for that reason: they describe what can be answered, and only what talks to Postgres lives in the Postgres package.
 - `memoryCapabilities(def)` builds it for the in-memory source, where every field takes every operator of its kind.
 - `holdsAllRows`, `searchIsOrdered` and `facetCountsFollowFilters` say how the source behaves instead of which kind it is: true for the in-memory source, false for an index-backed one.
 - **What may be filtered comes from the data alone.** A field def says nothing about filtering. `filterOps` names, per field, the operators the source could ever answer: on a server grid every operator of the field's kind that some tier answers (a choice field's `any of` and `none of` only when an index names it), on a client grid every operator of the field's kind. `canRun` then says, query by query, which can be used now. An operator that cannot be used now stays in the menu, disabled, with its reason.
-- **Every field gets one control**: an operator select and a value editor picked by the operator's shape (see "Operators"). `groupFields` is every equality field but a bare id. On a server grid many operators run over a narrowed set (see "The narrowed set"); `isNarrowed` says which query does, and `narrowLimited` that the source limits it at all.
+- **Every field gets one control**: an operator select and a value editor picked by the operator's shape (see "Operators"). `groupFields` is every field in an index's `filter` but a bare id. On a server grid many operators run over a narrowed set (see "The narrowed set"); `isNarrowed` says which query does, and `narrowLimited` that the source limits it at all.
 - Everything in the client that used to read indexes reads this instead: the provider's URL guard, `applyAction`, `listOffers`, the sort control, the search, the facet panel and the board.
 
 ## The two patterns
@@ -301,7 +302,7 @@ import { DataGrid, FacetPanel } from "@kikstart/query-grid-react/components";
 | `CardList`                                                 | the same row window, plus `titleField` and `badgeField`                                                                                                                              |
 | `StatusBoard`                                              | generic `lanes`, `onMove(id, to, { from, index })` and `canMove(from, to)`                                                                                                           |
 | `FilterBar`, `FilterSidebar`                               | children; the sidebar also takes `side: "start" \| "end"`, `activeCount` and `onReset`                                                                                               |
-| `FieldFilter`                                              | a `field`, its `ops` (each `{ op, disabled, reason, minLength }`), the `filter` and `onFilterChange`; `multiple`, and `loadOptions` for a lookup                                     |
+| `FieldFilter`                                              | a `field`, its `ops` (each `{ op, disabled, reason, minLength }`), the `filter` and `onFilterChange`; `loadOptions` for a lookup                                                     |
 | `EqualsSelect`                                             | a `field` with `options`, `values` (`null` is blank) and `onValuesChange`; `multiple`, `blank`                                                                                       |
 | `LookupFilter`                                             | the same, plus a required `loadOptions`, and `valueLabels` and `onOptionPick` for the chosen values' labels                                                                          |
 | `SortControl`, `SearchFilter`                              | options or a value, and one change callback                                                                                                                                          |
@@ -367,7 +368,7 @@ Filters are AND-combined unless Match any is on (see "The narrowed set"). Within
 - A list filter is `{ field, op: "any_of", values }`. In the URL its key repeats: `?f.status_code.any_of=paid&f.status_code.any_of=shipped`.
 - The SQL is `t.status_code = ANY($1::text[])` with one array parameter; one value stays `= $1`. Nothing is concatenated.
 - A list takes at most `maxValues` values, 20 unless the field says otherwise. Core validates it, `applyAction` refuses to pass it, and the server refuses it with `too_many_values` and the cap in `params`.
-- An index accepts several values on its equality fields unless it sets `multi: false`. The capabilities then offer one value only for it, and `Offers.multi` lists the fields that take several right now.
+- Every index takes several values on its filter fields. No index opts out, and every list editor takes several values.
 - A list editor is a UI SDK Select in `multiple` mode, or a Combobox with chips for a lookup field. `FilterChips` shows one chip per filter, listing its values, each with its own remove button.
 - Several values of the facet field read the sum of their counters, for the count, the totals and the facet panel. The board shows one lane per selected value.
 - The in-memory source matches any of the values.
@@ -407,19 +408,19 @@ A filter is `{ field, op, … }`, and `op` is a key of one table, `OPERATORS` in
 
 - **On a server grid** an operator is answered by an index, by an index of its own under the search budget, or over the narrowed set:
 
-| Operator                                    | Index                                                                                                  | Own index, budgeted                         | Narrowed set                                     |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------------------------ |
-| `any_of`, `blank`, `not_blank`              | the field is in an index's `equals` (`blank` also on a partial index's `blank`, beside its equalities) | –                                           | `blank`, `not_blank` on any other nullable field |
-| `none_of` on a field with options           | after the browser rewrites it to `any_of` the rest                                                     | –                                           | –                                                |
-| `none_of` on a lookup                       | –                                                                                                      | –                                           | always                                           |
-| `equals` on a number or a date              | the field is in an index's `equals`, or is the sort of an index with `range`                           | –                                           | otherwise                                        |
-| `greater_than` … `between`                  | the first one on the sort of an index with `range`                                                     | –                                           | otherwise                                        |
-| `not_equals`, `not_between`, `not_contains` | –                                                                                                      | –                                           | always                                           |
-| `contains`, `starts_with`, `ends_with`      | –                                                                                                      | a `textIndexes` field, 3 characters or more | otherwise                                        |
-| `equals` on text                            | an equality field                                                                                      | –                                           | otherwise                                        |
-| array `any_of`, `all_of`                    | –                                                                                                      | an `arrayIndexes` field (`&&`, `@>`)        | otherwise                                        |
-| array `none_of`, `blank`                    | –                                                                                                      | –                                           | always                                           |
-| `in_period`                                 | as `between`, after the browser resolves it                                                            | –                                           | –                                                |
+| Operator                                    | Index                                                           | Own index, budgeted                                   | Narrowed set                                     |
+| ------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------ |
+| `any_of`, `blank`, `not_blank`              | the field is in an index's `filter`                             | –                                                     | `blank`, `not_blank` on any other nullable field |
+| `none_of` on a field with options           | after the browser rewrites it to `any_of` the rest              | –                                                     | –                                                |
+| `none_of` on a lookup                       | –                                                               | –                                                     | always                                           |
+| `equals` on a number or a date              | the field is in an index's `filter`, or is an index's `sort[0]` | –                                                     | otherwise                                        |
+| `greater_than` … `between`                  | the first one on an index's `sort[0]`, a number or a date       | –                                                     | otherwise                                        |
+| `not_equals`, `not_between`, `not_contains` | –                                                               | –                                                     | always                                           |
+| `contains`, `starts_with`, `ends_with`      | –                                                               | a `{ text }` index on the field, 3 characters or more | otherwise                                        |
+| `equals` on text                            | the field is in an index's `filter`                             | –                                                     | otherwise                                        |
+| array `any_of`, `all_of`                    | –                                                               | an `{ array }` index on the field (`&&`, `@>`)        | otherwise                                        |
+| array `none_of`, `blank`                    | –                                                               | –                                                     | always                                           |
+| `in_period`                                 | as `between`, after the browser resolves it                     | –                                                     | –                                                |
 
 - **Blank.** `blank` and `not_blank` exist on a field the def marks `nullable`, as `IS NULL` and `IS NOT NULL` (an array's `blank` also holds an empty one). `null` in an `any_of` list is "or blank": `?f.assignee.any_of=glen&f.assignee.any_of=_empty` for "Glen or nobody", as `(assignee = ANY($1) OR assignee IS NULL)`, a choice the list offers as `(blank)`.
 - **None of.** On a field with a fixed list of values `none_of` is intent: the URL keeps it, `?f.status_code.none_of=cancelled`, and when the query runs it becomes `any_of` the remaining values (and blank, on a nullable field), so the server sees an ordinary `= ANY` and an option added later is included. It is not offered when nothing would remain or the remaining list would pass `maxValues`. On a lookup `none_of` is `(col <> ALL($1) OR col IS NULL)` over the narrowed set.
@@ -427,7 +428,7 @@ A filter is `{ field, op, … }`, and `op` is a key of one table, `OPERATORS` in
 - `none_of` on fixed values and `in_period` are intent the browser resolves. `toLiteralQuery(def, query, now)` turns both into literal filters, `withLiteralFilters` does it around a data source at fetch time, and both built-in sources are wrapped. The server never sees either and refuses both with `literal_required`; an operator the field's kind does not take is `invalid_op`.
 - **A negation keeps a blank cell.** `not_equals`, `not_between`, `not_contains` and `none_of` match a row whose field is blank. A range is written as its two outer sides, `(col < $1 OR col > $2 OR col IS NULL)`, never as `NOT (…)`.
 - **A day.** On a `datetime` field a day means the whole of it: `equals 2026-03-01` is that day's two ends, `greater_than` is past its last instant and `less_than` short of its first. A full instant compares exactly.
-- **Text.** `contains`, `starts_with` and `ends_with` ignore case (`ILIKE`, with the value's `%` and `_` escaped); `equals` and `not_equals` compare the exact text, so `equals` on an equality field is `name = $1` on its own index. A field may carry several filters: `?f.name.contains=invoice&f.name.not_contains=draft`.
+- **Text.** `contains`, `starts_with` and `ends_with` ignore case (`ILIKE`, with the value's `%` and `_` escaped); `equals` and `not_equals` compare the exact text, so `equals` on a field in an index's `filter` is `name = $1` on that index. A field may carry several filters: `?f.name.contains=invoice&f.name.not_contains=draft`.
 - **One control per field.** The operator select lists what the source could ever answer for the field; one it cannot answer now is listed, disabled, with its reason, and a text operator answered only by a text index asks for three characters. The value editor follows the operator's shape: a list is the select or the lookup, one value a number input, a date picker or a text input, a pair two of them, a preset the period select, and `blank` nothing. Changing the operator keeps what it can of the value.
 - **Chips** read as a sentence: `Total greater or equal R 500,00`, `Created between 2026-03-01 and 2026-03-31`, `Name starts with “inv”`, `Note blank`, `Status any of:` with a removable chip per value. The words are `messages.ops.<kind>.<op>` and `chipOne`, `chipPair`, `chipList`, `chipNone`.
 - **A query holds up to 20 filters** (`FILTER_MAX`); the server refuses more with `too_many_filters`.
@@ -435,7 +436,7 @@ A filter is `{ field, op, … }`, and `op` is a key of one table, `OPERATORS` in
 
 ### Text and array indexes
 
-Two kinds of filter have an index of their own, declared on the def beside `indexes`:
+Two kinds of filter have an index of their own, declared as members of `indexes`:
 
 ```ts
 export const FILES_GRID_DEF = {
@@ -443,22 +444,22 @@ export const FILES_GRID_DEF = {
   table: "files",
   fields: FILE_FIELDS,
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
+    { filter: [], sort: ["created_at"] },
+    { filter: ["folder_id", "deleted_at"], sort: ["created_at"] },
+    { text: "name" },
+    { array: "tags" },
   ],
-  textIndexes: ["name"],
-  arrayIndexes: ["tags"],
   defaultSort: { field: "created_at", direction: "desc" },
 } satisfies GridDef & PostgresGridDef;
 ```
 
-- **`textIndexes`** names text fields with a trigram GIN index each: `CREATE INDEX … USING gin (name gin_trgm_ops)`. A contains, a starts-with or an ends-with of three characters or more on such a field is answered at any table size. It keeps the order and the keyset paging of the grid, beside equality filters and a range on the sort, and it runs under the search's time budget: past `searchBudgetMs` the server answers `too_broad`.
-- **`arrayIndexes`** names array fields with a GIN index each: `CREATE INDEX … USING gin (tags)`. An `any of` (`&&`) or an `all of` (`@>`) on such a field runs the same way, under the same budget.
+- **`{ text: "name" }`** is a trigram GIN index on one text column: `CREATE INDEX … USING gin (name gin_trgm_ops)`. A contains, a starts-with or an ends-with of three characters or more on such a field is answered at any table size. It keeps the order and the keyset paging of the grid, beside equality filters and a range on the sort, and it runs under the search's time budget: past `searchBudgetMs` the server answers `too_broad`.
+- **`{ array: "tags" }`** is a GIN index on one array column: `CREATE INDEX … USING gin (tags)`. An `any of` (`&&`) or an `all of` (`@>`) on such a field runs the same way, under the same budget.
 - **Without the index** the same filters are offered over the narrowed set, like a range off the sort. So are a text value under three characters, `not_contains` and `not_equals`: no index answers those.
 - **One narrowed part narrows them all.** A text filter with an index beside any narrowed part (a second range, a negation, a text filter without an index) joins the narrowed set, so the count that sizes the set is never a trigram scan.
 - **They cost a write each.** A GIN index is written on every insert and on every update of its column. Declare one for the fields people filter by text, not for every text field.
-- **`blank`** on an index (named `empty` before) names nullable fields that are blank in every row it holds: a partial index, `… WHERE deleted_at IS NULL`. It answers a query that filters those fields with `blank` beside its equality fields, on its sort; `blank` on the field alone runs over the narrowed set. It is usually a scope's field (see "Scopes"). A partial index is never the index of the unfiltered grid. A plain index with the field among its `equals` answers the same query; the partial one is smaller when most rows are not blank. The index name and its DDL are unchanged by the rename.
-- `validateGridDef` checks all three, `generateGridMigration` writes them, and `listMissingIndexes` finds each in `pg_indexes` by its own shape, the `WHERE` of a partial index included.
+- **Blank has no index kind of its own.** `blank` and `not_blank` on a field in an index's `filter` are answered by that index, beside its other filter fields, like `deleted_at` above; on any other nullable field they run over the narrowed set. A field a scope holds blank is usually one (see "Scopes"). There are no partial indexes.
+- `validateGridDef` checks all three kinds, `generateGridMigration` writes them, and `listMissingIndexes` finds each in `pg_indexes` by its own shape. A partial index never counts.
 
 On the demo's 620,000 orders a `customer_name` text filter returns its ordered first page in at most 17.2 ms and its capped count in at most 24.2 ms at p95, against the 120 ms budget, and a value nothing matches answers in under 1 ms. For a common value the planner walks the sort index and filters; for a rare one it reads the trigram index and sorts.
 
@@ -511,7 +512,7 @@ A scope is a filter the user did not choose and cannot see: the folder a file li
 - A `QueryScope` holds `filters`, in the same shape as the query's.
 - **It is ANDed into every read**: the page, the count, the totals, the groups and the narrowed size. `withScope(source, scope)` is the wrapper the provider applies; a host that builds its own stores calls it itself. It is built on `mapSourceQueries`, which lists every member of a data source that takes a query, so a wrapper of your own that rewrites queries cannot miss one.
 - **It is never the user's.** The query, the URL, the chips and the active-filter count hold only what the user picked. A scoped field has no control, no URL key and is no group, so the page's address bar cannot widen the scope either. A request written by hand still can: see the last point.
-- **It decides what runs.** The capabilities answer for the scoped query, so on a server grid a scope needs an index like any filter: the scope's fields lead the `equals` of the indexes the grid uses, or sit in a partial index's `blank`.
+- **It decides what runs.** The capabilities answer for the scoped query, so on a server grid a scope needs an index like any filter: the scope's fields sit in the `filter` of the indexes the grid uses.
 - **Match any is withdrawn** while a scope is set. It would OR the scope with the user's filters.
 - **Facet counts** follow the scope on a client grid. A server grid's counter table counts the whole table, so its facet counts are not shown under a scope.
 - **Lookup options are not scoped.** `fetchOptions` takes a field and a search text, never the query, so a lookup under a scope may list a value no row in the scope has.
@@ -530,7 +531,14 @@ A scope is a filter the user did not choose and cannot see: the folder a file li
 | `equalsFields`, `rangeFields`, `textFields`, `overlapFields`             | `filterOps`                                                           |
 | `Offers.equals`, `exclude`, `ranges`, `narrowRanges`, `texts`, …         | `Offers.filters`, per field and operator                              |
 | `RangeFilter`, `TextFilter`, the `≠` toggle, the `texts` prop            | one `FieldFilter` per field                                           |
-| `IndexDef.empty`                                                         | `IndexDef.blank`                                                      |
+| index `{ equals, sort, then }`                                           | `{ filter, sort }`, two field lists; `then` is the rest of `sort`     |
+| `range: true` on an index                                                | nothing: a number or date `sort[0]` answers ranges                    |
+| `multi: false`, `Offers.multi`                                           | nothing: `any_of` always takes several values                         |
+| `IndexDef.empty`, then `blank` (a partial index)                         | nothing: a field in an index's `filter` answers `blank`               |
+| `textIndexes`, `arrayIndexes` on the def                                 | `{ text }` and `{ array }` members of `indexes`                       |
+| `indexCapabilities(indexes, …)`, `isTextIndexed`, `isOverlapIndexed`     | `gridDefCapabilities(def)`; the planner functions take the def        |
+| `planQuery(indexes, query, extras)`                                      | `planQuery(def, query, ordered?)`                                     |
+| `OneFilter`, `PairFilter`, `PresetFilter`, `NoneFilter`                  | `ValueFilter`, `BetweenFilter`, `PeriodFilter`, `BlankFilter`         |
 | `f.x=v`, `r.x=a..b`, `c.x=`, `o.x=` …                                    | `f.<field>.<op>=<value>`; the old keys are ignored                    |
 
 ### Renamed since 0.4.0
@@ -581,22 +589,22 @@ const handle = createGridHandler({
 Some operations have no index to answer them at any size: an OR across fields, a range the index does not bound, a second range on a field, a negation (`not_equals`, `not_between`, `not_contains`, `none_of` on a lookup), a text or array filter on a field with no index of its own, and `blank` on a field no index holds. They are allowed over a **narrowed set**: the rows the indexed filters leave, when those number at most `narrowLimit`.
 
 - **Match all / Match any.** A toggle on the filter bar. Match any ORs the filters. Each one is counted through its own index and the counts are summed; the sum is the set.
-- **Ranges on any date or number field.** A range on the sort field of an index with `range` is still answered by that index. Any other range, and a second one, is a filter over the narrowed rows.
-- **Text filters.** `?f.note.contains=gift` is `note ILIKE '%gift%'` over the narrowed rows; a field in `textIndexes` skips the narrowed set (see "Text and array indexes").
+- **Ranges on any date or number field.** A range on a number or date field that is an index's `sort[0]` is still answered by that index while the grid sorts by it. Any other range, and a second one, is a filter over the narrowed rows.
+- **Text filters.** `?f.note.contains=gift` is `note ILIKE '%gift%'` over the narrowed rows; a field with a `{ text }` index skips the narrowed set (see "Text and array indexes").
 - **Negations, blanks and arrays.** `not_between`, `not_equals`, `not_contains` and `none_of` on a lookup are always filters over the narrowed rows. So are `blank` and `not_blank` on a field no index holds, and an array filter on a field with no index.
 - **The size** comes from the count the grid already has: the indexed filters counted up to the limit, or read exactly from the counter table when they filter on the facet alone. A small table qualifies with no filter at all. `GET /narrowed` answers it and the offers read it.
 - **Over the limit** the controls stay visible and are held with the reason: `Narrow by Status or Customer account first: 620 000 rows.` in the control's `title`, and as text in the sidebar.
 - **The server checks again.** Before a narrowed query runs it counts the core itself and refuses past the limit with `narrow_first`, so a typed URL cannot run one. The statement then runs with `enable_seqscan = off`; the executor's statement timeout stays the safety net.
 - **The in-memory source** takes all of them with no limit.
 
-`planQuery(indexes, query, extras)` is the split: the core an index answers, whether anything runs over its rows (`narrowed`), and whether the core holds a filter with an index of its own (`budgeted`). `extras` is the def's `textIndexes` and `arrayIndexes`. A query already over a narrowed set may change its filters; if that widens the set past the limit, the grid shows the refusal and the way back.
+`planQuery(def, query)` is the split: the core an index answers, whether anything runs over its rows (`narrowed`), and whether the core holds a filter with an index of its own (`budgeted`). With `ordered` set it ignores the text and array indexes, so a size is always counted through a btree. A query already over a narrowed set may change its filters; if that widens the set past the limit, the grid shows the refusal and the way back.
 
 ## Grouping
 
 `?group=status_code` groups the grid by one field. There are no nested groups.
 
 - **By the counted field** the headers are the counter table: each value's count and every total, in one read, at any table size. With another filter active they fall back to one capped live count per value, like the grid's own count, and carry no sums.
-- **By any other equality field** the headers are one live `GROUP BY` over the narrowed rows, so the option is held until the indexed filters leave at most `narrowLimit` rows. A lookup field's label is read in the same statement; an empty value is its own group; past 200 groups the list is cut and says so.
+- **By any other filter field** the headers are one live `GROUP BY` over the narrowed rows, so the option is held until the indexed filters leave at most `narrowLimit` rows. A lookup field's label is read in the same statement; an empty value is its own group; past 200 groups the list is cut and says so.
 - **Rows** load per group. Opening a group starts a keyset feed for the query with that value added, the same feed a board lane uses; a collapsed group loads nothing, and each open group has its own Load more.
 - `DataGrid` takes `groups`, and renders header rows, the rows of open groups and a load-more row in the one virtual list. The bound `DataGrid` builds them from `createGrouping`. `GroupControl` is the select that sets the field, in the default filter bar after the sort.
 - The count and the totals in the page header stay the query's own.
@@ -607,12 +615,12 @@ A sort is a first column and up to two more (`SORT_MAX` is 3). `QueryState.sort`
 
 ```ts
 indexes: [
-  { equals: [], sort: "created_at", range: true },
-  { equals: [], sort: "item_count", then: ["total"] },
+  { filter: [], sort: ["created_at"] },
+  { filter: [], sort: ["item_count", "total"] },
 ],
 ```
 
-- **An index declares a composite order** with `then`. It is one btree over the equality columns, the sort, the `then` columns and the key, and it answers that order at any table size, both ways: a page is `(item_count, total, id) < ($1, $2, $3)`, one row comparison over the whole sort key.
+- **An index declares a composite order** with more than one `sort` column. It is one btree over the filter columns, the sort columns and the key, and it answers that order at any table size, both ways: a page is `(item_count, total, id) < ($1, $2, $3)`, one row comparison over the whole sort key.
 - **One direction for every column.** One index read forward or backward gives every column the same direction, so `item_count desc, total desc` and `asc, asc` are the index's and `desc, asc` is not.
 - **Any other further column runs over the narrowed set**: a column no index orders, or one that runs the other way. The first column still needs its index. The page reads the rows the indexed filters leave, at most `narrowLimit`, and sorts them; its keyset is spelled out column by column behind a bound on the first, so a deep page still starts at the cursor.
 - **A further column must have a value in every row** on a server grid: a nullable or an array field is never one, and neither is the key.
@@ -764,7 +772,7 @@ if (!result.ok) {
 const def = { ...result.def, table: "orders" } satisfies PostgresGridDef;
 ```
 
-- It accepts the core def and its indexes: `id`, `fields`, `defaultSort`, `facet`, `totals`, `search`, `orderField`, `indexes`, `textIndexes`, `arrayIndexes`.
+- It accepts the core def and its indexes: `id`, `fields`, `defaultSort`, `facet`, `totals`, `search`, `orderField` and `indexes`, each `{ filter, sort }`, `{ text }` or `{ array }`.
 - **It checks the shape, not the truth.** A stored def can name any column and claim any index. Pass `{ fields: [...] }` to hold it to the columns it may show, so a stored def cannot reach one the host never meant to expose, and run `listMissingIndexes` against the database before serving it: an index the def declares and the table lacks is a sort over the whole table.
 - An unknown key is `stored_unknown_key`, a wrong shape `stored_invalid`, a reference to a field the def lacks `stored_unknown_field`, a repeat `stored_duplicate` and an oversized list `stored_too_many`. It never throws and reports up to 50 problems.
 - **Storage is the host's.** `table` and `counterTable` are refused, so stored JSON never names a table; the host adds them and runs `validateGridDef` for the Postgres rules.
@@ -945,37 +953,56 @@ One field description drives the grid and the filters. Core's `BaseFieldDef` car
 
 The def then declares its **indexes**. An index is the unit the data layer answers, because a filter plus a sort is fast only when one index serves both:
 
-- an ordered index is a set of equality filters, one sort, optionally a range on that sort column, `multi: false` when its equality fields take one value only, and `empty` for the fields a partial index holds only empty
+```ts
+// A btree over the filter columns, the sort columns and the key.
+interface SortIndexDef {
+  filter: string[];
+  sort: string[];
+}
+// A GIN trigram index on one text column.
+interface TextIndexDef {
+  text: string;
+}
+// A GIN index on one array column.
+interface ArrayIndexDef {
+  array: string;
+}
+type IndexDef = SortIndexDef | TextIndexDef | ArrayIndexDef;
+```
+
+- a sort index answers `any_of`, `equals`, `blank` and `not_blank` on its `filter` fields, its order, and a range on `sort[0]` when that is a number or a date
+- a text index answers `contains`, `starts_with` and `ends_with`, and an array index `any_of` and `all_of`, under the search budget
 - the def's `search` is a list of columns matched by substring
-- `textIndexes` and `arrayIndexes` name the fields with a trigram or an array index of their own
 
-The demo's orders grid declares eleven ordered indexes and the search:
+The demo's orders grid declares eleven sort indexes, one text index and the search:
 
-| Index                                           | Index                           |
-| ----------------------------------------------- | ------------------------------- | ------------- | ----------- | ------------- | ----------------- |
-| no filter, sort `created_at`, range             | `(created_at, id)`              |
-| no filter, sort `total`, range                  | `(total, id)`                   |
-| `status_code =`, sort `created_at`, range       | `(status_code, created_at, id)` |
-| `status_code =`, sort `total`, range            | `(status_code, total, id)`      |
-| `customer_id =`, sort `created_at`              | first and deep, both directions | 0.92 / 1.04   | 2.74 / 2.91 | 12.41 / 17.86 | Index Scan        |
-| `region =`, sort `created_at`, range            | `(region, created_at, id)`      |
-| `channel =`, sort `created_at`                  | first and deep, both directions | 0.97 / 1.07   | 5.92 / 6.48 | 10.97 / 12.29 | Index Scan        |
-| `status_code =`, `region =`, sort `created_at`  | first and deep, both directions | 0.93 / 1.20   | 2.86 / 3.07 | 12.47 / 14.29 | Index Scan        |
-| `status_code =`, `channel =`, sort `created_at` | first and deep, both directions | 1.01 / 1.25   | 2.85 / 3.87 | 12.78 / 17.10 | Index Scan        |
-| search over `customer_name`, `order_number`     | 8 terms                         | 15.03 / 19.00 | none        | none          | Bitmap Index Scan |
-| no filter, sort `item_count`, then `total`      | `(item_count, total, id)`       |
+| Index                                           | Columns                                        |
+| ----------------------------------------------- | ---------------------------------------------- |
+| no filter, sort `created_at`                    | `(created_at, id)`                             |
+| no filter, sort `total`                         | `(total, id)`                                  |
+| `status_code =`, sort `created_at`              | `(status_code, created_at, id)`                |
+| `status_code =`, sort `total`                   | `(status_code, total, id)`                     |
+| `customer_id =`, sort `created_at`              | `(customer_id, created_at, id)`                |
+| `region =`, sort `created_at`                   | `(region, created_at, id)`                     |
+| `channel =`, sort `created_at`                  | `(channel, created_at, id)`                    |
+| `assignee =`, sort `created_at`                 | `(assignee, created_at, id)`                   |
+| `status_code =`, `region =`, sort `created_at`  | `(status_code, region, created_at, id)`        |
+| `status_code =`, `channel =`, sort `created_at` | `(status_code, channel, created_at, id)`       |
+| no filter, sort `item_count`, then `total`      | `(item_count, total, id)`                      |
+| text match on `customer_name`                   | `gin (customer_name gin_trgm_ops)`             |
+| search over `customer_name`, `order_number`     | one trigram GIN over both, joined with a space |
 
-`validateGridDef` rejects an index that sorts on a nullable field, repeats another index, puts a range on a field whose type has none, names an equality field the def lacks or puts a timestamp in the search, and requires the default sort with no filter to be an index.
+`validateGridDef` rejects a sort index with no sort, one that sorts on a nullable or an array field, filters on an array field, puts a field in both lists, names the key in its sort, repeats a field or orders by more than `SORT_MAX` columns; a text index on a field that is not plain text and an array index on one that is not an array; an index declared twice, a field the def lacks and a timestamp in the search. It requires `{ filter: [], sort: [defaultSort.field] }`.
 
 ### One declared index, one `CREATE INDEX`
 
-- `generateGridMigration` derives the DDL: equality columns, then the sort column, then `id`; one trigram GIN index over the search columns joined with spaces; then the counter table, its functions and its three triggers. The file is safe to re-run. `listGridMigrationSteps` gives the same thing as steps to send one at a time, and `listTableMigrations(defs)` merges every def on a table into one migration, with an index two defs share written once.
+- `generateGridMigration` derives the DDL: the filter columns, then the sort columns, then `id`; one trigram GIN index over the search columns joined with spaces; one GIN index per `{ text }` and `{ array }` member; then the counter table, its functions and its three triggers. The file is safe to re-run. `listGridMigrationSteps` gives the same thing as steps to send one at a time, and `listTableMigrations(defs)` merges every def on a table into one migration, with an index two defs share written once.
 - **Indexes are built `CONCURRENTLY`**, each as its own statement outside any transaction, so a build never blocks writes. `{ concurrently: false }` turns that off for a migration runner that insists on one transaction.
 - **The counter backfill takes no lock across its scan.** It runs in three short steps. The first installs the triggers in a mode that keeps the counters current and also logs each change to a `_pending` table. The second reads the whole table in one `REPEATABLE READ` snapshot, writes the counts into `_pending`, and deletes the logged changes it can see, which are exactly the ones already in its snapshot. The third replaces the counters with that count plus the changes logged since, and switches the triggers to write to the counters only. The table lock is held for the trigger swap and for the replacement, never for the scan, and a test runs the three steps with writes between each and a transaction open across the scan. The counters stay current throughout, so a run that stops after any step leaves a table whose counters still follow every write. Run the steps again, from the top or from the one that failed: a finished step does nothing the second time, and the third refuses to run before the second has counted. An existing `listCounterObjects(def).pending` table means a migration half done.
 - **A name past Postgres's 63 characters is shortened**, to its first 54 characters and an eight-character hash of the whole name. Postgres would otherwise truncate it silently, two long names could collide, and the second `IF NOT EXISTS` would do nothing. `validateGridDefs(defs)` checks every def and that no index name is declared with two definitions.
-- `listMissingIndexes` compares the def with `pg_indexes` by method and column order, not by name; a partial index counts only for a declared `empty` index with the same fields, and neither does one a failed concurrent build left invalid, when the caller passes `valid`. `listCounterObjects` names the counter table's columns, functions and triggers for the same check.
-- `getIndex` decides whether an ordered query is declared (`isQueryIndexed` adds the search). The set of equality fields must match exactly, a range must sit on the sort column of an index that allows it, several values need an index that has not opted out, and the search combines with no other filter.
-- `indexCapabilities(indexes)` wraps the same function for the client, so the two cannot disagree. Both are core's; `validateGridDef` and `describeIndex` stay in the Postgres package, because their rules and their words are Postgres's.
+- `listMissingIndexes` compares the def with `pg_indexes` by method and column order, not by name; a partial index never counts, and neither does one a failed concurrent build left invalid, when the caller passes `valid`. `listCounterObjects` names the counter table's columns, functions and triggers for the same check.
+- `getIndex` decides whether an ordered query is declared (`isQueryIndexed` adds the search). The set of filter fields must match exactly, a range must sit on the index's `sort[0]`, a number or a date, and the search combines only with filters a `filter` index answers.
+- `gridDefCapabilities(def)` wraps the same functions for the client, so the two cannot disagree. Both are core's; `validateGridDef` and `describeIndex` stay in the Postgres package, because their rules and their words are Postgres's.
 
 ### The UI offers only declared indexes
 
@@ -1115,7 +1142,7 @@ The base `StatusBoard` knows lanes, `onMove` and `canMove` and nothing else. The
 - **Counters.** One counter-row upsert per insert or delete, two per change of status or of a total field. Each total field is one more column in that same upsert, not another statement. The counter row is a hot row under concurrent writes to one status, and two concurrent status moves in opposite directions take their row locks in opposite order.
 - **Rollout.** Indexes ship as migrations, built `CONCURRENTLY`, so a build takes roughly twice as long as a plain one and never blocks writes; a build that fails leaves an invalid index to drop before the next run. The counter backfill is one snapshot read of the table, with two brief table locks around it. The 10M build took 117 s for all ten indexes, built plainly.
 - **Many tables.** Every declared index is a real index and every facet is three row triggers, on every table that has a grid. That is the price of principle 1, not a defect: two hundred tables with ten indexes each are two thousand indexes to build, store and write through. The tooling takes all the defs at once and gives one migration per table, but nothing makes the indexes cheaper. Declare an index because a screen needs it.
-- **Several values per field.** `= ANY` has no single index order to read. The planner either walks the sort index and filters, which is fast when the values are common, or collects the matches from the equality index and sorts them, which is fast when they are few. Between the two the cost grows with about the square root of the table. At 620,000 rows every case is a few milliseconds; an index whose page misses the budget on your data is declared `multi: false`.
+- **Several values per field.** `= ANY` has no single index order to read. The planner either walks the sort index and filters, which is fast when the values are common, or collects the matches from the equality index and sorts them, which is fast when they are few. Between the two the cost grows with about the square root of the table. At 620,000 rows every case is a few milliseconds; where a page misses the budget on your data, lower the field's `maxValues`.
 - **Request path.** One interaction is one indexed page read, one capped count and one statement for every total, each bounded by the page size or the cap.
 - **The narrowed set.** A narrowed query costs the count of its core, up to `narrowLimit` rows of an index-only scan, and then one pass over at most that many rows. Both repeat on every page, count and total, so the limit is a latency setting: it is the worst case a user waits for, and it does not grow with the table.
 - **The weak point.** The search is bounded by a timeout, not by the index, and its threshold falls as the table grows. On a wide table at scale, search a narrow table and feed the result into an equality index, as the demo's customer picker does.
@@ -1181,9 +1208,9 @@ Several values per field, on the same data. Each index with an equality field is
 | `status_code =`, `region =`, sort `created_at`  | 12      | 27.55 / 34.03 (5 rare of each) | 5.10 / 8.79                       | Index Scan, one Sort                        |
 | `status_code =`, `channel =`, sort `created_at` | 12      | 3.53 / 3.81 (2 rare of each)   | 4.81 / 8.03                       | Index Scan, one Sort                        |
 
-- No index misses the budget, so none is declared `multi: false`.
+- No index misses the budget.
 - The planner picks between two plans. With common values it walks the sort index and filters. With rare ones it reads the matches from the equality index and sorts them: 20 rare customers are 1.7 ms. The slow middle is a handful of rare values that match a few thousand rows: five rare statuses in five rare regions take 34 ms.
-- That middle grows with about the square root of the table, which is why the cap and `multi: false` exist. See "Cost at scale".
+- That middle grows with about the square root of the table, which is why the cap exists. See "Cost at scale".
 
 Empty values, on the nullable `assignee` field (18% of orders have one). The bar is the p95 budget alone, and the plan is recorded.
 

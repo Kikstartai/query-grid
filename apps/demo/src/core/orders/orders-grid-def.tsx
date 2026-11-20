@@ -28,7 +28,6 @@ export const ORDER_BAR_FIELDS = [
   "customer_name",
   "note",
 ];
-export const ORDER_TEXT_INDEXES = ["customer_name"];
 
 function toOptions(options: WeightedOption[]): FieldOption[] {
   return options.map(({ value, label }) => ({ value, label }));
@@ -163,17 +162,18 @@ const ORDER_FIELDS: FieldDef[] = [
 ];
 
 const ORDER_INDEXES: IndexDef[] = [
-  { equals: [], sort: "created_at", range: true },
-  { equals: [], sort: "total", range: true },
-  { equals: ["status_code"], sort: "created_at", range: true },
-  { equals: ["status_code"], sort: "total", range: true },
-  { equals: ["customer_id"], sort: "created_at" },
-  { equals: ["region"], sort: "created_at", range: true },
-  { equals: ["channel"], sort: "created_at" },
-  { equals: ["assignee"], sort: "created_at", range: true },
-  { equals: ["status_code", "region"], sort: "created_at" },
-  { equals: ["status_code", "channel"], sort: "created_at" },
-  { equals: [], sort: "item_count", then: ["total"] },
+  { filter: [], sort: ["created_at"] },
+  { filter: [], sort: ["total"] },
+  { filter: ["status_code"], sort: ["created_at"] },
+  { filter: ["status_code"], sort: ["total"] },
+  { filter: ["customer_id"], sort: ["created_at"] },
+  { filter: ["region"], sort: ["created_at"] },
+  { filter: ["channel"], sort: ["created_at"] },
+  { filter: ["assignee"], sort: ["created_at"] },
+  { filter: ["status_code", "region"], sort: ["created_at"] },
+  { filter: ["status_code", "channel"], sort: ["created_at"] },
+  { filter: [], sort: ["item_count", "total"] },
+  { text: "customer_name" },
 ];
 
 export const ORDERS_GRID_DEF = {
@@ -181,7 +181,6 @@ export const ORDERS_GRID_DEF = {
   table: "orders",
   fields: ORDER_FIELDS,
   indexes: ORDER_INDEXES,
-  textIndexes: ORDER_TEXT_INDEXES,
   defaultSort: { field: "created_at", direction: "desc" },
   facet: { field: ORDERS_FACET_FIELD, counterTable: "order_status_counts" },
   totals: ["total", "item_count"],

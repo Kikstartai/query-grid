@@ -11,8 +11,8 @@ import {
   type Combinator,
   type Filter,
   type GridRow,
-  type OneFilter,
   type QueryState,
+  type ValueFilter,
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 import {
@@ -67,14 +67,14 @@ const DEF: PostgresGridDef = {
     { key: "labels", label: "Labels", type: "array", nullable: true },
   ],
   indexes: [
-    { equals: [], sort: "created_at", range: true },
-    { equals: [], sort: "size", range: true },
-    { equals: ["starred"], sort: "created_at", range: true },
-    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
-    { equals: [], sort: "size", then: ["created_at"] },
+    { filter: [], sort: ["created_at"] },
+    { filter: [], sort: ["size"] },
+    { filter: ["starred"], sort: ["created_at"] },
+    { filter: ["folder_id", "deleted_at"], sort: ["created_at"] },
+    { filter: [], sort: ["size", "created_at"] },
+    { text: "name" },
+    { array: "tags" },
   ],
-  textIndexes: ["name"],
-  arrayIndexes: ["tags"],
 };
 
 function createRandom(seed: number): () => number {
@@ -238,7 +238,7 @@ async function expectSame(
   return fromMemory;
 }
 
-function one(field: string, op: OneFilter["op"], value: string): OneFilter {
+function one(field: string, op: ValueFilter["op"], value: string): ValueFilter {
   return { field, op, value };
 }
 
@@ -258,9 +258,7 @@ describe("the schema of the new indexes", () => {
       [TABLE],
     );
     expect(listMissingIndexes(DEF, rows)).toEqual([]);
-    expect(rows.map((row) => row.indexdef).join("\n")).toContain(
-      "WHERE (deleted_at IS NULL)",
-    );
+    expect(rows.map((row) => row.indexdef).join("\n")).not.toContain("WHERE");
   });
 
   test("a new type comes back in the row as the memory source holds it", async () => {
@@ -374,7 +372,7 @@ describe("every operator answers as the memory source does", () => {
       [anyOf("starred", "false"), one("created_at", "less_than", stampOf(900))],
     ],
     [
-      "a partial index: one folder or none, not deleted",
+      "a filter index on the blank field: one folder or none, not deleted",
       [
         anyOf("folder_id", FOLDERS[0], null),
         { field: "deleted_at", op: "blank" },
@@ -385,7 +383,7 @@ describe("every operator answers as the memory source does", () => {
       [{ field: "folder_id", op: "none_of", values: [FOLDERS[0], FOLDERS[1]] }],
     ],
     [
-      "a partial index: one folder, not deleted",
+      "a filter index on the blank field: one folder, not deleted",
       [anyOf("folder_id", FOLDERS[1]), { field: "deleted_at", op: "blank" }],
     ],
     [
@@ -493,7 +491,7 @@ describe("the tier each filter runs in", () => {
     ];
     for (const filters of cases) {
       const query = { ...BASE, filters };
-      expect(planQuery(DEF.indexes, query, DEF)).toMatchObject({
+      expect(planQuery(DEF, query)).toMatchObject({
         narrowed: true,
         budgeted: false,
       });
@@ -540,7 +538,7 @@ describe("the tier each filter runs in", () => {
           { field: "deleted_at", op: "blank" },
         ],
       }),
-    ).toContain(`auto_${TABLE}_folder_id__created_at__empty_deleted_at`);
+    ).toContain(`auto_${TABLE}_folder_id__deleted_at__created_at`);
   });
 });
 
@@ -683,7 +681,7 @@ describe("a composite order on the orders table", () => {
       sort: { field: "created_at", direction: "desc" },
       thenBy: [{ field: "region", direction: "asc" }],
     };
-    expect(planQuery(ORDERS_GRID_DEF.indexes, narrowed)?.narrowed).toBe(true);
+    expect(planQuery(ORDERS_GRID_DEF, narrowed)?.narrowed).toBe(true);
     const page = await listGridPage(ORDERS_GRID_DEF, execute, narrowed, 50);
     expect(page.rows.length).toBeGreaterThan(0);
     const stamps = page.rows.map((row) => String(row.created_at));

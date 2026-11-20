@@ -150,7 +150,7 @@ function planOrdered(
   def: PostgresGridDef,
   query: QueryState,
 ): QueryPlan | null {
-  return planQuery(def.indexes, query);
+  return planQuery(def, query, true);
 }
 
 async function sizeOfOr(
@@ -238,7 +238,7 @@ async function listNarrowSettings(
   signal?: AbortSignal,
 ): Promise<string[]> {
   assertDeclared(def, query);
-  const plan = planQuery(def.indexes, query, def);
+  const plan = planQuery(def, query);
   if (!plan?.narrowed) {
     return [];
   }

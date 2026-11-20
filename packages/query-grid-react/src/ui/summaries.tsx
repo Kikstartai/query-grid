@@ -36,7 +36,6 @@ import {
   useQueryGridMeta,
 } from "../react/query-grid-context.tsx";
 import { useFilterOps } from "./filters.tsx";
-import { useOffers } from "../react/query-grid-hooks.ts";
 
 export function CountDisplay() {
   const { requestExact } = useQueryGridActions();
@@ -75,7 +74,6 @@ export function FacetPanel() {
   const { capabilities } = useOfferContext();
   const facets = useFacetState();
   const key = def.facet?.field ?? "";
-  const multiple = useOffers().multi.includes(key);
   const { dispatch } = useQueryGridActions();
   const anyOf = useFilterOps(key).find((item) => item.op === "any_of");
   const field = getFacetField(def);
@@ -92,7 +90,7 @@ export function FacetPanel() {
             .filter((value) =>
               own.every((filter) => matchesFilter(field, filter, value)),
             ),
-    multiple,
+    multiple: true,
     onValuesChange: (values: string[]) =>
       dispatch(
         values.length > 0

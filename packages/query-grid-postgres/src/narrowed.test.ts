@@ -429,7 +429,7 @@ describe("the capped total and the order it is read in", () => {
     fields: TEST_DEF.fields.map((field) =>
       field.key === "region" ? { ...field, nullable: true } : field,
     ),
-    indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+    indexes: [...TEST_DEF.indexes, { filter: ["note"], sort: ["created_at"] }],
   };
   const settingsOf = async (query: QueryState) => {
     const { calls, execute } = counting((sql) =>

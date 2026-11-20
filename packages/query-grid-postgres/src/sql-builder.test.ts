@@ -98,7 +98,7 @@ describe("buildPageSql", () => {
     const page = buildPageSql(
       {
         ...TEST_DEF,
-        indexes: [{ equals: ["status", "region"], sort: "created_at" }],
+        indexes: [{ filter: ["status", "region"], sort: ["created_at"] }],
       },
       query,
       10,
@@ -142,33 +142,20 @@ describe("buildPageSql", () => {
     });
   });
 
-  test("an index that opts out of several values refuses them", () => {
+  test("an index that filters a field takes one value or several", () => {
     const single = {
       ...TEST_DEF,
-      indexes: [{ equals: ["status"], sort: "created_at", multi: false }],
+      indexes: [{ filter: ["status"], sort: ["created_at"] }],
     };
-    expect(() =>
-      buildPageSql(
-        single,
-        {
-          ...BASE,
-          filters: [
-            { field: "status", op: "any_of", values: ["open", "done"] },
-          ],
-        },
-        10,
-      ),
-    ).toThrow(QueryRejected);
-    expect(
-      buildPageSql(
-        single,
-        {
-          ...BASE,
-          filters: [{ field: "status", op: "any_of", values: ["open"] }],
-        },
-        10,
-      ).values,
-    ).toEqual(["open"]);
+    for (const values of [["open"], ["open", "done"]]) {
+      expect(
+        buildPageSql(
+          single,
+          { ...BASE, filters: [{ field: "status", op: "any_of", values }] },
+          10,
+        ).values,
+      ).toEqual([values.length === 1 ? "open" : values]);
+    }
   });
 
   test("a range bounds the sort column", () => {
@@ -568,9 +555,9 @@ describe("generated DDL", () => {
       facet: undefined,
       search: undefined,
       indexes: [
-        { equals: [], sort: "created_at" },
-        { equals: ["status", "region"], sort: "created_at" },
-        { equals: ["status", "region"], sort: "total" },
+        { filter: [], sort: ["created_at"] },
+        { filter: ["status", "region"], sort: ["created_at"] },
+        { filter: ["status", "region"], sort: ["total"] },
       ],
     };
     const names = listIndexDdl(wide).map((index) => index.name);
@@ -593,8 +580,8 @@ describe("generated DDL", () => {
       id: "things-by-region",
       facet: undefined,
       indexes: [
-        { equals: [], sort: "created_at", range: true },
-        { equals: ["region"], sort: "total" },
+        { filter: [], sort: ["created_at"] },
+        { filter: ["region"], sort: ["total"] },
       ],
     };
     const widgets: PostgresGridDef = {
@@ -632,7 +619,7 @@ describe("generated DDL", () => {
     ]);
     expect(
       validateGridDefs([
-        { ...other, indexes: [{ equals: [], sort: "total" }] },
+        { ...other, indexes: [{ filter: [], sort: ["total"] }] },
       ]),
     ).toEqual([
       "things-by-region: the default sort with no filter is not a declared index",
@@ -704,7 +691,7 @@ describe("blank values", () => {
     fields: TEST_DEF.fields.map((field) =>
       field.key === "region" ? { ...field, nullable: true } : field,
     ),
-    indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
+    indexes: [...TEST_DEF.indexes, { filter: ["note"], sort: ["created_at"] }],
   };
   const withFilter = (filter: Filter): QueryState => ({
     ...BASE,
@@ -797,10 +784,11 @@ describe("the SQL of each operator", () => {
     ],
     indexes: [
       ...TEST_DEF.indexes,
-      { equals: ["owner"], sort: "created_at" },
-      { equals: [], sort: "due", range: true },
+      { filter: ["owner"], sort: ["created_at"] },
+      { filter: [], sort: ["due"] },
+      { array: "tags" },
+      { array: "labels" },
     ],
-    arrayIndexes: ["tags", "labels"],
   };
 
   function where(...filters: Filter[]): SqlQuery {
@@ -860,14 +848,11 @@ describe("the SQL of each operator", () => {
     });
   });
 
-  test(
-    "none of on an array that is never null keeps a row with an empty array",
-    () => {
-      expect(
-        where({ field: "labels", op: "none_of", values: ["gift"] }),
-      ).toEqual({ text: "NOT (t.labels && $1::text[])", values: [["gift"]] });
-    },
-  );
+  test("none of on an array that is never null keeps a row with an empty array", () => {
+    expect(where({ field: "labels", op: "none_of", values: ["gift"] })).toEqual(
+      { text: "NOT (t.labels && $1::text[])", values: [["gift"]] },
+    );
+  });
 
   test("number and date equals are one = comparison", () => {
     expect(where({ field: "total", op: "equals", value: "500" })).toEqual({
