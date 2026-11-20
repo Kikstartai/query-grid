@@ -6,16 +6,16 @@ import {
   DEFAULT_LOCALE,
   formatCount,
   formatValue,
+  resolveFieldKind,
   type BaseFieldDef,
   type DatePreset,
+  type FieldKind,
+  type FilterOp,
   type GridValue,
   type Problem,
   type ProblemParams,
-  type RangeOp,
   type ReasonCode,
   type ReorderCode,
-  type ReservedValue,
-  type TextOp,
 } from "@kikstart/query-grid";
 
 export { formatList } from "@kikstart/query-grid";
@@ -43,17 +43,20 @@ export interface ReasonParams {
 
 type MessageParams = Record<string, string | number>;
 
-export type SingleRangeOp = Exclude<RangeOp, "between">;
+export type OpLabels = Record<FieldKind, Partial<Record<FilterOp, string>>>;
 
-export interface RangeOpParams {
+export interface ChipParams {
   label: string;
-  min: string;
-  max: string;
+  op: string;
 }
 
-export interface TextParams {
-  label: string;
+export interface ChipValueParams extends ChipParams {
   value: string;
+}
+
+export interface ChipPairParams extends ChipParams {
+  min: string;
+  max: string;
 }
 
 export interface QueryGridMessages {
@@ -94,37 +97,26 @@ export interface QueryGridMessages {
   clearSearchFilter: string;
   activeFilters: string;
   removeChip: (params: LabelParams) => string;
-  chipEquals: (params: LabelParams) => string;
-  chipExclude: (params: LabelParams) => string;
-  chipPreset: (params: { label: string; preset: string }) => string;
-  chipRange: (params: { label: string; min: string; max: string }) => string;
-  chipRangeOps: Record<SingleRangeOp, (params: RangeOpParams) => string>;
+  chipList: (params: ChipParams) => string;
+  chipNone: (params: ChipParams) => string;
+  chipOne: (params: ChipValueParams) => string;
+  chipPair: (params: ChipPairParams) => string;
+  chipText: (params: { value: string }) => string;
   chipSearch: (params: { value: string }) => string;
-  chipTexts: Record<TextOp, (params: TextParams) => string>;
-  chipOverlap: (params: LabelParams) => string;
   chipMatchAny: string;
   chipSort: (params: { label: string; direction: string }) => string;
   openBound: string;
   any: string;
-  emptyValue: string;
-  notEmptyValue: string;
-  excludeField: (params: LabelParams) => string;
-  excludeMark: string;
+  blankValue: string;
+  ops: OpLabels;
+  opField: (params: LabelParams) => string;
   datePresets: Record<DatePreset, string>;
-  customRange: string;
   presetField: (params: LabelParams) => string;
-  dateOps: Record<SingleRangeOp, string>;
-  rangeOps: Record<RangeOp, string>;
-  rangeOperator: (params: LabelParams) => string;
   rangeValue: (params: LabelParams) => string;
   pickDate: (params: LabelParams) => string;
   value: string;
   booleanTrue: string;
   booleanFalse: string;
-  textFilter: string;
-  textField: string;
-  textOperator: string;
-  textOps: Record<TextOp, string>;
   textValue: (params: { label: string; op: string }) => string;
   textPlaceholder: string;
   textHint: (params: { min: number }) => string;
@@ -197,19 +189,17 @@ type NestedKey =
   | "countSources"
   | "facetNotes"
   | "datePresets"
-  | "dateOps"
-  | "rangeOps"
-  | "textOps"
-  | "chipRangeOps"
-  | "chipTexts"
   | "reasons"
   | "reasonParts";
 
 export type QueryGridMessageOverrides = Partial<
-  Omit<QueryGridMessages, NestedKey | "errors">
+  Omit<QueryGridMessages, NestedKey | "errors" | "ops">
 > & {
   [K in NestedKey]?: Partial<QueryGridMessages[K]>;
-} & { errors?: QueryGridMessages["errors"] };
+} & {
+  errors?: QueryGridMessages["errors"];
+  ops?: Partial<OpLabels>;
+};
 
 const pluralRules = new Map<string, Intl.PluralRules>();
 
@@ -275,36 +265,67 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   clearSearchFilter: "Clear search",
   activeFilters: "Active filters and sort",
   removeChip: ({ label }) => `Remove ${label}`,
-  chipEquals: ({ label }) => `${label}:`,
-  chipExclude: ({ label }) => `${label} ≠`,
-  chipPreset: ({ label, preset }) => `${label}: ${preset}`,
-  chipRange: ({ label, min, max }) => `${label}: ${min} – ${max}`,
-  chipRangeOps: {
-    not_between: ({ label, min, max }) => `${label}: not ${min} – ${max}`,
-    eq: ({ label, min }) => `${label} = ${min}`,
-    neq: ({ label, min }) => `${label} ≠ ${min}`,
-    gt: ({ label, min }) => `${label} > ${min}`,
-    gte: ({ label, min }) => `${label} ≥ ${min}`,
-    lt: ({ label, min }) => `${label} < ${min}`,
-    lte: ({ label, min }) => `${label} ≤ ${min}`,
-  },
+  chipList: ({ label, op }) => `${label} ${op}:`,
+  chipNone: ({ label, op }) => `${label} ${op}`,
+  chipOne: ({ label, op, value }) => `${label} ${op} ${value}`,
+  chipPair: ({ label, op, min, max }) => `${label} ${op} ${min} and ${max}`,
+  chipText: ({ value }) => `“${value}”`,
   chipSearch: ({ value }) => `Search: “${value}”`,
-  chipTexts: {
-    contains: ({ label, value }) => `${label} contains “${value}”`,
-    not_contains: ({ label, value }) => `${label} does not contain “${value}”`,
-    starts_with: ({ label, value }) => `${label} starts with “${value}”`,
-    ends_with: ({ label, value }) => `${label} ends with “${value}”`,
-    not_equals: ({ label, value }) => `${label} is not “${value}”`,
-  },
-  chipOverlap: ({ label }) => `${label} has:`,
   chipMatchAny: "Match any",
   chipSort: ({ label, direction }) => `Sort: ${label} ${direction}`,
   openBound: "…",
   any: "any",
-  emptyValue: "(empty)",
-  notEmptyValue: "(not empty)",
-  excludeField: ({ label }) => `Exclude the chosen ${label} values`,
-  excludeMark: "≠",
+  blankValue: "(blank)",
+  ops: {
+    text: {
+      equals: "equals",
+      not_equals: "not equals",
+      contains: "contains",
+      not_contains: "not contains",
+      starts_with: "starts with",
+      ends_with: "ends with",
+      blank: "blank",
+      not_blank: "not blank",
+    },
+    number: {
+      equals: "equals",
+      not_equals: "not equals",
+      greater_than: "greater than",
+      greater_or_equal: "greater or equal",
+      less_than: "less than",
+      less_or_equal: "less or equal",
+      between: "between",
+      not_between: "not between",
+      blank: "blank",
+      not_blank: "not blank",
+    },
+    date: {
+      equals: "on",
+      not_equals: "not on",
+      greater_than: "after",
+      greater_or_equal: "on or after",
+      less_than: "before",
+      less_or_equal: "on or before",
+      between: "between",
+      not_between: "not between",
+      in_period: "in period",
+      blank: "blank",
+      not_blank: "not blank",
+    },
+    choice: {
+      any_of: "any of",
+      none_of: "none of",
+      blank: "blank",
+      not_blank: "not blank",
+    },
+    array: {
+      any_of: "any of",
+      none_of: "none of",
+      all_of: "all of",
+      blank: "blank",
+    },
+  },
+  opField: ({ label }) => `${label} operator`,
   datePresets: {
     today: "Today",
     yesterday: "Yesterday",
@@ -314,43 +335,12 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     "last-month": "Last month",
     "this-year": "This year",
   },
-  customRange: "Custom…",
   presetField: ({ label }) => `${label} period`,
-  dateOps: {
-    not_between: "Not between…",
-    eq: "On…",
-    neq: "Not on…",
-    gt: "After…",
-    gte: "On or after…",
-    lt: "Before…",
-    lte: "On or before…",
-  },
-  rangeOps: {
-    between: "between",
-    not_between: "not between",
-    eq: "=",
-    neq: "≠",
-    gt: ">",
-    gte: "≥",
-    lt: "<",
-    lte: "≤",
-  },
-  rangeOperator: ({ label }) => `${label} comparison`,
   rangeValue: ({ label }) => `${label} value`,
   pickDate: ({ label }) => `Pick a ${label} date`,
   value: "value",
   booleanTrue: "Yes",
   booleanFalse: "No",
-  textFilter: "Text",
-  textField: "Field to match",
-  textOperator: "How to match",
-  textOps: {
-    contains: "contains",
-    not_contains: "does not contain",
-    starts_with: "starts with",
-    ends_with: "ends with",
-    not_equals: "is not",
-  },
   textHint: ({ min }) => `${min} characters or more`,
   textValue: ({ label, op }) => `${label} ${op}`,
   textPlaceholder: "text…",
@@ -428,7 +418,7 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   moveFailed: "The move failed",
   reasons: {
     search_alone: () =>
-      "The search combines with equality filters only: clear the range, the text filter and Match any first.",
+      "The search combines with equality filters only: clear the other filters and Match any first.",
     search_unordered: () =>
       "A search result is unordered until every match is loaded: narrow it under the cap to sort.",
     search_no_combine: () => "The search combines with equality filters only.",
@@ -469,11 +459,14 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
     too_many_sorts: ({ max }) => `A sort takes at most ${max} columns.`,
     invalid_cursor: () => "The cursor does not decode.",
     invalid_limit: () => "The page size is not a number.",
-    too_many_filters: ({ max }) => `At most ${max} of these filters at once.`,
+    too_many_filters: ({ max }) => `At most ${max} filters at once.`,
+    invalid_op: ({ field, op }) => `${field} cannot be filtered by ${op}.`,
+    literal_required: ({ field, op }) =>
+      `${field} ${op} is resolved in the browser before it is sent.`,
     too_broad: () =>
       "That matches too much to answer fast. Add more characters or another filter.",
     narrow_first: ({ limit }) =>
-      `These filters leave more than ${limit} rows. Narrow them first, or clear the range, the text filter or Match any.`,
+      `These filters leave more than ${limit} rows. Narrow them first, or clear the filters no index answers, or Match any.`,
     export_too_large: ({ limit }) =>
       `More than ${limit} rows match. Narrow the filters to export them.`,
     transition_refused: ({ to }) => `A move to ${to} is not allowed.`,
@@ -487,6 +480,16 @@ export const DEFAULT_MESSAGES: QueryGridMessages = {
   errorFallback: ({ code }) => `The request failed (${code}).`,
 };
 
+function mergeOps(base: OpLabels, overrides: Partial<OpLabels>): OpLabels {
+  return {
+    text: { ...base.text, ...overrides.text },
+    number: { ...base.number, ...overrides.number },
+    date: { ...base.date, ...overrides.date },
+    choice: { ...base.choice, ...overrides.choice },
+    array: { ...base.array, ...overrides.array },
+  };
+}
+
 function mergeMessages(
   base: QueryGridMessages,
   overrides: QueryGridMessageOverrides,
@@ -499,11 +502,7 @@ function mergeMessages(
     countSources: { ...base.countSources, ...overrides.countSources },
     facetNotes: { ...base.facetNotes, ...overrides.facetNotes },
     datePresets: { ...base.datePresets, ...overrides.datePresets },
-    dateOps: { ...base.dateOps, ...overrides.dateOps },
-    rangeOps: { ...base.rangeOps, ...overrides.rangeOps },
-    textOps: { ...base.textOps, ...overrides.textOps },
-    chipRangeOps: { ...base.chipRangeOps, ...overrides.chipRangeOps },
-    chipTexts: { ...base.chipTexts, ...overrides.chipTexts },
+    ops: mergeOps(base.ops, overrides.ops ?? {}),
     reasons: { ...base.reasons, ...overrides.reasons },
     reasonParts: { ...base.reasonParts, ...overrides.reasonParts },
     errors: { ...base.errors, ...overrides.errors },
@@ -561,11 +560,12 @@ export function useCurrency(): string | undefined {
   return use(MessagesContext).currency;
 }
 
-export function formatReservedValue(
+export function formatOpLabel(
   messages: QueryGridMessages,
-  reserved: ReservedValue,
+  field: BaseFieldDef,
+  op: FilterOp,
 ): string {
-  return reserved === "empty" ? messages.emptyValue : messages.notEmptyValue;
+  return messages.ops[resolveFieldKind(field)][op] ?? op;
 }
 
 export function formatBoolean(

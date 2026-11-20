@@ -111,7 +111,10 @@ describe("GET /export", () => {
 
   test("over the export limit it is refused with the limit, before any page is read", async () => {
     const fake = createFake(8);
-    const response = await createHandler(fake, 5)("/export?f.region=north");
+    const response = await createHandler(
+      fake,
+      5,
+    )("/export?f.region.any_of=north");
     expect(response.status).toBe(400);
     expect((await response.json()) as ErrorBody).toMatchObject({
       error: "export_too_large",
@@ -132,7 +135,7 @@ describe("GET /export", () => {
 
   test("a query no index answers is refused like any read", async () => {
     const response = await createHandler(createFake(1))(
-      "/export?f.region=north&sort=total.desc",
+      "/export?f.region.any_of=north&sort=total.desc",
     );
     expect(response.status).toBe(400);
     expect(((await response.json()) as ErrorBody).code).toBe("unindexed_query");
@@ -183,7 +186,7 @@ describe("walkExportPages", () => {
     const sizes: number[] = [];
     for await (const rows of walkExportPages(TEST_DEF, fake.execute, {
       ...BASE,
-      equals: { region: ["north"] },
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
     })) {
       sizes.push(rows.length);
     }

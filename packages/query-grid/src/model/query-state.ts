@@ -1,41 +1,52 @@
+import type { DatePreset } from "./date-presets.ts";
 import type { SortState } from "./grid-def.ts";
+import {
+  getOperatorShape,
+  type FilterOp,
+  type OpOfShape,
+} from "./operators.ts";
 
-export interface RangeInput {
-  min: string | null;
-  max: string | null;
-  preset?: string;
-  exclude?: boolean;
-  minExclusive?: boolean;
-  maxExclusive?: boolean;
-}
-
-export interface RangeState extends RangeInput {
+export interface OneFilter {
   field: string;
-}
-
-export const TEXT_OPS = [
-  "contains",
-  "not_contains",
-  "starts_with",
-  "ends_with",
-  "not_equals",
-] as const;
-
-export type TextOp = (typeof TEXT_OPS)[number];
-
-export interface TextState {
-  field: string;
-  op: TextOp;
+  op: OpOfShape<"one">;
   value: string;
 }
+
+export interface PairFilter {
+  field: string;
+  op: OpOfShape<"pair">;
+  min: string;
+  max: string;
+}
+
+export interface ListFilter {
+  field: string;
+  op: OpOfShape<"list">;
+  values: (string | null)[];
+}
+
+export interface PresetFilter {
+  field: string;
+  op: OpOfShape<"preset">;
+  preset: DatePreset;
+}
+
+export interface NoneFilter {
+  field: string;
+  op: OpOfShape<"none">;
+}
+
+export type Filter =
+  | OneFilter
+  | PairFilter
+  | ListFilter
+  | PresetFilter
+  | NoneFilter;
 
 export type Combinator = "and" | "or";
 
 export interface QueryState {
-  equals: Record<string, string[]>;
-  ranges: RangeState[];
-  texts: TextState[];
-  overlaps: Record<string, string[]>;
+  filters: Filter[];
   combine: Combinator;
   search: string | null;
   sort: SortState;
@@ -45,8 +56,7 @@ export interface QueryState {
 }
 
 export const TEXT_MAX_LENGTH = 80;
-export const TEXT_FILTER_MAX = 8;
-export const RANGE_FILTER_MAX = 12;
+export const FILTER_MAX = 20;
 export const SORT_MAX = 3;
 
 export function listThenBy(query: QueryState): SortState[] {
@@ -61,10 +71,34 @@ export function withThenBy(query: QueryState, thenBy: SortState[]): QueryState {
   return { ...query, thenBy: thenBy.length > 0 ? thenBy : undefined };
 }
 
-export function getRange(query: QueryState, key: string): RangeState | null {
-  return query.ranges.find((range) => range.field === key) ?? null;
+export function listFieldFilters(query: QueryState, key: string): Filter[] {
+  return query.filters.filter((filter) => filter.field === key);
 }
 
-export function listRanges(query: QueryState, key: string): RangeState[] {
-  return query.ranges.filter((range) => range.field === key);
+export function getFieldFilter(query: QueryState, key: string): Filter | null {
+  return listFieldFilters(query, key)[0] ?? null;
+}
+
+export function listFilteredFields(query: QueryState): string[] {
+  return [...new Set(query.filters.map((filter) => filter.field))];
+}
+
+export function isListFilter(filter: Filter): filter is ListFilter {
+  return getOperatorShape(filter.op) === "list";
+}
+
+export function isOneFilter(filter: Filter): filter is OneFilter {
+  return getOperatorShape(filter.op) === "one";
+}
+
+export function isPairFilter(filter: Filter): filter is PairFilter {
+  return getOperatorShape(filter.op) === "pair";
+}
+
+export function isPresetFilter(filter: Filter): filter is PresetFilter {
+  return getOperatorShape(filter.op) === "preset";
+}
+
+export function hasOp(filter: Filter, ops: readonly FilterOp[]): boolean {
+  return ops.includes(filter.op);
 }

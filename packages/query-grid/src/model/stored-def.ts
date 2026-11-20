@@ -115,7 +115,7 @@ const OPTION_KEYS = ["value", "label"];
 const LOOKUP_KEYS = ["labelField"];
 const SORT_KEYS = ["field", "direction"];
 const FACET_KEYS = ["field"];
-const INDEX_KEYS = ["equals", "sort", "range", "multi", "empty", "then"];
+const INDEX_KEYS = ["equals", "sort", "range", "multi", "blank", "then"];
 
 const TOTALS_RULE: RefRule = { max: 20, unique: true, accepts: isSummable };
 const SEARCH_RULE: RefRule = { max: 20, unique: true };
@@ -610,7 +610,7 @@ function readIndex(value: unknown, path: string, run: Run): IndexDef | null {
       readBoolean(item, at, run),
     );
   }
-  readOptional(extras, "empty", source, path, (item, at) =>
+  readOptional(extras, "blank", source, path, (item, at) =>
     readFieldRefs(item, at, INDEX_COLUMNS_RULE, run),
   );
   readOptional(extras, "then", source, path, (item, at) =>

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  EMPTY_VALUE,
-  NOT_EMPTY_VALUE,
+  type Filter,
   type GridRow,
   type QueryState,
   type TotalResult,
@@ -40,10 +39,7 @@ import {
 import type { PostgresGridDef } from "./storage.ts";
 
 const BASE: QueryState = {
-  equals: {},
-  ranges: [],
-  texts: [],
-  overlaps: {},
+  filters: [],
   group: null,
   combine: "and",
   search: null,
@@ -67,7 +63,7 @@ describe("buildPageSql", () => {
   test("a cursor becomes a row comparison after the filters", () => {
     const query: QueryState = {
       ...BASE,
-      equals: { status: ["open"] },
+      filters: [{ field: "status", op: "any_of", values: ["open"] }],
       sort: BY_TOTAL,
       cursor: encodeCursor({ sortValues: ["1200"], id: ID }),
     };
@@ -94,7 +90,10 @@ describe("buildPageSql", () => {
   test("several values of one field are one array parameter under ANY", () => {
     const query: QueryState = {
       ...BASE,
-      equals: { status: ["open", "done"], region: ["north"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open", "done"] },
+        { field: "region", op: "any_of", values: ["north"] },
+      ],
     };
     const page = buildPageSql(
       {
@@ -110,7 +109,7 @@ describe("buildPageSql", () => {
     expect(page.values).toEqual([["open", "done"], "north"]);
     const count = buildCappedCountSql(TEST_DEF, {
       ...BASE,
-      equals: { status: ["open", "done"] },
+      filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
     });
     expect(count.text).toContain(
       "WHERE t.status = ANY($1::text[]) LIMIT 10001",
@@ -127,7 +126,7 @@ describe("buildPageSql", () => {
     };
     const query: QueryState = {
       ...BASE,
-      equals: { status: ["open", "done"] },
+      filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
     };
     let refusal: unknown = null;
     try {
@@ -151,20 +150,38 @@ describe("buildPageSql", () => {
     expect(() =>
       buildPageSql(
         single,
-        { ...BASE, equals: { status: ["open", "done"] } },
+        {
+          ...BASE,
+          filters: [
+            { field: "status", op: "any_of", values: ["open", "done"] },
+          ],
+        },
         10,
       ),
     ).toThrow(QueryRejected);
     expect(
-      buildPageSql(single, { ...BASE, equals: { status: ["open"] } }, 10)
-        .values,
+      buildPageSql(
+        single,
+        {
+          ...BASE,
+          filters: [{ field: "status", op: "any_of", values: ["open"] }],
+        },
+        10,
+      ).values,
     ).toEqual(["open"]);
   });
 
   test("a range bounds the sort column", () => {
     const query: QueryState = {
       ...BASE,
-      ranges: [{ field: "created_at", min: "2026-01-01", max: "2026-02-01" }],
+      filters: [
+        {
+          field: "created_at",
+          op: "between",
+          min: "2026-01-01T00:00:00Z",
+          max: "2026-02-01T00:00:00Z",
+        },
+      ],
     };
     expect(buildPageSql(TEST_DEF, query, 10).text).toContain(
       "WHERE t.created_at >= $1::timestamptz AND t.created_at <= $2::timestamptz ORDER BY",
@@ -193,7 +210,7 @@ describe("buildPageSql", () => {
   test("an unindexed query is rejected", () => {
     const query: QueryState = {
       ...BASE,
-      equals: { region: ["north"] },
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
       sort: BY_TOTAL,
     };
     expect(() => buildPageSql(TEST_DEF, query, 10)).toThrow(QueryRejected);
@@ -213,7 +230,10 @@ describe("buildPageSql", () => {
     expect(() =>
       buildPageSql(
         TEST_DEF,
-        { ...BASE, equals: { status: ["x' OR 1=1"] } },
+        {
+          ...BASE,
+          filters: [{ field: "status", op: "any_of", values: ["x' OR 1=1"] }],
+        },
         10,
       ),
     ).toThrow(QueryRejected);
@@ -243,7 +263,10 @@ describe("counts and totals", () => {
   });
 
   test("the live totals sum every total field inside the same cap", () => {
-    const query: QueryState = { ...BASE, equals: { region: ["north"] } };
+    const query: QueryState = {
+      ...BASE,
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
+    };
     expect(buildCappedTotalSql(TEST_DEF, query)).toEqual({
       text: "SELECT count(*)::int AS count, coalesce(sum(capped.total), 0)::float8 AS total_sum, coalesce(sum(capped.number), 0)::float8 AS number_sum FROM (SELECT t.total, t.number FROM things t WHERE t.region = $1::text ORDER BY t.created_at, t.id LIMIT 10001) capped",
       values: ["north"],
@@ -294,7 +317,10 @@ describe("counts and totals", () => {
 
   test("a status grouping reads its count and totals from the counter table", async () => {
     const { execute, seen } = recordingExecutor(counters);
-    const query: QueryState = { ...BASE, equals: { status: ["open"] } };
+    const query: QueryState = {
+      ...BASE,
+      filters: [{ field: "status", op: "any_of", values: ["open"] }],
+    };
     expect(await getGridCount(TEST_DEF, execute, query, false)).toEqual({
       count: 30,
       capped: false,
@@ -327,7 +353,10 @@ describe("counts and totals", () => {
 
   test("several facet values read the sum of their counters", async () => {
     const { execute } = recordingExecutor(counters);
-    const query: QueryState = { ...BASE, equals: { status: ["open", "done"] } };
+    const query: QueryState = {
+      ...BASE,
+      filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
+    };
     expect(await getGridCount(TEST_DEF, execute, query, false)).toEqual({
       count: 40,
       capped: false,
@@ -339,7 +368,10 @@ describe("counts and totals", () => {
   });
 
   test("another filter totals live under the cap and is refused above it", async () => {
-    const query: QueryState = { ...BASE, equals: { region: ["north"] } };
+    const query: QueryState = {
+      ...BASE,
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
+    };
     const under = recordingExecutor([
       { count: 812, total_sum: 55500, number_sum: 900 },
     ]);
@@ -666,45 +698,240 @@ describe("an exact count of a search", () => {
   });
 });
 
-describe("empty values", () => {
+describe("blank values", () => {
   const def: PostgresGridDef = {
     ...TEST_DEF,
+    fields: TEST_DEF.fields.map((field) =>
+      field.key === "region" ? { ...field, nullable: true } : field,
+    ),
     indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
   };
-  const withNote = (...values: string[]): QueryState => ({
+  const withFilter = (filter: Filter): QueryState => ({
     ...BASE,
-    equals: { note: values },
+    filters: [filter],
   });
 
-  test("empty is IS NULL and takes no parameter", () => {
-    const sql = buildPageSql(def, withNote(EMPTY_VALUE), 50);
+  test("blank is IS NULL and takes no parameter", () => {
+    const sql = buildPageSql(
+      def,
+      withFilter({ field: "note", op: "blank" }),
+      50,
+    );
     expect(sql.text).toContain("WHERE t.note IS NULL ORDER BY");
     expect(sql.values).toEqual([]);
   });
 
-  test("not empty is IS NOT NULL", () => {
-    const sql = buildCappedCountSql(def, withNote(NOT_EMPTY_VALUE));
+  test("not blank is IS NOT NULL", () => {
+    const sql = buildCappedCountSql(
+      def,
+      withFilter({ field: "note", op: "not_blank" }),
+    );
     expect(sql.text).toContain("WHERE t.note IS NOT NULL LIMIT");
     expect(sql.values).toEqual([]);
   });
 
-  test("empty beside real values is one OR group, so the other filters still AND", () => {
-    const one = buildPageSql(def, withNote(EMPTY_VALUE, "gift"), 50);
-    expect(one.text).toContain("WHERE (t.note = $1::text OR t.note IS NULL)");
-    expect(one.values).toEqual(["gift"]);
-    const two = buildPageSql(def, withNote("gift", EMPTY_VALUE, "fragile"), 50);
-    expect(two.text).toContain(
-      "WHERE (t.note = ANY($1::text[]) OR t.note IS NULL)",
+  test("blank beside real values is one OR group, so the other filters still AND", () => {
+    const one = buildPageSql(
+      def,
+      withFilter({ field: "region", op: "any_of", values: [null, "north"] }),
+      50,
     );
-    expect(two.values).toEqual([["gift", "fragile"]]);
+    expect(one.text).toContain(
+      "WHERE (t.region = $1::text OR t.region IS NULL)",
+    );
+    expect(one.values).toEqual(["north"]);
+    const two = buildPageSql(
+      def,
+      withFilter({
+        field: "region",
+        op: "any_of",
+        values: ["north", null, "south"],
+      }),
+      50,
+    );
+    expect(two.text).toContain(
+      "WHERE (t.region = ANY($1::text[]) OR t.region IS NULL)",
+    );
+    expect(two.values).toEqual([["north", "south"]]);
   });
 
-  test("not empty beside a value, and the token on a field that is never empty, are refused", () => {
+  test("blank on a field that is never blank is refused", () => {
     expect(() =>
-      buildPageSql(def, withNote(NOT_EMPTY_VALUE, "gift"), 50),
+      buildPageSql(def, withFilter({ field: "status", op: "blank" }), 50),
     ).toThrow(QueryRejected);
     expect(() =>
-      buildPageSql(def, { ...BASE, equals: { status: [EMPTY_VALUE] } }, 50),
+      buildPageSql(
+        def,
+        withFilter({ field: "status", op: "any_of", values: [null] }),
+        50,
+      ),
     ).toThrow(QueryRejected);
+  });
+});
+
+describe("the SQL of each operator", () => {
+  const OWNER = "018f4b5e-0000-7000-8000-0000000000aa";
+  const def: PostgresGridDef = {
+    ...TEST_DEF,
+    fields: [
+      ...TEST_DEF.fields,
+      {
+        key: "owner",
+        label: "Owner",
+        type: "id",
+        nullable: true,
+        lookup: { labelField: "name" },
+      },
+      { key: "tags", label: "Tags", type: "array", nullable: true },
+      { key: "labels", label: "Labels", type: "array" },
+      { key: "due", label: "Due", type: "date" },
+      {
+        key: "kind",
+        label: "Kind",
+        type: "enum",
+        options: [
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+        ],
+      },
+    ],
+    indexes: [
+      ...TEST_DEF.indexes,
+      { equals: ["owner"], sort: "created_at" },
+      { equals: [], sort: "due", range: true },
+    ],
+    arrayIndexes: ["tags", "labels"],
+  };
+
+  function where(...filters: Filter[]): SqlQuery {
+    const sql = buildCappedCountSql(def, { ...BASE, filters });
+    const match = /WHERE (.*) LIMIT \d+\) capped$/.exec(sql.text);
+    return { text: match ? match[1] : sql.text, values: sql.values };
+  }
+
+  function refusal(...filters: Filter[]): unknown {
+    try {
+      buildPageSql(def, { ...BASE, filters }, 10);
+    } catch (error) {
+      return error;
+    }
+    return null;
+  }
+
+  test("blank and not blank take no parameter, and an array is blank when empty too", () => {
+    expect(where({ field: "note", op: "blank" })).toEqual({
+      text: "t.note IS NULL",
+      values: [],
+    });
+    expect(where({ field: "note", op: "not_blank" })).toEqual({
+      text: "t.note IS NOT NULL",
+      values: [],
+    });
+    expect(where({ field: "tags", op: "blank" })).toEqual({
+      text: "(t.tags IS NULL OR cardinality(t.tags) = 0)",
+      values: [],
+    });
+  });
+
+  test("none of on a lookup is one <> ALL that keeps a blank cell unless blank is excluded too", () => {
+    expect(where({ field: "owner", op: "none_of", values: [OWNER] })).toEqual({
+      text: "(t.owner <> ALL($1::uuid[]) OR t.owner IS NULL)",
+      values: [[OWNER]],
+    });
+    expect(
+      where({ field: "owner", op: "none_of", values: [OWNER, null] }),
+    ).toEqual({ text: "t.owner <> ALL($1::uuid[])", values: [[OWNER]] });
+  });
+
+  test("text equals is one plain comparison of the trimmed value", () => {
+    expect(where({ field: "name", op: "equals", value: " Ann " })).toEqual({
+      text: "t.name = $1",
+      values: ["Ann"],
+    });
+  });
+
+  test("all of on an array is containment, none of is the negated overlap", () => {
+    expect(
+      where({ field: "tags", op: "all_of", values: ["gift", "rush"] }),
+    ).toEqual({ text: "t.tags @> $1::text[]", values: [["gift", "rush"]] });
+    expect(where({ field: "tags", op: "none_of", values: ["gift"] })).toEqual({
+      text: "(NOT (t.tags && $1::text[]) OR t.tags IS NULL)",
+      values: [["gift"]],
+    });
+  });
+
+  test(
+    "none of on an array that is never null keeps a row with an empty array",
+    () => {
+      expect(
+        where({ field: "labels", op: "none_of", values: ["gift"] }),
+      ).toEqual({ text: "NOT (t.labels && $1::text[])", values: [["gift"]] });
+    },
+  );
+
+  test("number and date equals are one = comparison", () => {
+    expect(where({ field: "total", op: "equals", value: "500" })).toEqual({
+      text: "t.total = $1::bigint",
+      values: ["500"],
+    });
+    expect(where({ field: "due", op: "equals", value: "2026-03-03" })).toEqual({
+      text: "t.due = $1::date",
+      values: ["2026-03-03"],
+    });
+  });
+
+  test("a datetime equal to a day is bounded by the first and last instants of the day", () => {
+    expect(
+      where({ field: "created_at", op: "equals", value: "2026-03-03" }),
+    ).toEqual({
+      text: "t.created_at >= $1::timestamptz AND t.created_at <= $2::timestamptz",
+      values: ["2026-03-03T00:00:00.000000Z", "2026-03-03T23:59:59.999999Z"],
+    });
+  });
+
+  test("an operator the field does not take is refused with its code", () => {
+    expect(
+      refusal({ field: "status", op: "contains", value: "op" }),
+    ).toMatchObject({
+      error: "invalid_value",
+      code: "invalid_op",
+      params: { field: "status", op: "contains" },
+    });
+  });
+
+  test("a period and an exclusion over fixed values must be literal by the time they reach the server", () => {
+    expect(
+      refusal({ field: "created_at", op: "in_period", preset: "last-7-days" }),
+    ).toMatchObject({
+      error: "invalid_value",
+      code: "literal_required",
+      params: { field: "created_at", op: "in_period" },
+    });
+    expect(
+      refusal({ field: "status", op: "none_of", values: ["open"] }),
+    ).toMatchObject({
+      error: "invalid_value",
+      code: "literal_required",
+      params: { field: "status", op: "none_of" },
+    });
+  });
+
+  test("more filters than the cap are refused with the cap", () => {
+    const filters: Filter[] = Array.from({ length: 21 }, (_, at) => ({
+      field: "total",
+      op: "greater_or_equal",
+      value: String(at),
+    }));
+    expect(refusal(...filters)).toMatchObject({
+      error: "invalid_value",
+      code: "too_many_filters",
+      params: { max: 20 },
+    });
+  });
+
+  test("any of on a choice field no index holds is refused as unindexed", () => {
+    expect(
+      refusal({ field: "kind", op: "any_of", values: ["a"] }),
+    ).toMatchObject({ error: "unindexed_query", code: "unindexed_query" });
   });
 });

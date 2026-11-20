@@ -329,12 +329,13 @@ pre {
   width: 16rem;
 }
 
-.skeleton-control[data-kind="lookup"] {
+.skeleton-control[data-kind="choice"] {
   width: 13rem;
 }
 
-.skeleton-control[data-kind="range"] {
-  width: 17rem;
+.skeleton-control[data-kind="number"],
+.skeleton-control[data-kind="date"] {
+  width: 21rem;
 }
 
 .skeleton-control[data-kind="sort"] {
@@ -342,11 +343,11 @@ pre {
 }
 
 .skeleton-control[data-kind="text"] {
-  width: 32rem;
+  width: 24rem;
 }
 
-.skeleton-control[data-kind="overlap"] {
-  width: 9rem;
+.skeleton-control[data-kind="array"] {
+  width: 13rem;
 }
 
 .skeleton-control[data-kind="combine"] {

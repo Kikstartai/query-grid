@@ -4,16 +4,17 @@ import { join } from "node:path";
 import {
   DEFAULT_LIMITS,
   defaultQuery,
-  EMPTY_VALUE,
   getField,
+  isListFilter,
   listSorts,
-  NOT_EMPTY_VALUE,
   resolveMaxValues,
   withThenBy,
+  type Filter,
   type GridRow,
   type IndexDef,
+  type ListFilter,
+  type OneFilter,
   type QueryState,
-  type TextOp,
 } from "@kikstart/query-grid";
 import {
   buildCappedCountSql,
@@ -208,12 +209,20 @@ function isPlanAllowed(
   return kind !== "single" || !types.includes("Sort");
 }
 
+function anyOf(field: string, ...values: (string | null)[]): ListFilter {
+  return { field, op: "any_of", values };
+}
+
+function since(bound: string): Filter {
+  return { field: "created_at", op: "greater_or_equal", value: bound };
+}
+
 async function pickEqualsValues(
   client: Client,
   index: IndexDef,
-): Promise<Record<string, string[]>> {
+): Promise<Filter[]> {
   if (index.equals.length === 0) {
-    return {};
+    return [];
   }
   const columns = index.equals.join(", ");
   const { rows } = await client.query<Record<string, string>>(
@@ -221,9 +230,7 @@ async function pickEqualsValues(
      WHERE ${index.equals.map((key) => `${key} IS NOT NULL`).join(" AND ")}
      GROUP BY ${columns} ORDER BY count(*) DESC LIMIT 1`,
   );
-  return Object.fromEntries(
-    Object.entries(rows[0]).map(([key, value]) => [key, [value]]),
-  );
+  return Object.entries(rows[0]).map(([key, value]) => anyOf(key, value));
 }
 
 type Frequency = "common" | "rare";
@@ -233,8 +240,8 @@ async function pickSeveralValues(
   index: IndexDef,
   size: number,
   frequency: Frequency,
-): Promise<Record<string, string[]>> {
-  const equals: Record<string, string[]> = {};
+): Promise<ListFilter[]> {
+  const filters: ListFilter[] = [];
   const order = frequency === "common" ? "DESC" : "ASC";
   for (const column of index.equals) {
     const { rows } = await client.query<{ value: string }>(
@@ -242,9 +249,9 @@ async function pickSeveralValues(
        WHERE ${column} IS NOT NULL
        GROUP BY ${column} ORDER BY count(*) ${order}, ${column} LIMIT ${size}`,
     );
-    equals[column] = rows.map((row) => row.value);
+    filters.push(anyOf(column, ...rows.map((row) => row.value)));
   }
-  return equals;
+  return filters;
 }
 
 function listMultiSizes(index: IndexDef): number[] {
@@ -263,18 +270,18 @@ async function benchSeveral(
   const seen = new Set<string>();
   for (const frequency of ["common", "rare"] as const) {
     for (const size of listMultiSizes(index)) {
-      const equals = await pickSeveralValues(client, index, size, frequency);
-      const key = JSON.stringify(equals);
+      const filters = await pickSeveralValues(client, index, size, frequency);
+      const key = JSON.stringify(filters);
       if (seen.has(key)) {
         continue;
       }
       seen.add(key);
-      const label = Object.entries(equals)
-        .map(([name, values]) => `${values.length} ${frequency} ${name}`)
+      const label = filters
+        .map((filter) => `${filter.values.length} ${frequency} ${filter.field}`)
         .join(", ");
       const query: QueryState = {
         ...defaultQuery(ORDERS_GRID_DEF),
-        equals,
+        filters,
         sort: { field: index.sort, direction: "desc" },
       };
       results.push(
@@ -304,9 +311,9 @@ async function pickDeepCursor(
   client: Client,
   query: QueryState,
 ): Promise<string | null> {
-  const filters = Object.keys(query.equals);
-  const where = filters.length
-    ? `WHERE ${filters.map((key, index) => `${key} = ANY($${index + 1})`).join(" AND ")}`
+  const lists = query.filters.filter(isListFilter);
+  const where = lists.length
+    ? `WHERE ${lists.map((filter, index) => `${filter.field} = ANY($${index + 1})`).join(" AND ")}`
     : "";
   const direction = query.sort.direction.toUpperCase();
   const sorts = listSorts(query).map((sort) => sort.field);
@@ -317,7 +324,7 @@ async function pickDeepCursor(
     const { rows } = await client.query<{ id: string }>(
       `SELECT id FROM orders ${where}
        ORDER BY ${order} OFFSET ${offset} LIMIT 1`,
-      Object.values(query.equals),
+      lists.map((filter) => filter.values),
     );
     if (rows[0]) {
       const rowSql = buildRowSql(ORDERS_GRID_DEF, rows[0].id);
@@ -335,13 +342,13 @@ async function benchOrdered(
   client: Client,
   index: IndexDef,
 ): Promise<Result[]> {
-  const equals = await pickEqualsValues(client, index);
+  const filters = await pickEqualsValues(client, index);
   const results: Result[] = [];
   const ordered = (direction: "asc" | "desc"): QueryState =>
     withThenBy(
       {
         ...defaultQuery(ORDERS_GRID_DEF),
-        equals,
+        filters,
         sort: { field: index.sort, direction },
       },
       (index.then ?? []).map((field) => ({ field, direction })),
@@ -387,27 +394,29 @@ async function benchOrdered(
     return results;
   }
   if (index.range) {
-    const range =
+    const range: Filter =
       index.sort === "total"
-        ? { field: "total", min: "20000", max: "60000" }
+        ? { field: "total", op: "between", min: "20000", max: "60000" }
         : {
             field: index.sort,
+            op: "between",
             min: new Date(Date.now() - 200 * 86_400_000).toISOString(),
             max: new Date(Date.now() - 100 * 86_400_000).toISOString(),
           };
+    const ranged: QueryState = { ...base, filters: [...base.filters, range] };
     results.push(
       await measure(
         client,
         index,
         "range, first page desc",
-        buildPageSql(ORDERS_GRID_DEF, { ...base, ranges: [range] }, PAGE),
+        buildPageSql(ORDERS_GRID_DEF, ranged, PAGE),
         null,
       ),
       await measure(
         client,
         index,
         "range, capped count",
-        buildCappedCountSql(ORDERS_GRID_DEF, { ...base, ranges: [range] }),
+        buildCappedCountSql(ORDERS_GRID_DEF, ranged),
         null,
       ),
     );
@@ -443,7 +452,7 @@ async function benchSearch(
   return results;
 }
 
-const TEXT_CASES: [TextOp, string][] = [
+const TEXT_CASES: [OneFilter["op"], string][] = [
   ["contains", "Smith"],
   ["contains", "Mokoena"],
   ["contains", "mok"],
@@ -457,7 +466,7 @@ async function benchTextIndexes(client: Client): Promise<Result[]> {
   const cases = QUICK ? TEXT_CASES.slice(1, 3) : TEXT_CASES;
   for (const field of ORDERS_GRID_DEF.textIndexes) {
     for (const [op, value] of cases) {
-      const query: QueryState = { ...BASE, texts: [{ field, op, value }] };
+      const query: QueryState = { ...BASE, filters: [{ field, op, value }] };
       const variant = `${op} “${value}”`;
       results.push(
         await measure(
@@ -518,19 +527,19 @@ async function benchEmpty(client: Client, index: IndexDef): Promise<Result[]> {
   const [common] = options;
   const rare = options[options.length - 1];
   const everyone = options.map((option) => option.value);
-  const variants: [string, string[]][] = [
-    ["empty", [EMPTY_VALUE]],
-    ["not empty", [NOT_EMPTY_VALUE]],
-    ["empty or the most common value", [EMPTY_VALUE, common.value]],
-    ["empty or the rarest value", [EMPTY_VALUE, rare.value]],
-    ["empty or every value", [EMPTY_VALUE, ...everyone]],
+  const variants: [string, Filter][] = [
+    ["blank", { field: key, op: "blank" }],
+    ["not blank", { field: key, op: "not_blank" }],
+    ["blank or the most common value", anyOf(key, null, common.value)],
+    ["blank or the rarest value", anyOf(key, null, rare.value)],
+    ["blank or every value", anyOf(key, null, ...everyone)],
   ];
   const picked = QUICK ? variants.slice(2, 3) : variants;
   const results: Result[] = [];
-  for (const [name, values] of picked) {
+  for (const [name, filter] of picked) {
     const query: QueryState = {
       ...BASE,
-      equals: { [key]: values },
+      filters: [filter],
       sort: { field: index.sort, direction: "desc" },
     };
     results.push(
@@ -563,27 +572,24 @@ async function benchEmpty(client: Client, index: IndexDef): Promise<Result[]> {
   return results;
 }
 
-function listSearchFilters(): [string, QueryState["equals"]][] {
+function listSearchFilters(): [string, Filter[]][] {
   const statuses = (
     getField(ORDERS_GRID_DEF, "status_code")?.options ?? []
   ).map((option) => option.value);
   const [largest] = statuses;
   const smallest = statuses[statuses.length - 1];
-  const filters: [string, QueryState["equals"]][] = [
-    [`status_code = ${largest}`, { status_code: [largest] }],
-    [`status_code = ${smallest}`, { status_code: [smallest] }],
+  const filters: [string, Filter[]][] = [
+    [`status_code = ${largest}`, [anyOf("status_code", largest)]],
+    [`status_code = ${smallest}`, [anyOf("status_code", smallest)]],
     [
       `status_code ≠ ${largest}`,
-      { status_code: statuses.filter((value) => value !== largest) },
+      [anyOf("status_code", ...statuses.filter((value) => value !== largest))],
     ],
     [
       "region and channel, which no index pairs",
-      {
-        region: ["gauteng"],
-        channel: ["web"],
-      },
+      [anyOf("region", "gauteng"), anyOf("channel", "web")],
     ],
-    ["assignee empty", { assignee: [EMPTY_VALUE] }],
+    ["assignee blank", [{ field: "assignee", op: "blank" }]],
   ];
   return QUICK ? filters.slice(1, 2) : filters;
 }
@@ -594,7 +600,7 @@ async function benchFilteredSearch(client: Client): Promise<Result[]> {
     ? FILTERED_SEARCH_TERMS.slice(0, 1)
     : FILTERED_SEARCH_TERMS;
   for (const term of terms) {
-    for (const [name, equals] of listSearchFilters()) {
+    for (const [name, filters] of listSearchFilters()) {
       results.push(
         await measure(
           client,
@@ -602,7 +608,7 @@ async function benchFilteredSearch(client: Client): Promise<Result[]> {
           `“${term}”, capped page`,
           buildPageSql(
             ORDERS_GRID_DEF,
-            { ...BASE, search: term, equals },
+            { ...BASE, search: term, filters },
             PAGE,
           ),
           listSearchSettings(),
@@ -646,9 +652,7 @@ async function benchExport(client: Client, total: number): Promise<Result[]> {
   const size = Math.min(DEFAULT_LIMITS.exportLimit, total);
   const query: QueryState = {
     ...BASE,
-    ranges: [
-      { field: "created_at", min: await pickBound(client, size), max: null },
-    ],
+    filters: [since(await pickBound(client, size))],
   };
   const cursor = await pickNewestCursor(client, size - EXPORT_PAGE - 1, [
     "created_at",
@@ -690,9 +694,7 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
   );
   const core: QueryState = {
     ...BASE,
-    ranges: [
-      { field: "created_at", min: await pickBound(client, size), max: null },
-    ],
+    filters: [since(await pickBound(client, size))],
   };
   const smallest = (getField(ORDERS_GRID_DEF, "status_code")?.options ?? []).at(
     -1,
@@ -701,18 +703,20 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
     ...BASE,
     combine: "or",
     sort: { field: "total", direction: "desc" },
-    equals: { status_code: [smallest?.value ?? ""] },
-    ranges: [
-      {
-        field: "created_at",
-        min: await pickBound(
+    filters: [
+      anyOf("status_code", smallest?.value ?? ""),
+      since(
+        await pickBound(
           client,
           Math.max(1, size - Number(counters.rows[0].rows)),
         ),
-        max: null,
-      },
+      ),
     ],
   };
+  const beside = (filter: Filter): QueryState => ({
+    ...core,
+    filters: [...core.filters, filter],
+  });
   const cases: [string, SqlQuery][] = [
     [
       "size probe: capped count of the indexed filters",
@@ -722,10 +726,7 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
       "contains with no match: first page",
       buildPageSql(
         ORDERS_GRID_DEF,
-        {
-          ...core,
-          texts: [{ field: "customer_name", op: "contains", value: NO_MATCH }],
-        },
+        beside({ field: "customer_name", op: "contains", value: NO_MATCH }),
         PAGE,
       ),
     ],
@@ -733,13 +734,19 @@ async function benchNarrowed(client: Client, total: number): Promise<Result[]> {
       "second range with no match: first page",
       buildPageSql(
         ORDERS_GRID_DEF,
-        {
-          ...core,
-          ranges: [
-            ...core.ranges,
-            { field: "total", min: "999999999999", max: null },
-          ],
-        },
+        beside({
+          field: "total",
+          op: "greater_or_equal",
+          value: "999999999999",
+        }),
+        PAGE,
+      ),
+    ],
+    [
+      "customer name equals with no match: first page",
+      buildPageSql(
+        ORDERS_GRID_DEF,
+        beside({ field: "customer_name", op: "equals", value: NO_MATCH }),
         PAGE,
       ),
     ],
@@ -842,9 +849,9 @@ function toMarkdown(results: Result[], total: number): string {
       ? `Indexes declared \`multi: false\`, so offered with one value only: ${optedOut.join("; ")}.`
       : "No index is declared `multi: false`.",
     "",
-    `## Empty values: ${summarize(empty)}`,
+    `## Blank values: ${summarize(empty)}`,
     "",
-    "Each index on a nullable field, with empty, not empty, and empty beside real values, as a first page, a capped count and a capped total. The bar is the p95 budget alone: a mixed list reads through whichever plan stops first, and the plan is shown.",
+    "Each index on a nullable field, with blank, not blank, and blank beside real values, as a first page, a capped count and a capped total. The bar is the p95 budget alone: a mixed list reads through whichever plan stops first, and the plan is shown.",
     "",
     ...toTable(empty),
     "",
@@ -899,7 +906,7 @@ async function main(): Promise<void> {
   for (const index of listNullableIndexes()) {
     const batch = await benchEmpty(client, index);
     results.push(...batch);
-    console.log(`empty values on ${index.equals[0]}: ${batch.length} queries`);
+    console.log(`blank values on ${index.equals[0]}: ${batch.length} queries`);
   }
   const filtered = await benchFilteredSearch(client);
   results.push(...filtered);

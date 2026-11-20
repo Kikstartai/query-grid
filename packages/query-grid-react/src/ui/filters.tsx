@@ -3,33 +3,25 @@
 import type { ReactNode } from "react";
 
 import {
-  explainNarrowed,
   explainUnavailable,
-  getField,
-  INDEXED_TEXT_OPS,
+  getFieldFilter,
   getFieldLabel,
-  getRange,
-  getReservedValue,
-  isExcluding,
+  hasFixedValues,
   labelKey,
-  listTextFilterFields,
-  listSelectedValues,
-  listThenBy,
-  toExcludeValues,
   listFilterFields,
+  listThenBy,
+  resolveFieldKind,
   SEARCH_MAX_LENGTH,
   SEARCH_MIN_LENGTH,
-  TEXT_INDEX_MIN_LENGTH,
-  resolveFilterKind,
   type BaseFieldDef,
   type FieldOption,
-  type RangeOp,
+  type Filter,
 } from "@kikstart/query-grid";
 
+import { CombineToggle as BaseCombineToggle } from "../components/combine-toggle.tsx";
 import {
-  EqualsSelect,
-  LookupFilter,
-  RangeFilter,
+  FieldFilter as BaseFieldFilter,
+  type FilterOpOption,
 } from "../components/field-filter.tsx";
 import {
   FilterBar as BaseFilterBar,
@@ -39,10 +31,6 @@ import {
   SortControl as BaseSortControl,
 } from "../components/filter-bar.tsx";
 import { FilterSidebar as BaseFilterSidebar } from "../components/filter-sidebar.tsx";
-import {
-  CombineToggle as BaseCombineToggle,
-  TextFilter as BaseTextFilter,
-} from "../components/narrow-filters.tsx";
 import {
   useLocale,
   useMessages,
@@ -66,41 +54,39 @@ export interface FieldFilterProps {
   field: BaseFieldDef;
 }
 
-export function useFieldOffer(
-  key: string,
-  kind: "equals" | "range" | "overlap",
-) {
-  const offer = useOfferState({ kind, field: key });
-  return { disabled: !offer.offered, reason: offer.reason };
+export function useFilterOps(key: string): FilterOpOption[] {
+  const { def } = useQueryGridMeta();
+  const messages = useMessages();
+  const locale = useLocale();
+  const offers = useOffers();
+  return (offers.filters[key] ?? []).map((offer) => ({
+    op: offer.op,
+    disabled: !offer.offered,
+    reason: offer.reason
+      ? formatReason(messages, def, offer.reason, locale)
+      : null,
+    minLength: offer.minLength,
+  }));
 }
 
-export function useEqualsFilter(key: string) {
-  const { def } = useQueryGridMeta();
+export function useFieldFilter(key: string) {
   const { dispatch } = useQueryGridActions();
   const query = useQueryState();
   const offers = useOffers();
-  const field = getField(def, key);
-  const chosen = query.equals[key] ?? [];
-  const excluded = field !== null && isExcluding(field, chosen);
-  const values = field ? listSelectedValues(field, chosen) : chosen;
-  const setValues = (next: string[], exclude: boolean) =>
-    dispatch({
-      type: "setEquals",
-      field: key,
-      values: exclude ? toExcludeValues(next) : next,
-    });
+  const ops = useFilterOps(key);
+  const filter = getFieldFilter(query, key);
+  const held = filter === null && ops.every((item) => item.disabled);
   return {
-    values,
-    excluded,
-    canExclude: offers.exclude.includes(key),
-    multiple: excluded || offers.multi.includes(key),
-    onValuesChange: (next: string[]) => setValues(next, excluded),
-    onExcludedChange: (exclude: boolean) =>
-      setValues(
-        values.filter(
-          (value) => !field || getReservedValue(field, value) === null,
-        ),
-        exclude,
+    ops,
+    filter,
+    multiple: offers.multi.includes(key),
+    disabled: held,
+    reason: held ? (ops[0]?.reason ?? null) : null,
+    onFilterChange: (next: Filter | null) =>
+      dispatch(
+        next
+          ? { type: "setFilter", filter: next, at: 0 }
+          : { type: "removeFilter", field: key, at: 0 },
       ),
   };
 }
@@ -121,74 +107,37 @@ function withBooleanOptions(
   };
 }
 
-function BoundEqualsSelect({ field }: FieldFilterProps) {
+function isLookupField(field: BaseFieldDef): boolean {
+  const kind = resolveFieldKind(field);
+  return (kind === "choice" || kind === "array") && !hasFixedValues(field);
+}
+
+function BoundChoiceFilter({ field }: FieldFilterProps) {
   const messages = useMessages();
   return (
-    <EqualsSelect
+    <BaseFieldFilter
       field={withBooleanOptions(field, messages)}
-      {...useEqualsFilter(field.key)}
-      {...useFieldOffer(field.key, "equals")}
+      {...useFieldFilter(field.key)}
     />
   );
-}
-
-function useOverlapFilter(key: string) {
-  const { dispatch } = useQueryGridActions();
-  const query = useQueryState();
-  return {
-    values: query.overlaps[key] ?? [],
-    multiple: true,
-    onValuesChange: (values: string[]) =>
-      dispatch({ type: "setOverlap", field: key, values }),
-  };
-}
-
-function BoundOverlapSelect({ field }: FieldFilterProps) {
-  return (
-    <EqualsSelect
-      kind="overlap"
-      field={field}
-      {...useOverlapFilter(field.key)}
-      {...useFieldOffer(field.key, "overlap")}
-    />
-  );
-}
-
-function BoundOverlapLookup({ field }: FieldFilterProps) {
-  const { loadOptions } = useQueryGridActions();
-  return (
-    <LookupFilter
-      kind="overlap"
-      field={field}
-      {...useOverlapFilter(field.key)}
-      {...useFieldOffer(field.key, "overlap")}
-      loadOptions={(text, signal) => loadOptions(field.key, text, signal)}
-    />
-  );
-}
-
-function BoundOverlapFilter({ field }: FieldFilterProps) {
-  if (field.options) {
-    return <BoundOverlapSelect field={field} />;
-  }
-  return <BoundOverlapLookup field={field} />;
 }
 
 function BoundLookupFilter({ field }: FieldFilterProps) {
   const { loadOptions, rememberLabel } = useQueryGridActions();
   const known = useFieldLabels();
-  const { values, multiple, onValuesChange } = useEqualsFilter(field.key);
-  const equals = { values, multiple, onValuesChange };
+  const bound = useFieldFilter(field.key);
+  const values =
+    bound.filter && "values" in bound.filter ? bound.filter.values : [];
   return (
-    <LookupFilter
+    <BaseFieldFilter
       field={field}
-      {...equals}
-      {...useFieldOffer(field.key, "equals")}
+      {...bound}
       loadOptions={(text, signal) => loadOptions(field.key, text, signal)}
       valueLabels={Object.fromEntries(
-        equals.values.flatMap((value) => {
-          const label = known[labelKey(field.key, value)];
-          return label ? [[value, label]] : [];
+        values.flatMap((value) => {
+          const label =
+            value === null ? null : known[labelKey(field.key, value)];
+          return value !== null && label ? [[value, label]] : [];
         }),
       )}
       onOptionPick={(option: FieldOption) =>
@@ -198,62 +147,11 @@ function BoundLookupFilter({ field }: FieldFilterProps) {
   );
 }
 
-const NARROW_RANGE_OPS: RangeOp[] = ["not_between", "neq"];
-
-function BoundRangeFilter({ field }: FieldFilterProps) {
-  const { def } = useQueryGridMeta();
-  const messages = useMessages();
-  const locale = useLocale();
-  const { dispatch } = useQueryGridActions();
-  const query = useQueryState();
-  const context = useOfferContext();
-  const offers = useOffers();
-  const held = !offers.narrowRanges.includes(field.key);
-  return (
-    <RangeFilter
-      field={field}
-      range={getRange(query, field.key)}
-      heldOps={held ? NARROW_RANGE_OPS : undefined}
-      heldReason={
-        held
-          ? formatReason(
-              messages,
-              def,
-              explainNarrowed(
-                query,
-                { kind: "range", field: field.key },
-                context,
-              ),
-              locale,
-            )
-          : null
-      }
-      onRangeChange={(next) =>
-        dispatch(
-          next
-            ? { type: "setRange", field: field.key, at: 0, ...next }
-            : { type: "clearRange", field: field.key, at: 0 },
-        )
-      }
-      {...useFieldOffer(field.key, "range")}
-    />
-  );
-}
-
 export function FieldFilter(props: FieldFilterProps) {
-  const { source } = useQueryGridMeta();
-  switch (resolveFilterKind(props.field, source.capabilities)) {
-    case "lookup":
-      return <BoundLookupFilter {...props} />;
-    case "equals":
-      return <BoundEqualsSelect {...props} />;
-    case "range":
-      return <BoundRangeFilter {...props} />;
-    case "overlap":
-      return <BoundOverlapFilter {...props} />;
-    default:
-      return null;
+  if (isLookupField(props.field)) {
+    return <BoundLookupFilter {...props} />;
   }
+  return <BoundChoiceFilter {...props} />;
 }
 
 export function SortControl() {
@@ -296,6 +194,7 @@ export function SortControl() {
                   messages,
                   def,
                   explainUnavailable(
+                    def,
                     query,
                     { kind: "thenBy", field: key },
                     context,
@@ -318,6 +217,7 @@ export function SortControl() {
               messages,
               def,
               explainUnavailable(
+                def,
                 query,
                 { kind: "sort", field: query.sort.field },
                 context,
@@ -355,6 +255,7 @@ export function GroupControl() {
                 messages,
                 def,
                 explainUnavailable(
+                  def,
                   query,
                   { kind: "group", field: key },
                   context,
@@ -394,61 +295,6 @@ export function SearchFilter() {
   );
 }
 
-export interface TextFilterProps {
-  fields?: string[];
-}
-
-export function TextFilter({ fields }: TextFilterProps) {
-  const { def, source } = useQueryGridMeta();
-  const messages = useMessages();
-  const locale = useLocale();
-  const query = useQueryState();
-  const context = useOfferContext();
-  const offers = useOffers();
-  const { dispatch } = useQueryGridActions();
-  const keys = listTextFilterFields(source.capabilities, fields);
-  const offered = keys.filter((key) => offers.texts.includes(key));
-  const offer = useOfferState({ kind: "text", field: keys[0] ?? "" });
-  if (keys.length === 0) {
-    return null;
-  }
-  const held = offered.length === 0 && query.texts.length === 0;
-  const explain = (key: string) =>
-    formatReason(
-      messages,
-      def,
-      explainNarrowed(query, { kind: "text", field: key }, context),
-      locale,
-    );
-  return (
-    <BaseTextFilter
-      options={keys.map((key) => {
-        if (offers.narrowTexts.includes(key)) {
-          return { value: key, label: getFieldLabel(def, key) };
-        }
-        return {
-          value: key,
-          label: getFieldLabel(def, key),
-          disabled: !offered.includes(key),
-          ops: INDEXED_TEXT_OPS,
-          minLength: TEXT_INDEX_MIN_LENGTH,
-          reason: explain(key),
-        };
-      })}
-      filters={query.texts}
-      onFilterChange={(at, filter) =>
-        dispatch(
-          filter
-            ? { type: "setText", at, ...filter }
-            : { type: "removeText", at },
-        )
-      }
-      disabled={held}
-      reason={held ? offer.reason : null}
-    />
-  );
-}
-
 export function CombineToggle() {
   const { source } = useQueryGridMeta();
   const query = useQueryState();
@@ -476,8 +322,8 @@ export function FilterChips() {
       onRemove={(chipId, valueId) => {
         const chip = chips.find(({ item }) => item.id === chipId)?.chip;
         const value =
-          chip?.kind === "equals" || chip?.kind === "overlap"
-            ? chip.values.find((item) => item.value === valueId)
+          chip?.kind === "filter"
+            ? chip.values.find((item) => (item.value ?? "") === valueId)
             : undefined;
         const clear = value?.clear ?? chip?.clear;
         if (clear) {
@@ -491,10 +337,9 @@ export function FilterChips() {
 
 interface DefaultFiltersProps {
   fields?: string[];
-  texts?: string[];
 }
 
-function DefaultFilters({ fields, texts }: DefaultFiltersProps) {
+function DefaultFilters({ fields }: DefaultFiltersProps) {
   const { def, source } = useQueryGridMeta();
   return (
     <>
@@ -502,7 +347,6 @@ function DefaultFilters({ fields, texts }: DefaultFiltersProps) {
       {listFilterFields(def, source.capabilities, fields).map((field) => (
         <FieldFilter key={field.key} field={field} />
       ))}
-      <TextFilter fields={texts ?? fields} />
       <CombineToggle />
       <SortControl />
       <GroupControl />
@@ -512,14 +356,13 @@ function DefaultFilters({ fields, texts }: DefaultFiltersProps) {
 
 export interface FilterBarProps {
   fields?: string[];
-  texts?: string[];
   children?: ReactNode;
 }
 
-export function FilterBar({ fields, texts, children }: FilterBarProps) {
+export function FilterBar({ fields, children }: FilterBarProps) {
   return (
     <BaseFilterBar>
-      {children ?? <DefaultFilters fields={fields} texts={texts} />}
+      {children ?? <DefaultFilters fields={fields} />}
     </BaseFilterBar>
   );
 }
@@ -528,7 +371,6 @@ export interface FilterSidebarProps {
   side?: "start" | "end";
   label?: string;
   fields?: string[];
-  texts?: string[];
   children?: ReactNode;
 }
 
@@ -536,7 +378,6 @@ export function FilterSidebar({
   side,
   label,
   fields,
-  texts,
   children,
 }: FilterSidebarProps) {
   const { dispatch } = useQueryGridActions();
@@ -548,7 +389,7 @@ export function FilterSidebar({
       activeCount={chips.filter(({ chip }) => chip.clear !== null).length}
       onReset={() => dispatch({ type: "reset" })}
     >
-      {children ?? <DefaultFilters fields={fields} texts={texts} />}
+      {children ?? <DefaultFilters fields={fields} />}
     </BaseFilterSidebar>
   );
 }

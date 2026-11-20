@@ -84,7 +84,7 @@ export interface IndexDef {
   sort: string;
   range?: boolean;
   multi?: boolean;
-  empty?: string[];
+  blank?: string[];
   then?: string[];
 }
 

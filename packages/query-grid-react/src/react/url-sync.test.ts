@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   createQueryStore,
   defaultQuery,
+  type Filter,
   type HistoryWrite,
+  type QueryAction,
   type QueryStore,
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
@@ -13,6 +15,14 @@ import { encodeStore, encodeUrlState, type UrlState } from "./url-state.ts";
 import { createUrlSync } from "./url-sync.ts";
 
 const DEF = TEST_GRID_DEF;
+
+function statusFilter(values: string[]): Filter {
+  return { field: "status", op: "any_of", values };
+}
+
+function setStatus(values: string[]): QueryAction {
+  return { type: "setFilter", filter: statusFilter(values) };
+}
 
 interface Written {
   queryString: string;
@@ -48,9 +58,9 @@ function createHarness(): Harness {
 describe("createUrlSync", () => {
   test("a discrete change is written once, as a push", () => {
     const { store, written } = createHarness();
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    store.dispatch(setStatus(["open"]));
     expect(written).toEqual([
-      { queryString: "f.status=open", history: "push" },
+      { queryString: "f.status.any_of=open", history: "push" },
     ]);
   });
 
@@ -62,35 +72,31 @@ describe("createUrlSync", () => {
 
   test("the URL catching up with two fast writes does not pull the store back", () => {
     const { store, written, sync } = createHarness();
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
-    store.dispatch({
-      type: "setEquals",
-      field: "status",
-      values: ["open", "done"],
-    });
+    store.dispatch(setStatus(["open"]));
+    store.dispatch(setStatus(["open", "done"]));
     sync.follow(written[0].queryString);
-    expect(store.getQuery().equals.status).toEqual(["open", "done"]);
+    expect(store.getQuery().filters).toEqual([statusFilter(["open", "done"])]);
     sync.follow(written[1].queryString);
-    expect(store.getQuery().equals.status).toEqual(["open", "done"]);
+    expect(store.getQuery().filters).toEqual([statusFilter(["open", "done"])]);
     expect(written).toHaveLength(2);
   });
 
   test("Back to an earlier URL is followed by the store and not written again", () => {
     const { store, written, sync } = createHarness();
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    store.dispatch(setStatus(["open"]));
     sync.follow(written[0].queryString);
     sync.follow("");
-    expect(store.getQuery().equals).toEqual({});
+    expect(store.getQuery().filters).toEqual([]);
     expect(written).toHaveLength(1);
   });
 
   test("an echo older than the guard window is followed as a navigation", () => {
     const { store, written, clock, sync } = createHarness();
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
-    store.dispatch({ type: "clearEquals", field: "status" });
+    store.dispatch(setStatus(["open"]));
+    store.dispatch({ type: "removeFilter", field: "status" });
     clock.now = 5000;
     sync.follow(written[0].queryString);
-    expect(store.getQuery().equals.status).toEqual(["open"]);
+    expect(store.getQuery().filters).toEqual([statusFilter(["open"])]);
   });
 
   test("a URL the def cannot hold is rewritten to what the store took from it", () => {

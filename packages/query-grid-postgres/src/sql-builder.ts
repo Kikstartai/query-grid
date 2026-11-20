@@ -1,10 +1,11 @@
 import {
+  checkFilterOps,
   DEFAULT_LIMITS,
   formatProblem,
   getField,
   GROUP_LIMIT,
-  getReservedValue,
   isCombineOr,
+  isPointBounds,
   isNumberType,
   isQueryBudgeted,
   isQueryRunnable,
@@ -14,18 +15,20 @@ import {
   listSorts,
   PAGE_LIMIT_MAX,
   planQuery,
+  resolveFieldKind,
+  toFilterBounds,
   validateQueryValues,
   type BaseFieldDef,
   type FieldType,
+  type Filter,
+  type FilterBounds,
+  type FilterOp,
   type GridLimits,
   type GridRow,
   type PageResult,
   type ProblemParams,
   type QueryState,
-  type RangeState,
   type SortDirection,
-  type TextOp,
-  type TextState,
 } from "@kikstart/query-grid";
 
 import { decodeCursor, encodeCursor } from "./cursor.ts";
@@ -162,6 +165,10 @@ export function searchExpression(def: PostgresGridDef, prefix = ""): string {
 }
 
 export function assertDeclared(def: PostgresGridDef, query: QueryState): void {
+  const refused = checkFilterOps(def, query);
+  if (refused) {
+    throw new QueryRejected("invalid_value", refused.code, refused.params);
+  }
   if (!isQueryRunnable(def, query)) {
     throw new QueryRejected("unindexed_query");
   }
@@ -198,40 +205,49 @@ function selectList(def: PostgresGridDef): string {
   return def.fields.map(selectExpression).join(", ");
 }
 
-interface Filter {
+interface Filtered {
   params: Params;
   clauses: string[];
 }
 
+function either(parts: string[]): string {
+  return parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0];
+}
+
 // An excluded range is written as the two sides outside it, never as NOT (…): each side stays a plain comparison, and an empty cell is outside every range.
-function rangeClauses(
+function boundsClauses(
   field: BaseFieldDef,
-  range: RangeState,
+  bounds: FilterBounds,
   params: Params,
 ): string[] {
   const name = column(field.key);
-  const outside = range.exclude === true;
-  const parts: string[] = [];
-  if (range.min !== null) {
-    const inside = range.minExclusive ? ">" : ">=";
-    const operator = outside ? (range.minExclusive ? "<=" : "<") : inside;
-    parts.push(`${name} ${operator} ${params.add(range.min, field)}`);
+  if (isPointBounds(bounds) && bounds.min !== null) {
+    const place = params.add(bounds.min, field);
+    if (!bounds.outside) {
+      return [`${name} = ${place}`];
+    }
+    const sides = [`${name} <> ${place}`];
+    return [either(field.nullable ? [...sides, `${name} IS NULL`] : sides)];
   }
-  if (range.max !== null) {
-    const inside = range.maxExclusive ? "<" : "<=";
-    const operator = outside ? (range.maxExclusive ? ">=" : ">") : inside;
-    parts.push(`${name} ${operator} ${params.add(range.max, field)}`);
+  const { outside } = bounds;
+  const parts: string[] = [];
+  if (bounds.min !== null) {
+    const inside = bounds.minOpen ? ">" : ">=";
+    const operator = outside ? (bounds.minOpen ? "<=" : "<") : inside;
+    parts.push(`${name} ${operator} ${params.add(bounds.min, field)}`);
+  }
+  if (bounds.max !== null) {
+    const inside = bounds.maxOpen ? "<" : "<=";
+    const operator = outside ? (bounds.maxOpen ? ">=" : ">") : inside;
+    parts.push(`${name} ${operator} ${params.add(bounds.max, field)}`);
   }
   if (!outside) {
     return parts;
   }
-  const sides = field.nullable ? [...parts, `${name} IS NULL`] : parts;
-  return [sides.length > 1 ? `(${sides.join(" OR ")})` : sides[0]];
+  return [either(field.nullable ? [...parts, `${name} IS NULL`] : parts)];
 }
 
-type LikeOp = Exclude<TextOp, "not_equals">;
-
-const LIKE_PATTERNS: Record<LikeOp, (value: string) => string> = {
+const LIKE_PATTERNS: Partial<Record<FilterOp, (value: string) => string>> = {
   contains: (value) => `%${value}%`,
   not_contains: (value) => `%${value}%`,
   starts_with: (value) => `${value}%`,
@@ -240,21 +256,117 @@ const LIKE_PATTERNS: Record<LikeOp, (value: string) => string> = {
 
 function textClause(
   field: BaseFieldDef,
-  text: TextState,
+  filter: Filter,
   params: Params,
 ): string {
   const name = column(field.key);
-  const value = text.value.trim();
-  if (text.op === "not_equals") {
+  const value = "value" in filter ? filter.value.trim() : "";
+  if (filter.op === "equals") {
+    return `${name} = ${params.addText(value)}`;
+  }
+  if (filter.op === "not_equals") {
     return `${name} IS DISTINCT FROM ${params.addText(value)}`;
   }
-  const pattern = params.addText(LIKE_PATTERNS[text.op](escapeLike(value)));
-  if (text.op !== "not_contains") {
+  const like = LIKE_PATTERNS[filter.op];
+  if (!like) {
+    throw new QueryRejected("invalid_value", "invalid_op", {
+      field: filter.field,
+      op: filter.op,
+    });
+  }
+  const pattern = params.addText(like(escapeLike(value)));
+  if (filter.op !== "not_contains") {
     return `${name} ILIKE ${pattern}`;
   }
   return field.nullable
     ? `(${name} NOT ILIKE ${pattern} OR ${name} IS NULL)`
     : `${name} NOT ILIKE ${pattern}`;
+}
+
+function blankClause(field: BaseFieldDef): string {
+  const name = column(field.key);
+  return field.type === "array"
+    ? `(${name} IS NULL OR cardinality(${name}) = 0)`
+    : `${name} IS NULL`;
+}
+
+function listReal(values: (string | null)[]): string[] {
+  return values.flatMap((value) => (value === null ? [] : [value]));
+}
+
+function anyOfClause(
+  field: BaseFieldDef,
+  values: (string | null)[],
+  params: Params,
+): string {
+  const name = column(field.key);
+  const real = listReal(values);
+  if (real.length === 0) {
+    return blankClause(field);
+  }
+  const blank = real.length < values.length ? [blankClause(field)] : [];
+  if (field.type === "array") {
+    return either([`${name} && ${params.addList(real, field)}`, ...blank]);
+  }
+  const matches =
+    real.length === 1
+      ? `${name} = ${params.add(real[0], field)}`
+      : `${name} = ANY(${params.addList(real, field)})`;
+  return either([matches, ...blank]);
+}
+
+function noneOfClause(
+  field: BaseFieldDef,
+  values: (string | null)[],
+  params: Params,
+): string {
+  const name = column(field.key);
+  const real = listReal(values);
+  const keepsBlank = real.length === values.length;
+  if (real.length === 0) {
+    return field.type === "array"
+      ? `(${name} IS NOT NULL AND cardinality(${name}) > 0)`
+      : `${name} IS NOT NULL`;
+  }
+  const list = params.addList(real, field);
+  if (field.type === "array") {
+    const outside = `NOT (${name} && ${list})`;
+    if (!keepsBlank) {
+      return `(${outside} AND cardinality(${name}) > 0)`;
+    }
+    return field.nullable ? `(${outside} OR ${name} IS NULL)` : outside;
+  }
+  const outside = `${name} <> ALL(${list})`;
+  return keepsBlank && field.nullable
+    ? `(${outside} OR ${name} IS NULL)`
+    : outside;
+}
+
+function filterClauses(
+  field: BaseFieldDef,
+  item: Filter,
+  params: Params,
+): string[] {
+  const name = column(field.key);
+  switch (item.op) {
+    case "blank":
+      return [blankClause(field)];
+    case "not_blank":
+      return [`${name} IS NOT NULL`];
+    case "any_of":
+      return [anyOfClause(field, item.values, params)];
+    case "none_of":
+      return [noneOfClause(field, item.values, params)];
+    case "all_of":
+      return [`${name} @> ${params.addList(listReal(item.values), field)}`];
+    default: {
+      const bounds =
+        resolveFieldKind(field) === "text" ? null : toFilterBounds(field, item);
+      return bounds
+        ? boundsClauses(field, bounds, params)
+        : [textClause(field, item, params)];
+    }
+  }
 }
 
 function anyOf(terms: string[][]): string[] {
@@ -264,23 +376,12 @@ function anyOf(terms: string[][]): string[] {
   return alternatives.length > 0 ? [`(${alternatives.join(" OR ")})`] : [];
 }
 
-function filter(def: PostgresGridDef, query: QueryState): Filter {
+function filter(def: PostgresGridDef, query: QueryState): Filtered {
   assertDeclared(def, query);
   const params = new Params();
-  const terms: string[][] = [];
-  for (const [key, values] of Object.entries(query.equals)) {
-    terms.push([equalsClause(requireField(def, key), values, params)]);
-  }
-  for (const range of query.ranges) {
-    terms.push(rangeClauses(requireField(def, range.field), range, params));
-  }
-  for (const text of query.texts) {
-    terms.push([textClause(requireField(def, text.field), text, params)]);
-  }
-  for (const [key, values] of Object.entries(query.overlaps)) {
-    const field = requireField(def, key);
-    terms.push([`${column(field.key)} && ${params.addList(values, field)}`]);
-  }
+  const terms = query.filters.map((item) =>
+    filterClauses(requireField(def, item.field), item, params),
+  );
   const clauses = isCombineOr(query) ? anyOf(terms) : terms.flat();
   if (query.search !== null) {
     const pattern = `%${escapeLike(query.search.trim())}%`;
@@ -289,30 +390,6 @@ function filter(def: PostgresGridDef, query: QueryState): Filter {
     );
   }
   return { params, clauses };
-}
-
-function equalsClause(
-  field: BaseFieldDef,
-  values: string[],
-  params: Params,
-): string {
-  const name = column(field.key);
-  if (values.some((value) => getReservedValue(field, value) === "not_empty")) {
-    return `${name} IS NOT NULL`;
-  }
-  const real = values.filter(
-    (value) => getReservedValue(field, value) === null,
-  );
-  if (real.length === 0) {
-    return `${name} IS NULL`;
-  }
-  const matches =
-    real.length === 1
-      ? `${name} = ${params.add(real[0], field)}`
-      : `${name} = ANY(${params.addList(real, field)})`;
-  return real.length === values.length
-    ? matches
-    : `(${matches} OR ${name} IS NULL)`;
 }
 
 function whereClause(clauses: string[]): string {
@@ -474,10 +551,10 @@ export function isTotalOrdered(
   return (
     !isCombineOr(query) &&
     !isQueryBudgeted(def, query) &&
-    Object.entries(query.equals).every(
-      ([key, values]) =>
-        values.length === 1 &&
-        getReservedValue(requireField(def, key), values[0]) !== "not_empty",
+    query.filters.every(
+      (item) =>
+        item.op !== "not_blank" &&
+        (item.op !== "any_of" || item.values.length === 1),
     )
   );
 }

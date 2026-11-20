@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
-import type { GridRow } from "./grid-def.ts";
 import type {
-  QueryState,
-  RangeInput,
-  RangeState,
-  TextState,
-} from "./query-state.ts";
+  BaseFieldDef,
+  GridRow,
+  IndexedGridDef,
+  SortDirection,
+} from "./grid-def.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 import { createTestSource } from "./grid-def.fixture.ts";
 import {
   gridDefCapabilities,
@@ -16,23 +16,28 @@ import {
   isQueryRunnable,
   planQuery,
 } from "./indexes.ts";
-import type { IndexedGridDef } from "./grid-def.ts";
-import { toLiteralQuery } from "./literal-filters.ts";
+import { toLiteralQuery, withLiteralFilters } from "./literal-filters.ts";
 import { createMemorySource, memoryCapabilities } from "./memory-source.ts";
+import {
+  FILTER_OPS,
+  getOperatorShape,
+  isFieldOp,
+  isFilterOp,
+  isLiteralOp,
+  listFieldOps,
+  listFixedValues,
+  resolveFieldKind,
+  type FilterOp,
+} from "./operators.ts";
 import {
   applyAction,
   defaultQuery,
-  explainNarrowed,
+  explainUnavailable,
   listOffers,
+  type OpOffer,
 } from "./query-actions.ts";
-import {
-  fromRangeValue,
-  resolveRangeValue,
-  toRangeValue,
-  type RangeValue,
-} from "./range-bounds.ts";
 import { decodeQuery, encodeQuery, listQueryKeys } from "./query-url.ts";
-import { validateQueryValues } from "./query-validate.ts";
+import { checkFilterOps, validateQueryValues } from "./query-validate.ts";
 import { applyScope, withScope, type QueryScope } from "./scope.ts";
 
 const DEF: IndexedGridDef = {
@@ -56,7 +61,7 @@ const DEF: IndexedGridDef = {
     { equals: [], sort: "created_at", range: true },
     { equals: ["starred"], sort: "created_at" },
     { equals: ["folder_id"], sort: "created_at", range: true },
-    { equals: ["folder_id"], sort: "created_at", empty: ["deleted_at"] },
+    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
     { equals: [], sort: "size", range: true },
   ],
   textIndexes: ["name"],
@@ -72,251 +77,494 @@ const CONTEXT = {
   narrowed: null,
 };
 
-function text(field: string, op: TextState["op"], value: string): TextState {
-  return { field, op, value };
+function getDefField(key: string): BaseFieldDef {
+  const field = DEF.fields.find((item) => item.key === key);
+  if (!field) {
+    throw new Error(key);
+  }
+  return field;
 }
 
-function plan(query: Partial<QueryState>) {
-  return planQuery(DEF.indexes, { ...BASE, ...query }, DEF);
+function one(field: string, op: FilterOp, value: string): Filter {
+  return { field, op, value } as Filter;
 }
 
-describe("the URL of the new filters", () => {
-  const ranges: RangeState[] = [
-    { field: "size", min: "5", max: null, minExclusive: true },
-    { field: "size", min: "10", max: "20", exclude: true },
-    { field: "due", min: null, max: "2026-03-01", maxExclusive: true },
-    {
-      field: "rate",
-      min: "1.5",
-      max: "2.5",
-      exclude: true,
-      minExclusive: true,
-      maxExclusive: true,
-    },
-  ];
-  const query: QueryState = {
-    ...BASE,
-    ranges,
-    texts: [
-      text("name", "starts_with", "inv"),
-      text("name", "not_contains", "draft"),
-      text("note", "ends_with", ".pdf"),
-      text("note", "not_equals", "n/a"),
-      text("note", "contains", "a..b"),
-    ],
-    overlaps: { tags: ["red", "blue"] },
-  };
+function pair(field: string, op: FilterOp, min: string, max: string): Filter {
+  return { field, op, min, max } as Filter;
+}
 
-  test("ranges carry exclusion and open bounds, several to a field", () => {
-    const params = encodeQuery(DEF, query);
-    expect(params.getAll("r.size")).toEqual(["(5..", "!10..20"]);
-    expect(params.get("r.due")).toBe("..2026-03-01)");
-    expect(params.get("r.rate")).toBe("!(1.5..2.5)");
-    expect(decodeQuery(DEF, params).ranges).toEqual(ranges);
+function list(field: string, op: FilterOp, values: (string | null)[]): Filter {
+  return { field, op, values } as Filter;
+}
+
+function none(field: string, op: FilterOp): Filter {
+  return { field, op } as Filter;
+}
+
+function withFilters(
+  filters: Filter[],
+  sort = "created_at",
+  direction: SortDirection = "desc",
+): QueryState {
+  return { ...BASE, filters, sort: { field: sort, direction } };
+}
+
+function plan(filters: Filter[], sort?: string) {
+  return planQuery(DEF.indexes, withFilters(filters, sort), DEF);
+}
+
+type Tier = "index" | "budgeted" | "narrowed" | "none";
+
+function resolveTier(
+  filters: Filter[],
+  sort?: string,
+  def: IndexedGridDef = DEF,
+): Tier {
+  const query = toLiteralQuery(def, withFilters(filters, sort), null);
+  const result = planQuery(def.indexes, query, def);
+  if (!isQueryRunnable(def, query) || !result) {
+    return "none";
+  }
+  if (result.narrowed) {
+    return "narrowed";
+  }
+  return result.budgeted ? "budgeted" : "index";
+}
+
+describe("the operator table", () => {
+  test("holds the 18 operators in their agreed order", () => {
+    expect(FILTER_OPS).toEqual([
+      "equals",
+      "not_equals",
+      "contains",
+      "not_contains",
+      "starts_with",
+      "ends_with",
+      "greater_than",
+      "greater_or_equal",
+      "less_than",
+      "less_or_equal",
+      "between",
+      "not_between",
+      "in_period",
+      "any_of",
+      "none_of",
+      "all_of",
+      "blank",
+      "not_blank",
+    ]);
+    expect(isFilterOp("between")).toBe(true);
+    expect(isFilterOp("like")).toBe(false);
+    expect(isFilterOp("toString")).toBe(false);
   });
 
-  test("each text operator has its own key, and overlaps repeat like equality", () => {
-    const params = encodeQuery(DEF, query);
-    expect(params.get("sw.name")).toBe("inv");
-    expect(params.get("nc.name")).toBe("draft");
-    expect(params.get("ew.note")).toBe(".pdf");
-    expect(params.get("ne.note")).toBe("n/a");
-    expect(params.get("c.note")).toBe("a..b");
-    expect(params.getAll("o.tags")).toEqual(["red", "blue"]);
-    expect(decodeQuery(DEF, params)).toEqual(query);
+  test("gives each operator the shape of its value", () => {
+    expect(getOperatorShape("equals")).toBe("one");
+    expect(getOperatorShape("contains")).toBe("one");
+    expect(getOperatorShape("less_or_equal")).toBe("one");
+    expect(getOperatorShape("between")).toBe("pair");
+    expect(getOperatorShape("not_between")).toBe("pair");
+    expect(getOperatorShape("any_of")).toBe("list");
+    expect(getOperatorShape("all_of")).toBe("list");
+    expect(getOperatorShape("in_period")).toBe("preset");
+    expect(getOperatorShape("blank")).toBe("none");
+    expect(getOperatorShape("not_blank")).toBe("none");
   });
 
-  test("a mark with no bound beside it is dropped, and a repeat is read once", () => {
-    const decoded = decodeQuery(
-      DEF,
-      new URLSearchParams("r.size=(..9&r.size=(..9&c.name=a&c.name=a"),
+  test("reads a field's kind from its type, options and lookup", () => {
+    const kind = (field: Partial<BaseFieldDef>) =>
+      resolveFieldKind({ key: "x", label: "X", type: "text", ...field });
+    expect(kind({})).toBe("text");
+    expect(kind({ options: [{ value: "a", label: "A" }] })).toBe("choice");
+    expect(kind({ lookup: { labelField: "x_name" } })).toBe("choice");
+    expect(kind({ type: "enum" })).toBe("choice");
+    expect(kind({ type: "boolean" })).toBe("choice");
+    expect(kind({ type: "id" })).toBe("choice");
+    expect(kind({ type: "integer" })).toBe("number");
+    expect(kind({ type: "decimal" })).toBe("number");
+    expect(kind({ type: "money" })).toBe("number");
+    expect(kind({ type: "date" })).toBe("date");
+    expect(kind({ type: "datetime" })).toBe("date");
+    expect(kind({ type: "array" })).toBe("array");
+    expect(kind({ type: "array", options: [{ value: "a", label: "A" }] })).toBe(
+      "array",
     );
-    expect(decoded.ranges).toEqual([{ field: "size", min: null, max: "9" }]);
-    expect(decoded.texts).toEqual([text("name", "contains", "a")]);
-  });
-
-  test("every new key is one the capabilities list", () => {
-    const names = listQueryKeys(CAPABILITIES).map((key) => key.name);
-    for (const name of encodeQuery(DEF, query).keys()) {
-      expect(names).toContain(name);
-    }
-    expect(names).toContain("o.labels");
-    expect(names).not.toContain("f.tags");
   });
 });
 
-describe("the values of the new field types", () => {
-  const valid = (query: Partial<QueryState>) =>
-    validateQueryValues(DEF, { ...BASE, ...query });
+describe("the operators a field can take", () => {
+  const ops = (key: string) => listFieldOps(getDefField(key));
+  const compared: FilterOp[] = [
+    "equals",
+    "not_equals",
+    "greater_than",
+    "greater_or_equal",
+    "less_than",
+    "less_or_equal",
+    "between",
+    "not_between",
+  ];
+
+  test("a text field matches text, and blank only when nullable", () => {
+    const text: FilterOp[] = [
+      "equals",
+      "not_equals",
+      "contains",
+      "not_contains",
+      "starts_with",
+      "ends_with",
+    ];
+    expect(ops("name")).toEqual(text);
+    expect(ops("note")).toEqual([...text, "blank", "not_blank"]);
+  });
+
+  test("a number compares, and a date adds a period", () => {
+    expect(ops("size")).toEqual(compared);
+    expect(ops("rate")).toEqual([...compared, "blank", "not_blank"]);
+    expect(ops("created_at")).toEqual([...compared, "in_period"]);
+    expect(ops("due")).toEqual([
+      ...compared,
+      "in_period",
+      "blank",
+      "not_blank",
+    ]);
+  });
+
+  test("a choice is any or none of its values", () => {
+    expect(ops("starred")).toEqual(["any_of", "none_of"]);
+    expect(ops("folder_id")).toEqual([
+      "any_of",
+      "none_of",
+      "blank",
+      "not_blank",
+    ]);
+  });
+
+  test("an array holds any, all or none, and is blank but never not blank", () => {
+    expect(ops("tags")).toEqual(["any_of", "none_of", "all_of", "blank"]);
+    expect(listFieldOps({ key: "x", label: "X", type: "array" })).toEqual([
+      "any_of",
+      "none_of",
+      "all_of",
+    ]);
+  });
+
+  test("isFieldOp agrees with the list", () => {
+    expect(isFieldOp(getDefField("size"), "between")).toBe(true);
+    expect(isFieldOp(getDefField("size"), "contains")).toBe(false);
+    expect(isFieldOp(getDefField("name"), "blank")).toBe(false);
+    expect(isFieldOp(getDefField("tags"), "not_blank")).toBe(false);
+  });
+
+  test("a period, and none of a field's fixed values, are the browser's to resolve", () => {
+    expect(listFixedValues(getDefField("starred"))).toEqual(["true", "false"]);
+    expect(listFixedValues(getDefField("folder_id"))).toBeNull();
+    expect(isLiteralOp(getDefField("due"), "in_period")).toBe(true);
+    expect(isLiteralOp(getDefField("starred"), "none_of")).toBe(true);
+    expect(isLiteralOp(getDefField("starred"), "any_of")).toBe(false);
+    expect(isLiteralOp(getDefField("folder_id"), "none_of")).toBe(false);
+    const options = [{ value: "a", label: "A" }];
+    expect(
+      isLiteralOp({ key: "x", label: "X", type: "array", options }, "none_of"),
+    ).toBe(false);
+  });
+});
+
+describe("the URL of every operator", () => {
+  const filters: Filter[] = [
+    one("name", "equals", "Invoice"),
+    one("note", "not_equals", "n/a"),
+    one("note", "contains", "a..b"),
+    one("name", "not_contains", "draft"),
+    one("name", "starts_with", "inv"),
+    one("note", "ends_with", ".pdf"),
+    one("size", "greater_than", "5"),
+    one("size", "greater_or_equal", "6"),
+    one("size", "less_than", "20"),
+    one("size", "less_or_equal", "19"),
+    pair("rate", "between", "1.5", "2.5"),
+    pair("size", "not_between", "10", "12"),
+    { field: "due", op: "in_period", preset: "last-7-days" },
+    list("folder_id", "any_of", [FOLDER, null]),
+    list("starred", "none_of", ["true"]),
+    list("tags", "all_of", ["red", "blue"]),
+    none("note", "blank"),
+    none("rate", "not_blank"),
+  ];
+  const query: QueryState = { ...BASE, filters };
+
+  test("each filter is one key per field and operator, and reads back as itself", () => {
+    const params = encodeQuery(DEF, query);
+    expect(params.get("f.name.equals")).toBe("Invoice");
+    expect(params.get("f.note.not_equals")).toBe("n/a");
+    expect(params.get("f.note.contains")).toBe("a..b");
+    expect(params.get("f.name.not_contains")).toBe("draft");
+    expect(params.get("f.name.starts_with")).toBe("inv");
+    expect(params.get("f.note.ends_with")).toBe(".pdf");
+    expect(params.get("f.size.greater_than")).toBe("5");
+    expect(params.get("f.size.greater_or_equal")).toBe("6");
+    expect(params.get("f.size.less_than")).toBe("20");
+    expect(params.get("f.size.less_or_equal")).toBe("19");
+    expect(params.get("f.rate.between")).toBe("1.5..2.5");
+    expect(params.get("f.size.not_between")).toBe("10..12");
+    expect(params.get("f.due.in_period")).toBe("last-7-days");
+    expect(params.getAll("f.folder_id.any_of")).toEqual([FOLDER, "_empty"]);
+    expect(params.get("f.starred.none_of")).toBe("true");
+    expect(params.getAll("f.tags.all_of")).toEqual(["red", "blue"]);
+    expect(params.get("f.note.blank")).toBe("");
+    expect(params.get("f.rate.not_blank")).toBe("");
+    expect(decodeQuery(DEF, params)).toEqual(query);
+  });
+
+  test("a field takes several filters, of one operator or of many", () => {
+    const several: QueryState = {
+      ...BASE,
+      filters: [
+        one("size", "greater_than", "5"),
+        one("size", "greater_than", "9"),
+        one("name", "contains", "a"),
+        one("name", "not_contains", "b"),
+      ],
+    };
+    const params = encodeQuery(DEF, several);
+    expect(params.getAll("f.size.greater_than")).toEqual(["5", "9"]);
+    expect(decodeQuery(DEF, params)).toEqual(several);
+  });
+
+  test("a repeat is read once, and a value the operator cannot hold is dropped", () => {
+    const decoded = decodeQuery(
+      DEF,
+      new URLSearchParams(
+        [
+          "f.name.contains=a",
+          "f.name.contains=a",
+          "f.tags.any_of=x",
+          "f.tags.any_of=x",
+          "f.note.blank=",
+          "f.note.blank=1",
+          "f.size.between=5..",
+          "f.size.between=..9",
+          "f.size.greater_than=",
+          "f.due.in_period=someday",
+        ].join("&"),
+      ),
+    );
+    expect(decoded.filters).toEqual([
+      one("name", "contains", "a"),
+      list("tags", "any_of", ["x"]),
+      none("note", "blank"),
+    ]);
+  });
+
+  test("the old keys and unknown operators are ignored", () => {
+    const decoded = decodeQuery(
+      DEF,
+      new URLSearchParams(
+        [
+          "f.starred=true",
+          "f.folder_id=_not_empty",
+          "f.starred=!true",
+          "r.size=5..9",
+          "c.name=inv",
+          "nc.name=x",
+          "sw.name=x",
+          "ew.name=x",
+          "ne.name=x",
+          "o.tags=red",
+          "f.size.like=5",
+          "f..equals=5",
+        ].join("&"),
+      ),
+    );
+    expect(decoded).toEqual(BASE);
+  });
+
+  test("every key a query writes is one the capabilities list", () => {
+    const capabilities = withLiteralFilters(
+      DEF,
+      createTestSource(CAPABILITIES),
+    ).capabilities;
+    const names = listQueryKeys(capabilities).map((key) => key.name);
+    for (const name of encodeQuery(DEF, query).keys()) {
+      expect(names).toContain(name);
+    }
+    expect(names).toContain("f.labels.any_of");
+    expect(names).not.toContain("f.tags.equals");
+    expect(names).not.toContain("f.id.any_of");
+  });
+});
+
+describe("the values of each operator", () => {
+  const valid = (...filters: Filter[]) =>
+    validateQueryValues(DEF, { ...BASE, filters });
 
   test("a boolean is true or false", () => {
-    expect(valid({ equals: { starred: ["true"] } })).toBeNull();
-    expect(valid({ equals: { starred: ["yes"] } })?.code).toBe("invalid_value");
+    expect(valid(list("starred", "any_of", ["true"]))).toBeNull();
+    expect(valid(list("starred", "any_of", ["yes"]))?.code).toBe(
+      "invalid_value",
+    );
   });
 
   test("a date is a calendar day and a decimal takes a fraction", () => {
-    const due = (min: string) =>
-      valid({ ranges: [{ field: "due", min, max: null }] });
+    const due = (value: string) => valid(one("due", "greater_or_equal", value));
     expect(due("2026-02-28")).toBeNull();
     expect(due("2026-02-28T00:00:00Z")?.code).toBe("invalid_value");
     expect(due("2026-13-01")?.code).toBe("invalid_value");
     expect(due("2026-02-31")?.code).toBe("invalid_value");
     expect(due("2028-02-29")).toBeNull();
-    const rate = (min: string) =>
-      valid({ ranges: [{ field: "rate", min, max: null }] });
+    const rate = (value: string) => valid(one("rate", "less_than", value));
     expect(rate("-12.375")).toBeNull();
     expect(rate("1e3")?.code).toBe("invalid_value");
-    expect(
-      valid({ ranges: [{ field: "size", min: "1.5", max: null }] })?.code,
-    ).toBe("invalid_value");
+    expect(valid(one("size", "equals", "1.5"))?.code).toBe("invalid_value");
   });
 
-  test("an array field takes an overlap and never an equality", () => {
-    expect(valid({ overlaps: { tags: ["red"] } })).toBeNull();
-    expect(valid({ overlaps: { tags: [] } })?.code).toBe("invalid_value");
-    expect(valid({ overlaps: { name: ["red"] } })?.code).toBe("invalid_value");
-    expect(valid({ equals: { tags: ["red"] } })?.code).toBe("invalid_value");
+  test("a datetime takes a day or an instant", () => {
+    expect(valid(one("created_at", "equals", "2026-03-03"))).toBeNull();
     expect(
-      valid({
-        overlaps: { tags: Array.from({ length: 21 }, (_, at) => `t${at}`) },
-      })?.code,
+      valid(one("created_at", "less_than", "2026-03-03T10:00:00Z")),
+    ).toBeNull();
+    expect(valid(one("created_at", "less_than", "soon"))?.code).toBe(
+      "invalid_value",
+    );
+  });
+
+  test("both sides of a pair are checked", () => {
+    expect(valid(pair("size", "between", "1", "9"))).toBeNull();
+    expect(valid(pair("size", "not_between", "1", "x"))?.code).toBe(
+      "invalid_value",
+    );
+  });
+
+  test("a list is never empty, stays under the cap, and holds a blank only when the field may be blank", () => {
+    expect(valid(list("tags", "any_of", ["red"]))).toBeNull();
+    expect(valid(list("tags", "any_of", []))?.code).toBe("invalid_value");
+    expect(
+      valid(
+        list(
+          "tags",
+          "any_of",
+          Array.from({ length: 21 }, (_, at) => `t${at}`),
+        ),
+      )?.code,
     ).toBe("too_many_values");
+    expect(valid(list("folder_id", "any_of", [FOLDER, null]))).toBeNull();
+    expect(valid(list("starred", "any_of", [null]))?.code).toBe(
+      "invalid_value",
+    );
+    expect(valid(list("folder_id", "none_of", ["not-a-uuid"]))?.code).toBe(
+      "invalid_value",
+    );
   });
 
-  test("a text filter needs a known operator, and the list is capped", () => {
-    expect(valid({ texts: [text("name", "starts_with", "a")] })).toBeNull();
-    expect(
-      valid({ texts: [{ field: "name", op: "like" as never, value: "a" }] })
-        ?.code,
-    ).toBe("invalid_value");
-    expect(
-      valid({
-        texts: Array.from({ length: 9 }, () => text("name", "contains", "a")),
-      }),
-    ).toEqual({ code: "too_many_filters", params: { max: 8 } });
+  test("a text value is trimmed, non-empty and capped", () => {
+    expect(valid(one("name", "starts_with", "a"))).toBeNull();
+    expect(valid(one("name", "contains", "   "))?.code).toBe("invalid_value");
+    expect(valid(one("name", "contains", "a".repeat(81)))?.code).toBe(
+      "invalid_value",
+    );
+  });
+
+  test("an operator the field's kind does not take is refused by name", () => {
+    expect(valid(one("size", "contains", "1"))).toEqual({
+      code: "invalid_op",
+      params: { field: "size", op: "contains" },
+    });
+    expect(valid(list("name", "any_of", ["red"]))?.code).toBe("invalid_op");
+    expect(valid(list("starred", "all_of", ["true"]))?.code).toBe("invalid_op");
+    expect(valid(none("name", "blank"))?.code).toBe("invalid_op");
+    expect(valid(none("tags", "not_blank"))?.code).toBe("invalid_op");
+    expect(valid(one("name", "like" as FilterOp, "a"))).toEqual({
+      code: "invalid_op",
+      params: { field: "name", op: "like" },
+    });
+    expect(valid(one("nope", "equals", "a"))).toEqual({
+      code: "unknown_field",
+      params: { field: "nope" },
+    });
+  });
+
+  test("one cap covers every filter", () => {
+    const filters = (count: number) =>
+      Array.from({ length: count }, () => one("name", "contains", "a"));
+    expect(valid(...filters(20))).toBeNull();
+    expect(valid(...filters(21))).toEqual({
+      code: "too_many_filters",
+      params: { max: 20 },
+    });
+    expect(checkFilterOps(DEF, { ...BASE, filters: filters(21) })).toEqual({
+      code: "too_many_filters",
+      params: { max: 20 },
+    });
+  });
+
+  test("the server refuses a period and none of fixed values by name", () => {
+    const check = (...filters: Filter[]) =>
+      checkFilterOps(DEF, { ...BASE, filters });
+    expect(check({ field: "due", op: "in_period", preset: "today" })).toEqual({
+      code: "literal_required",
+      params: { field: "due", op: "in_period" },
+    });
+    expect(check(list("starred", "none_of", ["true"]))).toEqual({
+      code: "literal_required",
+      params: { field: "starred", op: "none_of" },
+    });
+    expect(check(list("folder_id", "none_of", [FOLDER]))).toBeNull();
+    expect(check(list("tags", "none_of", ["red"]))).toBeNull();
+    expect(check(one("size", "contains", "1"))).toEqual({
+      code: "invalid_op",
+      params: { field: "size", op: "contains" },
+    });
+    expect(check(one("nope", "equals", "a"))).toBeNull();
   });
 });
 
-describe("the plan of the new filters", () => {
-  test("an open bound on the sort is still the index's own range", () => {
-    const open = plan({
-      ranges: [
-        {
-          field: "created_at",
-          min: "2026-01-01",
-          max: null,
-          minExclusive: true,
-        },
-      ],
-    });
-    expect(open).toMatchObject({ narrowed: false, budgeted: false });
-    expect(open?.core.ranges).toHaveLength(1);
-  });
-
-  test("an excluded range and a second range on one field run narrowed", () => {
-    const excluded = plan({
-      ranges: [
-        { field: "created_at", min: "2026-01-01", max: null, exclude: true },
-      ],
-    });
-    expect(excluded?.narrowed).toBe(true);
-    expect(excluded?.core.ranges).toEqual([]);
-    const first: RangeState = {
-      field: "created_at",
-      min: "2026-01-01",
-      max: null,
-    };
-    const second: RangeState = {
-      field: "created_at",
-      min: null,
-      max: "2026-06-01",
-    };
-    const twice = plan({ ranges: [first, second] });
-    expect(twice?.narrowed).toBe(true);
-    expect(twice?.core.ranges).toEqual([first]);
-  });
-
-  test("a text filter with its own index stays in the core, under the budget", () => {
-    const query = { texts: [text("name", "contains", "invoice")] };
-    expect(plan(query)).toMatchObject({ narrowed: false, budgeted: true });
-    expect(plan(query)?.core.texts).toEqual(query.texts);
-    expect(isQueryBudgeted(DEF, { ...BASE, ...query })).toBe(true);
-    for (const op of ["starts_with", "ends_with"] as const) {
-      expect(plan({ texts: [text("name", op, "inv")] })?.budgeted).toBe(true);
-    }
-  });
-
-  test("a negation, a short value or a field with no index runs narrowed", () => {
-    for (const filter of [
-      text("name", "not_contains", "invoice"),
-      text("name", "not_equals", "invoice"),
-      text("name", "contains", "in"),
-      text("note", "contains", "invoice"),
-    ]) {
-      const narrowed = plan({ texts: [filter] });
-      expect(narrowed).toMatchObject({ narrowed: true, budgeted: false });
-      expect(narrowed?.core.texts).toEqual([]);
-    }
-  });
-
-  test("an indexed text filter beside a narrowed part joins the narrowed set", () => {
-    const mixed = plan({
-      texts: [
-        text("name", "contains", "invoice"),
-        text("note", "contains", "x"),
-      ],
-    });
-    expect(mixed).toMatchObject({ narrowed: true, budgeted: false });
-    const ranged = plan({
-      texts: [text("name", "contains", "invoice")],
-      ranges: [{ field: "size", min: "1", max: null }],
-    });
-    expect(ranged).toMatchObject({ narrowed: true, budgeted: false });
-  });
-
-  test("an overlap is budgeted with a GIN index and narrowed without one", () => {
-    expect(plan({ overlaps: { tags: ["red"] } })).toMatchObject({
-      narrowed: false,
-      budgeted: true,
-    });
-    expect(plan({ overlaps: { labels: ["red"] } })).toMatchObject({
-      narrowed: true,
-      budgeted: false,
-    });
-    expect(isQueryRunnable(DEF, { ...BASE, overlaps: { name: ["red"] } })).toBe(
-      false,
+describe("the tier of every operator", () => {
+  test("an equality field answers any of, blank and not blank from its index", () => {
+    expect(resolveTier([list("starred", "any_of", ["true"])])).toBe("index");
+    expect(resolveTier([list("folder_id", "any_of", [FOLDER, null])])).toBe(
+      "index",
     );
+    expect(resolveTier([none("folder_id", "blank")])).toBe("index");
+    expect(resolveTier([none("folder_id", "not_blank")])).toBe("index");
   });
 
-  test("the search takes no text filter or overlap beside it", () => {
-    const search = { ...BASE, search: "invoice" };
-    const def = { ...DEF, search: ["name"] };
-    expect(isQueryRunnable(def, search)).toBe(true);
+  test("none of fixed values is answered as the values it keeps", () => {
+    expect(resolveTier([list("starred", "none_of", ["true"])])).toBe("index");
     expect(
-      isQueryRunnable(def, {
-        ...search,
-        texts: [text("name", "contains", "inv")],
-      }),
+      isQueryRunnable(DEF, withFilters([list("starred", "none_of", ["true"])])),
     ).toBe(false);
-    expect(isQueryRunnable(def, { ...search, overlaps: { tags: ["a"] } })).toBe(
-      false,
-    );
   });
 
-  test("a partial index answers its fields only when they are empty", () => {
-    const live = { folder_id: [FOLDER], deleted_at: ["_empty"] };
-    expect(plan({ equals: live })).toMatchObject({ narrowed: false });
+  test("none of a lookup, and blank on a field no index holds, run narrowed", () => {
+    expect(resolveTier([list("folder_id", "none_of", [FOLDER])])).toBe(
+      "narrowed",
+    );
+    expect(resolveTier([none("note", "blank")])).toBe("narrowed");
+    expect(resolveTier([none("note", "not_blank")])).toBe("narrowed");
+    expect(resolveTier([none("rate", "blank")])).toBe("narrowed");
+    expect(resolveTier([none("due", "not_blank")])).toBe("narrowed");
+  });
+
+  test("a partial index answers its fields only when they are blank", () => {
+    const live = [
+      list("folder_id", "any_of", [FOLDER]),
+      none("deleted_at", "blank"),
+    ];
+    expect(plan(live)).toMatchObject({ narrowed: false });
+    expect(plan(live)?.core.filters).toEqual(live);
     expect(
-      plan({ equals: { ...live, deleted_at: ["_not_empty"] } }),
-    ).toBeNull();
-    expect(plan({ equals: { deleted_at: ["_empty"] } })).toBeNull();
-    expect(CAPABILITIES.equalsFields).not.toContain("deleted_at");
+      resolveTier([
+        list("folder_id", "any_of", [FOLDER]),
+        none("deleted_at", "not_blank"),
+      ]),
+    ).toBe("narrowed");
     expect(CAPABILITIES.groupFields).not.toContain("deleted_at");
-    expect(CAPABILITIES.rangeFields).toContain("deleted_at");
+    expect(CAPABILITIES.filterOps.deleted_at).not.toContain("any_of");
+    expect(CAPABILITIES.filterOps.deleted_at).toContain("blank");
     expect(
       isQueryRunnable(
         { ...DEF, search: ["name"] },
-        { ...BASE, equals: live, search: "invoice" },
+        { ...withFilters(live), search: "invoice" },
       ),
     ).toBe(true);
     expect(indexId(DEF.indexes[3])).toBe(
@@ -325,17 +573,167 @@ describe("the plan of the new filters", () => {
     expect(indexId(DEF.indexes[2])).toBe("folder_id|created_at");
   });
 
-  test("a boolean is an equality field and groups like any other", () => {
-    expect(CAPABILITIES.equalsFields).toContain("starred");
-    expect(CAPABILITIES.groupFields).toContain("starred");
-    expect(CAPABILITIES.rangeFields).toEqual([
-      "size",
-      "rate",
-      "due",
-      "created_at",
-      "deleted_at",
+  test(
+    "a partial index's blank field without its equality runs narrowed, like blank on any nullable field",
+    () => {
+      expect(resolveTier([none("deleted_at", "blank")])).toBe("narrowed");
+      const under = {
+        ...CONTEXT,
+        narrowed: {
+          limit: 100,
+          and: { rows: 40, over: false, capped: false },
+          or: null,
+          andBasis: CAPABILITIES.narrowBasis(BASE),
+          orBasis: "",
+        },
+      };
+      expect(
+        listOffers(DEF, BASE, under).filters.deleted_at.find(
+          (offer) => offer.op === "blank",
+        )?.offered,
+      ).toBe(true);
+    },
+  );
+
+  test("a bound on the sort of a range index is the index's own range", () => {
+    for (const filter of [
+      one("created_at", "equals", "2026-03-03"),
+      one("created_at", "greater_than", "2026-01-01"),
+      one("created_at", "greater_or_equal", "2026-01-01"),
+      one("created_at", "less_than", "2026-01-01"),
+      one("created_at", "less_or_equal", "2026-01-01"),
+      pair("created_at", "between", "2026-01-01", "2026-02-01"),
+    ]) {
+      expect(resolveTier([filter])).toBe("index");
+      expect(plan([filter])?.core.filters).toEqual([filter]);
+    }
+    expect(
+      resolveTier([{ field: "created_at", op: "in_period", preset: "today" }]),
+    ).toBe("index");
+    expect(resolveTier([one("size", "greater_than", "5")], "size")).toBe(
+      "index",
+    );
+    expect(resolveTier([one("size", "equals", "5")], "size")).toBe("index");
+  });
+
+  test("a bound off the sort, an exclusion and a second bound run narrowed", () => {
+    expect(resolveTier([one("size", "greater_than", "5")])).toBe("narrowed");
+    expect(resolveTier([one("rate", "greater_than", "1")])).toBe("narrowed");
+    expect(resolveTier([one("created_at", "not_equals", "2026-01-01")])).toBe(
+      "narrowed",
+    );
+    expect(
+      resolveTier([
+        pair("created_at", "not_between", "2026-01-01", "2026-02-01"),
+      ]),
+    ).toBe("narrowed");
+    const excluded = plan([one("created_at", "not_equals", "2026-01-01")]);
+    expect(excluded?.core.filters).toEqual([]);
+    const first = one("created_at", "greater_or_equal", "2026-01-01");
+    const second = one("created_at", "less_or_equal", "2026-06-01");
+    const twice = plan([first, second]);
+    expect(twice?.narrowed).toBe(true);
+    expect(twice?.core.filters).toEqual([first]);
+  });
+
+  test("equals on a number in an index's equality lowers to that index", () => {
+    const def: IndexedGridDef = {
+      ...DEF,
+      indexes: [
+        { equals: [], sort: "created_at" },
+        { equals: ["size"], sort: "created_at" },
+        { equals: ["name"], sort: "created_at" },
+      ],
+    };
+    expect(resolveTier([one("size", "equals", "5")], undefined, def)).toBe(
+      "index",
+    );
+    expect(
+      resolveTier([one("size", "greater_than", "5")], undefined, def),
+    ).toBe("narrowed");
+    expect(
+      resolveTier([one("name", "equals", "Invoice")], undefined, def),
+    ).toBe("index");
+  });
+
+  test("a text match on a field with its own index is budgeted, from three characters", () => {
+    for (const op of ["contains", "starts_with", "ends_with"] as const) {
+      expect(resolveTier([one("name", op, "inv")])).toBe("budgeted");
+    }
+    const filters = [one("name", "contains", "invoice")];
+    expect(plan(filters)?.core.filters).toEqual(filters);
+    expect(isQueryBudgeted(DEF, withFilters(filters))).toBe(true);
+  });
+
+  test("a negation, a short value, text equals or a field with no index runs narrowed", () => {
+    for (const filter of [
+      one("name", "not_contains", "invoice"),
+      one("name", "not_equals", "invoice"),
+      one("name", "equals", "invoice"),
+      one("name", "contains", "in"),
+      one("note", "contains", "invoice"),
+    ]) {
+      const narrowed = plan([filter]);
+      expect(narrowed).toMatchObject({ narrowed: true, budgeted: false });
+      expect(narrowed?.core.filters).toEqual([]);
+    }
+  });
+
+  test("a budgeted filter beside a narrowed part joins the narrowed set", () => {
+    expect(
+      plan([one("name", "contains", "invoice"), one("note", "contains", "x")]),
+    ).toMatchObject({ narrowed: true, budgeted: false });
+    expect(
+      plan([
+        one("name", "contains", "invoice"),
+        one("size", "greater_than", "1"),
+      ]),
+    ).toMatchObject({ narrowed: true, budgeted: false });
+  });
+
+  test("an array index answers any of and all of; the rest of an array runs narrowed", () => {
+    expect(resolveTier([list("tags", "any_of", ["red"])])).toBe("budgeted");
+    expect(resolveTier([list("tags", "all_of", ["red", "blue"])])).toBe(
+      "budgeted",
+    );
+    expect(resolveTier([list("tags", "none_of", ["red"])])).toBe("narrowed");
+    expect(resolveTier([none("tags", "blank")])).toBe("narrowed");
+    expect(resolveTier([list("labels", "any_of", ["red"])])).toBe("narrowed");
+    expect(resolveTier([list("labels", "all_of", ["red"])])).toBe("narrowed");
+  });
+
+  test("the search takes no text match or array filter beside it", () => {
+    const def = { ...DEF, search: ["name"] };
+    const search = (...filters: Filter[]) =>
+      isQueryRunnable(def, { ...withFilters(filters), search: "invoice" });
+    expect(search()).toBe(true);
+    expect(search(list("starred", "any_of", ["true"]))).toBe(true);
+    expect(search(one("name", "contains", "inv"))).toBe(false);
+    expect(search(list("tags", "any_of", ["a"]))).toBe(false);
+  });
+
+  test("the capabilities list what some tier answers", () => {
+    expect(CAPABILITIES.filterOps.starred).toEqual(["any_of"]);
+    expect(CAPABILITIES.filterOps.folder_id).toEqual([
+      "any_of",
+      "none_of",
+      "blank",
+      "not_blank",
     ]);
-    expect(CAPABILITIES.overlapFields).toEqual(["tags", "labels"]);
+    expect(CAPABILITIES.filterOps.tags).toEqual([
+      "any_of",
+      "none_of",
+      "all_of",
+      "blank",
+    ]);
+    expect(CAPABILITIES.filterOps.due).not.toContain("in_period");
+    expect(CAPABILITIES.filterOps.id).toBeUndefined();
+    expect(CAPABILITIES.groupFields).toContain("starred");
+    const literal = withLiteralFilters(DEF, createTestSource(CAPABILITIES))
+      .capabilities.filterOps;
+    expect(literal.starred).toEqual(["any_of", "none_of"]);
+    expect(literal.due).toContain("in_period");
+    expect(literal.folder_id).toEqual(CAPABILITIES.filterOps.folder_id);
   });
 });
 
@@ -387,144 +785,175 @@ const ROWS: GridRow[] = [
 describe("the memory source runs every operator", () => {
   const source = createMemorySource(DEF, ROWS);
   const signal = new AbortController().signal;
-  const ids = async (query: Partial<QueryState>) => {
+  const ids = async (...filters: Filter[]) => {
     const page = await source.fetchPage(
-      { ...BASE, sort: { field: "size", direction: "asc" }, ...query },
+      withFilters(filters, "size", "asc"),
       50,
       signal,
     );
     return page.rows.map((row) => row.id);
   };
-  const size = (range: Partial<RangeState>): RangeState => ({
-    field: "size",
-    min: null,
-    max: null,
-    ...range,
-  });
+  const idsOr = async (...filters: Filter[]) => {
+    const page = await source.fetchPage(
+      { ...withFilters(filters, "size", "asc"), combine: "or" },
+      50,
+      signal,
+    );
+    return page.rows.map((row) => row.id);
+  };
 
-  test("open bounds leave the bound itself out", async () => {
-    expect(await ids({ ranges: [size({ min: "5" })] })).toEqual([
+  test("the number operators, open bounds leaving the bound itself out", async () => {
+    expect(await ids(one("size", "equals", "10"))).toEqual(["b"]);
+    expect(await ids(one("size", "not_equals", "10"))).toEqual(["a", "c"]);
+    expect(await ids(one("size", "greater_than", "5"))).toEqual(["b", "c"]);
+    expect(await ids(one("size", "greater_or_equal", "5"))).toEqual([
       "a",
       "b",
       "c",
     ]);
+    expect(await ids(one("size", "less_than", "20"))).toEqual(["a", "b"]);
+    expect(await ids(one("size", "less_or_equal", "10"))).toEqual(["a", "b"]);
+    expect(await ids(pair("size", "between", "5", "10"))).toEqual(["a", "b"]);
+    expect(await ids(pair("size", "not_between", "6", "20"))).toEqual(["a"]);
+  });
+
+  test("an exclusion is everything outside it, a blank cell included", async () => {
+    expect(await ids(pair("rate", "not_between", "1", "2"))).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(await ids(pair("rate", "between", "1", "2"))).toEqual(["a"]);
+    expect(await ids(one("rate", "not_equals", "1.5"))).toEqual(["b", "c"]);
+  });
+
+  test("blank and not blank on a number, a text and a lookup", async () => {
+    expect(await ids(none("rate", "blank"))).toEqual(["c"]);
+    expect(await ids(none("rate", "not_blank"))).toEqual(["a", "b"]);
+    expect(await ids(none("note", "blank"))).toEqual(["b"]);
+    expect(await ids(none("note", "not_blank"))).toEqual(["a", "c"]);
+    expect(await ids(none("folder_id", "blank"))).toEqual(["c"]);
+    expect(await ids(none("folder_id", "not_blank"))).toEqual(["a", "b"]);
+  });
+
+  test("two filters on one field both apply", async () => {
     expect(
-      await ids({ ranges: [size({ min: "5", minExclusive: true })] }),
-    ).toEqual(["b", "c"]);
+      await ids(
+        one("size", "greater_or_equal", "5"),
+        one("size", "not_equals", "10"),
+      ),
+    ).toEqual(["a", "c"]);
     expect(
-      await ids({ ranges: [size({ max: "20", maxExclusive: true })] }),
+      await ids(
+        one("name", "contains", "invoice"),
+        one("name", "not_contains", "april"),
+      ),
+    ).toEqual(["a"]);
+  });
+
+  test("a date field compares calendar days", async () => {
+    expect(await ids(one("due", "equals", "2026-03-01"))).toEqual(["a"]);
+    expect(await ids(one("due", "not_equals", "2026-03-01"))).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(await ids(one("due", "greater_than", "2026-03-01"))).toEqual(["b"]);
+    expect(await ids(one("due", "less_than", "2026-04-15"))).toEqual(["a"]);
+  });
+
+  test("a day on a datetime is the whole day", async () => {
+    expect(await ids(one("created_at", "equals", "2026-03-01"))).toEqual(["a"]);
+    expect(await ids(one("created_at", "not_equals", "2026-03-01"))).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(await ids(one("created_at", "greater_than", "2026-03-01"))).toEqual([
+      "b",
+      "c",
+    ]);
+    expect(await ids(one("created_at", "less_or_equal", "2026-04-15"))).toEqual(
+      ["a", "b"],
+    );
+    expect(
+      await ids(pair("created_at", "between", "2026-03-01", "2026-04-15")),
     ).toEqual(["a", "b"]);
   });
 
-  test("an excluded range is everything outside it, an empty cell included", async () => {
-    expect(
-      await ids({ ranges: [size({ min: "10", max: "10", exclude: true })] }),
-    ).toEqual(["a", "c"]);
-    expect(
-      await ids({
-        ranges: [{ field: "rate", min: "1", max: "2", exclude: true }],
-      }),
-    ).toEqual(["b", "c"]);
-    expect(
-      await ids({ ranges: [{ field: "rate", min: "1", max: "2" }] }),
-    ).toEqual(["a"]);
+  test("the text operators ignore case, and a negation keeps a blank cell", async () => {
+    expect(await ids(one("name", "starts_with", "INV"))).toEqual(["a", "b"]);
+    expect(await ids(one("name", "ends_with", "april"))).toEqual(["b"]);
+    expect(await ids(one("note", "contains", "PDF"))).toEqual(["a"]);
+    expect(await ids(one("note", "not_contains", "pdf"))).toEqual(["b", "c"]);
+    expect(await ids(one("note", "not_equals", "draft"))).toEqual(["a", "b"]);
+    expect(await ids(one("name", "not_equals", "receipt"))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(await ids(one("name", "equals", "Receipt"))).toEqual(["c"]);
   });
 
-  test("two ranges on one field both apply", async () => {
-    expect(
-      await ids({
-        ranges: [
-          size({ min: "5" }),
-          size({ min: "10", max: "10", exclude: true }),
-        ],
-      }),
-    ).toEqual(["a", "c"]);
+  test("a choice is any or none of its values, a blank one included when asked", async () => {
+    expect(await ids(list("starred", "any_of", ["true"]))).toEqual(["a"]);
+    expect(await ids(list("starred", "any_of", ["false"]))).toEqual(["b", "c"]);
+    expect(await ids(list("starred", "none_of", ["true"]))).toEqual(["b", "c"]);
+    expect(await ids(list("folder_id", "any_of", [null]))).toEqual(["c"]);
+    expect(await ids(list("folder_id", "any_of", [FOLDER, null]))).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(await ids(list("folder_id", "none_of", [FOLDER]))).toEqual(["c"]);
   });
 
-  test("a date field compares calendar days, and one day is a range of itself", async () => {
-    const due = (range: Partial<RangeState>): RangeState => ({
-      field: "due",
-      min: null,
-      max: null,
-      ...range,
-    });
-    expect(
-      await ids({ ranges: [due({ min: "2026-03-01", max: "2026-03-01" })] }),
-    ).toEqual(["a"]);
-    expect(
-      await ids({
-        ranges: [due({ min: "2026-03-01", max: "2026-03-01", exclude: true })],
-      }),
-    ).toEqual(["b", "c"]);
-    expect(
-      await ids({ ranges: [due({ min: "2026-03-01", minExclusive: true })] }),
-    ).toEqual(["b"]);
-  });
-
-  test("the text operators ignore case, and a negation keeps an empty cell", async () => {
-    const run = (field: string, op: TextState["op"], value: string) =>
-      ids({ texts: [text(field, op, value)] });
-    expect(await run("name", "starts_with", "INV")).toEqual(["a", "b"]);
-    expect(await run("name", "ends_with", "april")).toEqual(["b"]);
-    expect(await run("note", "contains", "PDF")).toEqual(["a"]);
-    expect(await run("note", "not_contains", "pdf")).toEqual(["b", "c"]);
-    expect(await run("note", "not_equals", "draft")).toEqual(["a", "b"]);
-    expect(await run("name", "not_equals", "receipt")).toEqual(["a", "b", "c"]);
-  });
-
-  test("two text filters on one field both apply", async () => {
-    expect(
-      await ids({
-        texts: [
-          text("name", "contains", "invoice"),
-          text("name", "not_contains", "april"),
-        ],
-      }),
-    ).toEqual(["a"]);
-  });
-
-  test("an overlap matches any shared value, a boolean its own", async () => {
-    expect(await ids({ overlaps: { tags: ["blue", "green"] } })).toEqual([
+  test("an array holds any, all or none of the values, and an empty list is blank", async () => {
+    expect(await ids(list("tags", "any_of", ["blue", "green"]))).toEqual([
       "a",
       "b",
     ]);
-    expect(await ids({ overlaps: { labels: ["x"] } })).toEqual(["b"]);
-    expect(await ids({ equals: { starred: ["true"] } })).toEqual(["a"]);
-    expect(await ids({ equals: { starred: ["false"] } })).toEqual(["b", "c"]);
+    expect(await ids(list("labels", "any_of", ["x"]))).toEqual(["b"]);
+    expect(await ids(list("tags", "all_of", ["red", "blue"]))).toEqual(["a"]);
+    expect(await ids(list("tags", "all_of", ["red", "green"]))).toEqual([]);
+    expect(await ids(list("tags", "none_of", ["red"]))).toEqual(["b", "c"]);
+    expect(await ids(none("tags", "blank"))).toEqual(["c"]);
+    expect(await ids(none("labels", "blank"))).toEqual(["a", "c"]);
   });
 
-  test("match any ORs the new filters too", async () => {
+  test("match any ORs every filter", async () => {
     expect(
-      await ids({
-        combine: "or",
-        texts: [text("name", "starts_with", "rec")],
-        overlaps: { tags: ["red"] },
-      }),
+      await idsOr(
+        one("name", "starts_with", "rec"),
+        list("tags", "any_of", ["red"]),
+      ),
     ).toEqual(["a", "c"]);
   });
 
-  test("a client grid offers all of it", () => {
+  test("a client grid offers every operator", () => {
     const capabilities = memoryCapabilities(DEF);
-    expect(capabilities.textFields).toEqual(["name", "note"]);
-    expect(capabilities.overlapFields).toEqual(["tags", "labels"]);
-    expect(capabilities.equalsFields).toEqual([
-      "id",
-      "name",
-      "note",
-      "starred",
-      "folder_id",
-    ]);
+    for (const field of DEF.fields) {
+      expect(capabilities.filterOps[field.key]).toEqual(
+        listFieldOps(field).filter((op) => !isLiteralOp(field, op)),
+      );
+    }
+    const literal = source.capabilities.filterOps;
+    expect(literal.due).toEqual(listFieldOps(getDefField("due")));
+    expect(literal.starred).toEqual(["any_of", "none_of"]);
     const offers = listOffers(DEF, BASE, {
-      capabilities,
+      capabilities: source.capabilities,
       allSearchMatchesLoaded: false,
       narrowed: null,
     });
-    expect(offers.texts).toEqual(["name", "note"]);
-    expect(offers.overlaps).toEqual(["tags", "labels"]);
+    for (const field of DEF.fields) {
+      expect(offers.filters[field.key].map((offer) => offer.op)).toEqual(
+        listFieldOps(field),
+      );
+      expect(offers.filters[field.key].every((offer) => offer.offered)).toBe(
+        true,
+      );
+    }
   });
 });
 
-describe("the actions of the new filters", () => {
+describe("the actions of a filter", () => {
   const memory = {
     capabilities: memoryCapabilities(DEF),
     allSearchMatchesLoaded: false,
@@ -533,142 +962,222 @@ describe("the actions of the new filters", () => {
   const run = (query: QueryState, action: Parameters<typeof applyAction>[2]) =>
     applyAction(DEF, query, action, memory);
 
-  test("a text filter is added at the end, replaced in place and removed by position", () => {
-    const one = run(BASE, {
-      type: "setText",
-      field: "name",
-      op: "contains",
-      value: "a",
+  test("setFilter replaces the field's filter at a position, else adds one at the end", () => {
+    const first = run(BASE, {
+      type: "setFilter",
+      filter: one("name", "contains", "a"),
     });
-    const two = run(one, {
-      type: "setText",
-      field: "name",
-      op: "not_contains",
-      value: "b",
+    const second = run(first, {
+      type: "setFilter",
+      filter: one("name", "not_contains", "b"),
+      at: 1,
     });
-    expect(two.texts).toEqual([
-      text("name", "contains", "a"),
-      text("name", "not_contains", "b"),
+    expect(second.filters).toEqual([
+      one("name", "contains", "a"),
+      one("name", "not_contains", "b"),
     ]);
-    const replaced = run(two, {
-      type: "setText",
-      field: "note",
-      op: "ends_with",
-      value: "c",
+    const replaced = run(second, {
+      type: "setFilter",
+      filter: one("name", "ends_with", "c"),
       at: 0,
     });
-    expect(replaced.texts[0]).toEqual(text("note", "ends_with", "c"));
-    expect(run(replaced, { type: "removeText", at: 0 }).texts).toEqual([
-      text("name", "not_contains", "b"),
+    expect(replaced.filters).toEqual([
+      one("name", "ends_with", "c"),
+      one("name", "not_contains", "b"),
     ]);
-    expect(run(replaced, { type: "clearTexts" }).texts).toEqual([]);
+    const defaulted = run(replaced, {
+      type: "setFilter",
+      filter: one("name", "equals", "d"),
+    });
+    expect(defaulted.filters[0]).toEqual(one("name", "equals", "d"));
   });
 
-  test("setRange replaces a field's ranges, addRange adds one and clearRange takes one out", () => {
-    const set = run(BASE, {
-      type: "setRange",
-      field: "size",
-      min: "1",
-      max: null,
-    });
-    const added = run(set, {
-      type: "addRange",
-      field: "size",
-      min: "5",
-      max: "5",
-      exclude: true,
-    });
-    expect(added.ranges).toEqual([
-      { field: "size", min: "1", max: null },
-      { field: "size", min: "5", max: "5", exclude: true },
-    ]);
-    expect(
-      run(added, { type: "clearRange", field: "size", at: 0 }).ranges,
-    ).toEqual([{ field: "size", min: "5", max: "5", exclude: true }]);
-    expect(run(added, { type: "clearRange", field: "size" }).ranges).toEqual(
-      [],
-    );
-    expect(
-      run(added, {
-        type: "setRange",
-        field: "size",
-        min: null,
-        max: "3",
-        maxExclusive: true,
-      }).ranges,
-    ).toEqual([{ field: "size", min: null, max: "3", maxExclusive: true }]);
-  });
-
-  test("an overlap is set, trimmed by value and cleared", () => {
-    const set = run(BASE, {
-      type: "setOverlap",
-      field: "tags",
-      values: ["a", "b", "a"],
-    });
-    expect(set.overlaps).toEqual({ tags: ["a", "b"] });
-    const less = run(set, {
-      type: "removeOverlapValue",
-      field: "tags",
-      value: "a",
-    });
-    expect(less.overlaps).toEqual({ tags: ["b"] });
-    expect(
-      run(less, { type: "removeOverlapValue", field: "tags", value: "b" })
-        .overlaps,
-    ).toEqual({});
-    expect(run(set, { type: "clearOverlap", field: "tags" }).overlaps).toEqual(
-      {},
-    );
-  });
-
-  test("each range, text filter and overlap has a chip that clears just itself", () => {
+  test("a position keeps the other fields' filters where they are", () => {
     const query: QueryState = {
       ...BASE,
-      ranges: [
-        { field: "size", min: "1", max: null, minExclusive: true },
-        { field: "size", min: "5", max: "5", exclude: true },
+      filters: [
+        one("size", "greater_or_equal", "1"),
+        one("rate", "greater_or_equal", "1"),
+        one("size", "not_equals", "5"),
       ],
-      texts: [text("name", "starts_with", "inv")],
-      overlaps: { tags: ["red"] },
+    };
+    const replaced = run(query, {
+      type: "setFilter",
+      filter: one("size", "less_or_equal", "3"),
+      at: 1,
+    });
+    expect(replaced.filters).toEqual([
+      query.filters[0],
+      query.filters[1],
+      one("size", "less_or_equal", "3"),
+    ]);
+  });
+
+  test("removeFilter takes one filter by position, or every filter on the field", () => {
+    const query: QueryState = {
+      ...BASE,
+      filters: [
+        one("size", "greater_or_equal", "1"),
+        one("name", "contains", "a"),
+        one("size", "not_equals", "5"),
+      ],
+    };
+    expect(
+      run(query, { type: "removeFilter", field: "size", at: 0 }).filters,
+    ).toEqual([one("name", "contains", "a"), one("size", "not_equals", "5")]);
+    expect(run(query, { type: "removeFilter", field: "size" }).filters).toEqual(
+      [one("name", "contains", "a")],
+    );
+  });
+
+  test("a list is set without repeats, trimmed by value and gone with its last value", () => {
+    const set = run(BASE, {
+      type: "setFilter",
+      filter: list("tags", "any_of", ["a", "b", "a"]),
+    });
+    expect(set.filters).toEqual([list("tags", "any_of", ["a", "b"])]);
+    const less = run(set, {
+      type: "removeFilterValue",
+      field: "tags",
+      at: 0,
+      value: "a",
+    });
+    expect(less.filters).toEqual([list("tags", "any_of", ["b"])]);
+    expect(
+      run(less, { type: "removeFilterValue", field: "tags", at: 0, value: "b" })
+        .filters,
+    ).toEqual([]);
+    expect(
+      run(BASE, { type: "setFilter", filter: list("tags", "any_of", []) })
+        .filters,
+    ).toEqual([]);
+  });
+
+  test("none of every fixed value is refused, since nothing would be left", () => {
+    const capabilities = withLiteralFilters(
+      DEF,
+      createMemorySource(DEF, ROWS),
+    ).capabilities;
+    const context = { ...memory, capabilities };
+    const kept = applyAction(
+      DEF,
+      BASE,
+      { type: "setFilter", filter: list("starred", "none_of", ["true"]) },
+      context,
+    );
+    expect(kept.filters).toEqual([list("starred", "none_of", ["true"])]);
+    const all = applyAction(
+      DEF,
+      BASE,
+      {
+        type: "setFilter",
+        filter: list("starred", "none_of", ["true", "false"]),
+      },
+      context,
+    );
+    expect(all).toBe(BASE);
+  });
+
+  test("each filter has a chip that clears just itself", () => {
+    const query: QueryState = {
+      ...BASE,
+      filters: [
+        one("size", "greater_than", "1"),
+        one("size", "not_equals", "5"),
+        one("name", "starts_with", "inv"),
+        list("tags", "any_of", ["red", null]),
+        none("note", "blank"),
+      ],
     };
     const chips = listFilterChips(DEF, query);
     expect(chips.map((chip) => chip.id)).toEqual([
-      "overlap:tags",
-      "range:size",
-      "range:size:1",
-      "text:0",
+      "filter:size:greater_than",
+      "filter:size:not_equals:1",
+      "filter:name:starts_with",
+      "filter:tags:any_of",
+      "filter:note:blank",
       "sort",
     ]);
-    expect(chips[1]).toMatchObject({ op: "gt", min: "1", max: null });
+    expect(chips[0]).toMatchObject({ op: "greater_than", operands: ["1"] });
+    expect(chips[1]).toMatchObject({
+      op: "not_equals",
+      operands: ["5"],
+      clear: { type: "removeFilter", field: "size", at: 1 },
+    });
     expect(chips[2]).toMatchObject({
-      op: "neq",
-      min: "5",
-      max: null,
-      clear: { type: "clearRange", field: "size", at: 1 },
+      op: "starts_with",
+      operands: ["inv"],
+      clear: { type: "removeFilter", field: "name", at: 0 },
     });
     expect(chips[3]).toMatchObject({
-      kind: "text",
-      op: "starts_with",
-      clear: { type: "removeText", at: 0 },
+      op: "any_of",
+      operands: [],
+      values: [
+        {
+          value: "red",
+          text: "red",
+          clear: {
+            type: "removeFilterValue",
+            field: "tags",
+            at: 0,
+            value: "red",
+          },
+        },
+        {
+          value: null,
+          text: null,
+          clear: {
+            type: "removeFilterValue",
+            field: "tags",
+            at: 0,
+            value: null,
+          },
+        },
+      ],
     });
-    expect(chips[0]).toMatchObject({
-      kind: "overlap",
-      clear: { type: "clearOverlap", field: "tags" },
+    expect(chips[4]).toMatchObject({ op: "blank", operands: [], values: [] });
+  });
+});
+
+describe("the offers of a server grid", () => {
+  const getOffer = (
+    offers: ReturnType<typeof listOffers>,
+    field: string,
+    op: FilterOp,
+  ): OpOffer | undefined =>
+    offers.filters[field]?.find((offer) => offer.op === op);
+
+  test("a text match on an indexed field is offered without a narrowed size, from three characters", () => {
+    const offers = listOffers(DEF, BASE, CONTEXT);
+    expect(getOffer(offers, "name", "contains")).toMatchObject({
+      offered: true,
+      reason: null,
+      minLength: 3,
     });
+    expect(getOffer(offers, "tags", "any_of")?.offered).toBe(true);
+    expect(getOffer(offers, "tags", "all_of")?.offered).toBe(true);
+    for (const [field, op] of [
+      ["name", "not_contains"],
+      ["name", "equals"],
+      ["note", "contains"],
+      ["note", "blank"],
+      ["tags", "none_of"],
+      ["labels", "any_of"],
+      ["folder_id", "none_of"],
+    ] as const) {
+      const offer = getOffer(offers, field, op);
+      expect(offer?.offered).toBe(false);
+      expect(offer?.reason?.code).toBe("narrow_counting");
+    }
+    expect(getOffer(offers, "starred", "any_of")?.offered).toBe(true);
+    expect(getOffer(offers, "created_at", "between")?.offered).toBe(true);
+    expect(offers.filters.id).toBeUndefined();
   });
 
-  test("a server grid offers a text filter on an indexed field without a narrowed size", () => {
-    const offers = listOffers(DEF, BASE, CONTEXT);
-    expect(offers.overlaps).toEqual(["tags"]);
-    expect(offers.texts).toEqual(["name"]);
-    expect(offers.narrowTexts).toEqual([]);
-    expect(
-      explainNarrowed(BASE, { kind: "text", field: "name" }, CONTEXT).code,
-    ).toBe("narrow_counting");
-    const basis = CAPABILITIES.narrowBasis({
-      ...BASE,
-      texts: [text("note", "contains", "x")],
-    });
+  test("a narrowed set over the limit holds every narrowed operator with its size", () => {
+    const basis = CAPABILITIES.narrowBasis(
+      withFilters([one("note", "contains", "x")]),
+    );
     const sized = (rows: number, over: boolean) => ({
       ...CONTEXT,
       narrowed: {
@@ -680,57 +1189,68 @@ describe("the actions of the new filters", () => {
       },
     });
     const over = sized(100, true);
-    expect(listOffers(DEF, BASE, over).texts).toEqual(["name"]);
-    expect(listOffers(DEF, BASE, over).narrowTexts).toEqual([]);
-    expect(
-      explainNarrowed(BASE, { kind: "text", field: "name" }, over),
-    ).toMatchObject({
-      code: "narrow_first",
-      rows: 100,
-      capped: true,
+    const held = listOffers(DEF, BASE, over);
+    expect(getOffer(held, "name", "contains")?.offered).toBe(true);
+    expect(getOffer(held, "created_at", "greater_than")?.offered).toBe(true);
+    expect(getOffer(held, "note", "contains")).toMatchObject({
+      offered: false,
+      reason: { code: "narrow_first", rows: 100, capped: true },
     });
-    expect(listOffers(DEF, BASE, over).ranges).toContain("created_at");
-    expect(listOffers(DEF, BASE, over).narrowRanges).toEqual([]);
     expect(
-      explainNarrowed(BASE, { kind: "range", field: "created_at" }, over),
+      explainUnavailable(
+        DEF,
+        BASE,
+        { kind: "filter", field: "created_at", op: "not_between" },
+        over,
+      ),
     ).toMatchObject({ code: "narrow_first", field: "created_at", rows: 100 });
-    const under = sized(40, false);
-    expect(listOffers(DEF, BASE, under).narrowRanges).toEqual(
-      CAPABILITIES.rangeFields,
-    );
-    expect(listOffers(DEF, BASE, under).texts).toEqual(["name", "note"]);
-    expect(listOffers(DEF, BASE, under).narrowTexts).toEqual(["name", "note"]);
+    const under = listOffers(DEF, BASE, sized(40, false));
+    for (const [field, offers] of Object.entries(under.filters)) {
+      for (const offer of offers.filter(
+        (item) => field !== "deleted_at" || item.op !== "blank",
+      )) {
+        expect({ field, op: offer.op, offered: offer.offered }).toEqual({
+          field,
+          op: offer.op,
+          offered: true,
+        });
+      }
+    }
     const indexed = applyAction(
       DEF,
       BASE,
-      { type: "setText", field: "name", op: "contains", value: "invoice" },
+      { type: "setFilter", filter: one("name", "contains", "invoice") },
       CONTEXT,
     );
-    expect(indexed.texts).toHaveLength(1);
+    expect(indexed.filters).toHaveLength(1);
   });
 });
 
-describe("a date preset on a date field", () => {
-  test("resolves to the viewer's calendar days", () => {
+describe("a date period", () => {
+  test("resolves to the viewer's calendar days on a date field", () => {
     const now = new Date(2026, 2, 15, 9, 30);
     const literal = toLiteralQuery(
       DEF,
       {
         ...BASE,
-        ranges: [{ field: "due", min: null, max: null, preset: "this-month" }],
+        filters: [{ field: "due", op: "in_period", preset: "this-month" }],
       },
       now,
     );
-    expect(literal.ranges).toEqual([
-      { field: "due", min: "2026-03-01", max: "2026-03-31" },
+    expect(literal.filters).toEqual([
+      pair("due", "between", "2026-03-01", "2026-03-31"),
     ]);
     expect(validateQueryValues(DEF, literal)).toBeNull();
+    expect(checkFilterOps(DEF, literal)).toBeNull();
   });
 });
 
 describe("a scope", () => {
   const scope: QueryScope = {
-    equals: { folder_id: [FOLDER], deleted_at: ["_empty"] },
+    filters: [
+      list("folder_id", "any_of", [FOLDER]),
+      none("deleted_at", "blank"),
+    ],
   };
 
   test("is ANDed into every request and never into the user's query", async () => {
@@ -764,7 +1284,8 @@ describe("a scope", () => {
       scope,
     );
     const signal = new AbortController().signal;
-    const user: QueryState = { ...BASE, equals: { starred: ["true"] } };
+    const own = list("starred", "any_of", ["true"]);
+    const user: QueryState = { ...BASE, filters: [own] };
     await source.fetchPage(user, 10, signal);
     await source.fetchCount(user, false, signal);
     await source.fetchTotals(user, signal);
@@ -772,44 +1293,40 @@ describe("a scope", () => {
     await source.fetchNarrowed(user, signal);
     expect(seen).toHaveLength(5);
     for (const query of seen) {
-      expect(query.equals).toEqual({ starred: ["true"], ...scope.equals });
+      expect(query.filters).toEqual([...(scope.filters ?? []), own]);
     }
-    expect(user.equals).toEqual({ starred: ["true"] });
+    expect(user.filters).toEqual([own]);
     expect(listFilterChips(DEF, user).map((chip) => chip.id)).toEqual([
-      "eq:starred",
+      "filter:starred:any_of",
       "sort",
     ]);
   });
 
   test("takes its fields and Match any out of what is offered", () => {
     const { capabilities } = withScope(createTestSource(CAPABILITIES), scope);
-    expect(capabilities.equalsFields).toEqual(["starred"]);
+    expect(Object.keys(capabilities.filterOps)).not.toContain("folder_id");
+    expect(Object.keys(capabilities.filterOps)).not.toContain("deleted_at");
+    expect(capabilities.filterOps.starred).toEqual(["any_of"]);
     expect(capabilities.groupFields).toEqual(["starred"]);
     expect(capabilities.combineOr).toBe(false);
     expect(capabilities.canRun(BASE)).toBe(true);
     expect(
-      capabilities.canRun({ ...BASE, equals: { folder_id: [FOLDER] } }),
+      capabilities.canRun(withFilters([list("folder_id", "any_of", [FOLDER])])),
     ).toBe(false);
     expect(capabilities.canRun({ ...BASE, combine: "or" })).toBe(false);
-    expect(listQueryKeys(capabilities).map((key) => key.name)).not.toContain(
-      "f.folder_id",
-    );
+    const names = listQueryKeys(capabilities).map((key) => key.name);
+    expect(names).not.toContain("f.folder_id.any_of");
+    expect(names).toContain("f.starred.any_of");
   });
 
   test("decides what can run: the scoped query must have an index", () => {
     const { capabilities } = withScope(createTestSource(CAPABILITIES), scope);
+    const starred = withFilters([list("starred", "any_of", ["true"])]);
+    expect(capabilities.canRun(starred)).toBe(false);
     expect(
-      capabilities.canRun({ ...BASE, equals: { starred: ["true"] } }),
-    ).toBe(false);
-    expect(
-      capabilities.isNarrowed({
-        ...BASE,
-        ranges: [{ field: "size", min: "1", max: null }],
-      }),
+      capabilities.isNarrowed(withFilters([one("size", "greater_than", "1")])),
     ).toBe(true);
-    expect(
-      CAPABILITIES.canRun({ ...BASE, equals: { starred: ["true"] } }),
-    ).toBe(true);
+    expect(CAPABILITIES.canRun(starred)).toBe(true);
   });
 
   test("keeps a server grid from showing whole-table facet counts", async () => {
@@ -822,11 +1339,13 @@ describe("a scope", () => {
     expect(scoped.capabilities.isFacetCountExact(BASE)).toBe(false);
   });
 
-  test("filters a client grid's rows, ranges and text included", async () => {
+  test("filters a client grid's rows by any operator", async () => {
     const source = withScope(createMemorySource(DEF, ROWS), {
-      equals: { deleted_at: ["_empty"] },
-      ranges: [{ field: "size", min: "5", max: null, minExclusive: true }],
-      texts: [text("name", "starts_with", "inv")],
+      filters: [
+        none("deleted_at", "blank"),
+        one("size", "greater_than", "5"),
+        one("name", "starts_with", "inv"),
+      ],
     });
     const signal = new AbortController().signal;
     const page = await source.fetchPage(BASE, 10, signal);
@@ -837,197 +1356,8 @@ describe("a scope", () => {
   test("an empty scope is no wrapper at all", () => {
     const source = createTestSource(CAPABILITIES);
     expect(withScope(source, {})).toBe(source);
-    expect(applyScope(BASE, { equals: { a: ["b"] } }).equals).toEqual({
-      a: ["b"],
-    });
-  });
-});
-
-describe("a range as an operator and its values", () => {
-  const created = DEF.fields[7];
-  const due = DEF.fields[6];
-  const size = DEF.fields[3];
-
-  test("each operator on a datetime is whole days, and reads back as the same day", () => {
-    const cases: [RangeValue, RangeInput][] = [
-      [
-        { op: "eq", first: "2026-03-03", second: null },
-        {
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-03T23:59:59.999999Z",
-        },
-      ],
-      [
-        { op: "neq", first: "2026-03-03", second: null },
-        {
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-03T23:59:59.999999Z",
-          exclude: true,
-        },
-      ],
-      [
-        { op: "gt", first: "2026-03-03", second: null },
-        { min: "2026-03-03T23:59:59.999999Z", max: null, minExclusive: true },
-      ],
-      [
-        { op: "gte", first: "2026-03-03", second: null },
-        { min: "2026-03-03T00:00:00.000000Z", max: null },
-      ],
-      [
-        { op: "lt", first: "2026-03-03", second: null },
-        { min: null, max: "2026-03-03T00:00:00.000000Z", maxExclusive: true },
-      ],
-      [
-        { op: "lte", first: "2026-03-03", second: null },
-        { min: null, max: "2026-03-03T23:59:59.999999Z" },
-      ],
-      [
-        { op: "between", first: "2026-03-03", second: "2026-03-09" },
-        {
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-09T23:59:59.999999Z",
-        },
-      ],
-      [
-        { op: "not_between", first: "2026-03-03", second: "2026-03-09" },
-        {
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-09T23:59:59.999999Z",
-          exclude: true,
-        },
-      ],
-    ];
-    for (const [value, range] of cases) {
-      expect(fromRangeValue(created, value)).toEqual(range);
-      expect(toRangeValue(created, range)).toEqual(value);
-    }
-  });
-
-  test("a date field keeps the day and a number its text", () => {
-    expect(
-      fromRangeValue(due, { op: "eq", first: "2026-03-03", second: null }),
-    ).toEqual({
-      min: "2026-03-03",
-      max: "2026-03-03",
-    });
-    expect(
-      fromRangeValue(size, { op: "gt", first: "5", second: null }),
-    ).toEqual({
-      min: "5",
-      max: null,
-      minExclusive: true,
-    });
-    expect(toRangeValue(size, { min: "5", max: "5", exclude: true })).toEqual({
-      op: "neq",
-      first: "5",
-      second: null,
-    });
-    expect(toRangeValue(size, { min: "5", max: null })).toEqual({
-      op: "gte",
-      first: "5",
-      second: null,
-    });
-  });
-
-  test("nothing to compare with is no range, and a preset has no operator", () => {
-    expect(
-      fromRangeValue(size, { op: "gt", first: null, second: null }),
-    ).toBeNull();
-    expect(
-      fromRangeValue(size, { op: "between", first: null, second: null }),
-    ).toBeNull();
-    expect(
-      fromRangeValue(size, { op: "between", first: null, second: "9" }),
-    ).toEqual({
-      min: null,
-      max: "9",
-    });
-    expect(toRangeValue(size, null)).toBeNull();
-    expect(
-      toRangeValue(due, { min: null, max: null, preset: "today" }),
-    ).toBeNull();
-  });
-});
-
-describe("a control that keeps its operator", () => {
-  const size = DEF.fields[3];
-
-  test("a half-open or one-value range still reads as between when that is picked", () => {
-    expect(resolveRangeValue(size, { min: "5", max: null }, "between")).toEqual(
-      {
-        op: "between",
-        first: "5",
-        second: null,
-      },
-    );
-    expect(resolveRangeValue(size, { min: null, max: "9" }, "between")).toEqual(
-      {
-        op: "between",
-        first: null,
-        second: "9",
-      },
-    );
-    expect(resolveRangeValue(size, { min: "5", max: "5" }, "between")).toEqual({
-      op: "between",
-      first: "5",
-      second: "5",
-    });
-    expect(
-      resolveRangeValue(
-        size,
-        { min: "5", max: "5", exclude: true },
-        "not_between",
-      ),
-    ).toEqual({ op: "not_between", first: "5", second: "5" });
-  });
-
-  test("an operator that cannot say the range gives way to the one that can", () => {
-    expect(
-      resolveRangeValue(
-        size,
-        { min: "5", max: null, minExclusive: true },
-        "between",
-      )?.op,
-    ).toBe("gt");
-    expect(resolveRangeValue(size, { min: "5", max: null }, "eq")?.op).toBe(
-      "gte",
-    );
-    expect(resolveRangeValue(size, { min: "5", max: null }, null)?.op).toBe(
-      "gte",
-    );
-  });
-
-  test("setRange with a position replaces that one range of the field", () => {
-    const context = {
-      capabilities: memoryCapabilities(DEF),
-      allSearchMatchesLoaded: false,
-      narrowed: null,
-    };
-    const query: QueryState = {
-      ...BASE,
-      ranges: [
-        { field: "size", min: "1", max: null },
-        { field: "rate", min: "1", max: null },
-        { field: "size", min: "5", max: "5", exclude: true },
-      ],
-    };
-    const first = applyAction(
-      DEF,
-      query,
-      { type: "setRange", field: "size", at: 0, min: null, max: "3" },
-      context,
-    );
-    expect(first.ranges).toEqual([
-      { field: "size", min: null, max: "3" },
-      query.ranges[1],
-      query.ranges[2],
-    ]);
-    const added = applyAction(
-      DEF,
-      BASE,
-      { type: "setRange", field: "size", at: 0, min: "2", max: null },
-      context,
-    );
-    expect(added.ranges).toEqual([{ field: "size", min: "2", max: null }]);
+    expect(withScope(source, { filters: [] })).toBe(source);
+    const filter = list("a", "any_of", ["b"]);
+    expect(applyScope(BASE, { filters: [filter] }).filters).toEqual([filter]);
   });
 });

@@ -25,8 +25,11 @@ describe("the in-memory source", () => {
   test("it filters, sorts and pages", async () => {
     const query: QueryState = {
       ...BASE,
-      equals: { status: ["open"], region: ["south"] },
-      ranges: [{ field: "total", min: "500", max: "2000" }],
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["south"] },
+        { field: "total", op: "between", min: "500", max: "2000" },
+      ],
       sort: { field: "total", direction: "desc" },
     };
     const first = await source.fetchPage(query, 3, signal);
@@ -78,7 +81,10 @@ describe("the in-memory source", () => {
 
   test("each total is the sum of the filtered rows", async () => {
     const totals = await source.fetchTotals(
-      { ...BASE, equals: { status: ["done"] } },
+      {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["done"] }],
+      },
       signal,
     );
     const done = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36];
@@ -102,7 +108,13 @@ describe("the in-memory source", () => {
 
   test("facet counts follow the other filters, not the facet itself", async () => {
     const facets = await source.fetchFacets(
-      { ...BASE, equals: { status: ["done"], region: ["north"] } },
+      {
+        ...BASE,
+        filters: [
+          { field: "status", op: "any_of", values: ["done"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
+      },
       signal,
     );
     expect(
@@ -120,13 +132,22 @@ describe("the in-memory source", () => {
 
   test("several values of one field match any of them", async () => {
     const either = await source.fetchCount(
-      { ...BASE, equals: { status: ["open", "done"], region: ["north"] } },
+      {
+        ...BASE,
+        filters: [
+          { field: "status", op: "any_of", values: ["open", "done"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
+      },
       false,
       signal,
     );
     expect(either.count).toBe(20);
     const facets = await source.fetchFacets(
-      { ...BASE, equals: { status: ["open", "done"] } },
+      {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
+      },
       signal,
     );
     expect(facets.reduce((sum, facet) => sum + facet.count, 0)).toBe(40);
@@ -142,7 +163,10 @@ describe("the in-memory source", () => {
     const updated = await mutable.changeFacetValue("row-01", "done");
     expect(updated.status).toBe("done");
     const count = await mutable.fetchCount(
-      { ...BASE, equals: { status: ["done"] } },
+      {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["done"] }],
+      },
       false,
       signal,
     );

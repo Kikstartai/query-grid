@@ -54,7 +54,7 @@ const FULL_DEF: IndexedGridDef = {
       equals: ["status"],
       sort: "created_at",
       multi: true,
-      empty: ["note"],
+      blank: ["note"],
       then: ["total", "quantity"],
     },
   ],
@@ -369,7 +369,7 @@ describe("normalizeStoredGridDef", () => {
         {
           equals: ["gone_f"],
           sort: "gone_g",
-          empty: ["gone_h"],
+          blank: ["gone_h"],
           then: ["gone_i"],
         },
       ];
@@ -392,7 +392,7 @@ describe("normalizeStoredGridDef", () => {
       ["stored_unknown_field", "arrayIndexes.0", "gone_k"],
       ["stored_unknown_field", "indexes.0.equals.0", "gone_f"],
       ["stored_unknown_field", "indexes.0.sort", "gone_g"],
-      ["stored_unknown_field", "indexes.0.empty.0", "gone_h"],
+      ["stored_unknown_field", "indexes.0.blank.0", "gone_h"],
       ["stored_unknown_field", "indexes.0.then.0", "gone_i"],
     ]);
   });
@@ -520,7 +520,7 @@ describe("normalizeStoredGridDef", () => {
           sort: "created_at",
           range: "yes",
           multi: 1,
-          empty: "note",
+          blank: "note",
         },
       ];
     });
@@ -531,7 +531,7 @@ describe("normalizeStoredGridDef", () => {
       invalidAt("indexes.3.equals.0"),
       invalidAt("indexes.3.range"),
       invalidAt("indexes.3.multi"),
-      invalidAt("indexes.3.empty"),
+      invalidAt("indexes.3.blank"),
     ]);
   });
 
@@ -658,24 +658,24 @@ describe("a stored def that reads cleanly must also suit its indexes", () => {
     expect(
       listProblems(
         storedWith({
-          indexes: [{ equals: [], sort: "created_at", empty: ["total"] }],
+          indexes: [{ equals: [], sort: "created_at", blank: ["total"] }],
         }),
       ),
     ).toEqual([
-      indexProblem("index_never_empty", {
-        path: "indexes.0.empty.0",
+      indexProblem("index_never_blank", {
+        path: "indexes.0.blank.0",
         field: "total",
       }),
     ]);
     expect(
       listProblems(
         storedWith({
-          indexes: [{ equals: ["note"], sort: "created_at", empty: ["note"] }],
+          indexes: [{ equals: ["note"], sort: "created_at", blank: ["note"] }],
         }),
       ),
     ).toEqual([
-      indexProblem("index_empty_is_filtered", {
-        path: "indexes.0.empty.0",
+      indexProblem("index_blank_is_filtered", {
+        path: "indexes.0.blank.0",
         field: "note",
       }),
     ]);

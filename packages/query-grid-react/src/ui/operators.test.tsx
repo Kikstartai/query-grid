@@ -7,7 +7,7 @@ import { createMemorySource } from "@kikstart/query-grid/memory";
 
 import { CardList } from "../components/card-list.tsx";
 import { NO_PERSISTENCE } from "../components/column-state.ts";
-import { RangeFilter } from "../components/field-filter.tsx";
+import { FieldFilter } from "../components/field-filter.tsx";
 import type { GridDef } from "../components/fields.ts";
 import { QueryGridMessagesProvider } from "../components/messages.tsx";
 import { StaticQueryGridProvider } from "../react/query-grid-provider.tsx";
@@ -82,137 +82,180 @@ function listChips(html: string): string[] {
 }
 
 describe("the controls of the new field types", () => {
-  test("a boolean is a Yes / No select, an array an overlap, and each kind says so", () => {
+  test("a boolean is a Yes / No select, an array a list, and each kind says so", () => {
     const html = render(<FilterBar />);
-    expect(html).toMatch(/data-field="starred" data-kind="equals"/);
-    expect(html).toMatch(/data-field="tags" data-kind="overlap"/);
-    expect(html).toMatch(/data-field="labels" data-kind="overlap"/);
-    expect(html).toMatch(/data-field="due" data-kind="range"/);
-    expect(html).toMatch(/data-field="rate" data-kind="range"/);
-    expect(html).not.toContain("(empty)</");
+    expect(html).toMatch(/data-field="starred" data-kind="choice"/);
+    expect(html).toMatch(/data-field="tags" data-kind="array"/);
+    expect(html).toMatch(/data-field="labels" data-kind="array"/);
+    expect(html).toMatch(/data-field="due" data-kind="date"/);
+    expect(html).toMatch(/data-field="rate" data-kind="number"/);
+    expect(html).toMatch(/data-field="name" data-kind="text"/);
+    expect(html).not.toContain("(blank)");
     const starred = render(
       <FilterBar fields={["starred"]} />,
-      "f.starred=true",
+      "f.starred.any_of=true",
     );
     expect(starred).toContain(">Yes<");
   });
 
   test("an array field with no options looks its values up", () => {
-    const html = render(<FilterBar fields={["labels"]} />, "o.labels=x");
+    const html = render(<FilterBar fields={["labels"]} />, "f.labels.any_of=x");
     expect(html).toContain('data-filter="labels"');
     expect(html).toContain('role="combobox"');
     expect(html).toContain(">x<");
   });
 });
 
-describe("a range and its operator", () => {
+describe("an operator and its value editor", () => {
   const size = DEF.fields[2];
   const created = DEF.fields[6];
+  const sizeOps = [
+    { op: "between" as const },
+    { op: "greater_than" as const },
+    { op: "not_between" as const },
+  ];
+  const createdOps = [
+    { op: "equals" as const },
+    { op: "greater_than" as const },
+    { op: "between" as const },
+    { op: "not_between" as const },
+    { op: "in_period" as const },
+  ];
 
-  test("a number range shows the operator the range says, with one value or two", () => {
+  test("a number filter shows its operator, with one value or two", () => {
     const between = renderToStaticMarkup(
-      <RangeFilter field={size} range={null} onRangeChange={noop} />,
+      <FieldFilter
+        field={size}
+        ops={sizeOps}
+        filter={null}
+        onFilterChange={noop}
+      />,
     );
     expect(between).toContain('data-filter="size.op"');
     expect(between).toContain(">between<");
     expect(between).toContain('data-filter="size.min"');
     expect(between).toContain('data-filter="size.max"');
     const greater = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={size}
-        range={{ min: "5", max: null, minExclusive: true }}
-        onRangeChange={noop}
+        ops={sizeOps}
+        filter={{ field: "size", op: "greater_than", value: "5" }}
+        onFilterChange={noop}
       />,
     );
-    expect(greater).toContain(">&gt;<");
+    expect(greater).toContain(">greater than<");
     expect(greater).toContain('data-filter="size.value"');
     expect(greater).toContain('aria-label="Size value"');
     expect(greater).not.toContain('data-filter="size.max"');
     const not = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={size}
-        range={{ min: "5", max: "9", exclude: true }}
-        onRangeChange={noop}
+        ops={sizeOps}
+        filter={{ field: "size", op: "not_between", min: "5", max: "9" }}
+        onFilterChange={noop}
       />,
     );
     expect(not).toContain(">not between<");
     expect(not).toContain('data-filter="size.max"');
   });
 
-  test("a half-open range stays a between, since that is the control's default", () => {
-    const html = renderToStaticMarkup(
-      <RangeFilter
+  test("with no filter the control opens on the field kind's usual operator when it is offered", () => {
+    const held = renderToStaticMarkup(
+      <FieldFilter
         field={size}
-        range={{ min: "5", max: null }}
-        onRangeChange={noop}
+        ops={[
+          { op: "between", disabled: true, reason: "Narrow first." },
+          { op: "greater_than" },
+        ]}
+        filter={null}
+        onFilterChange={noop}
       />,
     );
-    expect(html).toContain(">between<");
-    expect(html).toContain('data-filter="size.max"');
+    expect(held).toContain(">greater than<");
+    expect(held).toContain('data-filter="size.value"');
   });
 
-  test("a date range names its operator in the period select and picks one date or two", () => {
+  test("a date filter names its operator in the dates' words and picks one date or two", () => {
     const on = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={created}
-        range={{
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-03T23:59:59.999999Z",
-        }}
-        onRangeChange={noop}
+        ops={createdOps}
+        filter={{ field: "created_at", op: "equals", value: "2026-03-03" }}
+        onFilterChange={noop}
       />,
     );
-    expect(on).toContain("On…");
+    expect(on).toContain(">on<");
+    expect(on).toContain('data-filter="created_at.value"');
     expect(on).toContain('aria-label="Pick a Created date"');
     expect(on).not.toContain('aria-label="Pick Created dates"');
     const after = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={created}
-        range={{
-          min: "2026-03-03T23:59:59.999999Z",
-          max: null,
-          minExclusive: true,
+        ops={createdOps}
+        filter={{
+          field: "created_at",
+          op: "greater_than",
+          value: "2026-03-03",
         }}
-        onRangeChange={noop}
+        onFilterChange={noop}
       />,
     );
-    expect(after).toContain("After…");
+    expect(after).toContain(">after<");
     const not = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={created}
-        range={{
-          min: "2026-03-03T00:00:00.000000Z",
-          max: "2026-03-09T23:59:59.999999Z",
-          exclude: true,
+        ops={createdOps}
+        filter={{
+          field: "created_at",
+          op: "not_between",
+          min: "2026-03-03",
+          max: "2026-03-09",
         }}
-        onRangeChange={noop}
+        onFilterChange={noop}
       />,
     );
-    expect(not).toContain("Not between…");
+    expect(not).toContain(">not between<");
     expect(not).toContain('aria-label="Pick Created dates"');
+    const idle = renderToStaticMarkup(
+      <FieldFilter
+        field={created}
+        ops={createdOps}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    expect(idle).toContain(">in period<");
+    expect(idle).toContain('data-filter="created_at.preset"');
   });
 
-  test("an operator the data cannot answer yet is listed, disabled, with the reason", () => {
+  test("an operator the data cannot answer keeps the filter it already holds", () => {
     const held = renderToStaticMarkup(
-      <RangeFilter
+      <FieldFilter
         field={size}
-        range={{ min: "5", max: "9", exclude: true }}
-        onRangeChange={noop}
-        heldOps={["not_between", "neq"]}
-        heldReason="Narrow by Status first: 620,000+ rows."
+        ops={[
+          { op: "between" },
+          {
+            op: "not_between",
+            disabled: true,
+            reason: "Narrow by Status first: 620,000+ rows.",
+          },
+        ]}
+        filter={{ field: "size", op: "not_between", min: "5", max: "9" }}
+        onFilterChange={noop}
       />,
     );
     expect(held).toContain(">not between<");
-    expect(held).toContain('data-filter="size.max"');
+    expect(held).toMatch(/data-filter="size\.max"(?![^>]*disabled)/);
   });
 
-  test("the bound filter reads the field's first range from the URL", () => {
+  test("the bound filter reads the field's first filter, in the query's order", () => {
     const html = render(
       <FilterBar fields={["size"]} />,
-      "r.size=(5..&r.size=!9..9",
+      "f.size.less_than=9&f.size.greater_than=5",
     );
-    expect(html).toContain(">&gt;<");
+    expect(html).toContain(">greater than<");
     expect(html).toContain('data-filter="size.value"');
+    expect(html).toContain('value="5"');
   });
 });
 
@@ -221,29 +264,31 @@ describe("the chips of the new filters", () => {
     const html = render(
       <FilterChips />,
       [
-        "r.size=(5..",
-        "r.size=!9..9",
-        "r.rate=1.5..2.5",
-        "r.due=..2026-03-01)",
-        "r.created_at=!2026-03-03T00:00:00.000000Z..2026-03-09T23:59:59.999999Z",
-        "sw.name=inv",
-        "nc.name=draft",
-        "ne.folder=inbox",
-        "f.starred=false",
-        "o.tags=red",
+        "f.size.greater_than=5",
+        "f.size.not_equals=9",
+        "f.rate.between=1.5..2.5",
+        "f.rate.blank=",
+        "f.due.less_than=2026-03-01",
+        "f.created_at.not_between=2026-03-03..2026-03-09",
+        "f.name.starts_with=inv",
+        "f.name.not_contains=draft",
+        "f.folder.not_equals=inbox",
+        "f.starred.any_of=false",
+        "f.tags.all_of=red",
       ].join("&"),
     );
     expect(listChips(html)).toEqual([
-      "Starred:",
-      "Tags has:",
-      "Size &gt; 5",
-      "Size ≠ 9",
-      "Rate: 1.5 – 2.5",
-      "Due &lt; 2026-03-01",
-      "Created: not 2026-03-03 – 2026-03-09",
-      "Name does not contain “draft”",
+      "Name not contains “draft”",
       "Name starts with “inv”",
-      "Folder is not “inbox”",
+      "Size not equals 9",
+      "Size greater than 5",
+      "Rate between 1.5 and 2.5",
+      "Rate blank",
+      "Starred any of:",
+      "Due before 2026-03-01",
+      "Created not between 2026-03-03 and 2026-03-09",
+      "Folder not equals “inbox”",
+      "Tags all of:",
       "Sort: Created ↓",
     ]);
     expect(html).toContain(">No<");
@@ -254,17 +299,15 @@ describe("the chips of the new filters", () => {
     const html = renderToStaticMarkup(
       <QueryGridMessagesProvider
         messages={{
-          chipRangeOps: { gt: ({ label, min }) => `${label} over ${min}` },
-          chipTexts: {
-            starts_with: ({ label, value }) => `${label} begins ${value}`,
-          },
+          ops: { number: { greater_than: "over" } },
+          chipText: ({ value }) => `«${value}»`,
           booleanTrue: "On",
         }}
       >
         <StaticQueryGridProvider
           def={DEF}
           source={source}
-          queryString="r.size=(5..&sw.name=inv&f.starred=true&r.rate=!2..2"
+          queryString="f.size.greater_than=5&f.name.starts_with=inv&f.starred.any_of=true&f.rate.not_equals=2"
           columnPersistence={NO_PERSISTENCE}
         >
           <FilterChips />
@@ -272,10 +315,10 @@ describe("the chips of the new filters", () => {
       </QueryGridMessagesProvider>,
     );
     expect(listChips(html)).toEqual([
-      "Starred:",
+      "Name starts with «inv»",
       "Size over 5",
-      "Rate ≠ 2",
-      "Name begins inv",
+      "Rate not equals 2",
+      "Starred any of:",
       "Sort: Created ↓",
     ]);
     expect(html).toContain(">On<");
@@ -283,21 +326,24 @@ describe("the chips of the new filters", () => {
 });
 
 describe("the text filter, bound", () => {
-  test("shows a row for each filter in the URL and one more to add", () => {
+  test("shows the field's first text filter with its operator", () => {
     const html = render(
       <FilterBar fields={["name", "folder"]} />,
-      "c.name=inv&nc.name=draft",
+      "f.name.contains=inv&f.folder.blank=",
     );
-    expect(html.match(/data-text-row=/g)).toHaveLength(3);
     expect(html).toContain('aria-label="Name contains"');
-    expect(html).toContain('aria-label="Name does not contain"');
+    expect(html).toContain('value="inv"');
+    expect(html).toMatch(/data-filter="folder\.op"[^>]*>.*?>blank</s);
+    expect(html).not.toContain('data-filter="folder.value"');
   });
 });
 
 describe("a scope on the provider", () => {
   const scope: QueryScope = {
-    equals: { folder: ["inbox"] },
-    overlaps: { tags: ["red"] },
+    filters: [
+      { field: "folder", op: "equals", value: "inbox" },
+      { field: "tags", op: "any_of", values: ["red"] },
+    ],
   };
 
   test("is no chip, no control and no URL key", () => {
@@ -306,10 +352,10 @@ describe("a scope on the provider", () => {
         <FilterBar />
         <FilterChips />
       </>,
-      "f.starred=true&f.folder=other&o.tags=blue",
+      "f.starred.any_of=true&f.folder.equals=other&f.tags.any_of=blue",
       scope,
     );
-    expect(listChips(html)).toEqual(["Starred:", "Sort: Created ↓"]);
+    expect(listChips(html)).toEqual(["Starred any of:", "Sort: Created ↓"]);
     expect(html).not.toContain('data-field="folder"');
     expect(html).not.toContain('data-field="tags"');
     expect(html).toContain('data-field="labels"');
@@ -317,7 +363,7 @@ describe("a scope on the provider", () => {
   });
 
   test("leaves the same grid untouched without one", () => {
-    const html = render(<FilterBar />, "f.folder=other");
+    const html = render(<FilterBar />, "f.folder.equals=other");
     expect(html).toContain('data-field="folder"');
     expect(html).toContain('data-field="combine"');
   });

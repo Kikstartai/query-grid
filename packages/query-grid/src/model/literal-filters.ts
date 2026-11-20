@@ -1,81 +1,79 @@
+import type { DataSourceCapabilities } from "./capabilities.ts";
 import { mapSourceQueries, type DataSource } from "./data-source.ts";
+import { resolveDatePreset, resolveDayPreset } from "./date-presets.ts";
+import { expandNoneOf } from "./filter-values.ts";
+import { getField, type BaseGridDef } from "./grid-def.ts";
 import {
-  isDatePreset,
-  resolveDatePreset,
-  resolveDayPreset,
-} from "./date-presets.ts";
-import { getField, isDateType, type BaseGridDef } from "./grid-def.ts";
-import type { QueryState, RangeState } from "./query-state.ts";
-import { expandEquals, isExcluding } from "./field-values.ts";
+  FILTER_OPS,
+  isLiteralOp,
+  listFieldOps,
+  type FilterOp,
+} from "./operators.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 
-function resolveEquals(
+const REFERENCE_DAY = new Date(2000, 0, 1);
+
+type PeriodMode = Date | "name";
+
+function resolveFilter(
   def: BaseGridDef,
-  equals: QueryState["equals"],
-): QueryState["equals"] {
-  const entries = Object.entries(equals);
-  const excluding = entries.some(([key, values]) => {
-    const field = getField(def, key);
-    return field !== null && isExcluding(field, values);
+  filter: Filter,
+  mode: PeriodMode,
+): Filter {
+  const field = getField(def, filter.field);
+  if (!field || !isLiteralOp(field, filter.op)) {
+    return filter;
+  }
+  if (filter.op === "none_of") {
+    return expandNoneOf(field, filter);
+  }
+  if (filter.op !== "in_period") {
+    return filter;
+  }
+  if (mode === "name") {
+    return {
+      field: filter.field,
+      op: "between",
+      min: filter.preset,
+      max: filter.preset,
+    };
+  }
+  const period =
+    field.type === "date"
+      ? resolveDayPreset(filter.preset, mode)
+      : resolveDatePreset(filter.preset, mode);
+  return { field: filter.field, op: "between", ...period };
+}
+
+function resolveFilters(
+  def: BaseGridDef,
+  query: QueryState,
+  mode: PeriodMode,
+): QueryState {
+  const literal = query.filters.some((filter) => {
+    const field = getField(def, filter.field);
+    return field !== null && isLiteralOp(field, filter.op);
   });
-  if (!excluding) {
-    return equals;
+  if (!literal) {
+    return query;
   }
-  return Object.fromEntries(
-    entries.map(([key, values]) => {
-      const field = getField(def, key);
-      return [key, field ? expandEquals(field, values) : values];
-    }),
-  );
+  return {
+    ...query,
+    filters: query.filters.map((filter) => resolveFilter(def, filter, mode)),
+  };
 }
 
-function resolveRange(
-  def: BaseGridDef,
-  range: RangeState,
-  now: Date | null,
-): RangeState {
-  const { field, preset } = range;
-  if (preset === undefined) {
-    return range;
-  }
-  const type = getField(def, field)?.type;
-  if (!isDatePreset(preset) || type === undefined || !isDateType(type)) {
-    return range;
-  }
-  if (now === null) {
-    return { field, min: null, max: null };
-  }
-  return type === "date"
-    ? { field, ...resolveDayPreset(preset, now) }
-    : { field, ...resolveDatePreset(preset, now) };
-}
-
-function resolveRanges(
-  def: BaseGridDef,
-  ranges: RangeState[],
-  now: Date | null,
-): RangeState[] {
-  if (ranges.every((range) => range.preset === undefined)) {
-    return ranges;
-  }
-  return ranges.map((range) => resolveRange(def, range, now));
-}
-
+// Without a clock a period is resolved against a fixed day: what is checked is the filter's shape, not which days it holds.
 export function toLiteralQuery(
   def: BaseGridDef,
   query: QueryState,
   now: Date | null,
 ): QueryState {
-  const equals = resolveEquals(def, query.equals);
-  const ranges = resolveRanges(def, query.ranges, now);
-  if (equals === query.equals && ranges === query.ranges) {
-    return query;
-  }
-  return { ...query, equals, ranges };
+  return resolveFilters(def, query, now ?? REFERENCE_DAY);
 }
 
 interface Resolved {
-  equals: QueryState["equals"];
-  ranges: RangeState[];
+  filters: Filter[];
   day: string;
   query: QueryState;
 }
@@ -86,22 +84,49 @@ function createResolver(def: BaseGridDef): (query: QueryState) => QueryState {
     const at = new Date();
     const day = at.toDateString();
     const fresh =
-      last !== null &&
-      last.equals === query.equals &&
-      last.ranges === query.ranges &&
-      last.day === day;
+      last !== null && last.filters === query.filters && last.day === day;
     if (!fresh) {
       last = {
-        equals: query.equals,
-        ranges: query.ranges,
+        filters: query.filters,
         day,
         query: toLiteralQuery(def, query, at),
       };
     }
-    const { equals, ranges } = (last as Resolved).query;
-    return equals === query.equals && ranges === query.ranges
-      ? query
-      : { ...query, equals, ranges };
+    const { filters } = (last as Resolved).query;
+    return filters === query.filters ? query : { ...query, filters };
+  };
+}
+
+function listLiteralOps(
+  def: BaseGridDef,
+  key: string,
+  ops: FilterOp[],
+): FilterOp[] {
+  const field = getField(def, key);
+  if (!field) {
+    return ops;
+  }
+  const added = listFieldOps(field).filter((op) => {
+    if (!isLiteralOp(field, op)) {
+      return false;
+    }
+    return ops.includes(op === "in_period" ? "between" : "any_of");
+  });
+  return FILTER_OPS.filter((op) => ops.includes(op) || added.includes(op));
+}
+
+function withLiteralOps(
+  def: BaseGridDef,
+  capabilities: DataSourceCapabilities,
+): DataSourceCapabilities {
+  return {
+    ...capabilities,
+    filterOps: Object.fromEntries(
+      Object.entries(capabilities.filterOps).map(([key, ops]) => [
+        key,
+        listLiteralOps(def, key, ops),
+      ]),
+    ),
   };
 }
 
@@ -109,20 +134,10 @@ export function withLiteralFilters(
   def: BaseGridDef,
   source: DataSource,
 ): DataSource {
-  const resolve = createResolver(def);
-  const shape = (query: QueryState) => toLiteralQuery(def, query, null);
-  // A preset has no bounds until it is resolved, so its name stands in for them where two queries are compared.
-  const mark = (query: QueryState): QueryState => ({
-    ...shape(query),
-    ranges: query.ranges.map((range) =>
-      range.preset === undefined
-        ? range
-        : { ...range, preset: undefined, min: range.preset, max: null },
-    ),
+  const mapped = mapSourceQueries(source, {
+    fetch: createResolver(def),
+    check: (query) => toLiteralQuery(def, query, null),
+    basis: (query) => resolveFilters(def, query, "name"),
   });
-  return mapSourceQueries(source, {
-    fetch: resolve,
-    check: shape,
-    basis: mark,
-  });
+  return { ...mapped, capabilities: withLiteralOps(def, mapped.capabilities) };
 }

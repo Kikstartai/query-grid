@@ -30,7 +30,16 @@
   font-weight: 500;
 }
 
-:where(.qg-field[data-kind="range"]) :where(.qg-field-label) {
+:where(
+    .qg-field:is(
+      [data-kind="text"],
+      [data-kind="number"],
+      [data-kind="date"],
+      [data-kind="choice"],
+      [data-kind="array"]
+    )
+  )
+  :where(.qg-field-label) {
   display: inline;
 }
 
@@ -591,11 +600,6 @@
   color: var(--ui-muted-foreground);
   font-size: calc(var(--ui-font-size) - 0.125rem);
   white-space: nowrap;
-}
-
-:where(.qg-exclude) {
-  min-inline-size: 2rem;
-  justify-content: center;
 }
 
 :where(.qg-row:has(.qg-row-check[data-checked])) {

@@ -16,11 +16,7 @@ import {
   SkeletonTools,
 } from "@/lib/workspace-skeleton";
 
-import {
-  ORDER_BAR_FIELDS,
-  ORDER_TEXT_FIELDS,
-  ORDERS_GRID_DEF,
-} from "../orders-grid-def";
+import { ORDER_BAR_FIELDS, ORDERS_GRID_DEF } from "../orders-grid-def";
 import { OrdersFilterBar } from "./orders-view";
 import { OrdersQueryProvider } from "../orders-provider";
 
@@ -38,7 +34,6 @@ function RestyledSkeleton() {
           def={ORDERS_GRID_DEF}
           capabilities={gridDefCapabilities(ORDERS_GRID_DEF)}
           fields={ORDER_BAR_FIELDS}
-          texts={ORDER_TEXT_FIELDS}
         />
         <SkeletonChips />
         <SkeletonGrid />

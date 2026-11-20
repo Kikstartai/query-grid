@@ -22,8 +22,7 @@ const SERVER: DataSourceCapabilities = {
   searchIsOrdered: false,
   facetCountsFollowFilters: false,
   canRun: () => true,
-  equalsFields: [],
-  rangeFields: [],
+  filterOps: {},
   sortFields: ["created_at", "total"],
   searchFields: TEST_SEARCH_FIELDS,
   isFacetCountExact: () => true,
@@ -109,7 +108,10 @@ describe("the count store on the shared resource", () => {
     expect(counts.getState().result?.source).toBe("capped");
     await settle();
     expect(counts.getState().result?.source).toBe("exact");
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    store.dispatch({
+      type: "setFilter",
+      filter: { field: "status", op: "any_of", values: ["open"] },
+    });
     expect(counts.getState().result).toBeNull();
     await settle();
     expect(calls.counts).toEqual([false, true, false]);

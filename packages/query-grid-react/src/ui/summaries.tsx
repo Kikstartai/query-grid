@@ -1,9 +1,10 @@
 "use client";
 
 import {
-  expandEquals,
   getFacetField,
+  listFieldFilters,
   listTotalFields,
+  matchesFilter,
 } from "@kikstart/query-grid";
 
 import {
@@ -34,7 +35,8 @@ import {
   useQueryGridActions,
   useQueryGridMeta,
 } from "../react/query-grid-context.tsx";
-import { useEqualsFilter, useFieldOffer } from "./filters.tsx";
+import { useFilterOps } from "./filters.tsx";
+import { useOffers } from "../react/query-grid-hooks.ts";
 
 export function CountDisplay() {
   const { requestExact } = useQueryGridActions();
@@ -73,18 +75,38 @@ export function FacetPanel() {
   const { capabilities } = useOfferContext();
   const facets = useFacetState();
   const key = def.facet?.field ?? "";
-  const { multiple } = useEqualsFilter(key);
+  const multiple = useOffers().multi.includes(key);
   const { dispatch } = useQueryGridActions();
-  const offer = useFieldOffer(key, "equals");
+  const anyOf = useFilterOps(key).find((item) => item.op === "any_of");
   const field = getFacetField(def);
   if (!field?.options) {
     return null;
   }
+  const own = listFieldFilters(query, key);
   const equals = {
-    values: expandEquals(field, query.equals[key] ?? []),
+    values:
+      own.length === 0
+        ? []
+        : field.options
+            .map((option) => option.value)
+            .filter((value) =>
+              own.every((filter) => matchesFilter(field, filter, value)),
+            ),
     multiple,
     onValuesChange: (values: string[]) =>
-      dispatch({ type: "setEquals", field: key, values }),
+      dispatch(
+        values.length > 0
+          ? {
+              type: "setFilter",
+              filter: { field: key, op: "any_of", values },
+              at: 0,
+            }
+          : { type: "removeFilter", field: key },
+      ),
+  };
+  const offer = {
+    disabled: anyOf?.disabled ?? true,
+    reason: anyOf?.reason ?? null,
   };
   const counted = capabilities.isFacetCountExact(query);
   const showCounts = counted && facets.loaded;

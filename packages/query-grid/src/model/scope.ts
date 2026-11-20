@@ -1,11 +1,8 @@
 import { mapSourceQueries, type DataSource } from "./data-source.ts";
-import type { QueryState, RangeState, TextState } from "./query-state.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 
 export interface QueryScope {
-  equals?: Record<string, string[]>;
-  ranges?: RangeState[];
-  texts?: TextState[];
-  overlaps?: Record<string, string[]>;
+  filters?: Filter[];
 }
 
 type Merge<T> = (value: T) => T;
@@ -23,44 +20,22 @@ function remember<T>(merge: Merge<T>): Merge<T> {
 }
 
 function listScoped(scope: QueryScope): string[] {
-  return [
-    ...Object.keys(scope.equals ?? {}),
-    ...Object.keys(scope.overlaps ?? {}),
-  ];
+  return [...new Set((scope.filters ?? []).map((filter) => filter.field))];
 }
 
 export function isScopeEmpty(scope: QueryScope): boolean {
-  return (
-    listScoped(scope).length === 0 &&
-    (scope.ranges ?? []).length === 0 &&
-    (scope.texts ?? []).length === 0
-  );
+  return (scope.filters ?? []).length === 0;
 }
 
-// The merged parts keep their identity while the user's parts do, so a source that caches by filter identity still hits.
+// The merged filters keep their identity while the user's do, so a source that caches by filter identity still hits.
 function createScoper(scope: QueryScope): Merge<QueryState> {
-  const equals = remember<QueryState["equals"]>((own) => ({
-    ...own,
-    ...scope.equals,
-  }));
-  const overlaps = remember<QueryState["overlaps"]>((own) => ({
-    ...own,
-    ...scope.overlaps,
-  }));
-  const ranges = remember<RangeState[]>((own) => [
-    ...(scope.ranges ?? []),
-    ...own,
-  ]);
-  const texts = remember<TextState[]>((own) => [
-    ...(scope.texts ?? []),
+  const filters = remember<Filter[]>((own) => [
+    ...(scope.filters ?? []),
     ...own,
   ]);
   return (query) => ({
     ...query,
-    equals: equals(query.equals),
-    overlaps: overlaps(query.overlaps),
-    ranges: ranges(query.ranges),
-    texts: texts(query.texts),
+    filters: filters(query.filters),
     combine: "and",
   });
 }
@@ -84,16 +59,20 @@ export function withScope(source: DataSource, scope: QueryScope): DataSource {
   const { capabilities } = mapped;
   const isOwn = (query: QueryState) =>
     query.combine !== "or" &&
-    listScoped(query).every((key) => !scoped.includes(key));
-  const free = (keys: string[]) => keys.filter((key) => !scoped.includes(key));
+    query.filters.every((filter) => !scoped.includes(filter.field));
   return {
     ...mapped,
     capabilities: {
       ...capabilities,
       combineOr: false,
-      equalsFields: free(capabilities.equalsFields),
-      overlapFields: free(capabilities.overlapFields),
-      groupFields: free(capabilities.groupFields),
+      filterOps: Object.fromEntries(
+        Object.entries(capabilities.filterOps).filter(
+          ([key]) => !scoped.includes(key),
+        ),
+      ),
+      groupFields: capabilities.groupFields.filter(
+        (key) => !scoped.includes(key),
+      ),
       canRun: (query) => isOwn(query) && capabilities.canRun(query),
       isFacetCountExact: (query) =>
         facetCountsFollowFilters && capabilities.isFacetCountExact(query),

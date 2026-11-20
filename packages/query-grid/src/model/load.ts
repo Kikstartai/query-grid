@@ -17,11 +17,6 @@ export function createAbortable(): () => AbortController {
 
 export function sameFilters(a: QueryState, b: QueryState): boolean {
   return (
-    a.equals === b.equals &&
-    a.ranges === b.ranges &&
-    a.texts === b.texts &&
-    a.overlaps === b.overlaps &&
-    a.combine === b.combine &&
-    a.search === b.search
+    a.filters === b.filters && a.combine === b.combine && a.search === b.search
   );
 }

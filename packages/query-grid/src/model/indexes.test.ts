@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { QueryState } from "./query-state.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 import {
   TEST_DEF,
   TEST_SEARCH_FIELDS,
@@ -8,6 +8,7 @@ import {
 } from "./grid-def.fixture.ts";
 import { createHttpSource } from "./http-source.ts";
 import { isQueryIndexed, getIndex, indexCapabilities } from "./indexes.ts";
+import type { FilterOp } from "./operators.ts";
 import { defaultQuery } from "./query-actions.ts";
 
 const INDEXES = TEST_INDEXES;
@@ -19,35 +20,51 @@ describe("getIndex", () => {
     expect(
       getIndex(INDEXES, {
         ...BASE,
-        equals: { status: ["open"], region: ["north"] },
+        filters: [
+          { field: "status", op: "any_of", values: ["open"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
       }),
     ).toBeNull();
   });
 
   test("a range sits on the sort column of an index that allows it", () => {
-    const ranges = [{ field: "created_at", min: "2026-01-01", max: null }];
-    expect(getIndex(INDEXES, { ...BASE, ranges })).not.toBeNull();
+    const range: Filter = {
+      field: "created_at",
+      op: "greater_or_equal",
+      value: "2026-01-01",
+    };
+    expect(getIndex(INDEXES, { ...BASE, filters: [range] })).not.toBeNull();
     expect(
-      getIndex(INDEXES, { ...BASE, equals: { status: ["open"] }, ranges }),
+      getIndex(INDEXES, {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["open"] }, range],
+      }),
     ).toBeNull();
     expect(
       getIndex(INDEXES, {
         ...BASE,
         sort: { field: "total", direction: "asc" },
-        ranges,
+        filters: [range],
       }),
     ).toBeNull();
   });
 
   test("several values of one field match the same index unless it opts out", () => {
-    const several = { ...BASE, equals: { status: ["open", "done"] } };
+    const several: QueryState = {
+      ...BASE,
+      filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
+    };
     expect(getIndex(INDEXES, several)).toEqual(INDEXES[2]);
     const single = INDEXES.map((index) =>
       index.equals.includes("status") ? { ...index, multi: false } : index,
     );
     expect(getIndex(single, several)).toBeNull();
     expect(
-      getIndex(single, { ...BASE, equals: { status: ["open"] } }),
+      getIndex(single, {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
+      }),
     ).not.toBeNull();
     expect(indexCapabilities(single).canRun(several)).toBe(false);
   });
@@ -59,19 +76,24 @@ describe("getIndex", () => {
     expect(
       isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
         ...search,
-        equals: { status: ["open", "done"], region: ["north"] },
+        filters: [
+          { field: "status", op: "any_of", values: ["open", "done"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
       }),
     ).toBe(true);
     expect(
       isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
         ...search,
-        equals: { name: ["x"] },
+        filters: [{ field: "name", op: "equals", value: "x" }],
       }),
     ).toBe(false);
     expect(
       isQueryIndexed(INDEXES, TEST_SEARCH_FIELDS, {
         ...search,
-        ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
+        filters: [
+          { field: "created_at", op: "greater_or_equal", value: "2026-01-01" },
+        ],
       }),
     ).toBe(false);
   });
@@ -89,7 +111,7 @@ describe("the HTTP source", () => {
     expect(
       source.capabilities.canRun({
         ...BASE,
-        equals: { region: ["north"] },
+        filters: [{ field: "region", op: "any_of", values: ["north"] }],
         sort: { field: "total", direction: "asc" },
       }),
     ).toBe(false);
@@ -104,8 +126,20 @@ describe("indexCapabilities", () => {
 
   test("they are the indexes, read once", () => {
     expect(caps.searchIsOrdered).toBe(false);
-    expect(caps.equalsFields).toEqual(["status", "region"]);
-    expect(caps.rangeFields).toEqual(["created_at", "total"]);
+    const ranges: FilterOp[] = [
+      "equals",
+      "greater_than",
+      "greater_or_equal",
+      "less_than",
+      "less_or_equal",
+      "between",
+    ];
+    expect(caps.filterOps).toEqual({
+      status: ["any_of"],
+      region: ["any_of"],
+      created_at: ranges,
+      total: ranges,
+    });
     expect(caps.sortFields).toEqual(["created_at", "total"]);
     expect(caps.searchFields).toEqual(["name", "number"]);
   });
@@ -113,7 +147,7 @@ describe("indexCapabilities", () => {
   test("a query is answerable exactly when an index matches it", () => {
     const undeclared: QueryState = {
       ...BASE,
-      equals: { region: ["north"] },
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
       sort: { field: "total", direction: "asc" },
     };
     expect(caps.canRun(BASE)).toBe(true);
@@ -124,10 +158,16 @@ describe("indexCapabilities", () => {
   test("facet counts show only while the facet is the only filter", () => {
     expect(caps.isFacetCountExact(BASE)).toBe(true);
     expect(
-      caps.isFacetCountExact({ ...BASE, equals: { status: ["open"] } }),
+      caps.isFacetCountExact({
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
+      }),
     ).toBe(true);
     expect(
-      caps.isFacetCountExact({ ...BASE, equals: { region: ["north"] } }),
+      caps.isFacetCountExact({
+        ...BASE,
+        filters: [{ field: "region", op: "any_of", values: ["north"] }],
+      }),
     ).toBe(false);
     expect(indexCapabilities(INDEXES).isFacetCountExact(BASE)).toBe(false);
   });

@@ -101,7 +101,7 @@ function indexDdl(
   const columns = [...order, KEY_FIELD]
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
-  const empty = [...(index.empty ?? [])].map(identifier).sort();
+  const empty = [...(index.blank ?? [])].map(identifier).sort();
   const suffix = empty.length > 0 ? `__empty_${empty.join("_")}` : "";
   const name = shortenIdentifier(
     `${AUTO_PREFIX}${table}_${order.join("__")}${suffix}`,

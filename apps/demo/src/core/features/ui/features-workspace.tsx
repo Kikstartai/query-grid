@@ -6,11 +6,7 @@ import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
-import {
-  TASK_FILTER_FIELDS,
-  TASK_TEXT_FIELDS,
-  TASKS_GRID_DEF,
-} from "../../tasks/tasks-grid-def";
+import { TASK_FILTER_FIELDS, TASKS_GRID_DEF } from "../../tasks/tasks-grid-def";
 import { FeaturesQueryProvider, FeaturesView } from "../features-provider";
 import { FeatureGuide } from "./feature-guide";
 
@@ -22,7 +18,6 @@ function FeaturesFallback() {
         def={TASKS_GRID_DEF}
         capabilities={memoryCapabilities(TASKS_GRID_DEF)}
         fields={TASK_FILTER_FIELDS}
-        texts={TASK_TEXT_FIELDS}
       />
     </>
   );
@@ -38,11 +33,7 @@ export function FeaturesWorkspace() {
       <Suspense fallback={<FeaturesFallback />}>
         <FeaturesQueryProvider>
           <FeatureGuide />
-          <WorkspaceParts
-            filterFields={TASK_FILTER_FIELDS}
-            textFields={TASK_TEXT_FIELDS}
-            phoneView={null}
-          >
+          <WorkspaceParts filterFields={TASK_FILTER_FIELDS} phoneView={null}>
             <FeaturesView />
           </WorkspaceParts>
         </FeaturesQueryProvider>

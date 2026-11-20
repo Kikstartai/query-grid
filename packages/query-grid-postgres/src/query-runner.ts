@@ -1,10 +1,10 @@
 import {
-  countFilterTerms,
+  BLANK_GROUP,
   DEFAULT_LIMITS,
-  EMPTY_VALUE,
   getField,
   GROUP_LIMIT,
-  NOT_EMPTY_VALUE,
+  matchesFilter,
+  toGroupFilter,
   toGroupValue,
   isFacetOnlyQuery,
   isCombineOr,
@@ -13,6 +13,7 @@ import {
   withoutFilters,
   type BaseFieldDef,
   type CountResult,
+  type Filter,
   type FacetCount,
   type GridLimits,
   type GridRow,
@@ -204,7 +205,7 @@ export async function getNarrowedSizes(
   };
   const andPlan = planOrdered(def, { ...filters, combine: "and" });
   const orPlan =
-    countFilterTerms(filters) > 1
+    filters.filters.length > 1
       ? planOrdered(def, { ...filters, combine: "or" })
       : null;
   const [andSize, orSize] = await Promise.all([
@@ -251,16 +252,17 @@ async function listNarrowSettings(
 
 function listFacetGroupValues(
   field: BaseFieldDef | null,
-  selected: string[] | undefined,
+  selected: Filter[],
 ): string[] {
   const options = (field?.options ?? []).map((option) => option.value);
-  if (selected?.includes(NOT_EMPTY_VALUE)) {
-    return options;
-  }
-  if (selected) {
-    return selected;
-  }
-  return field?.nullable ? [...options, EMPTY_VALUE] : options;
+  const values = field?.nullable ? [...options, BLANK_GROUP] : options;
+  return values.filter(
+    (value) =>
+      field === null ||
+      selected.every((filter) =>
+        matchesFilter(field, filter, value === BLANK_GROUP ? null : value),
+      ),
+  );
 }
 
 async function listFacetGroups(
@@ -288,11 +290,16 @@ async function listFacetGroups(
     };
   }
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
-  const values = listFacetGroupValues(getField(def, key), query.equals[key]);
+  const own = query.filters.filter((filter) => filter.field === key);
+  const others = query.filters.filter((filter) => filter.field !== key);
+  const values = listFacetGroupValues(getField(def, key), own);
   const cap = limits.countCap;
   const groups = await Promise.all(
     values.map(async (value): Promise<GroupHeader> => {
-      const valued = { ...query, equals: { ...query.equals, [key]: [value] } };
+      const valued = {
+        ...query,
+        filters: [...others, toGroupFilter(key, value)],
+      };
       const [row] = await runFiltered<{ count: number }>(
         def,
         execute,
@@ -494,10 +501,16 @@ async function listSelectedCounters(
   signal?: AbortSignal,
 ): Promise<FacetCount[]> {
   const counts = await listFacetCounts(def, execute, signal);
-  const selected = def.facet ? query.equals[def.facet.field] : undefined;
-  return selected
-    ? counts.filter((facet) => selected.includes(facet.value))
-    : counts;
+  const field = def.facet ? getField(def, def.facet.field) : null;
+  if (!field) {
+    return counts;
+  }
+  return counts.filter((facet) =>
+    query.filters.every(
+      (filter) =>
+        filter.field !== field.key || matchesFilter(field, filter, facet.value),
+    ),
+  );
 }
 
 export async function getGridCount(

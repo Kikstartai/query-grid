@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultQuery,
   DEFAULT_LIMITS,
+  type Filter,
   type NarrowedResult,
   type QueryState,
 } from "@kikstart/query-grid";
@@ -28,7 +29,10 @@ import {
 import type { PostgresGridDef } from "./storage.ts";
 
 const BASE = defaultQuery(TEST_DEF);
-const OPEN: QueryState = { ...BASE, equals: { status: ["open"] } };
+const OPEN: QueryState = {
+  ...BASE,
+  filters: [{ field: "status", op: "any_of", values: ["open"] }],
+};
 const LIMITS = { ...DEFAULT_LIMITS, narrowLimit: 50 };
 
 interface Call {
@@ -57,10 +61,11 @@ describe("the SQL of the expensive operations", () => {
     const sql = buildPageSql(
       TEST_DEF,
       {
-        ...OPEN,
-        ranges: [
-          { field: "total", min: "100", max: "900" },
-          { field: "number", min: null, max: "7" },
+        ...BASE,
+        filters: [
+          { field: "status", op: "any_of", values: ["open"] },
+          { field: "total", op: "between", min: "100", max: "900" },
+          { field: "number", op: "less_or_equal", value: "7" },
         ],
       },
       50,
@@ -73,8 +78,11 @@ describe("the SQL of the expensive operations", () => {
 
   test("contains is one ILIKE on its own column, with the wildcards of the value escaped", () => {
     const sql = buildCappedCountSql(TEST_DEF, {
-      ...OPEN,
-      texts: [{ field: "note", op: "contains", value: " 50%_off " }],
+      ...BASE,
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "note", op: "contains", value: " 50%_off " },
+      ],
     });
     expect(sql.text).toContain(
       "WHERE t.status = $1::text AND t.note ILIKE $2 LIMIT",
@@ -86,8 +94,11 @@ describe("the SQL of the expensive operations", () => {
     const either: QueryState = {
       ...BASE,
       combine: "or",
-      equals: { status: ["open"], region: ["north", "south"] },
-      ranges: [{ field: "total", min: "100", max: "900" }],
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["north", "south"] },
+        { field: "total", op: "between", min: "100", max: "900" },
+      ],
     };
     const sql = buildPageSql(TEST_DEF, either, 50);
     expect(sql.text).toContain(
@@ -118,14 +129,26 @@ describe("the SQL of the expensive operations", () => {
     expect(() =>
       buildPageSql(
         TEST_DEF,
-        { ...OPEN, texts: [{ field: "status", op: "contains", value: "op" }] },
+        {
+          ...BASE,
+          filters: [
+            { field: "status", op: "any_of", values: ["open"] },
+            { field: "status", op: "contains", value: "op" },
+          ],
+        },
         50,
       ),
     ).toThrow(QueryRejected);
     expect(() =>
       buildPageSql(
         TEST_DEF,
-        { ...OPEN, ranges: [{ field: "name", min: "a", max: null }] },
+        {
+          ...BASE,
+          filters: [
+            { field: "status", op: "any_of", values: ["open"] },
+            { field: "name", op: "greater_or_equal", value: "a" },
+          ],
+        },
         50,
       ),
     ).toThrow(QueryRejected);
@@ -134,9 +157,11 @@ describe("the SQL of the expensive operations", () => {
 
 describe("the narrowed-set limit on the server", () => {
   const narrowed: QueryState = {
-    ...OPEN,
-    equals: { region: ["north"] },
-    texts: [{ field: "note", op: "contains", value: "gift" }],
+    ...BASE,
+    filters: [
+      { field: "region", op: "any_of", values: ["north"] },
+      { field: "note", op: "contains", value: "gift" },
+    ],
   };
 
   test("a narrowed query first counts its core up to the limit, then runs without a Seq Scan", async () => {
@@ -191,7 +216,10 @@ describe("the narrowed-set limit on the server", () => {
     await listGridPage(
       TEST_DEF,
       execute,
-      { ...BASE, equals: { region: ["north"] } },
+      {
+        ...BASE,
+        filters: [{ field: "region", op: "any_of", values: ["north"] }],
+      },
       20,
       undefined,
       LIMITS,
@@ -206,8 +234,11 @@ describe("the narrowed-set limit on the server", () => {
       { value: "done", count: 900, total_sum: 0, number_sum: 0 },
     ]);
     const query: QueryState = {
-      ...OPEN,
-      texts: [{ field: "note", op: "contains", value: "gift" }],
+      ...BASE,
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "note", op: "contains", value: "gift" },
+      ],
     };
     await listGridPage(TEST_DEF, execute, query, 20, undefined, LIMITS);
     expect(calls[0].sql.text).toContain("FROM thing_status_counts");
@@ -218,8 +249,10 @@ describe("the narrowed-set limit on the server", () => {
     const either: QueryState = {
       ...BASE,
       combine: "or",
-      equals: { region: ["north"] },
-      ranges: [{ field: "total", min: "100", max: null }],
+      filters: [
+        { field: "region", op: "any_of", values: ["north"] },
+        { field: "total", op: "greater_or_equal", value: "100" },
+      ],
     };
     const sizes = [20, 25];
     const { calls, execute } = counting((sql) =>
@@ -249,8 +282,10 @@ describe("the narrowed-set limit on the server", () => {
     const either: QueryState = {
       ...BASE,
       combine: "or",
-      equals: { region: ["north"] },
-      texts: [{ field: "note", op: "contains", value: "gift" }],
+      filters: [
+        { field: "region", op: "any_of", values: ["north"] },
+        { field: "note", op: "contains", value: "gift" },
+      ],
     };
     const { calls, execute } = counting(() => [
       { value: "open", count: 30, total_sum: 0, number_sum: 0 },
@@ -287,7 +322,7 @@ describe("/narrowed", () => {
 
   test("it answers the size the current filters leave, capped at the limit", async () => {
     const { get, calls } = serve(12);
-    const response = await get("/narrowed?f.region=north");
+    const response = await get("/narrowed?f.region.any_of=north");
     expect(await response.json()).toEqual({
       limit: 50,
       and: { rows: 12, over: false, capped: false },
@@ -299,7 +334,9 @@ describe("/narrowed", () => {
 
   test("with two filters it also answers what match any would run over", async () => {
     const { get } = serve(30);
-    const response = await get("/narrowed?f.region=north&r.total=100..");
+    const response = await get(
+      "/narrowed?f.region.any_of=north&f.total.greater_or_equal=100",
+    );
     expect(await response.json()).toEqual({
       limit: 50,
       and: { rows: 30, over: false, capped: false },
@@ -319,7 +356,7 @@ describe("/narrowed", () => {
 
   test("a refused page says narrow_first as a 400 with its params", async () => {
     const { get } = serve(51);
-    const response = await get("?f.region=north&c.note=gift");
+    const response = await get("?f.region.any_of=north&f.note.contains=gift");
     expect(response.status).toBe(400);
     expect((await response.json()) as ErrorBody).toMatchObject({
       error: "narrow_first",
@@ -330,7 +367,7 @@ describe("/narrowed", () => {
 
   test("the sizes ignore the search and the contains text, which do not change the set", async () => {
     const { get, calls } = serve(5);
-    await get("/narrowed?f.region=north&c.note=gift");
+    await get("/narrowed?f.region.any_of=north&f.note.contains=gift");
     expect(calls[0].sql.text).not.toContain("ILIKE");
     expect(calls[0].sql.values).toEqual(["north"]);
   });
@@ -345,8 +382,10 @@ describe("getNarrowedSizes", () => {
       {
         ...BASE,
         group: "region",
-        equals: { region: ["north"] },
-        ranges: [{ field: "total", min: "100", max: null }],
+        filters: [
+          { field: "region", op: "any_of", values: ["north"] },
+          { field: "total", op: "greater_or_equal", value: "100" },
+        ],
       },
       undefined,
       LIMITS,
@@ -368,7 +407,10 @@ describe("getNarrowedSizes", () => {
       {
         ...BASE,
         combine: "or",
-        equals: { status: ["open"], region: ["north"] },
+        filters: [
+          { field: "status", op: "any_of", values: ["open"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
       },
       undefined,
       LIMITS,
@@ -384,6 +426,9 @@ describe("getNarrowedSizes", () => {
 describe("the capped total and the order it is read in", () => {
   const def: PostgresGridDef = {
     ...TEST_DEF,
+    fields: TEST_DEF.fields.map((field) =>
+      field.key === "region" ? { ...field, nullable: true } : field,
+    ),
     indexes: [...TEST_DEF.indexes, { equals: ["note"], sort: "created_at" }],
   };
   const settingsOf = async (query: QueryState) => {
@@ -396,13 +441,13 @@ describe("the capped total and the order it is read in", () => {
     return calls[calls.length - 1];
   };
 
-  test("one plain value, or empty alone, is summed over its index in sort order", async () => {
-    const filters: QueryState["equals"][] = [
-      { region: ["north"] },
-      { note: ["_empty"] },
+  test("one plain value, or blank alone, is summed over its index in sort order", async () => {
+    const cases: Filter[][] = [
+      [{ field: "region", op: "any_of", values: ["north"] }],
+      [{ field: "note", op: "blank" }],
     ];
-    for (const equals of filters) {
-      const query = { ...BASE, equals };
+    for (const filters of cases) {
+      const query = { ...BASE, filters };
       expect(isTotalOrdered(def, query)).toBe(true);
       const call = await settingsOf(query);
       expect(call.sql.text).toContain(
@@ -412,16 +457,26 @@ describe("the capped total and the order it is read in", () => {
     }
   });
 
-  test("several values, not empty and match any are capped unordered, so no sort index is walked to its end", async () => {
+  test("several values, not blank, blank beside a value and match any are capped unordered, so no sort index is walked to its end", async () => {
     const cases: QueryState[] = [
-      { ...BASE, equals: { region: ["north", "south"] } },
-      { ...BASE, equals: { note: ["_not_empty"] } },
-      { ...BASE, equals: { note: ["_empty", "gift"] } },
+      {
+        ...BASE,
+        filters: [
+          { field: "region", op: "any_of", values: ["north", "south"] },
+        ],
+      },
+      { ...BASE, filters: [{ field: "note", op: "not_blank" }] },
+      {
+        ...BASE,
+        filters: [{ field: "region", op: "any_of", values: [null, "north"] }],
+      },
       {
         ...BASE,
         combine: "or",
-        equals: { region: ["north"] },
-        ranges: [{ field: "total", min: "100", max: null }],
+        filters: [
+          { field: "region", op: "any_of", values: ["north"] },
+          { field: "total", op: "greater_or_equal", value: "100" },
+        ],
       },
     ];
     for (const query of cases) {

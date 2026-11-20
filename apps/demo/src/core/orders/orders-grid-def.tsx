@@ -25,8 +25,9 @@ export const ORDER_BAR_FIELDS = [
   "assignee",
   "created_at",
   "total",
+  "customer_name",
+  "note",
 ];
-export const ORDER_TEXT_FIELDS = ["customer_name", "note"];
 export const ORDER_TEXT_INDEXES = ["customer_name"];
 
 function toOptions(options: WeightedOption[]): FieldOption[] {

@@ -7,10 +7,7 @@ import { ByKikstart, SiteBrand } from "@/lib/site-brand";
 import { WorkspaceParts } from "@/lib/workspace-parts";
 import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
-import {
-  TASK_FILTER_FIELDS,
-  TASK_TEXT_FIELDS,
-} from "../../tasks/tasks-grid-def";
+import { TASK_FILTER_FIELDS } from "../../tasks/tasks-grid-def";
 import {
   LANGUAGES,
   listViews,
@@ -67,14 +64,12 @@ export function LocalizedWorkspace({ language }: LocalizedWorkspaceProps) {
               def={def}
               capabilities={memoryCapabilities(def)}
               fields={TASK_FILTER_FIELDS}
-              texts={TASK_TEXT_FIELDS}
             />
           }
         >
           <LocalizedQueryProvider key={language.code} language={language}>
             <WorkspaceParts
               filterFields={TASK_FILTER_FIELDS}
-              textFields={TASK_TEXT_FIELDS}
               views={listViews(language)}
             >
               <LocalizedView />

@@ -3,8 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultQuery,
   DEFAULT_LIMITS,
-  EMPTY_VALUE,
-  NOT_EMPTY_VALUE,
+  BLANK_GROUP,
   type QueryState,
 } from "@kikstart/query-grid";
 
@@ -45,8 +44,10 @@ describe("buildGroupSql", () => {
     const sql = buildGroupSql(TEST_DEF, {
       ...BASE,
       group: "region",
-      ranges: [{ field: "total", min: "100", max: null }],
-      texts: [{ field: "note", op: "contains", value: "gift" }],
+      filters: [
+        { field: "total", op: "greater_or_equal", value: "100" },
+        { field: "note", op: "contains", value: "gift" },
+      ],
     });
     expect(sql.text).toBe(
       "SELECT t.region::text AS value, count(*)::float8 AS count, coalesce(sum(t.total), 0)::float8 AS total_sum, coalesce(sum(t.number), 0)::float8 AS number_sum FROM things t WHERE t.total >= $1::bigint AND t.note ILIKE $2 GROUP BY t.region ORDER BY count(*) DESC, t.region LIMIT 201",
@@ -119,7 +120,11 @@ describe("grouping by the counted field", () => {
     const result = await listGridGroups(
       TEST_DEF,
       execute,
-      { ...BASE, group: "status", equals: { status: ["done"] } },
+      {
+        ...BASE,
+        group: "status",
+        filters: [{ field: "status", op: "any_of", values: ["done"] }],
+      },
       undefined,
       LIMITS,
     );
@@ -133,7 +138,7 @@ describe("grouping by the counted field", () => {
       ...BASE,
       group: "status",
       sort: { field: "total", direction: "asc" },
-      ranges: [{ field: "total", min: "100", max: null }],
+      filters: [{ field: "total", op: "greater_or_equal", value: "100" }],
     };
     const result = await listGridGroups(
       TEST_DEF,
@@ -144,9 +149,9 @@ describe("grouping by the counted field", () => {
     );
     expect(calls).toHaveLength(2);
     expect(calls[0].sql.text).toContain(
-      "WHERE t.status = $1::text AND t.total >= $2::bigint LIMIT 21",
+      "WHERE t.total >= $1::bigint AND t.status = $2::text LIMIT 21",
     );
-    expect(calls.map((call) => call.sql.values[0])).toEqual(["open", "done"]);
+    expect(calls.map((call) => call.sql.values[1])).toEqual(["open", "done"]);
     expect(result).toEqual({
       source: "capped",
       truncated: false,
@@ -206,7 +211,7 @@ describe("grouping by another equality field", () => {
           sums: { total: 80, number: 4 },
         },
         {
-          value: EMPTY_VALUE,
+          value: BLANK_GROUP,
           label: null,
           count: 2,
           capped: false,
@@ -246,7 +251,10 @@ describe("grouping by another equality field", () => {
     const result = await listGridGroups(
       TEST_DEF,
       execute,
-      { ...byRegion, equals: { region: ["north"] } },
+      {
+        ...byRegion,
+        filters: [{ field: "region", op: "any_of", values: ["north"] }],
+      },
       undefined,
       LIMITS,
     );
@@ -286,7 +294,7 @@ describe("a nullable counted field", () => {
     ...BASE,
     group: "status",
     sort: { field: "total", direction: "asc" },
-    ranges: [{ field: "total", min: "100", max: null }],
+    filters: [{ field: "total", op: "greater_or_equal", value: "100" }],
   };
 
   test("its capped headers count the empty rows as a group of their own", async () => {
@@ -301,9 +309,9 @@ describe("a nullable counted field", () => {
     expect(result.groups.map((group) => group.value)).toEqual([
       "open",
       "done",
-      EMPTY_VALUE,
+      BLANK_GROUP,
     ]);
-    expect(calls[2].sql.text).toContain("WHERE t.status IS NULL AND");
+    expect(calls[2].sql.text).toContain("AND t.status IS NULL LIMIT");
   });
 
   test("not empty is every option, never a header of its own, and never read from the counters", async () => {
@@ -311,7 +319,11 @@ describe("a nullable counted field", () => {
     const result = await listGridGroups(
       def,
       execute,
-      { ...BASE, group: "status", equals: { status: [NOT_EMPTY_VALUE] } },
+      {
+        ...BASE,
+        group: "status",
+        filters: [{ field: "status", op: "not_blank" }],
+      },
       undefined,
       LIMITS,
     );

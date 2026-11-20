@@ -8,7 +8,6 @@ import { WorkspaceSkeleton } from "@/lib/workspace-skeleton";
 
 import {
   TASK_COUNT,
-  TASK_TEXT_FIELDS,
   TASK_FILTER_FIELDS,
   TASKS_GRID_DEF,
 } from "../tasks-grid-def";
@@ -33,15 +32,11 @@ export function TasksWorkspace() {
             def={TASKS_GRID_DEF}
             capabilities={memoryCapabilities(TASKS_GRID_DEF)}
             fields={TASK_FILTER_FIELDS}
-            texts={TASK_TEXT_FIELDS}
           />
         }
       >
         <TasksQueryProvider>
-          <WorkspaceParts
-            filterFields={TASK_FILTER_FIELDS}
-            textFields={TASK_TEXT_FIELDS}
-          >
+          <WorkspaceParts filterFields={TASK_FILTER_FIELDS}>
             <TasksView />
           </WorkspaceParts>
         </TasksQueryProvider>

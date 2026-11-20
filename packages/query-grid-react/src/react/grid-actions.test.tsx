@@ -77,7 +77,7 @@ function mount(
     <StaticQueryGridProvider
       def={DEF}
       source={source}
-      scope={{ equals: {} }}
+      scope={{ filters: [] }}
       queryString={queryString}
       columnPersistence={NO_PERSISTENCE}
     >
@@ -215,7 +215,7 @@ describe("the selection a host reads", () => {
       <StaticQueryGridProvider
         def={DEF}
         source={createMemorySource(DEF, listRows())}
-        scope={{ equals: { kind: ["a"] } }}
+        scope={{ filters: [{ field: "kind", op: "any_of", values: ["a"] }] }}
         queryString="sort=name.asc"
         columnPersistence={NO_PERSISTENCE}
       >
@@ -241,14 +241,16 @@ describe("the selection a host reads", () => {
     );
     expect(selection).toMatchObject({
       kind: "matching",
-      scope: { equals: { kind: ["a"] } },
+      scope: { filters: [{ field: "kind", op: "any_of", values: ["a"] }] },
       capped: false,
     });
     expect(selection.kind === "matching" && selection.query.sort).toEqual({
       field: "name",
       direction: "asc",
     });
-    expect(selection.kind === "matching" && selection.query.equals).toEqual({});
+    expect(selection.kind === "matching" && selection.query.filters).toEqual(
+      [],
+    );
     expect("ids" in selection).toBe(false);
   });
 
@@ -268,7 +270,7 @@ describe("fetchExport", () => {
   test("is the current query, in the columns asked for", async () => {
     const { actions } = mount(
       createMemorySource(DEF, listRows()),
-      "f.kind=a&sort=position.desc",
+      "f.kind.any_of=a&sort=position.desc",
     );
     expect(await actions.fetchExport(["name", "position"])).toBe(
       `${CSV_BOM}"Name","Order"\r\n"three",3\r\n"one",1\r\n`,

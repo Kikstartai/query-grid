@@ -8,10 +8,11 @@ import {
   explainUnavailable,
   formatSum,
   getField,
-  getReservedValue,
+  BLANK_GROUP,
   listSorts,
   listTotalFields,
-  resolveFilterKind,
+  listCapableOps,
+  listFilteredFields,
   type BaseFieldDef,
   toProblem,
   type GroupHeader,
@@ -33,7 +34,6 @@ import type { RowWindow } from "../components/fields.ts";
 import {
   formatList,
   formatProblemMessage,
-  formatReservedValue,
   formatRows,
   useCurrency,
   useLocale,
@@ -154,6 +154,7 @@ function useSortReasons(): Record<string, string> {
         messages,
         def,
         explainUnavailable(
+          def,
           query,
           { kind: sortFields.includes(key) ? "sort" : "thenBy", field: key },
           context,
@@ -187,19 +188,14 @@ function useGridControls() {
     filters: Object.fromEntries(
       def.fields
         .filter(
-          (field) => resolveFilterKind(field, source.capabilities) !== null,
+          (field) => listCapableOps(source.capabilities, field.key).length > 0,
         )
         .map((field) => [
           field.key,
           <FieldFilter key={field.key} field={field} />,
         ]),
     ),
-    activeFilters: [
-      ...Object.keys(query.equals),
-      ...query.ranges.map((range) => range.field),
-      ...query.texts.map((text) => text.field),
-      ...Object.keys(query.overlaps),
-    ],
+    activeFilters: listFilteredFields(query),
   };
 }
 
@@ -235,9 +231,8 @@ function formatGroupLabel(
   locale: string,
   currency: string | undefined,
 ): string {
-  const reserved = field ? getReservedValue(field, header.value) : null;
-  if (reserved) {
-    return formatReservedValue(messages, reserved);
+  if (field?.nullable && header.value === BLANK_GROUP) {
+    return messages.blankValue;
   }
   if (header.label !== null) {
     return header.label;

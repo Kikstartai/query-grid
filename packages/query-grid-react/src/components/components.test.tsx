@@ -1,13 +1,10 @@
+import { SelectContent } from "@ui-sdk/react/select";
 import { describe, expect, test } from "bun:test";
-import type { ReactElement } from "react";
+import * as React from "react";
+import { Children, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import {
-  EMPTY_VALUE,
-  NOT_EMPTY_VALUE,
-  type GridValue,
-  type TextOp,
-} from "@kikstart/query-grid";
+import type { Filter, FilterOp, GridValue } from "@kikstart/query-grid";
 
 import { CardList } from "./card-list.tsx";
 import { defaultColumns } from "./column-state.ts";
@@ -15,9 +12,10 @@ import { ColumnsMenu } from "./columns-menu.tsx";
 import { CountDisplay, TotalFooter } from "./count-display.tsx";
 import { DataGrid } from "./data-grid.tsx";
 import { FacetPanel } from "./facet-panel.tsx";
-import { EqualsSelect, LookupFilter, RangeFilter } from "./field-filter.tsx";
+import { CombineToggle } from "./combine-toggle.tsx";
+import { EqualsSelect, FieldFilter, LookupFilter } from "./field-filter.tsx";
 import { ReasonDisplayContext } from "./field-frame.tsx";
-import { CombineToggle, TextFilter } from "./narrow-filters.tsx";
+import type { FieldDef } from "./fields.ts";
 import { TEST_FIELDS, TEST_ROWS } from "./fields.fixture.ts";
 import {
   FilterBar,
@@ -49,6 +47,19 @@ const OWNER = {
   nullable: true,
   options: [{ value: "ann", label: "Ann" }],
 };
+const CUSTOMER: FieldDef = {
+  key: "customer",
+  label: "Customer",
+  type: "id",
+  lookup: { labelField: "customer_name" },
+};
+const COLOURS: FieldDef = {
+  key: "colours",
+  label: "Colours",
+  type: "array",
+  nullable: true,
+  options: [{ value: "red", label: "Red" }],
+};
 const ROW_WINDOW = {
   rows: TEST_ROWS,
   hasNext: false,
@@ -58,6 +69,69 @@ const ROW_WINDOW = {
 
 function render(element: ReactElement): string {
   return renderToStaticMarkup(element);
+}
+
+interface HookDispatcher {
+  useState: (initial: unknown) => [unknown, () => void];
+  use: (context: { _currentValue: unknown }) => unknown;
+}
+
+interface ElementProps {
+  children?: ReactNode;
+  [prop: string]: unknown;
+}
+
+type ShallowElement = ReactElement<ElementProps>;
+
+const REACT_INTERNALS = (
+  React as unknown as Record<string, { H: HookDispatcher | null }>
+).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+
+// No DOM runs here, so a callback a control hands its parts is reached by rendering one level at a time.
+function renderShallow(element: ReactElement): ShallowElement {
+  const previous = REACT_INTERNALS.H;
+  REACT_INTERNALS.H = {
+    useState: (initial) => [
+      typeof initial === "function" ? initial() : initial,
+      noop,
+    ],
+    use: (context) => context._currentValue,
+  };
+  try {
+    const component = element.type as (props: unknown) => ShallowElement;
+    return component(element.props);
+  } finally {
+    REACT_INTERNALS.H = previous;
+  }
+}
+
+function listElements(element: ShallowElement): ShallowElement[] {
+  return Children.toArray(element.props.children) as ShallowElement[];
+}
+
+function findChild(element: ShallowElement, type: unknown): ShallowElement {
+  const found = listElements(element).find((child) =>
+    typeof type === "string"
+      ? (child.type as { name?: string }).name === type
+      : child.type === type,
+  );
+  if (!found) {
+    throw new Error("no such child");
+  }
+  return found;
+}
+
+function choose(select: ShallowElement, op: FilterOp) {
+  (select.props.onOpChange as (op: FilterOp) => void)(op);
+}
+
+function listOptions(content: ShallowElement) {
+  return listElements(content).map(({ props }) => ({
+    value: props.value,
+    label: props.label,
+    disabled: props.disabled,
+    reason: props.reason,
+  }));
 }
 
 function DisabledSort() {
@@ -376,132 +450,290 @@ describe("each base component mounts alone, with plain props and no provider", (
     expect(lookup).toContain("Alpha");
     expect(lookup).toContain('aria-label="Remove Beta"');
     const money = render(
-      <RangeFilter
+      <FieldFilter
         field={TOTAL}
-        range={{ min: "1000", max: null }}
-        onRangeChange={noop}
-      />,
-    );
-    expect(money).toContain('aria-label="Total from"');
-    const dates = render(
-      <RangeFilter field={CREATED} range={null} onRangeChange={noop} />,
-    );
-    expect(dates).toContain('aria-label="Created period"');
-    expect(dates).not.toContain('aria-label="Pick Created dates"');
-    const custom = render(
-      <RangeFilter
-        field={CREATED}
-        range={{
-          min: "2026-01-01T00:00:00.000000Z",
-          max: "2026-01-31T23:59:59.999999Z",
-        }}
-        onRangeChange={noop}
-      />,
-    );
-    expect(custom).toContain('aria-label="Pick Created dates"');
-    expect(custom).toContain("Custom…");
-    const preset = render(
-      <RangeFilter
-        field={CREATED}
-        range={{ min: null, max: null, preset: "last-7-days" }}
-        onRangeChange={noop}
-      />,
-    );
-    expect(preset).toContain("Last 7 days");
-    expect(preset).not.toContain('aria-label="Pick Created dates"');
-  });
-
-  test("a nullable field words its reserved values through the messages", () => {
-    const empty = render(
-      <EqualsSelect
-        field={OWNER}
-        values={[EMPTY_VALUE, "ann"]}
-        onValuesChange={noop}
-        multiple
-      />,
-    );
-    expect(empty).toContain("(empty)");
-    expect(empty).toContain("Ann");
-    const translated = render(
-      <QueryGridMessagesProvider messages={{ notEmptyValue: "(ingevul)" }}>
-        <LookupFilter
-          field={NOTE}
-          values={[NOT_EMPTY_VALUE]}
-          onValuesChange={noop}
-          loadOptions={async () => []}
-          multiple
-        />
-      </QueryGridMessagesProvider>,
-    );
-    expect(translated).toContain("(ingevul)");
-    expect(translated).toContain('aria-label="Remove (ingevul)"');
-    const plain = render(
-      <EqualsSelect
-        field={STATUS}
-        values={[EMPTY_VALUE]}
-        onValuesChange={noop}
-      />,
-    );
-    expect(plain).not.toContain("(empty)");
-  });
-
-  test("an excluding select marks its trigger and offers the toggle only when it may", () => {
-    const excluding = render(
-      <EqualsSelect
-        field={STATUS}
-        values={["open"]}
-        onValuesChange={noop}
-        multiple
-        excluded
-        canExclude
-        onExcludedChange={noop}
-      />,
-    );
-    expect(excluding).toContain("Status ≠");
-    expect(excluding).toContain('data-filter-exclude="status"');
-    expect(excluding).toContain('aria-pressed="true"');
-    const plain = render(
-      <EqualsSelect field={STATUS} values={["open"]} onValuesChange={noop} />,
-    );
-    expect(plain).not.toContain("data-filter-exclude");
-    const idle = render(
-      <EqualsSelect
-        field={STATUS}
-        values={[]}
-        onValuesChange={noop}
-        canExclude
-        onExcludedChange={noop}
-      />,
-    );
-    expect(idle).toMatch(/data-filter-exclude="status"[^>]*disabled/);
-  });
-
-  test("TextFilter names each row's field, operator and text, and carries a reason when held", () => {
-    const options = [
-      { value: "name", label: "Name" },
-      { value: "note", label: "Note" },
-    ];
-    const html = render(
-      <TextFilter
-        options={options}
-        filters={[
-          { field: "note", op: "contains", value: "gift" },
-          { field: "name", op: "not_contains", value: "draft" },
-        ]}
+        ops={[{ op: "between" }, { op: "greater_or_equal" }]}
+        filter={{ field: "total", op: "between", min: "1000", max: "2000" }}
         onFilterChange={noop}
       />,
     );
-    expect(html).toContain('data-field="text"');
-    expect(html).toContain('aria-label="Note contains"');
-    expect(html).toContain('value="gift"');
-    expect(html).toContain('aria-label="Name does not contain"');
-    expect(html).toContain('value="draft"');
-    expect(html.match(/data-text-row=/g)).toHaveLength(3);
+    expect(money).toContain('data-kind="number"');
+    expect(money).toContain('aria-label="Total from"');
+    expect(money).toContain('aria-label="Total to"');
+    const dates = render(
+      <FieldFilter
+        field={CREATED}
+        ops={[{ op: "between" }, { op: "in_period" }]}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    expect(dates).toContain('data-kind="date"');
+    expect(dates).toContain('aria-label="Created period"');
+    expect(dates).not.toContain('aria-label="Pick Created dates"');
+    const custom = render(
+      <FieldFilter
+        field={CREATED}
+        ops={[{ op: "between" }, { op: "in_period" }]}
+        filter={{
+          field: "created_at",
+          op: "between",
+          min: "2026-01-01",
+          max: "2026-01-31",
+        }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(custom).toContain('aria-label="Pick Created dates"');
+    expect(custom).toContain(">between<");
+    const preset = render(
+      <FieldFilter
+        field={CREATED}
+        ops={[{ op: "between" }, { op: "in_period" }]}
+        filter={{ field: "created_at", op: "in_period", preset: "last-7-days" }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(preset).toContain("Last 7 days");
+    expect(preset).toContain('data-filter="created_at.preset"');
+    expect(preset).not.toContain('aria-label="Pick Created dates"');
+  });
+
+  test("a nullable field words its blank value through the messages", () => {
+    const blank = render(
+      <EqualsSelect
+        field={OWNER}
+        values={[null, "ann"]}
+        onValuesChange={noop}
+        multiple
+        blank
+      />,
+    );
+    expect(blank).toContain("(blank)");
+    expect(blank).toContain("Ann");
+    const translated = render(
+      <QueryGridMessagesProvider messages={{ blankValue: "(leeg)" }}>
+        <LookupFilter
+          field={NOTE}
+          values={[null]}
+          onValuesChange={noop}
+          loadOptions={async () => []}
+          multiple
+          blank
+        />
+      </QueryGridMessagesProvider>,
+    );
+    expect(translated).toContain("(leeg)");
+    expect(translated).toContain('aria-label="Remove (leeg)"');
+    const plain = render(
+      <EqualsSelect field={STATUS} values={[]} onValuesChange={noop} />,
+    );
+    expect(plain).not.toContain("(blank)");
+  });
+
+  test("FieldFilter lists the ops it is given, each held one with its reason", () => {
+    const frame = renderShallow(
+      <FieldFilter
+        field={TOTAL}
+        ops={[
+          { op: "between" },
+          { op: "greater_than" },
+          {
+            op: "not_between",
+            disabled: true,
+            reason: "Narrow by Status first.",
+          },
+        ]}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    const select = renderShallow(findChild(frame, "OpSelect"));
+    expect(select.props.value).toBe("between");
+    expect(listOptions(findChild(select, SelectContent))).toEqual([
+      { value: "between", label: "between", disabled: undefined, reason: null },
+      {
+        value: "greater_than",
+        label: "greater than",
+        disabled: undefined,
+        reason: null,
+      },
+      {
+        value: "not_between",
+        label: "not between",
+        disabled: true,
+        reason: "Narrow by Status first.",
+      },
+    ]);
+    const html = render(
+      <FieldFilter
+        field={TOTAL}
+        ops={[{ op: "between" }, { op: "greater_than" }]}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    expect(html).toContain('aria-label="Total operator"');
+    expect(html).toContain('data-filter="total.op"');
+    const alone = render(
+      <FieldFilter
+        field={TOTAL}
+        ops={[{ op: "between" }]}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    expect(alone).not.toContain('data-filter="total.op"');
+    expect(alone).toContain('data-filter="total.min"');
+  });
+
+  test("choosing a blank operator filters at once, and another waits for a value", () => {
+    const changes: (Filter | null)[] = [];
+    const frame = renderShallow(
+      <FieldFilter
+        field={NOTE}
+        ops={[{ op: "contains" }, { op: "blank" }, { op: "not_blank" }]}
+        filter={null}
+        onFilterChange={(filter) => changes.push(filter)}
+      />,
+    );
+    const select = findChild(frame, "OpSelect");
+    choose(select, "blank");
+    choose(select, "contains");
+    expect(changes).toEqual([{ field: "note", op: "blank" }]);
+    const blank = render(
+      <FieldFilter
+        field={NOTE}
+        ops={[{ op: "contains" }, { op: "blank" }]}
+        filter={{ field: "note", op: "blank" }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(blank).toContain(">blank<");
+    expect(blank).not.toContain('data-filter="note.value"');
+  });
+
+  test("switching the operator keeps what it can of the value", () => {
+    const changes: (Filter | null)[] = [];
+    const frame = renderShallow(
+      <FieldFilter
+        field={TOTAL}
+        ops={[{ op: "between" }, { op: "greater_than" }, { op: "not_between" }]}
+        filter={{ field: "total", op: "between", min: "5", max: "9" }}
+        onFilterChange={(filter) => changes.push(filter)}
+      />,
+    );
+    const select = findChild(frame, "OpSelect");
+    choose(select, "greater_than");
+    choose(select, "not_between");
+    expect(changes).toEqual([
+      { field: "total", op: "greater_than", value: "5" },
+      { field: "total", op: "not_between", min: "5", max: "9" },
+    ]);
+  });
+
+  test("the list editor is a select over options and a lookup over anything else", () => {
+    const options = render(
+      <FieldFilter
+        field={STATUS}
+        ops={[{ op: "any_of" }, { op: "none_of" }]}
+        filter={{ field: "status", op: "any_of", values: ["open"] }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(options).toContain('data-kind="choice"');
+    expect(options).toMatch(/<button[^>]*data-filter="status"/);
+    expect(options).toContain('data-filter-clear="status"');
+    const lookup = render(
+      <FieldFilter
+        field={CUSTOMER}
+        ops={[{ op: "any_of" }, { op: "none_of" }]}
+        filter={null}
+        onFilterChange={noop}
+        loadOptions={async () => []}
+      />,
+    );
+    expect(lookup).toMatch(/<input[^>]*data-filter="customer"/);
+    expect(lookup).toContain('role="combobox"');
+  });
+
+  test("a (blank) choice is offered only for any of, on a nullable field that is not an array", () => {
+    const isBlankOffered = (field: FieldDef, op: FilterOp) => {
+      const frame = renderShallow(
+        <FieldFilter
+          field={field}
+          ops={[{ op: "any_of" }, { op: "none_of" }]}
+          filter={{ field: field.key, op, values: ["x"] } as Filter}
+          onFilterChange={noop}
+        />,
+      );
+      const editor = renderShallow(findChild(frame, "ValueEditor"));
+      return renderShallow(editor).props.blank;
+    };
+    expect(isBlankOffered(OWNER, "any_of")).toBe(true);
+    expect(isBlankOffered(OWNER, "none_of")).toBe(false);
+    expect(isBlankOffered(STATUS, "any_of")).toBe(false);
+    expect(isBlankOffered(COLOURS, "any_of")).toBe(false);
+    const html = render(
+      <FieldFilter
+        field={OWNER}
+        ops={[{ op: "any_of" }, { op: "none_of" }]}
+        filter={{ field: "owner", op: "any_of", values: [null, "ann"] }}
+        multiple
+        onFilterChange={noop}
+      />,
+    );
+    expect(html).toContain("(blank) and Ann");
+  });
+
+  test("the text editor names its field and operator, and hints at the length its index needs", () => {
+    const ops = [
+      { op: "contains" as const, minLength: 3 },
+      { op: "starts_with" as const, minLength: 3 },
+    ];
+    const short = render(
+      <FieldFilter
+        field={NAME}
+        ops={ops}
+        filter={{ field: "name", op: "contains", value: "in" }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(short).toContain('data-kind="text"');
+    expect(short).toContain('aria-label="Name contains"');
+    expect(short).toContain('data-filter="name.value"');
+    expect(short).toContain("data-text-hint");
+    expect(short).toContain("<bdi>3 characters or more</bdi>");
+    const long = render(
+      <FieldFilter
+        field={NAME}
+        ops={ops}
+        filter={{ field: "name", op: "starts_with", value: "inv" }}
+        onFilterChange={noop}
+      />,
+    );
+    expect(long).toContain('aria-label="Name starts with"');
+    expect(long).toContain('value="inv"');
+    expect(long).not.toContain("data-text-hint");
+    const idle = render(
+      <FieldFilter
+        field={NAME}
+        ops={ops}
+        filter={null}
+        onFilterChange={noop}
+      />,
+    );
+    expect(idle).toContain('aria-label="Name contains"');
+    expect(idle).not.toContain("data-text-hint");
+  });
+
+  test("a held FieldFilter carries its reason", () => {
     const held = render(
       <ReasonDisplayContext value={true}>
-        <TextFilter
-          options={options}
-          filters={[]}
+        <FieldFilter
+          field={NOTE}
+          ops={[{ op: "contains", disabled: true }]}
+          filter={null}
           onFilterChange={noop}
           disabled
           reason="Narrow by Status first: 2,300,000+ rows."
@@ -510,56 +742,8 @@ describe("each base component mounts alone, with plain props and no provider", (
     );
     expect(held).toContain("data-unavailable");
     expect(held).toContain("Narrow by Status first: 2,300,000+ rows.");
-    expect(held).toContain('aria-label="Name contains"');
-    expect(held.match(/data-text-row=/g)).toHaveLength(1);
-  });
-
-  test("TextFilter holds a field to what its own index answers", () => {
-    const options = [
-      {
-        value: "name",
-        label: "Name",
-        ops: ["contains", "starts_with", "ends_with"] as TextOp[],
-        minLength: 3,
-        reason: "Narrow by Status first: 620,000+ rows.",
-      },
-      { value: "note", label: "Note", disabled: true },
-    ];
-    const short = render(
-      <TextFilter
-        options={options}
-        filters={[{ field: "name", op: "contains", value: "in" }]}
-        onFilterChange={noop}
-      />,
-    );
-    expect(short).toContain("data-text-hint");
-    expect(short).toContain("<bdi>3 characters or more</bdi>");
-    const long = render(
-      <TextFilter
-        options={options}
-        filters={[{ field: "name", op: "contains", value: "inv" }]}
-        onFilterChange={noop}
-      />,
-    );
-    expect(long).not.toContain("data-text-hint");
-    const idle = render(
-      <TextFilter options={options} filters={[]} onFilterChange={noop} />,
-    );
-    expect(idle).toContain('aria-label="Name contains"');
-    expect(idle).not.toContain("data-text-hint");
-  });
-
-  test("TextFilter stops offering a new row at its cap", () => {
-    const html = render(
-      <TextFilter
-        options={[{ value: "name", label: "Name" }]}
-        filters={[{ field: "name", op: "starts_with", value: "a" }]}
-        onFilterChange={noop}
-        maxFilters={1}
-      />,
-    );
-    expect(html.match(/data-text-row=/g)).toHaveLength(1);
-    expect(html).toContain('aria-label="Name starts with"');
+    expect(held).toContain('aria-label="Note contains"');
+    expect(held).toMatch(/data-filter="note\.value"[^>]*disabled/);
   });
 
   test("CombineToggle keeps Match all reachable when Match any is held", () => {
@@ -585,9 +769,9 @@ describe("each base component mounts alone, with plain props and no provider", (
       <FilterChips
         chips={[
           {
-            id: "eq:status",
-            kind: "equals",
-            label: "Status:",
+            id: "filter:status:any_of",
+            kind: "filter",
+            label: "Status any of:",
             values: [
               { id: "open", label: "Open" },
               { id: "done", label: "Done" },
@@ -606,8 +790,10 @@ describe("each base component mounts alone, with plain props and no provider", (
       />,
     );
     expect(html.match(/data-chip=/g)).toHaveLength(2);
-    expect(html.match(/data-chip-remove="eq:status"/g)).toHaveLength(2);
-    expect(html).toContain('aria-label="Remove Status: Done"');
+    expect(html.match(/data-chip-remove="filter:status:any_of"/g)).toHaveLength(
+      2,
+    );
+    expect(html).toContain('aria-label="Remove Status any of: Done"');
     expect(html).toContain('data-chip-value="open"');
   });
 

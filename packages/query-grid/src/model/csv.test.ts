@@ -145,7 +145,10 @@ describe("the in-memory source exports what the query matches", () => {
 
   test("every matching row, sorted as the grid is, in the columns asked for", async () => {
     const csv = await source.fetchExport(
-      { ...sorted, equals: { status: ["open"] } },
+      {
+        ...sorted,
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
+      },
       { columns: ["number", "name", "total"] },
       signal,
     );
@@ -155,7 +158,9 @@ describe("the in-memory source exports what the query matches", () => {
   });
 
   test("a scope narrows the export like every other read", async () => {
-    const scoped = withScope(source, { equals: { status: ["done"] } });
+    const scoped = withScope(source, {
+      filters: [{ field: "status", op: "any_of", values: ["done"] }],
+    });
     const csv = await scoped.fetchExport(sorted, { columns: ["name"] }, signal);
     expect(csv).toBe(`${CSV_BOM}"Name"\r\n"'=y"\r\n`);
   });

@@ -36,7 +36,14 @@ describe("when a manual order may be changed", () => {
   test("sorted ascending by the order field, with every row in hand, it is allowed", () => {
     expect(explainReorder(DEF, ORDERED, WHOLE)).toBeNull();
     expect(
-      explainReorder(DEF, { ...ORDERED, equals: { status: ["open"] } }, WHOLE),
+      explainReorder(
+        DEF,
+        {
+          ...ORDERED,
+          filters: [{ field: "status", op: "any_of", values: ["open"] }],
+        },
+        WHOLE,
+      ),
     ).toBeNull();
   });
 

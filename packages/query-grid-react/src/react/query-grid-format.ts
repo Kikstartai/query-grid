@@ -1,11 +1,12 @@
 import {
   getField,
   getFieldLabel,
-  isDatePreset,
+  getOperatorShape,
+  resolveFieldKind,
   type BaseGridDef,
   type ChipValue,
+  type FieldChip,
   type FilterChip,
-  type RangeChip,
   type SortDirection,
   type UnavailableReason,
 } from "@kikstart/query-grid";
@@ -14,7 +15,7 @@ import type { ChipItem } from "../components/filter-bar.tsx";
 import {
   formatBoolean,
   formatList,
-  formatReservedValue,
+  formatOpLabel,
   formatRows,
   type QueryGridMessages,
 } from "../components/messages.tsx";
@@ -44,36 +45,45 @@ export function formatReason(
   return messages.reasons[reason.code]({ label, blockers, rows, narrowBy });
 }
 
-function formatEqualsValue(
+function formatChipValue(
   messages: QueryGridMessages,
   value: ChipValue,
   boolean: boolean,
 ): string {
-  if (value.reserved) {
-    return formatReservedValue(messages, value.reserved);
+  if (value.value === null) {
+    return messages.blankValue;
   }
-  return boolean ? formatBoolean(messages, value.value) : value.text;
+  return boolean ? formatBoolean(messages, value.value) : (value.text ?? "");
 }
 
-function formatRangeChip(
+function formatFieldChip(
   messages: QueryGridMessages,
-  chip: RangeChip,
+  def: BaseGridDef,
+  chip: FieldChip,
   label: string,
 ): string {
-  if (chip.preset !== null && isDatePreset(chip.preset)) {
-    return messages.chipPreset({
-      label,
-      preset: messages.datePresets[chip.preset],
-    });
+  const field = getField(def, chip.field);
+  const op = field ? formatOpLabel(messages, field, chip.op) : chip.op;
+  const text = field !== null && resolveFieldKind(field) === "text";
+  const [first = "", second = ""] = chip.operands.map((operand) =>
+    text ? messages.chipText({ value: operand }) : operand,
+  );
+  switch (getOperatorShape(chip.op)) {
+    case "list":
+      return messages.chipList({ label, op });
+    case "none":
+      return messages.chipNone({ label, op });
+    case "pair":
+      return messages.chipPair({ label, op, min: first, max: second });
+    case "preset":
+      return messages.chipOne({
+        label,
+        op,
+        value: chip.preset ? messages.datePresets[chip.preset] : "",
+      });
+    case "one":
+      return messages.chipOne({ label, op, value: first });
   }
-  const params = {
-    label,
-    min: chip.min ?? messages.openBound,
-    max: chip.max ?? messages.openBound,
-  };
-  return chip.op === null || chip.op === "between"
-    ? messages.chipRange(params)
-    : messages.chipRangeOps[chip.op](params);
 }
 
 function formatArrow(direction: SortDirection): string {
@@ -89,46 +99,22 @@ export function formatChip(
     "field" in chip ? getFieldLabel(def, chip.field) : messages.searchFilter;
   const removable = chip.clear !== null;
   switch (chip.kind) {
-    case "equals": {
+    case "filter": {
       const boolean = getField(def, chip.field)?.type === "boolean";
+      const listed = getOperatorShape(chip.op) === "list";
       return {
         id: chip.id,
         kind: chip.kind,
-        label: chip.excluded
-          ? messages.chipExclude({ label })
-          : messages.chipEquals({ label }),
-        values: chip.values.map((value) => ({
-          id: value.value,
-          label: formatEqualsValue(messages, value, boolean),
-        })),
+        label: formatFieldChip(messages, def, chip, label),
+        values: listed
+          ? chip.values.map((value) => ({
+              id: value.value ?? "",
+              label: formatChipValue(messages, value, boolean),
+            }))
+          : undefined,
         removable,
       };
     }
-    case "overlap":
-      return {
-        id: chip.id,
-        kind: chip.kind,
-        label: messages.chipOverlap({ label }),
-        values: chip.values.map((value) => ({
-          id: value.value,
-          label: value.text,
-        })),
-        removable,
-      };
-    case "range":
-      return {
-        id: chip.id,
-        kind: chip.kind,
-        label: formatRangeChip(messages, chip, label),
-        removable,
-      };
-    case "text":
-      return {
-        id: chip.id,
-        kind: chip.kind,
-        label: messages.chipTexts[chip.op]({ label, value: chip.value }),
-        removable,
-      };
     case "combine":
       return {
         id: chip.id,

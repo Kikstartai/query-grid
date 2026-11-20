@@ -1,10 +1,16 @@
 import type { DataSource } from "./data-source.ts";
 import type { Listener } from "./store.ts";
-import { getFacetField, type BaseGridDef, type GridRow } from "./grid-def.ts";
-import type { QueryState } from "./query-state.ts";
+import {
+  getFacetField,
+  getField,
+  type BaseGridDef,
+  type GridRow,
+} from "./grid-def.ts";
+import { listFieldFilters, type QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
-import { expandEquals } from "./field-values.ts";
+import { matchesFilter } from "./filter-values.ts";
 import { isCombineOr } from "./indexes.ts";
+import { resolveFieldKind } from "./operators.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
@@ -75,30 +81,32 @@ export function getLaneQueries(
     return null;
   }
   const holdsAllRows = capabilities.holdsAllRows;
-  const chosen = query.equals[field.key];
-  const selected = chosen ? expandEquals(field, chosen) : undefined;
+  const own = listFieldFilters(query, field.key);
+  const others = query.filters.filter((filter) => filter.field !== field.key);
   const statuses = field.options
     .map((option) => option.value)
-    .filter((value) => selected === undefined || selected.includes(value));
+    .filter((value) =>
+      own.every((filter) => matchesFilter(field, filter, value)),
+    );
   const base: QueryState = holdsAllRows
     ? { ...query, cursor: null }
-    : {
-        ...query,
-        ranges: [],
-        sort: def.defaultSort,
-        thenBy: undefined,
-        cursor: null,
-      };
+    : { ...query, sort: def.defaultSort, thenBy: undefined, cursor: null };
   const queries = new Map<string, QueryState>(
     statuses.map((status) => [
       status,
-      { ...base, equals: { ...query.equals, [field.key]: [status] } },
+      {
+        ...base,
+        filters: [
+          ...others,
+          { field: field.key, op: "any_of", values: [status] },
+        ],
+      },
     ]),
   );
-  const plain =
-    query.texts.length === 0 &&
-    Object.keys(query.overlaps).length === 0 &&
-    query.ranges.length === 0;
+  const plain = others.every((filter) => {
+    const target = getField(def, filter.field);
+    return target !== null && resolveFieldKind(target) === "choice";
+  });
   const combinable =
     !isCombineOr(query) && (holdsAllRows || (query.search === null && plain));
   const answerable =

@@ -5,8 +5,9 @@ import {
   defaultQuery,
   DEFAULT_LIMITS,
   encodeQuery,
+  type Filter,
+  type OneFilter,
   type QueryState,
-  type TextState,
 } from "@kikstart/query-grid";
 
 import { validateGridDef } from "./index-defs.ts";
@@ -58,7 +59,7 @@ const DEF: PostgresGridDef = {
   indexes: [
     { equals: [], sort: "created_at", range: true },
     { equals: ["starred"], sort: "created_at" },
-    { equals: ["folder_id"], sort: "created_at", empty: ["deleted_at"] },
+    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
   ],
   textIndexes: ["name"],
   arrayIndexes: ["tags"],
@@ -76,7 +77,7 @@ function where(query: Partial<QueryState>): SqlQuery {
   };
 }
 
-function text(field: string, op: TextState["op"], value: string): TextState {
+function text(field: string, op: OneFilter["op"], value: string): Filter {
   return { field, op, value };
 }
 
@@ -101,14 +102,9 @@ describe("the SQL of a range", () => {
   test("an open bound is a strict comparison", () => {
     expect(
       where({
-        ranges: [
-          {
-            field: "created_at",
-            min: "2026-01-01T00:00:00Z",
-            max: "2026-02-01T00:00:00Z",
-            minExclusive: true,
-            maxExclusive: true,
-          },
+        filters: [
+          text("created_at", "greater_than", "2026-01-01T00:00:00Z"),
+          text("created_at", "less_than", "2026-02-01T00:00:00Z"),
         ],
       }),
     ).toEqual({
@@ -120,7 +116,7 @@ describe("the SQL of a range", () => {
   test("an excluded range is the two sides outside it, and keeps an empty cell", () => {
     expect(
       where({
-        ranges: [{ field: "rate", min: "1.5", max: "2.5", exclude: true }],
+        filters: [{ field: "rate", op: "not_between", min: "1.5", max: "2.5" }],
       }),
     ).toEqual({
       text: "(t.rate < $1::numeric OR t.rate > $2::numeric OR t.rate IS NULL)",
@@ -128,63 +124,54 @@ describe("the SQL of a range", () => {
     });
     expect(
       where({
-        ranges: [
-          {
-            field: "size",
-            min: "5",
-            max: null,
-            exclude: true,
-            minExclusive: true,
-          },
-        ],
+        filters: [text("size", "less_or_equal", "5")],
       }).text,
     ).toBe("t.size <= $1::bigint");
     expect(
       where({
-        ranges: [
-          { field: "due", min: "2026-03-01", max: "2026-03-01", exclude: true },
-        ],
-      }).text,
-    ).toBe("(t.due < $1::date OR t.due > $2::date OR t.due IS NULL)");
+        filters: [text("due", "not_equals", "2026-03-01")],
+      }),
+    ).toEqual({
+      text: "(t.due <> $1::date OR t.due IS NULL)",
+      values: ["2026-03-01"],
+    });
   });
 
   test("two ranges on one field are two clauses", () => {
     expect(
       where({
-        ranges: [
-          { field: "size", min: "5", max: null },
-          { field: "size", min: "9", max: "9", exclude: true },
+        filters: [
+          text("size", "greater_or_equal", "5"),
+          text("size", "not_equals", "9"),
         ],
       }).text,
-    ).toBe(
-      "t.size >= $1::bigint AND (t.size < $2::bigint OR t.size > $3::bigint)",
-    );
+    ).toBe("t.size >= $1::bigint AND t.size <> $2::bigint");
   });
 });
 
 describe("the SQL of a text filter", () => {
   test("each operator is one comparison with the value's wildcards escaped", () => {
-    expect(where({ texts: [text("note", "starts_with", "50%")] })).toEqual({
+    expect(where({ filters: [text("note", "starts_with", "50%")] })).toEqual({
       text: "t.note ILIKE $1",
       values: ["50\\%%"],
     });
-    expect(where({ texts: [text("note", "ends_with", "_v2")] }).values).toEqual(
-      ["%\\_v2"],
-    );
     expect(
-      where({ texts: [text("note", "contains", " gift ")] }).values,
+      where({ filters: [text("note", "ends_with", "_v2")] }).values,
+    ).toEqual(["%\\_v2"]);
+    expect(
+      where({ filters: [text("note", "contains", " gift ")] }).values,
     ).toEqual(["%gift%"]);
   });
 
   test("a negation keeps an empty cell on a nullable field", () => {
-    expect(where({ texts: [text("note", "not_contains", "gift")] })).toEqual({
+    expect(where({ filters: [text("note", "not_contains", "gift")] })).toEqual({
       text: "(t.note NOT ILIKE $1 OR t.note IS NULL)",
       values: ["%gift%"],
     });
-    expect(where({ texts: [text("name", "not_contains", "gift")] }).text).toBe(
-      "t.name NOT ILIKE $1",
-    );
-    expect(where({ texts: [text("note", "not_equals", "50%")] })).toEqual({
+    expect(
+      where({ filters: [text("name", "not_contains", "gift")] }).text,
+    ).toBe("t.name NOT ILIKE $1");
+    expect(where({ filters: [text("note", "not_equals", "50%")] })).toEqual({
       text: "t.note IS DISTINCT FROM $1",
       values: ["50%"],
     });
@@ -195,10 +182,10 @@ describe("the SQL of a text filter", () => {
       text("note", "contains", "gift"),
       text("note", "not_contains", "card"),
     ];
-    expect(where({ texts }).text).toBe(
+    expect(where({ filters: texts }).text).toBe(
       "t.note ILIKE $1 AND (t.note NOT ILIKE $2 OR t.note IS NULL)",
     );
-    expect(where({ texts, combine: "or" }).text).toBe(
+    expect(where({ filters: texts, combine: "or" }).text).toBe(
       "(t.note ILIKE $1 OR (t.note NOT ILIKE $2 OR t.note IS NULL))",
     );
   });
@@ -206,19 +193,32 @@ describe("the SQL of a text filter", () => {
 
 describe("the SQL of the new field types", () => {
   test("an overlap is one array parameter", () => {
-    expect(where({ overlaps: { tags: ["red", "blue"] } })).toEqual({
+    expect(
+      where({
+        filters: [{ field: "tags", op: "any_of", values: ["red", "blue"] }],
+      }),
+    ).toEqual({
       text: "t.tags && $1::text[]",
       values: [["red", "blue"]],
     });
   });
 
   test("a boolean is cast, and a partial index's field is IS NULL", () => {
-    expect(where({ equals: { starred: ["true"] } })).toEqual({
+    expect(
+      where({
+        filters: [{ field: "starred", op: "any_of", values: ["true"] }],
+      }),
+    ).toEqual({
       text: "t.starred = $1::boolean",
       values: ["true"],
     });
     expect(
-      where({ equals: { folder_id: [FOLDER], deleted_at: ["_empty"] } }).text,
+      where({
+        filters: [
+          { field: "folder_id", op: "any_of", values: [FOLDER] },
+          { field: "deleted_at", op: "blank" },
+        ],
+      }).text,
     ).toBe("t.folder_id = $1::uuid AND t.deleted_at IS NULL");
   });
 
@@ -233,13 +233,13 @@ describe("the SQL of the new field types", () => {
   test("a query core encodes and decodes into the same SQL", () => {
     const query: QueryState = {
       ...BASE,
-      equals: { starred: ["false"] },
-      ranges: [
-        { field: "size", min: "1", max: "9", exclude: true },
-        { field: "due", min: "2026-01-01", max: null, minExclusive: true },
+      filters: [
+        { field: "starred", op: "any_of", values: ["false"] },
+        { field: "size", op: "not_between", min: "1", max: "9" },
+        text("due", "greater_than", "2026-01-01"),
+        text("note", "ends_with", ".pdf"),
+        { field: "labels", op: "any_of", values: ["a"] },
       ],
-      texts: [text("note", "ends_with", ".pdf")],
-      overlaps: { labels: ["a"] },
     };
     const decoded = decodeQuery(DEF, encodeQuery(DEF, query));
     expect(buildCappedCountSql(DEF, decoded)).toEqual(
@@ -249,7 +249,8 @@ describe("the SQL of the new field types", () => {
 });
 
 describe("a filter with an index of its own", () => {
-  const indexed = { ...BASE, texts: [text("name", "contains", "invoice")] };
+  const invoice = text("name", "contains", "invoice");
+  const indexed = { ...BASE, filters: [invoice] };
 
   test("runs under the search budget with no count of a narrowed set first", async () => {
     const { calls, execute } = recording(() => []);
@@ -273,7 +274,10 @@ describe("a filter with an index of its own", () => {
         listGridPage(
           DEF,
           canceled,
-          { ...BASE, overlaps: { tags: ["red"] } },
+          {
+            ...BASE,
+            filters: [{ field: "tags", op: "any_of", values: ["red"] }],
+          },
           20,
           undefined,
           LIMITS,
@@ -305,7 +309,7 @@ describe("a filter with an index of its own", () => {
       await listGridPage(
         DEF,
         execute,
-        { ...BASE, texts: [filter] },
+        { ...BASE, filters: [filter] },
         20,
         undefined,
         LIMITS,
@@ -321,7 +325,13 @@ describe("a filter with an index of its own", () => {
     const sizes = await getNarrowedSizes(
       DEF,
       execute,
-      { ...indexed, equals: { starred: ["true"] } },
+      {
+        ...BASE,
+        filters: [
+          { field: "starred", op: "any_of", values: ["true"] },
+          invoice,
+        ],
+      },
       undefined,
       LIMITS,
     );
@@ -346,7 +356,10 @@ describe("a filter with an index of its own", () => {
     const refusal = await listGridPage(
       DEF,
       execute,
-      { ...BASE, overlaps: { labels: ["a"] } },
+      {
+        ...BASE,
+        filters: [{ field: "labels", op: "any_of", values: ["a"] }],
+      },
       20,
       undefined,
       LIMITS,
@@ -411,7 +424,7 @@ describe("the DDL of the new indexes", () => {
       ...DEF,
       indexes: [
         DEF.indexes[0],
-        { equals: [], sort: "created_at", empty: ["note", "deleted_at"] },
+        { equals: [], sort: "created_at", blank: ["note", "deleted_at"] },
       ],
     };
     const rows = [
@@ -434,7 +447,7 @@ describe("the def rules of the new indexes", () => {
       validateGridDef({
         ...DEF,
         indexes: [
-          { equals: [], sort: "created_at", empty: ["deleted_at"] },
+          { equals: [], sort: "created_at", blank: ["deleted_at"] },
           ...DEF.indexes.slice(1),
         ],
       }),
@@ -463,18 +476,18 @@ describe("the def rules of the new indexes", () => {
         textIndexes: ["size"],
         indexes: [
           ...DEF.indexes,
-          { equals: ["starred"], sort: "created_at", empty: ["name", "nope"] },
+          { equals: ["starred"], sort: "created_at", blank: ["name", "nope"] },
           {
             equals: ["folder_id"],
             sort: "created_at",
-            empty: ["folder_id"],
+            blank: ["folder_id"],
           },
         ],
       }),
     ).toEqual([
-      "index starred|created_at|empty:name+nope: name is never empty",
-      "index starred|created_at|empty:name+nope: unknown empty field nope",
-      "index folder_id|created_at|empty:folder_id: folder_id is empty in every row of the index, so it cannot also be an equality or the sort",
+      "index starred|created_at|empty:name+nope: name is never blank",
+      "index starred|created_at|empty:name+nope: unknown blank field nope",
+      "index folder_id|created_at|empty:folder_id: folder_id is blank in every row of the index, so it cannot also be an equality or the sort",
       "textIndexes: size is not a text field without options",
     ]);
   });

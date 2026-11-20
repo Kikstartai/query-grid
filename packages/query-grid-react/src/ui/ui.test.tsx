@@ -94,8 +94,8 @@ describe("the bound filter containers", () => {
       "sort",
       "group",
     ]);
-    const withText = render(<FilterBar fields={["region"]} texts={["note"]} />);
-    expect(withText).toContain('data-field="text"');
+    const withText = render(<FilterBar fields={["region", "note"]} />);
+    expect(withText).toMatch(/data-field="note" data-kind="text"/);
     expect(withText).toContain("Note");
   });
 
@@ -117,39 +117,44 @@ describe("the bound filter containers", () => {
   });
 });
 
-describe("exclude and presets, bound", () => {
-  const QUERY = "f.status=!open&r.created_at=last-7-days";
+describe("an exclusion and a preset, bound", () => {
+  const QUERY = "f.status.none_of=open&f.created_at.in_period=last-7-days";
 
   test("the chips word the intent the URL holds", () => {
     const html = render(<FilterChips />, QUERY);
-    expect(html).toContain("Status ≠");
+    expect(html).toContain("Status none of:");
     expect(html).toContain('data-chip-value="open"');
-    expect(html).toContain("Created: Last 7 days");
+    expect(html).toContain("Created in period Last 7 days");
   });
 
-  test("the select shows the excluded value with its toggle pressed, and the period its preset", () => {
+  test("the operator select shows none of, and the period its preset", () => {
     const html = render(<FilterBar fields={["status", "created_at"]} />, QUERY);
-    expect(html).toMatch(
-      /data-filter-exclude="status"[^>]*aria-pressed="true"/,
-    );
-    expect(html).toContain("Status ≠");
+    expect(html).toMatch(/data-filter="status\.op"[^>]*>.*?none of/s);
+    expect(html).toMatch(/data-filter="created_at\.op"[^>]*>.*?in period/s);
     expect(html).toContain("Last 7 days");
     expect(html).not.toContain('data-filter="created_at.min"');
   });
 
+  test("a blank filter is a chip with no value", () => {
+    const html = render(<FilterChips />, "f.note.blank=");
+    expect(html).toContain("Note blank");
+    expect(html).not.toContain("data-chip-value");
+  });
+
   test("the facet panel presses the values that remain", () => {
-    const html = render(<FacetPanel />, "f.status=!open");
+    const html = render(<FacetPanel />, "f.status.none_of=open");
     expect(html).toMatch(/data-facet="done"[^>]*aria-pressed="true"/);
     expect(html).toMatch(/data-facet="open"[^>]*aria-pressed="false"/);
   });
 });
 
 describe("the narrowed-set controls, bound", () => {
-  test("a client grid offers Contains and Match any with no limit", () => {
+  test("a client grid offers the text operators and Match any with no limit", () => {
     const html = render(<FilterBar />);
-    expect(html).toContain('data-field="text"');
+    expect(html).toMatch(/data-field="note" data-kind="text"/);
+    expect(html).toContain('data-filter="note.op"');
     expect(html).toContain('data-field="combine"');
-    expect(html).not.toMatch(/data-field="contains"[^>]*data-unavailable/);
+    expect(html).not.toMatch(/data-field="note"[^>]*data-unavailable/);
     expect(html).not.toMatch(/data-combine="or"[^>]*disabled/);
   });
 
@@ -159,11 +164,12 @@ describe("the narrowed-set controls, bound", () => {
         <FilterBar />
         <FilterChips />
       </>,
-      "f.status=open&r.total=100..&c.note=gift&match=any",
+      "f.status.any_of=open&f.total.greater_or_equal=100&f.note.contains=gift&match=any",
     );
     expect(html).toMatch(/data-combine="or"[^>]*aria-checked="true"/);
     expect(html).toContain('value="gift"');
     expect(html).toContain("Note contains “gift”");
+    expect(html).toContain("Total greater or equal");
     expect(html).toContain('data-chip="combine"');
     expect(html).toContain("Match any");
   });

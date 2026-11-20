@@ -2,19 +2,13 @@
 
 import { createContext, use, type ReactNode } from "react";
 
+import type { FieldKind } from "@kikstart/query-grid";
+
 import type { ControlState } from "./fields.ts";
 
 export interface FieldFrameProps extends ControlState {
   name: string;
-  kind:
-    | "equals"
-    | "range"
-    | "overlap"
-    | "sort"
-    | "search"
-    | "text"
-    | "combine"
-    | "group";
+  kind: FieldKind | "sort" | "search" | "combine" | "group";
   label: string;
   children: ReactNode;
 }

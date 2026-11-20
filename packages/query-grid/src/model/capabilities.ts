@@ -1,9 +1,5 @@
-import {
-  getField,
-  hasFixedValues,
-  type BaseFieldDef,
-  type BaseGridDef,
-} from "./grid-def.ts";
+import { getField, type BaseFieldDef, type BaseGridDef } from "./grid-def.ts";
+import type { FilterOp } from "./operators.ts";
 import type { QueryState } from "./query-state.ts";
 
 export interface DataSourceCapabilities {
@@ -15,10 +11,7 @@ export interface DataSourceCapabilities {
   canRun: (query: QueryState) => boolean;
   isNarrowed: (query: QueryState) => boolean;
   narrowBasis: (query: QueryState) => string;
-  equalsFields: string[];
-  rangeFields: string[];
-  textFields: string[];
-  overlapFields: string[];
+  filterOps: Record<string, FilterOp[]>;
   groupFields: string[];
   sortFields: string[];
   thenByFields: string[];
@@ -50,22 +43,13 @@ export interface OfferContext {
   narrowed?: NarrowedState | null;
 }
 
-export type FilterKind = "lookup" | "equals" | "range" | "overlap";
-
-export function resolveFilterKind(
-  field: BaseFieldDef,
+export function listCapableOps(
   capabilities: DataSourceCapabilities,
-): FilterKind | null {
-  if (capabilities.equalsFields.includes(field.key)) {
-    return hasFixedValues(field) ? "equals" : "lookup";
-  }
-  if (capabilities.rangeFields.includes(field.key)) {
-    return "range";
-  }
-  if (capabilities.overlapFields.includes(field.key)) {
-    return "overlap";
-  }
-  return null;
+  key: string,
+): FilterOp[] {
+  return Object.hasOwn(capabilities.filterOps, key)
+    ? capabilities.filterOps[key]
+    : [];
 }
 
 export function listFilterFields<F extends BaseFieldDef>(
@@ -77,6 +61,6 @@ export function listFilterFields<F extends BaseFieldDef>(
     ? keys.flatMap((key) => getField(def, key) ?? [])
     : def.fields;
   return fields.filter(
-    (field) => resolveFilterKind(field, capabilities) !== null,
+    (field) => listCapableOps(capabilities, field.key).length > 0,
   );
 }

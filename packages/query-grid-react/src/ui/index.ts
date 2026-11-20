@@ -16,11 +16,9 @@ export {
   CombineToggle,
   SearchFilter,
   SortControl,
-  TextFilter,
   type FieldFilterProps,
   type FilterBarProps,
   type FilterSidebarProps,
-  type TextFilterProps,
 } from "./filters.tsx";
 export { StatusBoard, type StatusBoardProps } from "./status-board.tsx";
 export {

@@ -80,7 +80,7 @@ function postStatus(body: unknown): RequestInit {
 describe("the routes", () => {
   test("the base path answers a keyset page with the requested limit", async () => {
     const { handle, seen } = createHandler([ROW]);
-    const response = await handle("?f.status=open&limit=25");
+    const response = await handle("?f.status.any_of=open&limit=25");
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       rows: [ROW],
@@ -103,13 +103,13 @@ describe("the routes", () => {
 
   test("/count is capped, and exact on request", async () => {
     const { handle, seen } = createHandler([{ count: 12 }]);
-    const capped = await handle("/count?f.region=north");
+    const capped = await handle("/count?f.region.any_of=north");
     expect(await capped.json()).toEqual({
       count: 12,
       capped: false,
       source: "capped",
     });
-    const exact = await handle("/count?f.region=north&exact=1");
+    const exact = await handle("/count?f.region.any_of=north&exact=1");
     expect(await exact.json()).toEqual({
       count: 12,
       capped: false,
@@ -123,7 +123,9 @@ describe("the routes", () => {
     const live = createHandler([
       { count: 3, total_sum: 900, number_sum: 3003 },
     ]);
-    expect(await (await live.handle("/total?f.region=north")).json()).toEqual([
+    expect(
+      await (await live.handle("/total?f.region.any_of=north")).json(),
+    ).toEqual([
       { field: "total", available: true, sum: 900, rows: 3, source: "live" },
       { field: "number", available: true, sum: 3003, rows: 3, source: "live" },
     ]);
@@ -133,7 +135,9 @@ describe("the routes", () => {
       code: "over_cap",
       params: { cap: 10000 },
     };
-    expect(await (await over.handle("/total?f.region=north")).json()).toEqual([
+    expect(
+      await (await over.handle("/total?f.region.any_of=north")).json(),
+    ).toEqual([
       { field: "total", ...refused },
       { field: "number", ...refused },
     ]);
@@ -144,7 +148,9 @@ describe("the routes", () => {
       { value: "open", count: 30, total_sum: 9000, number_sum: 30030 },
     ];
     const { handle, seen } = createHandler(counters);
-    const response = await handle("/facets?f.region=north&sort=nope.asc");
+    const response = await handle(
+      "/facets?f.region.any_of=north&sort=nope.asc",
+    );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual([
       { value: "open", count: 30, sums: { total: 9000, number: 30030 } },
@@ -182,10 +188,10 @@ describe("the routes", () => {
 describe("the URL codec", () => {
   test("a query encoded by core reaches the SQL through core's decoder", async () => {
     const query: QueryState = {
-      equals: { status: ["open", "done"] },
-      ranges: [{ field: "total", min: "100", max: null }],
-      texts: [],
-      overlaps: {},
+      filters: [
+        { field: "status", op: "any_of", values: ["open", "done"] },
+        { field: "total", op: "greater_or_equal", value: "100" },
+      ],
       group: null,
       combine: "and",
       search: null,
@@ -219,10 +225,9 @@ describe("the URL codec", () => {
       const source = createHttpSource(TEST_DEF, BASE_PATH);
       const signal = new AbortController().signal;
       const query: QueryState = {
-        equals: { region: ["north", "south"] },
-        ranges: [],
-        texts: [],
-        overlaps: {},
+        filters: [
+          { field: "region", op: "any_of", values: ["north", "south"] },
+        ],
         group: null,
         combine: "and",
         search: null,
@@ -245,7 +250,9 @@ describe("the URL codec", () => {
     } finally {
       globalThis.fetch = original;
     }
-    expect(fetched[0]).toBe(`${BASE_PATH}/count?f.region=north&f.region=south`);
+    expect(fetched[0]).toBe(
+      `${BASE_PATH}/count?f.region.any_of=north&f.region.any_of=south`,
+    );
   });
 });
 
@@ -256,7 +263,7 @@ describe("refusals", () => {
 
   test("an unindexed query is a 400 with a code and no SQL", async () => {
     const { handle, seen } = createHandler([]);
-    const response = await handle("?f.region=north&sort=total.asc");
+    const response = await handle("?f.region.any_of=north&sort=total.asc");
     expect(response.status).toBe(400);
     expect(await readError(response)).toEqual({
       error: "unindexed_query",
@@ -275,7 +282,7 @@ describe("refusals", () => {
       ),
     };
     const { handle, seen } = createHandler([], { def: capped });
-    const response = await handle("?f.status=open&f.status=done");
+    const response = await handle("?f.status.any_of=open&f.status.any_of=done");
     expect(response.status).toBe(400);
     expect(await readError(response)).toEqual({
       error: "invalid_value",
@@ -288,7 +295,7 @@ describe("refusals", () => {
 
   test("a field named like an object internal is a 400, not a crash", async () => {
     const { handle, seen } = createHandler([]);
-    const response = await handle("?f.__proto__=x");
+    const response = await handle("?f.__proto__.any_of=x");
     expect(response.status).toBe(400);
     expect((await readError(response)).error).toBe("unindexed_query");
     expect(seen).toEqual([]);
@@ -296,7 +303,7 @@ describe("refusals", () => {
 
   test("a bad value is a 400 that names the field in params", async () => {
     const { handle } = createHandler([]);
-    const response = await handle("?f.status=nope");
+    const response = await handle("?f.status.any_of=nope");
     expect(response.status).toBe(400);
     expect(await readError(response)).toEqual({
       error: "invalid_value",
@@ -354,8 +361,8 @@ describe("refusals", () => {
     });
     const paths = [
       "",
-      "/count?f.region=north",
-      "/total?f.region=north",
+      "/count?f.region.any_of=north",
+      "/total?f.region.any_of=north",
       "/facets",
       "/options?field=region",
       "/transitions",
@@ -582,7 +589,7 @@ describe("limits", () => {
     const get = (path: string) =>
       handler(new Request(`${ORIGIN}${BASE_PATH}${path}`));
     await get("");
-    await get("/count?f.region=north");
+    await get("/count?f.region.any_of=north");
     await get("?q=smith");
     await get("/count?q=smith");
     expect(seen[0].text).toEndWith("LIMIT 41");
@@ -611,20 +618,25 @@ describe("intent the browser resolves", () => {
 
   test("an excluded value is refused: the server sees plain values only", async () => {
     const { handle, seen } = createHandler([]);
-    const response = await handle("?f.status=!open");
+    const response = await handle("?f.status.none_of=open");
     expect(response.status).toBe(400);
     expect(await readError(response)).toMatchObject({
       error: "invalid_value",
-      params: { field: "status" },
+      code: "literal_required",
+      params: { field: "status", op: "none_of" },
     });
     expect(seen).toEqual([]);
   });
 
   test("a preset name is refused: the server sees bounds only", async () => {
     const { handle, seen } = createHandler([]);
-    const response = await handle("?r.created_at=last-7-days");
+    const response = await handle("?f.created_at.in_period=last-7-days");
     expect(response.status).toBe(400);
-    expect((await readError(response)).error).toBe("invalid_value");
+    expect(await readError(response)).toMatchObject({
+      error: "invalid_value",
+      code: "literal_required",
+      params: { field: "created_at", op: "in_period" },
+    });
     expect(seen).toEqual([]);
   });
 
@@ -638,10 +650,7 @@ describe("intent the browser resolves", () => {
       const source = createHttpSource(TEST_DEF, BASE_PATH);
       const signal = new AbortController().signal;
       const query: QueryState = {
-        equals: { status: ["!open"] },
-        ranges: [],
-        texts: [],
-        overlaps: {},
+        filters: [{ field: "status", op: "none_of", values: ["open"] }],
         group: null,
         combine: "and",
         search: null,
@@ -654,10 +663,7 @@ describe("intent the browser resolves", () => {
       await source.fetchPage(
         {
           ...query,
-          equals: {},
-          ranges: [
-            { field: "created_at", min: null, max: null, preset: "today" },
-          ],
+          filters: [{ field: "created_at", op: "in_period", preset: "today" }],
         },
         10,
         signal,
@@ -703,7 +709,7 @@ describe("search with equality filters", () => {
   test("the filters AND with the search, under the search budget and limit", async () => {
     const { get, seen, settings } = recording([ROW]);
     const response = await get(
-      "?q=smith&f.status=open&f.region=north&f.region=south",
+      "?q=smith&f.status.any_of=open&f.region.any_of=north&f.region.any_of=south",
     );
     expect(response.status).toBe(200);
     expect(seen[0].text).toContain(
@@ -718,14 +724,14 @@ describe("search with equality filters", () => {
     const { get, seen } = recording([
       { count: 7, total_sum: 1, number_sum: 2 },
     ]);
-    const count = await get("/count?q=smith&f.status=open");
+    const count = await get("/count?q=smith&f.status.any_of=open");
     expect(await count.json()).toEqual({
       count: 7,
       capped: false,
       source: "capped",
     });
     expect(seen[0].text).toContain("LIMIT 501");
-    const total = await get("/total?q=smith&f.status=open");
+    const total = await get("/total?q=smith&f.status.any_of=open");
     expect(((await total.json()) as { source: string }[])[0].source).toBe(
       "live",
     );
@@ -747,7 +753,7 @@ describe("search with equality filters", () => {
       basePath: BASE_PATH,
     });
     const response = await handler(
-      new Request(`${ORIGIN}${BASE_PATH}?q=smith&f.note=_empty`),
+      new Request(`${ORIGIN}${BASE_PATH}?q=smith&f.note.blank=`),
     );
     expect(response.status).toBe(200);
     expect(seen[0].text).toContain("WHERE t.note IS NULL AND (");
@@ -755,9 +761,11 @@ describe("search with equality filters", () => {
 
   test("a range beside the search, and a filter on a field no index holds, are refused", async () => {
     const { get, seen } = recording([]);
-    const ranged = await get("?q=smith&r.created_at=2026-01-01..");
+    const ranged = await get(
+      "?q=smith&f.created_at.greater_or_equal=2026-01-01",
+    );
     expect(ranged.status).toBe(400);
-    const unindexed = await get("?q=smith&f.name=Ann");
+    const unindexed = await get("?q=smith&f.name.equals=Ann");
     expect(unindexed.status).toBe(400);
     expect(seen).toEqual([]);
   });

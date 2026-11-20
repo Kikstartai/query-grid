@@ -30,6 +30,7 @@ import {
   DatePickerInput,
   DatePickerTrigger,
 } from "@ui-sdk/react/date-picker";
+import { Input, InputClear, InputGroup } from "@ui-sdk/react/input";
 import {
   NumberInput,
   NumberInputControl,
@@ -39,153 +40,122 @@ import {
   Select,
   SelectClear,
   SelectContent,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@ui-sdk/react/select";
-import { Toggle } from "@ui-sdk/react/toggle";
-import { useState, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 
 import {
+  convertFilter,
   DATE_PRESETS,
+  fromDayBound,
   fromNumberBound,
-  fromRangeValue,
-  getReservedValue,
+  getOperatorShape,
+  isDatePreset,
   isDateType,
-  isPairRangeOp,
-  listReservedValues,
-  normalizeEqualsValues,
-  RANGE_OPS,
   moneyFormatOptions,
   resolveCurrency,
-  resolveRangeValue,
+  resolveFieldKind,
+  TEXT_MAX_LENGTH,
   toNumberBound,
   type BaseFieldDef,
+  type FieldKind,
   type FieldOption,
-  type RangeInput as FieldRange,
-  type RangeOp,
-  type RangeValue,
+  type Filter,
+  type FilterOp,
 } from "@kikstart/query-grid";
 
 import { FieldFrame } from "./field-frame.tsx";
-import type { ControlOption, ControlState } from "./fields.ts";
+import type { ControlState } from "./fields.ts";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons.tsx";
 import {
-  formatReservedValue,
+  formatOpLabel,
   useCurrency,
   useLocale,
   useMessages,
-  type QueryGridMessages,
-  type SingleRangeOp,
 } from "./messages.tsx";
 import { SelectOption } from "./select-option.tsx";
-
-export type { FieldRange };
 
 export type LoadOptions = (
   text: string,
   signal: AbortSignal,
 ) => Promise<FieldOption[]>;
 
-interface FilterProps extends ControlState {
+export interface FilterOpOption {
+  op: FilterOp;
+  disabled?: boolean;
+  reason?: string | null;
+  minLength?: number;
+}
+
+interface ListProps extends ControlState {
   field: BaseFieldDef;
-}
-
-export interface EqualsSelectProps extends FilterProps {
-  kind?: "equals" | "overlap";
-  values: string[];
-  onValuesChange: (values: string[]) => void;
+  values: (string | null)[];
+  onValuesChange: (values: (string | null)[]) => void;
   multiple?: boolean;
-  excluded?: boolean;
-  canExclude?: boolean;
-  onExcludedChange?: (excluded: boolean) => void;
+  blank?: boolean;
 }
 
-export interface LookupFilterProps extends EqualsSelectProps {
+export type EqualsSelectProps = ListProps;
+
+export interface LookupFilterProps extends ListProps {
   loadOptions: LoadOptions;
   valueLabels?: Record<string, string>;
   onOptionPick?: (option: FieldOption) => void;
 }
 
-export interface RangeFilterProps extends FilterProps {
-  range: FieldRange | null;
-  onRangeChange: (range: FieldRange | null) => void;
-  heldOps?: RangeOp[];
-  heldReason?: string | null;
-}
-
-interface FilterFrameProps {
-  filter: FilterProps;
-  kind: "equals" | "range" | "overlap";
-  children: ReactNode;
-}
-
-function FilterFrame({ filter, kind, children }: FilterFrameProps) {
-  return (
-    <FieldFrame
-      name={filter.field.key}
-      kind={kind}
-      label={filter.field.label}
-      disabled={filter.disabled}
-      reason={filter.reason}
-    >
-      {children}
-    </FieldFrame>
-  );
+export interface FieldFilterProps extends ControlState {
+  field: BaseFieldDef;
+  ops: FilterOpOption[];
+  filter: Filter | null;
+  onFilterChange: (filter: Filter | null) => void;
+  multiple?: boolean;
+  loadOptions?: LoadOptions;
+  valueLabels?: Record<string, string>;
+  onOptionPick?: (option: FieldOption) => void;
 }
 
 const MAX_LABELS = 2;
+const BLANK_CHOICE = "\u0000blank";
+const PREFERRED_OPS: Record<FieldKind, FilterOp> = {
+  text: "contains",
+  number: "between",
+  date: "in_period",
+  choice: "any_of",
+  array: "any_of",
+};
 
-function toValues(value: string | string[] | null): string[] {
+function toChoices(values: (string | null)[]): string[] {
+  return values.map((value) => value ?? BLANK_CHOICE);
+}
+
+function fromChoices(choices: string[]): (string | null)[] {
+  return choices.map((choice) => (choice === BLANK_CHOICE ? null : choice));
+}
+
+function toList(value: string | string[] | null): string[] {
   if (value === null) {
     return [];
   }
   return Array.isArray(value) ? value : [value];
 }
 
-function listReservedOptions(
+function listItems(
   field: BaseFieldDef,
-  messages: QueryGridMessages,
+  blank: boolean,
+  label: string,
 ): FieldOption[] {
-  return listReservedValues(field).flatMap((value) => {
-    const reserved = getReservedValue(field, value);
-    return reserved
-      ? [{ value, label: formatReservedValue(messages, reserved) }]
-      : [];
-  });
+  const options = field.options ?? [];
+  return blank ? [{ value: BLANK_CHOICE, label }, ...options] : options;
 }
 
-function ReservedOptions({ options }: { options: FieldOption[] }) {
-  if (options.length === 0) {
-    return null;
-  }
-  return (
-    <>
-      {options.map((option) => (
-        <SelectOption
-          key={option.value}
-          value={option.value}
-          label={option.label}
-        />
-      ))}
-      <SelectSeparator />
-    </>
-  );
+interface ChoicePartsProps {
+  field: BaseFieldDef;
+  items: FieldOption[];
+  multiple?: boolean;
 }
 
-interface EqualsSelectPartsProps extends Pick<
-  EqualsSelectProps,
-  "field" | "multiple" | "excluded"
-> {
-  reserved: FieldOption[];
-}
-
-function EqualsSelectParts({
-  field,
-  multiple,
-  excluded,
-  reserved,
-}: EqualsSelectPartsProps) {
+function ChoiceParts({ field, items, multiple }: ChoicePartsProps) {
   const messages = useMessages();
   const label = { label: field.label };
   return (
@@ -195,9 +165,6 @@ function EqualsSelectParts({
         data-filter={field.key}
         data-multiple={multiple ? "" : undefined}
       >
-        <span className="qg-select-prefix">
-          {excluded ? messages.chipExclude(label) : field.label}
-        </span>
         <SelectValue
           maxLabels={MAX_LABELS}
           getMoreLabel={(count) => messages.moreValues({ count })}
@@ -211,8 +178,7 @@ function EqualsSelectParts({
         <XIcon size={12} />
       </SelectClear>
       <SelectContent>
-        <ReservedOptions options={reserved} />
-        {(field.options ?? []).map((option) => (
+        {items.map((option) => (
           <SelectOption
             key={option.value}
             value={option.value}
@@ -224,80 +190,50 @@ function EqualsSelectParts({
   );
 }
 
-function ExcludeToggle({
+export function EqualsSelect({
   field,
   values,
-  excluded,
-  canExclude,
+  onValuesChange,
+  multiple,
+  blank = false,
   disabled,
-  onExcludedChange,
 }: EqualsSelectProps) {
   const messages = useMessages();
-  if (!onExcludedChange || (!canExclude && !excluded)) {
-    return null;
-  }
-  return (
-    <Toggle
-      className="qg-exclude"
-      aria-label={messages.excludeField({ label: field.label })}
-      title={messages.excludeField({ label: field.label })}
-      data-filter-exclude={field.key}
-      pressed={excluded ?? false}
-      disabled={disabled || values.length === 0}
-      onPressedChange={(pressed: boolean) => onExcludedChange(pressed)}
-    >
-      {messages.excludeMark}
-    </Toggle>
-  );
-}
-
-function EqualsControl(props: EqualsSelectProps) {
-  const { field, values, disabled, onValuesChange, excluded } = props;
-  const messages = useMessages();
-  const reserved = excluded ? [] : listReservedOptions(field, messages);
-  const items = [...reserved, ...(field.options ?? [])];
-  if (props.multiple) {
+  const items = listItems(field, blank, messages.blankValue);
+  const choices = toChoices(values);
+  if (multiple) {
     return (
       <Select
         multiple
         items={items}
-        value={values}
+        value={choices}
         disabled={disabled}
         placeholder={messages.any}
-        onValueChange={(next: string[]) =>
-          onValuesChange(normalizeEqualsValues(field, values, next))
-        }
+        onValueChange={(next: string[]) => onValuesChange(fromChoices(next))}
       >
-        <EqualsSelectParts
-          field={field}
-          multiple
-          excluded={excluded}
-          reserved={reserved}
-        />
+        <ChoiceParts field={field} items={items} multiple />
       </Select>
     );
   }
   return (
     <Select
       items={items}
-      value={values[0] ?? null}
+      value={choices[0] ?? null}
       disabled={disabled}
       placeholder={messages.any}
-      onValueChange={(next: string | null) => onValuesChange(toValues(next))}
+      onValueChange={(next: string | null) =>
+        onValuesChange(fromChoices(toList(next)))
+      }
     >
-      <EqualsSelectParts
-        field={field}
-        excluded={excluded}
-        reserved={reserved}
-      />
+      <ChoiceParts field={field} items={items} />
     </Select>
   );
 }
 
 function useLookup({
-  field,
   values,
   valueLabels = {},
+  blank = false,
   loadOptions,
   onOptionPick,
   onValuesChange,
@@ -308,25 +244,26 @@ function useLookup({
     (query, { signal }) => loadOptions(query, signal),
     { debounce: 250, immediate: true },
   );
-  const reserved = listReservedOptions(field, messages);
+  const reserved = blank
+    ? [{ value: BLANK_CHOICE, label: messages.blankValue }]
+    : [];
   const choose = (value: string | string[] | null) => {
-    const next = normalizeEqualsValues(field, values, toValues(value));
+    const next = toList(value);
     for (const option of options.items) {
       if (next.includes(option.value)) {
         onOptionPick?.(option);
       }
     }
-    onValuesChange(next);
+    onValuesChange(fromChoices(next));
   };
   return {
     status: options.status,
+    choices: toChoices(values),
     items: text.trim() === "" ? [...reserved, ...options.items] : options.items,
     labels: {
       ...valueLabels,
-      ...Object.fromEntries(
-        reserved.map((option) => [option.value, option.label]),
-      ),
-    },
+      [BLANK_CHOICE]: messages.blankValue,
+    } as Record<string, string>,
     setQuery: (query: string) => {
       setText(query);
       options.setQuery(query);
@@ -358,10 +295,10 @@ function LookupItems({ items }: { items: FieldOption[] }) {
 }
 
 function LookupSingle(props: LookupFilterProps) {
-  const { field, values, disabled } = props;
+  const { field, disabled } = props;
   const messages = useMessages();
   const lookup = useLookup(props);
-  const current = values[0] ?? null;
+  const current = lookup.choices[0] ?? null;
   const label = { label: field.label };
   return (
     <Combobox<string>
@@ -398,7 +335,7 @@ interface LookupChipState {
 }
 
 function LookupMultiple(props: LookupFilterProps) {
-  const { field, values, disabled } = props;
+  const { field, disabled } = props;
   const messages = useMessages();
   const lookup = useLookup(props);
   const label = { label: field.label };
@@ -408,7 +345,7 @@ function LookupMultiple(props: LookupFilterProps) {
       items={lookup.items}
       filter={false}
       status={lookup.status}
-      value={values}
+      value={lookup.choices}
       disabled={disabled}
       itemToLabel={(value) => lookup.labels[value] ?? value}
       onQueryChange={lookup.setQuery}
@@ -417,7 +354,7 @@ function LookupMultiple(props: LookupFilterProps) {
       <ComboboxChips className="qg-combobox-chips">
         <ComboboxValue>
           {(state: LookupChipState) =>
-            toValues(state.value as string[]).map((value) => (
+            toList(state.value as string[]).map((value) => (
               <ComboboxChip
                 key={value}
                 value={value}
@@ -449,122 +386,11 @@ function LookupMultiple(props: LookupFilterProps) {
   );
 }
 
-const CUSTOM_RANGE = "custom";
-const OP_PREFIX = "op:";
-const SINGLE_OPS: SingleRangeOp[] = [
-  "eq",
-  "neq",
-  "lt",
-  "lte",
-  "gt",
-  "gte",
-  "not_between",
-];
-
-function toPeriod(op: RangeOp | null): string | null {
-  if (op === null) {
-    return null;
+export function LookupFilter(props: LookupFilterProps) {
+  if (props.multiple) {
+    return <LookupMultiple {...props} />;
   }
-  return op === "between" ? CUSTOM_RANGE : `${OP_PREFIX}${op}`;
-}
-
-function fromPeriod(period: string): RangeOp | null {
-  if (period === CUSTOM_RANGE) {
-    return "between";
-  }
-  const op = period.slice(OP_PREFIX.length);
-  return RANGE_OPS.find((item) => item === op) ?? null;
-}
-
-interface OpRangeProps extends RangeFilterProps {
-  op: RangeOp;
-  value: RangeValue | null;
-}
-
-function DateRange(props: RangeFilterProps) {
-  const { field, range, disabled, onRangeChange } = props;
-  const messages = useMessages();
-  const [picked, setPicked] = useState<RangeOp | null>(null);
-  const label = { label: field.label };
-  const value = resolveRangeValue(field, range, picked);
-  const op = range?.preset ? null : (value?.op ?? picked);
-  const periods: ControlOption[] = [
-    ...DATE_PRESETS.map((preset) => ({
-      value: preset as string,
-      label: messages.datePresets[preset],
-    })),
-    { value: CUSTOM_RANGE, label: messages.customRange },
-    ...SINGLE_OPS.map((item) => ({
-      value: `${OP_PREFIX}${item}`,
-      label: messages.dateOps[item],
-      disabled: props.heldOps?.includes(item),
-      reason: props.heldReason,
-    })),
-  ];
-  const choose = (next: string | null) => {
-    const nextOp = next === null ? null : fromPeriod(next);
-    setPicked(nextOp);
-    if (next !== null && nextOp === null) {
-      onRangeChange({ min: null, max: null, preset: next });
-      return;
-    }
-    onRangeChange(
-      nextOp !== null && value
-        ? fromRangeValue(field, { ...value, op: nextOp })
-        : null,
-    );
-  };
-  return (
-    <>
-      <Select
-        items={periods}
-        value={range?.preset ?? toPeriod(op)}
-        disabled={disabled}
-        placeholder={messages.any}
-        onValueChange={choose}
-      >
-        <SelectTrigger
-          aria-label={messages.presetField(label)}
-          data-filter={`${field.key}.preset`}
-        >
-          <span className="qg-select-prefix">{field.label}</span>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectClear
-          className="qg-clear"
-          aria-label={messages.clearField(label)}
-          data-filter-clear={field.key}
-        >
-          <XIcon size={12} />
-        </SelectClear>
-        <SelectContent>
-          {periods.map((option) => (
-            <SelectOption
-              key={option.value}
-              value={option.value}
-              label={option.label}
-            />
-          ))}
-        </SelectContent>
-      </Select>
-      <DateOperand {...props} op={op} value={value} />
-    </>
-  );
-}
-
-interface DateOperandProps extends RangeFilterProps {
-  op: RangeOp | null;
-  value: RangeValue | null;
-}
-
-function DateOperand({ op, ...props }: DateOperandProps) {
-  if (op === null) {
-    return null;
-  }
-  if (isPairRangeOp(op)) {
-    return <DatePair {...props} op={op} />;
-  }
-  return <DateSingle {...props} op={op} />;
+  return <LookupSingle {...props} />;
 }
 
 function CalendarParts() {
@@ -589,67 +415,35 @@ function CalendarParts() {
   );
 }
 
-function DatePair({ field, disabled, onRangeChange, op, value }: OpRangeProps) {
-  const messages = useMessages();
-  const label = { label: field.label };
-  const change = (next: unknown) =>
-    onRangeChange(
-      Array.isArray(next) && next.length === 2
-        ? fromRangeValue(field, {
-            op,
-            first: String(next[0]),
-            second: String(next[1]),
-          })
-        : null,
-    );
-  return (
-    <DatePicker
-      mode="range"
-      value={value?.first && value.second ? [value.first, value.second] : null}
-      disabled={disabled}
-      onValueChange={change}
-    >
-      <div className="qg-range">
-        <DatePickerInput
-          aria-label={messages.rangeFrom(label)}
-          placeholder={value?.first ?? messages.from}
-          data-filter={`${field.key}.min`}
-        />
-        <span className="qg-range-dash">–</span>
-        <DatePickerInput
-          end
-          placeholder={value?.second ?? messages.to}
-          aria-label={messages.rangeTo(label)}
-          data-filter={`${field.key}.max`}
-        />
-        <DatePickerTrigger
-          aria-label={messages.pickDates(label)}
-          data-filter={`${field.key}.calendar`}
-        />
-      </div>
-      <CalendarParts />
-    </DatePicker>
-  );
+interface EditorProps extends ControlState {
+  field: BaseFieldDef;
+  op: FilterOp;
+  filter: Filter | null;
+  minLength?: number;
+  onFilterChange: (filter: Filter | null) => void;
 }
 
-function DateSingle({
-  field,
-  disabled,
-  onRangeChange,
-  op,
-  value,
-}: OpRangeProps) {
+function readOne(filter: Filter | null): string | null {
+  return filter && "value" in filter ? filter.value : null;
+}
+
+function readPair(filter: Filter | null): [string | null, string | null] {
+  return filter && "min" in filter ? [filter.min, filter.max] : [null, null];
+}
+
+function DateOne({ field, op, filter, disabled, onFilterChange }: EditorProps) {
   const messages = useMessages();
   const label = { label: field.label };
+  const value = readOne(filter);
   const change = (next: unknown) =>
-    onRangeChange(
+    onFilterChange(
       typeof next === "string" && next
-        ? fromRangeValue(field, { op, first: next, second: null })
+        ? ({ field: field.key, op, value: next } as Filter)
         : null,
     );
   return (
     <DatePicker
-      value={value?.first ?? null}
+      value={value === null ? null : fromDayBound(value)}
       disabled={disabled}
       onValueChange={change}
     >
@@ -660,6 +454,57 @@ function DateSingle({
         />
         <DatePickerTrigger
           aria-label={messages.pickDate(label)}
+          data-filter={`${field.key}.calendar`}
+        />
+      </div>
+      <CalendarParts />
+    </DatePicker>
+  );
+}
+
+function DatePair({
+  field,
+  op,
+  filter,
+  disabled,
+  onFilterChange,
+}: EditorProps) {
+  const messages = useMessages();
+  const label = { label: field.label };
+  const [min, max] = readPair(filter);
+  const change = (next: unknown) =>
+    onFilterChange(
+      Array.isArray(next) && next.length === 2
+        ? ({
+            field: field.key,
+            op,
+            min: String(next[0]),
+            max: String(next[1]),
+          } as Filter)
+        : null,
+    );
+  return (
+    <DatePicker
+      mode="range"
+      value={min && max ? [fromDayBound(min), fromDayBound(max)] : null}
+      disabled={disabled}
+      onValueChange={change}
+    >
+      <div className="qg-range">
+        <DatePickerInput
+          aria-label={messages.rangeFrom(label)}
+          placeholder={messages.from}
+          data-filter={`${field.key}.min`}
+        />
+        <span className="qg-range-dash">–</span>
+        <DatePickerInput
+          end
+          placeholder={messages.to}
+          aria-label={messages.rangeTo(label)}
+          data-filter={`${field.key}.max`}
+        />
+        <DatePickerTrigger
+          aria-label={messages.pickDates(label)}
           data-filter={`${field.key}.calendar`}
         />
       </div>
@@ -720,183 +565,389 @@ function NumberBound({
   );
 }
 
-interface NumberOperandsProps {
-  field: BaseFieldDef;
-  op: RangeOp;
-  first: number | null;
-  second: number | null;
-  disabled?: boolean;
-  onFirstChange: (value: number | null) => void;
-  onSecondChange: (value: number | null) => void;
-  onCommit: (first: number | null, second: number | null) => void;
+function useNumberDraft(field: BaseFieldDef, filter: Filter | null) {
+  const [first, second] =
+    filter && "min" in filter ? readPair(filter) : [readOne(filter), null];
+  const key = `${first ?? ""}|${second ?? ""}`;
+  const [seen, setSeen] = useState(key);
+  const [low, setLow] = useState(fromNumberBound(field, first));
+  const [high, setHigh] = useState(fromNumberBound(field, second));
+  if (seen !== key) {
+    setSeen(key);
+    setLow(fromNumberBound(field, first));
+    setHigh(fromNumberBound(field, second));
+  }
+  return { low, high, setLow, setHigh };
 }
 
-function NumberOperands({
-  field,
-  op,
-  first,
-  second,
-  disabled,
-  onFirstChange,
-  onSecondChange,
-  onCommit,
-}: NumberOperandsProps) {
-  if (!isPairRangeOp(op)) {
-    return (
-      <NumberBound
-        field={field}
-        part="value"
-        value={first}
-        disabled={disabled}
-        onValueChange={onFirstChange}
-        onValueCommit={(value) => onCommit(value, null)}
-      />
-    );
-  }
+function NumberOne(props: EditorProps) {
+  const { field, op, filter, disabled, onFilterChange } = props;
+  const draft = useNumberDraft(field, filter);
+  const commit = (next: number | null) => {
+    const value = toNumberBound(field, next);
+    if (value !== null) {
+      onFilterChange({ field: field.key, op, value } as Filter);
+      return;
+    }
+    if (filter) {
+      onFilterChange(null);
+    }
+  };
   return (
-    <>
+    <NumberBound
+      field={field}
+      part="value"
+      value={draft.low}
+      disabled={disabled}
+      onValueChange={draft.setLow}
+      onValueCommit={commit}
+    />
+  );
+}
+
+function NumberPair(props: EditorProps) {
+  const { field, op, filter, disabled, onFilterChange } = props;
+  const draft = useNumberDraft(field, filter);
+  const commit = (low: number | null, high: number | null) => {
+    const min = toNumberBound(field, low);
+    const max = toNumberBound(field, high);
+    if (min !== null && max !== null) {
+      onFilterChange({ field: field.key, op, min, max } as Filter);
+      return;
+    }
+    if (filter && min === null && max === null) {
+      onFilterChange(null);
+    }
+  };
+  return (
+    <div className="qg-range">
       <NumberBound
         field={field}
         part="min"
-        value={first}
+        value={draft.low}
         disabled={disabled}
-        onValueChange={onFirstChange}
-        onValueCommit={(value) => onCommit(value, second)}
+        onValueChange={draft.setLow}
+        onValueCommit={(value) => commit(value, draft.high)}
       />
       <span className="qg-range-dash">–</span>
       <NumberBound
         field={field}
         part="max"
-        value={second}
+        value={draft.high}
         disabled={disabled}
-        onValueChange={onSecondChange}
-        onValueCommit={(value) => onCommit(first, value)}
-      />
-    </>
-  );
-}
-
-function NumberRange(props: RangeFilterProps) {
-  const { field, range, disabled, onRangeChange, heldOps, heldReason } = props;
-  const messages = useMessages();
-  const [picked, setPicked] = useState<RangeOp>("between");
-  const value = resolveRangeValue(field, range, picked);
-  const op = value?.op ?? picked;
-  const rangeKey = `${op}|${value?.first ?? ""}|${value?.second ?? ""}`;
-  const [seen, setSeen] = useState(rangeKey);
-  const [first, setFirst] = useState(
-    fromNumberBound(field, value?.first ?? null),
-  );
-  const [second, setSecond] = useState(
-    fromNumberBound(field, value?.second ?? null),
-  );
-  if (seen !== rangeKey) {
-    setSeen(rangeKey);
-    setFirst(fromNumberBound(field, value?.first ?? null));
-    setSecond(fromNumberBound(field, value?.second ?? null));
-  }
-  const apply = (next: RangeOp, lower: number | null, upper: number | null) =>
-    onRangeChange(
-      fromRangeValue(field, {
-        op: next,
-        first: toNumberBound(field, lower),
-        second: toNumberBound(field, upper),
-      }),
-    );
-  const ops: ControlOption[] = RANGE_OPS.map((item) => ({
-    value: item,
-    label: messages.rangeOps[item],
-    disabled: heldOps?.includes(item),
-    reason: heldReason,
-  }));
-  return (
-    <div className="qg-range">
-      <Select
-        items={ops}
-        value={op}
-        disabled={disabled}
-        onValueChange={(next: string | null) => {
-          const chosen = RANGE_OPS.find((item) => item === next);
-          if (chosen) {
-            setPicked(chosen);
-            apply(chosen, first, second);
-          }
-        }}
-      >
-        <SelectTrigger
-          className="qg-range-op"
-          aria-label={messages.rangeOperator({ label: field.label })}
-          data-filter={`${field.key}.op`}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {ops.map((option) => (
-            <SelectOption
-              key={option.value}
-              value={option.value}
-              label={option.label}
-              disabled={option.disabled}
-              reason={option.disabled ? option.reason : null}
-            />
-          ))}
-        </SelectContent>
-      </Select>
-      <NumberOperands
-        field={field}
-        op={op}
-        first={first}
-        second={second}
-        disabled={disabled}
-        onFirstChange={setFirst}
-        onSecondChange={setSecond}
-        onCommit={(lower, upper) => apply(op, lower, upper)}
+        onValueChange={draft.setHigh}
+        onValueCommit={(value) => commit(draft.low, value)}
       />
     </div>
   );
 }
 
-function LookupControl(props: LookupFilterProps) {
-  if (props.multiple) {
-    return <LookupMultiple {...props} />;
-  }
-  return <LookupSingle {...props} />;
+interface TextHintProps {
+  min: number;
+  shown: boolean;
 }
 
-// A control clears only a range that is there, so an empty control that changes operator sends nothing.
-function RangeControl(props: RangeFilterProps) {
-  const onRangeChange = (next: FieldRange | null) => {
-    if (next || props.range) {
-      props.onRangeChange(next);
+function TextHint({ min, shown }: TextHintProps) {
+  const messages = useMessages();
+  if (!shown) {
+    return null;
+  }
+  return (
+    <span className="qg-search-hint" role="status" data-text-hint>
+      <bdi>{messages.textHint({ min })}</bdi>
+    </span>
+  );
+}
+
+function TextOne(props: EditorProps) {
+  const { field, op, filter, minLength = 1, disabled, onFilterChange } = props;
+  const messages = useMessages();
+  const value = readOne(filter) ?? "";
+  const [seen, setSeen] = useState(value);
+  const [draft, setDraft] = useState(value);
+  if (seen !== value) {
+    setSeen(value);
+    setDraft(value);
+  }
+  const trimmed = draft.trim();
+  const short = trimmed.length > 0 && trimmed.length < minLength;
+  const apply = (text: string) => {
+    const next = text.trim().slice(0, TEXT_MAX_LENGTH);
+    if (next.length >= minLength) {
+      onFilterChange({ field: field.key, op, value: next } as Filter);
+      return;
+    }
+    if (filter && !next) {
+      onFilterChange(null);
     }
   };
-  if (isDateType(props.field.type)) {
-    return <DateRange {...props} onRangeChange={onRangeChange} />;
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    apply(draft);
+  };
+  return (
+    <form className="qg-search" onSubmit={submit}>
+      <InputGroup className="qg-search-group">
+        <Input
+          className="qg-search-input"
+          type="search"
+          aria-label={messages.textValue({
+            label: field.label,
+            op: formatOpLabel(messages, field, op),
+          })}
+          placeholder={messages.textPlaceholder}
+          data-filter={`${field.key}.value`}
+          value={draft}
+          maxLength={TEXT_MAX_LENGTH}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <InputClear
+          className="qg-clear"
+          aria-label={messages.clearField({ label: field.label })}
+          data-filter-clear={field.key}
+          onClick={() => {
+            setDraft("");
+            apply("");
+          }}
+        >
+          <XIcon size={12} />
+        </InputClear>
+      </InputGroup>
+      <TextHint min={minLength} shown={short} />
+    </form>
+  );
+}
+
+function PresetSelect({
+  field,
+  filter,
+  disabled,
+  onFilterChange,
+}: EditorProps) {
+  const messages = useMessages();
+  const label = { label: field.label };
+  const items = DATE_PRESETS.map((preset) => ({
+    value: preset as string,
+    label: messages.datePresets[preset],
+  }));
+  const current = filter && "preset" in filter ? filter.preset : null;
+  return (
+    <Select
+      items={items}
+      value={current}
+      disabled={disabled}
+      placeholder={messages.any}
+      onValueChange={(next: string | null) =>
+        onFilterChange(
+          next !== null && isDatePreset(next)
+            ? { field: field.key, op: "in_period", preset: next }
+            : null,
+        )
+      }
+    >
+      <SelectTrigger
+        aria-label={messages.presetField(label)}
+        data-filter={`${field.key}.preset`}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectClear
+        className="qg-clear"
+        aria-label={messages.clearField(label)}
+        data-filter-clear={field.key}
+      >
+        <XIcon size={12} />
+      </SelectClear>
+      <SelectContent>
+        {items.map((option) => (
+          <SelectOption
+            key={option.value}
+            value={option.value}
+            label={option.label}
+          />
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+interface ListEditorProps extends EditorProps {
+  multiple?: boolean;
+  loadOptions?: LoadOptions;
+  valueLabels?: Record<string, string>;
+  onOptionPick?: (option: FieldOption) => void;
+}
+
+function ListEditor(props: ListEditorProps) {
+  const { field, op, filter, onFilterChange } = props;
+  const values = filter && "values" in filter ? filter.values : [];
+  const list = {
+    field,
+    values,
+    disabled: props.disabled,
+    multiple: op === "any_of" ? props.multiple : true,
+    blank:
+      values.includes(null) ||
+      (op === "any_of" && field.nullable === true && field.type !== "array"),
+    onValuesChange: (next: (string | null)[]) =>
+      onFilterChange(
+        next.length > 0
+          ? ({ field: field.key, op, values: next } as Filter)
+          : null,
+      ),
+  };
+  if (field.options || !props.loadOptions) {
+    return <EqualsSelect {...list} />;
   }
-  return <NumberRange {...props} onRangeChange={onRangeChange} />;
-}
-
-export function EqualsSelect(props: EqualsSelectProps) {
   return (
-    <FilterFrame filter={props} kind={props.kind ?? "equals"}>
-      <ExcludeToggle {...props} />
-      <EqualsControl {...props} />
-    </FilterFrame>
+    <LookupFilter
+      {...list}
+      loadOptions={props.loadOptions}
+      valueLabels={props.valueLabels}
+      onOptionPick={props.onOptionPick}
+    />
   );
 }
 
-export function LookupFilter(props: LookupFilterProps) {
+function PairEditor(props: EditorProps) {
+  if (isDateType(props.field.type)) {
+    return <DatePair {...props} />;
+  }
+  return <NumberPair {...props} />;
+}
+
+function OneEditor(props: EditorProps) {
+  if (resolveFieldKind(props.field) === "text") {
+    return <TextOne {...props} />;
+  }
+  if (isDateType(props.field.type)) {
+    return <DateOne {...props} />;
+  }
+  return <NumberOne {...props} />;
+}
+
+function ValueEditor(props: ListEditorProps) {
+  switch (getOperatorShape(props.op)) {
+    case "none":
+      return null;
+    case "list":
+      return <ListEditor {...props} />;
+    case "preset":
+      return <PresetSelect {...props} />;
+    case "pair":
+      return <PairEditor {...props} />;
+    case "one":
+      return <OneEditor {...props} />;
+  }
+}
+
+interface OpSelectProps extends ControlState {
+  field: BaseFieldDef;
+  ops: FilterOpOption[];
+  op: FilterOp;
+  onOpChange: (op: FilterOp) => void;
+}
+
+function OpSelect({ field, ops, op, disabled, onOpChange }: OpSelectProps) {
+  const messages = useMessages();
+  if (ops.length < 2) {
+    return null;
+  }
+  const items = ops.map((item) => ({
+    value: item.op as string,
+    label: formatOpLabel(messages, field, item.op),
+  }));
   return (
-    <FilterFrame filter={props} kind={props.kind ?? "equals"}>
-      <LookupControl {...props} />
-    </FilterFrame>
+    <Select
+      items={items}
+      value={op}
+      disabled={disabled}
+      onValueChange={(next: string | null) => {
+        const chosen = ops.find((item) => item.op === next);
+        if (chosen) {
+          onOpChange(chosen.op);
+        }
+      }}
+    >
+      <SelectTrigger
+        className="qg-op"
+        aria-label={messages.opField({ label: field.label })}
+        data-filter={`${field.key}.op`}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {ops.map((item) => (
+          <SelectOption
+            key={item.op}
+            value={item.op}
+            label={formatOpLabel(messages, field, item.op)}
+            disabled={item.disabled}
+            reason={item.disabled ? item.reason : null}
+          />
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
-export function RangeFilter(props: RangeFilterProps) {
+function resolveDefaultOp(
+  field: BaseFieldDef,
+  ops: FilterOpOption[],
+): FilterOp {
+  const open = ops.filter((item) => !item.disabled);
+  const preferred = PREFERRED_OPS[resolveFieldKind(field)];
+  const pick =
+    open.find((item) => item.op === preferred) ??
+    open[0] ??
+    ops.find((item) => item.op === preferred) ??
+    ops[0];
+  return pick?.op ?? preferred;
+}
+
+export function FieldFilter(props: FieldFilterProps) {
+  const { field, ops, filter, disabled, reason, onFilterChange } = props;
+  const [picked, setPicked] = useState<FilterOp | null>(null);
+  const op = filter?.op ?? picked ?? resolveDefaultOp(field, ops);
+  const offer = ops.find((item) => item.op === op);
+  const chooseOp = (next: FilterOp) => {
+    setPicked(next);
+    if (getOperatorShape(next) === "none") {
+      onFilterChange({ field: field.key, op: next } as Filter);
+      return;
+    }
+    if (filter) {
+      onFilterChange(convertFilter(filter, next));
+    }
+  };
   return (
-    <FilterFrame filter={props} kind="range">
-      <RangeControl {...props} />
-    </FilterFrame>
+    <FieldFrame
+      name={field.key}
+      kind={resolveFieldKind(field)}
+      label={field.label}
+      disabled={disabled}
+      reason={reason}
+    >
+      <OpSelect
+        field={field}
+        ops={ops}
+        op={op}
+        disabled={disabled}
+        onOpChange={chooseOp}
+      />
+      <ValueEditor
+        field={field}
+        op={op}
+        filter={filter}
+        minLength={offer?.minLength}
+        disabled={disabled || (offer?.disabled === true && filter === null)}
+        multiple={props.multiple}
+        loadOptions={props.loadOptions}
+        valueLabels={props.valueLabels}
+        onOptionPick={props.onOptionPick}
+        onFilterChange={onFilterChange}
+      />
+    </FieldFrame>
   );
 }

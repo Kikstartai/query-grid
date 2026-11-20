@@ -8,24 +8,28 @@ import {
 } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
-import { DATE_PRESETS, resolveDatePreset } from "./date-presets.ts";
-import { getField, type BaseGridDef, type GridRow } from "./grid-def.ts";
-import type { QueryState } from "./query-state.ts";
 import {
-  canExpandEquals,
-  EMPTY_VALUE,
-  expandEquals,
-  isExcluding,
-  toExcludeValues,
-} from "./field-values.ts";
+  DATE_PRESETS,
+  resolveDatePreset,
+  type DatePreset,
+} from "./date-presets.ts";
+import { canExpandNoneOf, expandNoneOf } from "./filter-values.ts";
+import { getField, type BaseGridDef, type GridRow } from "./grid-def.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 import { TEST_DEF, TEST_INDEXES } from "./grid-def.fixture.ts";
 import { indexCapabilities } from "./indexes.ts";
 import { createMemorySource } from "./memory-source.ts";
-import { applyAction, defaultQuery, listOffers } from "./query-actions.ts";
+import { isLiteralOp, type FilterOp } from "./operators.ts";
+import {
+  applyAction,
+  defaultQuery,
+  listOffers,
+  type Offers,
+} from "./query-actions.ts";
 import { toLiteralQuery, withLiteralFilters } from "./literal-filters.ts";
 import { createQueryStore } from "./query-store.ts";
 import { decodeQuery, encodeQuery } from "./query-url.ts";
-import { validateQueryValues } from "./query-validate.ts";
+import { checkFilterOps, validateQueryValues } from "./query-validate.ts";
 
 const BASE = defaultQuery(TEST_DEF);
 const STATUS = getField(TEST_DEF, "status")!;
@@ -50,6 +54,8 @@ const WIDE: BaseGridDef = {
   ),
 };
 
+const NOT_OPEN: Filter = { field: "status", op: "none_of", values: ["open"] };
+
 function indexed(def: BaseGridDef, multi: boolean) {
   return withLiteralFilters(def, {
     ...createMemorySource(def, []),
@@ -60,60 +66,93 @@ function indexed(def: BaseGridDef, multi: boolean) {
   }).capabilities;
 }
 
-describe("exclude", () => {
-  test("only a field with a fixed list of values excludes", () => {
-    expect(isExcluding(STATUS, ["!open"])).toBe(true);
-    expect(isExcluding(STATUS, ["!open", "done"])).toBe(false);
-    expect(isExcluding(STATUS, [])).toBe(false);
-    expect(isExcluding(NAME, ["!open"])).toBe(false);
+function listOfferedFields(offers: Offers, op: FilterOp): string[] {
+  return Object.entries(offers.filters)
+    .filter(([, ops]) => ops.some((offer) => offer.op === op && offer.offered))
+    .map(([key]) => key);
+}
+
+describe("none of", () => {
+  test("only a field with a fixed list of values is resolved in the browser", () => {
+    expect(isLiteralOp(STATUS, "none_of")).toBe(true);
+    expect(isLiteralOp(STATUS, "any_of")).toBe(false);
     expect(
-      isExcluding({ ...STATUS, lookup: { labelField: "name" } }, ["!open"]),
+      isLiteralOp(
+        { ...STATUS, type: "boolean", options: undefined },
+        "none_of",
+      ),
+    ).toBe(true);
+    expect(isLiteralOp(NAME, "none_of")).toBe(false);
+    expect(
+      isLiteralOp(
+        {
+          key: "owner",
+          label: "Owner",
+          type: "id",
+          lookup: { labelField: "name" },
+        },
+        "none_of",
+      ),
+    ).toBe(false);
+    expect(
+      isLiteralOp({ key: "tags", label: "Tags", type: "array" }, "none_of"),
     ).toBe(false);
   });
 
-  test("it expands to the remaining values, and to empty on a nullable field", () => {
-    expect(expandEquals(STATUS, ["!open"])).toEqual(["done"]);
-    expect(expandEquals(STATUS, ["open"])).toEqual(["open"]);
-    expect(expandEquals(getField(WIDE, "region")!, ["!north"])).toEqual([
-      "south",
-      "east",
-      EMPTY_VALUE,
-    ]);
+  test("it expands to the remaining values, and to blank on a nullable field", () => {
+    expect(expandNoneOf(STATUS, NOT_OPEN)).toEqual({
+      field: "status",
+      op: "any_of",
+      values: ["done"],
+    });
+    expect(
+      expandNoneOf(getField(WIDE, "region")!, {
+        field: "region",
+        op: "none_of",
+        values: ["north"],
+      }),
+    ).toEqual({
+      field: "region",
+      op: "any_of",
+      values: ["south", "east", null],
+    });
   });
 
   test("it is refused when nothing remains or more than the cap would", () => {
-    expect(canExpandEquals(STATUS, ["!open", "!done"])).toBe(false);
-    expect(canExpandEquals({ ...STATUS, maxValues: 1 }, ["!open"])).toBe(true);
+    const excluding = (values: string[]) =>
+      ({ field: "status", op: "none_of", values }) as const;
+    expect(canExpandNoneOf(STATUS, excluding(["open", "done"]))).toBe(false);
+    expect(canExpandNoneOf({ ...STATUS, maxValues: 1 }, NOT_OPEN)).toBe(true);
     const many = {
       ...STATUS,
       maxValues: 2,
       options: ["a", "b", "c", "d"].map((value) => ({ value, label: value })),
     };
-    expect(canExpandEquals(many, ["!a"])).toBe(false);
-    expect(canExpandEquals(many, ["!a", "!b"])).toBe(true);
+    expect(canExpandNoneOf(many, excluding(["a"]))).toBe(false);
+    expect(canExpandNoneOf(many, excluding(["a", "b"]))).toBe(true);
   });
 
   test("the query keeps the intent, and the resolved query holds plain values", () => {
-    const query: QueryState = { ...BASE, equals: { status: ["!open"] } };
-    expect(toLiteralQuery(TEST_DEF, query, null).equals).toEqual({
-      status: ["done"],
-    });
+    const query: QueryState = { ...BASE, filters: [NOT_OPEN] };
+    expect(toLiteralQuery(TEST_DEF, query, null).filters).toEqual([
+      { field: "status", op: "any_of", values: ["done"] },
+    ]);
     expect(toLiteralQuery(TEST_DEF, BASE, null)).toBe(BASE);
-    expect(validateQueryValues(TEST_DEF, query)).toEqual({
-      code: "invalid_value",
-      params: { field: "status" },
+    expect(checkFilterOps(TEST_DEF, query)).toEqual({
+      code: "literal_required",
+      params: { field: "status", op: "none_of" },
     });
-    expect(
-      validateQueryValues(TEST_DEF, toLiteralQuery(TEST_DEF, query, null)),
-    ).toBeNull();
+    const literal = toLiteralQuery(TEST_DEF, query, null);
+    expect(checkFilterOps(TEST_DEF, literal)).toBeNull();
+    expect(validateQueryValues(TEST_DEF, literal)).toBeNull();
   });
 
   test("the URL keeps the intent and a new option joins the expansion", () => {
-    const query: QueryState = { ...BASE, equals: { status: ["!open"] } };
+    const query: QueryState = { ...BASE, filters: [NOT_OPEN] };
     const params = encodeQuery(TEST_DEF, query);
-    expect(params.getAll("f.status")).toEqual(["!open"]);
+    expect(params.getAll("f.status.none_of")).toEqual(["open"]);
     const decoded = decodeQuery(TEST_DEF, params);
-    expect(decoded.equals).toEqual({ status: ["!open"] });
+    expect(decoded.filters).toEqual([NOT_OPEN]);
     const grown: BaseGridDef = {
       ...TEST_DEF,
       fields: TEST_DEF.fields.map((field) =>
@@ -128,52 +167,52 @@ describe("exclude", () => {
           : field,
       ),
     };
-    expect(toLiteralQuery(grown, decoded, null).equals).toEqual({
-      status: ["done", "held"],
-    });
+    expect(toLiteralQuery(grown, decoded, null).filters).toEqual([
+      { field: "status", op: "any_of", values: ["done", "held"] },
+    ]);
   });
 
   test("it is offered where the remaining values run, and the store keeps the intent", () => {
     const capabilities = indexed(TEST_DEF, true);
     const context = { capabilities, allSearchMatchesLoaded: false };
-    expect(listOffers(TEST_DEF, BASE, context).exclude).toEqual([
-      "status",
-      "region",
-    ]);
     expect(
-      listOffers(WIDE, BASE, {
-        capabilities: indexed(WIDE, false),
-        allSearchMatchesLoaded: false,
-      }).exclude,
+      listOfferedFields(listOffers(TEST_DEF, BASE, context), "none_of"),
+    ).toEqual(["status", "region"]);
+    expect(
+      listOfferedFields(
+        listOffers(WIDE, BASE, {
+          capabilities: indexed(WIDE, false),
+          allSearchMatchesLoaded: false,
+        }),
+        "none_of",
+      ),
     ).toEqual(["status"]);
     const store = createQueryStore(TEST_DEF, capabilities, BASE);
+    store.dispatch({ type: "setFilter", filter: NOT_OPEN });
+    expect(store.getQuery().filters).toEqual([NOT_OPEN]);
     store.dispatch({
-      type: "setEquals",
-      field: "status",
-      values: toExcludeValues(["open"]),
+      type: "setFilter",
+      filter: { field: "status", op: "none_of", values: ["open", "done"] },
     });
-    expect(store.getQuery().equals).toEqual({ status: ["!open"] });
-    store.dispatch({
-      type: "setEquals",
-      field: "status",
-      values: toExcludeValues(["open", "done"]),
-    });
-    expect(store.getQuery().equals).toEqual({ status: ["!open"] });
+    expect(store.getQuery().filters).toEqual([NOT_OPEN]);
   });
 
-  test("the chip names the excluded values and removes one by its token", () => {
-    const [chip] = listFilterChips(TEST_DEF, {
-      ...BASE,
-      equals: { status: ["!open"] },
-    });
+  test("the chip names the excluded values and removes one by its value", () => {
+    const [chip] = listFilterChips(TEST_DEF, { ...BASE, filters: [NOT_OPEN] });
     expect(chip).toMatchObject({
-      kind: "equals",
-      excluded: true,
+      id: "filter:status:none_of",
+      kind: "filter",
+      op: "none_of",
       values: [
         {
           value: "open",
           text: "Open",
-          clear: { type: "removeEqualsValue", field: "status", value: "!open" },
+          clear: {
+            type: "removeFilterValue",
+            field: "status",
+            at: 0,
+            value: "open",
+          },
         },
       ],
     });
@@ -186,7 +225,7 @@ describe("exclude", () => {
     ];
     const source = createMemorySource(TEST_DEF, rows);
     const page = await source.fetchPage(
-      { ...BASE, equals: { status: ["!open"] } },
+      { ...BASE, filters: [NOT_OPEN] },
       10,
       signal,
     );
@@ -205,6 +244,11 @@ describe("date presets", () => {
 
   const local = (iso: string) => new Date(iso);
   const endOf = (afterLast: Date) => afterLast.getTime() - 1;
+  const inPeriod = (field: string, preset: DatePreset): Filter => ({
+    field,
+    op: "in_period",
+    preset,
+  });
 
   test("each preset is whole days where the viewer is, both ends included", () => {
     const today = resolveDatePreset("today", NOW);
@@ -240,41 +284,51 @@ describe("date presets", () => {
     for (const preset of DATE_PRESETS) {
       const query: QueryState = {
         ...BASE,
-        ranges: [{ field: "created_at", min: null, max: null, preset }],
+        filters: [inPeriod("created_at", preset)],
       };
       const params = encodeQuery(TEST_DEF, query);
-      expect(params.get("r.created_at")).toBe(preset);
-      expect(decodeQuery(TEST_DEF, params).ranges).toEqual(query.ranges);
-      const [range] = toLiteralQuery(TEST_DEF, query, NOW).ranges;
-      expect(range).toEqual({
-        field: "created_at",
-        ...resolveDatePreset(preset, NOW),
+      expect(params.get("f.created_at.in_period")).toBe(preset);
+      expect(decodeQuery(TEST_DEF, params).filters).toEqual(query.filters);
+      const literal = toLiteralQuery(TEST_DEF, query, NOW);
+      expect(literal.filters).toEqual([
+        {
+          field: "created_at",
+          op: "between",
+          ...resolveDatePreset(preset, NOW),
+        },
+      ]);
+      expect(checkFilterOps(TEST_DEF, query)).toEqual({
+        code: "literal_required",
+        params: { field: "created_at", op: "in_period" },
       });
-      expect(validateQueryValues(TEST_DEF, query)).not.toBeNull();
-      expect(
-        validateQueryValues(TEST_DEF, toLiteralQuery(TEST_DEF, query, NOW)),
-      ).toBeNull();
+      expect(checkFilterOps(TEST_DEF, literal)).toBeNull();
+      expect(validateQueryValues(TEST_DEF, literal)).toBeNull();
     }
   });
 
-  test("a preset on a field that is no date, or an unknown name, is never resolved", () => {
+  test("an unknown period name is dropped from the URL", () => {
+    expect(
+      decodeQuery(TEST_DEF, new URLSearchParams("f.created_at.in_period=soon"))
+        .filters,
+    ).toEqual([]);
+    expect(
+      decodeQuery(TEST_DEF, new URLSearchParams("f.total.greater_or_equal=5"))
+        .filters,
+    ).toEqual([{ field: "total", op: "greater_or_equal", value: "5" }]);
+  });
+
+  test("a period on a field that is no date is never resolved", () => {
     const onTotal: QueryState = {
       ...BASE,
-      ranges: [{ field: "total", min: null, max: null, preset: "today" }],
+      filters: [inPeriod("total", "today")],
     };
-    expect(toLiteralQuery(TEST_DEF, onTotal, NOW).ranges[0].preset).toBe(
-      "today",
+    expect(toLiteralQuery(TEST_DEF, onTotal, NOW).filters).toEqual(
+      onTotal.filters,
     );
-    const unknown: QueryState = {
-      ...BASE,
-      ranges: [{ field: "created_at", min: null, max: null, preset: "soon" }],
-    };
-    expect(toLiteralQuery(TEST_DEF, unknown, NOW).ranges[0].preset).toBe(
-      "soon",
-    );
-    expect(
-      decodeQuery(TEST_DEF, new URLSearchParams("r.total=5")).ranges,
-    ).toEqual([{ field: "total", min: "5", max: null }]);
+    expect(validateQueryValues(TEST_DEF, onTotal)).toEqual({
+      code: "invalid_op",
+      params: { field: "total", op: "in_period" },
+    });
   });
 
   test("the action sets a preset, the chip carries its name, and the source resolves it at fetch time", async () => {
@@ -290,31 +344,22 @@ describe("date presets", () => {
     const query = applyAction(
       TEST_DEF,
       BASE,
-      {
-        type: "setRange",
-        field: "created_at",
-        min: null,
-        max: null,
-        preset: "last-7-days",
-      },
+      { type: "setFilter", filter: inPeriod("created_at", "last-7-days") },
       context,
     );
-    expect(query.ranges).toEqual([
-      { field: "created_at", min: null, max: null, preset: "last-7-days" },
-    ]);
+    expect(query.filters).toEqual([inPeriod("created_at", "last-7-days")]);
     const chip = listFilterChips(TEST_DEF, query).find(
-      (item) => item.kind === "range",
+      (item) => item.kind === "filter",
     );
-    expect(chip).toMatchObject({ preset: "last-7-days", min: null, max: null });
+    expect(chip).toMatchObject({
+      op: "in_period",
+      preset: "last-7-days",
+      operands: [],
+    });
     const page = await source.fetchPage(query, 10, signal);
     expect(page.rows.map((row) => row.id)).toEqual(["new"]);
     const month = await source.fetchCount(
-      {
-        ...query,
-        ranges: [
-          { field: "created_at", min: null, max: null, preset: "this-month" },
-        ],
-      },
+      { ...query, filters: [inPeriod("created_at", "this-month")] },
       false,
       signal,
     );
@@ -333,100 +378,143 @@ describe("date presets", () => {
     });
     const query: QueryState = {
       ...BASE,
-      equals: { status: ["!open"] },
-      ranges: [{ field: "created_at", min: null, max: null, preset: "today" }],
+      filters: [NOT_OPEN, inPeriod("created_at", "today")],
     };
     await source.fetchPage(query, 10, signal);
     await source.fetchPage({ ...query, cursor: "10" }, 10, signal);
-    expect(seen[0].equals).toBe(seen[1].equals);
-    expect(seen[0].ranges).toBe(seen[1].ranges);
+    expect(seen[0].filters).toBe(seen[1].filters);
+    expect(seen[0].filters.map((filter) => filter.op)).toEqual([
+      "any_of",
+      "between",
+    ]);
     expect(seen[1].cursor).toBe("10");
     await source.fetchPage(BASE, 10, signal);
     expect(seen[2]).toBe(BASE);
   });
 });
 
-describe("several ranges", () => {
+describe("several bound filters", () => {
   const source = createMemorySource(TEST_DEF, []);
   const context = {
     capabilities: source.capabilities,
     allSearchMatchesLoaded: false,
   };
 
-  test("a range is set per field and cleared per field", () => {
+  test("a bound filter is set per field and cleared per field", () => {
     const one = applyAction(
       TEST_DEF,
       BASE,
-      { type: "setRange", field: "total", min: "1", max: "9" },
+      {
+        type: "setFilter",
+        filter: { field: "total", op: "between", min: "1", max: "9" },
+      },
       context,
     );
     const two = applyAction(
       TEST_DEF,
       one,
-      { type: "setRange", field: "number", min: "5", max: null },
+      {
+        type: "setFilter",
+        filter: { field: "number", op: "greater_or_equal", value: "5" },
+      },
       context,
     );
-    expect(two.ranges.map((range) => range.field)).toEqual(["total", "number"]);
+    expect(two.filters.map((filter) => filter.field)).toEqual([
+      "total",
+      "number",
+    ]);
     const replaced = applyAction(
       TEST_DEF,
       two,
-      { type: "setRange", field: "total", min: "2", max: null },
+      {
+        type: "setFilter",
+        filter: { field: "total", op: "greater_or_equal", value: "2" },
+      },
       context,
     );
-    expect(replaced.ranges).toEqual([
-      { field: "number", min: "5", max: null },
-      { field: "total", min: "2", max: null },
+    expect(replaced.filters).toEqual([
+      { field: "total", op: "greater_or_equal", value: "2" },
+      { field: "number", op: "greater_or_equal", value: "5" },
     ]);
     const cleared = applyAction(
       TEST_DEF,
       two,
-      { type: "clearRange", field: "total" },
+      { type: "removeFilter", field: "total" },
       context,
     );
-    expect(cleared.ranges.map((range) => range.field)).toEqual(["number"]);
+    expect(cleared.filters.map((filter) => filter.field)).toEqual(["number"]);
     expect(
-      applyAction(TEST_DEF, two, { type: "clearRange" }, context).ranges,
+      applyAction(
+        TEST_DEF,
+        cleared,
+        { type: "removeFilter", field: "number" },
+        context,
+      ).filters,
     ).toEqual([]);
   });
 
-  test("an index-backed source takes one range, on its sort", () => {
+  test("an index-backed source takes one bound filter, on its sort", () => {
     const capabilities = indexCapabilities(TEST_INDEXES);
     const server = { capabilities, allSearchMatchesLoaded: false };
     const byTotal: QueryState = {
       ...BASE,
       sort: { field: "total", direction: "asc" },
-      ranges: [{ field: "total", min: "1", max: null }],
+      filters: [{ field: "total", op: "greater_or_equal", value: "1" }],
     };
     expect(capabilities.canRun(byTotal)).toBe(true);
     expect(
       capabilities.canRun({
         ...byTotal,
-        ranges: [
-          ...byTotal.ranges,
-          { field: "created_at", min: "2026-01-01", max: null },
+        filters: [
+          ...byTotal.filters,
+          { field: "created_at", op: "greater_or_equal", value: "2026-01-01" },
         ],
       }),
     ).toBe(false);
     const next = applyAction(
       TEST_DEF,
       byTotal,
-      { type: "setRange", field: "total", min: "7", max: null },
+      {
+        type: "setFilter",
+        filter: { field: "total", op: "greater_or_equal", value: "7" },
+      },
       server,
     );
-    expect(next.ranges).toEqual([{ field: "total", min: "7", max: null }]);
+    expect(next.filters).toEqual([
+      { field: "total", op: "greater_or_equal", value: "7" },
+    ]);
   });
 
-  test("the same field takes several ranges, up to the cap", () => {
-    const ranges = [
-      { field: "total", min: "1", max: null },
-      { field: "total", min: null, max: "9", exclude: true },
-    ];
-    expect(validateQueryValues(TEST_DEF, { ...BASE, ranges })).toBeNull();
+  test("the same field takes several filters, up to the cap", () => {
+    const first: Filter = {
+      field: "total",
+      op: "greater_or_equal",
+      value: "1",
+    };
+    const second: Filter = {
+      field: "total",
+      op: "not_between",
+      min: "5",
+      max: "9",
+    };
+    const both = applyAction(
+      TEST_DEF,
+      applyAction(
+        TEST_DEF,
+        BASE,
+        { type: "setFilter", filter: first },
+        context,
+      ),
+      { type: "setFilter", filter: second, at: 1 },
+      context,
+    );
+    expect(both.filters).toEqual([first, second]);
+    expect(validateQueryValues(TEST_DEF, both)).toBeNull();
     expect(
       validateQueryValues(TEST_DEF, {
         ...BASE,
-        ranges: Array.from({ length: 13 }, () => ranges[0]),
+        filters: Array.from({ length: 21 }, () => first),
       }),
-    ).toEqual({ code: "too_many_filters", params: { max: 12 } });
+    ).toEqual({ code: "too_many_filters", params: { max: 20 } });
   });
 });

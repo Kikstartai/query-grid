@@ -1,7 +1,6 @@
 import {
-  listTextFilterFields,
   listFilterFields,
-  resolveFilterKind,
+  resolveFieldKind,
   type BaseGridDef,
   type DataSourceCapabilities,
 } from "@kikstart/query-grid";
@@ -16,7 +15,6 @@ interface SkeletonProps {
 interface SkeletonFiltersProps extends SkeletonProps {
   capabilities: DataSourceCapabilities;
   fields?: string[];
-  texts?: string[];
 }
 
 interface SkeletonControlProps {
@@ -45,10 +43,7 @@ export function SkeletonFilters({
   def,
   capabilities,
   fields,
-  texts,
 }: SkeletonFiltersProps) {
-  const searchable =
-    listTextFilterFields(capabilities, texts ?? fields).length > 0;
   return (
     <div className="skeleton-filters" aria-hidden="true">
       <span className="skeleton skeleton-control" data-kind="search" />
@@ -56,10 +51,9 @@ export function SkeletonFilters({
         <span
           key={field.key}
           className="skeleton skeleton-control"
-          data-kind={resolveFilterKind(field, capabilities)}
+          data-kind={resolveFieldKind(field)}
         />
       ))}
-      <SkeletonControl kind="text" shown={searchable} />
       <SkeletonControl kind="combine" shown={capabilities.combineOr} />
       <span className="skeleton skeleton-control" data-kind="sort" />
     </div>
@@ -117,7 +111,6 @@ export function WorkspaceSkeleton({
   def,
   capabilities,
   fields,
-  texts,
 }: SkeletonFiltersProps) {
   return (
     <>
@@ -133,7 +126,6 @@ export function WorkspaceSkeleton({
           def={def}
           capabilities={capabilities}
           fields={fields}
-          texts={texts}
         />
         <SkeletonChips />
         <div className="workspace-main">

@@ -4,19 +4,21 @@ import {
   type BaseFieldDef,
   type BaseGridDef,
 } from "./grid-def.ts";
+import { isDatePreset } from "./date-presets.ts";
 import {
+  isFieldOp,
+  isFilterOp,
+  isLiteralOp,
+  resolveFieldKind,
+} from "./operators.ts";
+import {
+  FILTER_MAX,
   listSorts,
-  RANGE_FILTER_MAX,
   SORT_MAX,
-  TEXT_FILTER_MAX,
   TEXT_MAX_LENGTH,
-  TEXT_OPS,
+  type Filter,
   type QueryState,
-  type RangeState,
-  type TextState,
 } from "./query-state.ts";
-import { canCombineValues, getReservedValue } from "./field-values.ts";
-import { isOverlapField, isTextField } from "./indexes.ts";
 import type { Problem } from "./problems.ts";
 
 export const SEARCH_MIN_LENGTH = 3;
@@ -99,65 +101,77 @@ function checkValue(
   return isValidValue(field, value) ? null : invalid(key);
 }
 
-function areValidEquals(field: BaseFieldDef, values: string[]): boolean {
-  return (
-    canCombineValues(field, values) &&
-    values.every(
-      (value) =>
-        getReservedValue(field, value) !== null || isValidValue(field, value),
-    )
-  );
+function isValidTextValue(value: string): boolean {
+  const length = value.trim().length;
+  return length > 0 && length <= TEXT_MAX_LENGTH && !value.includes(NUL);
 }
 
-function checkValues(
-  def: BaseGridDef,
-  key: string,
-  values: string[],
-  overlap: boolean,
+function isValidOperand(field: BaseFieldDef, value: string): boolean {
+  return resolveFieldKind(field) === "text"
+    ? isValidTextValue(value)
+    : isValidValue(field, value);
+}
+
+function checkList(
+  field: BaseFieldDef,
+  values: (string | null)[],
 ): Problem | null {
-  const field = getField(def, key);
-  if (!field) {
-    return unknown(key);
-  }
-  if (values.length === 0 || isOverlapField(field) !== overlap) {
-    return invalid(key);
+  if (values.length === 0) {
+    return invalid(field.key);
   }
   const max = resolveMaxValues(field);
   if (values.length > max) {
-    return { code: "too_many_values", params: { field: key, max } };
+    return { code: "too_many_values", params: { field: field.key, max } };
   }
-  const valid = overlap
-    ? values.every(isValidText)
-    : areValidEquals(field, values);
-  return valid ? null : invalid(key);
+  const valid = values.every((value) =>
+    value === null ? field.nullable === true : isValidValue(field, value),
+  );
+  return valid ? null : invalid(field.key);
 }
 
-function checkRange(def: BaseGridDef, range: RangeState): Problem | null {
-  const unbounded = range.min === null && range.max === null;
-  if (range.preset !== undefined || (range.exclude && unbounded)) {
-    return invalid(range.field);
+function checkOperands(field: BaseFieldDef, filter: Filter): Problem | null {
+  if ("values" in filter) {
+    return checkList(field, filter.values);
   }
-  for (const bound of [range.min, range.max]) {
-    const problem = bound === null ? null : checkValue(def, range.field, bound);
-    if (problem) {
-      return problem;
+  if ("value" in filter) {
+    return isValidOperand(field, filter.value) ? null : invalid(field.key);
+  }
+  if ("min" in filter) {
+    const valid =
+      isValidOperand(field, filter.min) && isValidOperand(field, filter.max);
+    return valid ? null : invalid(field.key);
+  }
+  if ("preset" in filter) {
+    return isDatePreset(filter.preset) ? null : invalid(field.key);
+  }
+  return null;
+}
+
+function opProblem(code: string, filter: Filter): Problem {
+  return { code, params: { field: filter.field, op: filter.op } };
+}
+
+// What a field takes is fixed by its type, so an operator outside it is refused before any index is asked, and an operator only the browser resolves is refused by name.
+export function checkFilterOps(
+  def: BaseGridDef,
+  query: QueryState,
+): Problem | null {
+  if (query.filters.length > FILTER_MAX) {
+    return { code: "too_many_filters", params: { max: FILTER_MAX } };
+  }
+  for (const filter of query.filters) {
+    const field = getField(def, filter.field);
+    if (!field) {
+      continue;
+    }
+    if (!isFilterOp(filter.op) || !isFieldOp(field, filter.op)) {
+      return opProblem("invalid_op", filter);
+    }
+    if (isLiteralOp(field, filter.op)) {
+      return opProblem("literal_required", filter);
     }
   }
-  return getField(def, range.field) ? null : unknown(range.field);
-}
-
-function checkText(def: BaseGridDef, text: TextState): Problem | null {
-  const target = getField(def, text.field);
-  if (!target) {
-    return unknown(text.field);
-  }
-  const length = text.value.trim().length;
-  const valid =
-    isTextField(target) &&
-    TEXT_OPS.includes(text.op) &&
-    length > 0 &&
-    length <= TEXT_MAX_LENGTH;
-  return valid ? null : invalid(text.field);
+  return null;
 }
 
 function getFirstProblem<T>(
@@ -186,26 +200,22 @@ export function isValidSearchValue(value: string): boolean {
   return length >= SEARCH_MIN_LENGTH && length <= SEARCH_MAX_LENGTH;
 }
 
+function checkFilter(def: BaseGridDef, filter: Filter): Problem | null {
+  const field = getField(def, filter.field);
+  if (!field) {
+    return unknown(filter.field);
+  }
+  if (!isFilterOp(filter.op) || !isFieldOp(field, filter.op)) {
+    return opProblem("invalid_op", filter);
+  }
+  return checkOperands(field, filter);
+}
+
 function checkFilters(def: BaseGridDef, query: QueryState): Problem | null {
-  if (query.ranges.length > RANGE_FILTER_MAX) {
-    return {
-      code: "too_many_filters",
-      params: { max: RANGE_FILTER_MAX },
-    };
+  if (query.filters.length > FILTER_MAX) {
+    return { code: "too_many_filters", params: { max: FILTER_MAX } };
   }
-  if (query.texts.length > TEXT_FILTER_MAX) {
-    return { code: "too_many_filters", params: { max: TEXT_FILTER_MAX } };
-  }
-  return (
-    getFirstProblem(Object.entries(query.equals), ([key, values]) =>
-      checkValues(def, key, values, false),
-    ) ??
-    getFirstProblem(Object.entries(query.overlaps), ([key, values]) =>
-      checkValues(def, key, values, true),
-    ) ??
-    getFirstProblem(query.ranges, (range) => checkRange(def, range)) ??
-    getFirstProblem(query.texts, (text) => checkText(def, text))
-  );
+  return getFirstProblem(query.filters, (filter) => checkFilter(def, filter));
 }
 
 function checkSorts(def: BaseGridDef, query: QueryState): Problem | null {

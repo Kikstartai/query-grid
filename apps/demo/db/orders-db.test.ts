@@ -3,10 +3,10 @@ import { Client } from "pg";
 
 import {
   DEFAULT_LIMITS,
+  BLANK_GROUP,
   defaultQuery,
-  EMPTY_VALUE,
   getGroupQuery,
-  NOT_EMPTY_VALUE,
+  type Filter,
   type GridRow,
   type QueryState,
   type TotalResult,
@@ -63,6 +63,18 @@ async function readGrouped(): Promise<Record<string, Counter>> {
   return Object.fromEntries(
     rows.map(({ status_code, ...counter }) => [status_code, counter]),
   );
+}
+
+function anyOf(field: string, ...values: string[]): Filter {
+  return { field, op: "any_of", values };
+}
+
+function since(days: number): Filter {
+  return {
+    field: "created_at",
+    op: "greater_or_equal",
+    value: new Date(Date.now() - days * 86_400_000).toISOString(),
+  };
 }
 
 function withoutEmpty(counters: Record<string, Counter>) {
@@ -122,11 +134,8 @@ describe("keyset paging", () => {
       for (const direction of ["asc", "desc"] as const) {
         const query: QueryState = {
           ...defaultQuery(ORDERS_GRID_DEF),
-          equals: Object.fromEntries(
-            Object.entries(sample.rows[0]).map(([key, value]) => [
-              key,
-              [value],
-            ]),
+          filters: Object.entries(sample.rows[0]).map(([field, value]) =>
+            anyOf(field, value),
           ),
           sort: { field: index.sort, direction },
           thenBy: index.then?.map((field) => ({ field, direction })),
@@ -151,7 +160,7 @@ describe("keyset paging", () => {
   test("an unindexed query never reaches the database", () => {
     const query: QueryState = {
       ...defaultQuery(ORDERS_GRID_DEF),
-      equals: { channel: ["web"] },
+      filters: [anyOf("channel", "web")],
       sort: { field: "total", direction: "desc" },
     };
     expect(() => buildPageSql(ORDERS_GRID_DEF, query, 50)).toThrow(
@@ -182,13 +191,14 @@ describe("search", () => {
 });
 
 describe("search with equality filters", () => {
-  const searching = (
-    search: string,
-    equals: QueryState["equals"],
-  ): QueryState => ({ ...defaultQuery(ORDERS_GRID_DEF), search, equals });
+  const searching = (search: string, filters: Filter[]): QueryState => ({
+    ...defaultQuery(ORDERS_GRID_DEF),
+    search,
+    filters,
+  });
 
   test("the filters narrow the matches, and the count is the live count under the limit", async () => {
-    const query = searching("mokoena", { status_code: ["failed"] });
+    const query = searching("mokoena", [anyOf("status_code", "failed")]);
     const page = await listPage(query, 50);
     expect(page.rows.length).toBeGreaterThan(0);
     expect(page.hasNext).toBe(false);
@@ -210,7 +220,7 @@ describe("search with equality filters", () => {
 
   test("several values, an empty value and two fields no index pairs all combine with the search", async () => {
     const several = await listPage(
-      searching("smith", { status_code: ["paid", "pending"] }),
+      searching("smith", [anyOf("status_code", "paid", "pending")]),
       50,
     );
     expect(several.rows.length).toBeGreaterThan(0);
@@ -218,13 +228,13 @@ describe("search with equality filters", () => {
       expect(["paid", "pending"]).toContain(String(row.status_code));
     }
     const unassigned = await listPage(
-      searching("smith", { assignee: [EMPTY_VALUE] }),
+      searching("smith", [{ field: "assignee", op: "blank" }]),
       50,
     );
     expect(unassigned.rows.length).toBeGreaterThan(0);
     expect(unassigned.rows.every((row) => row.assignee === null)).toBe(true);
     const paired = await listPage(
-      searching("smith", { region: ["gauteng"], channel: ["web"] }),
+      searching("smith", [anyOf("region", "gauteng"), anyOf("channel", "web")]),
       50,
     );
     expect(paired.rows.length).toBeGreaterThan(0);
@@ -235,7 +245,7 @@ describe("search with equality filters", () => {
 
   test("a search over the limit is capped and unordered, with or without a filter", async () => {
     const page = await listPage(
-      searching("mok", { status_code: ["completed"] }),
+      searching("mok", [anyOf("status_code", "completed")]),
       50,
     );
     expect(page.rows).toHaveLength(500);
@@ -243,7 +253,7 @@ describe("search with equality filters", () => {
     const totals = await listGridTotals(
       ORDERS_GRID_DEF,
       execute,
-      searching("mok", { status_code: ["completed"] }),
+      searching("mok", [anyOf("status_code", "completed")]),
     );
     expect(totals.every((total) => !total.available)).toBe(true);
   }, 60_000);
@@ -253,8 +263,13 @@ describe("search with equality filters", () => {
       buildPageSql(
         ORDERS_GRID_DEF,
         {
-          ...searching("smith", {}),
-          ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
+          ...searching("smith", [
+            {
+              field: "created_at",
+              op: "greater_or_equal",
+              value: "2026-01-01",
+            },
+          ]),
         },
         50,
       ),
@@ -264,7 +279,10 @@ describe("search with equality filters", () => {
 
 describe("the narrowed-set tier", () => {
   const base = defaultQuery(ORDERS_GRID_DEF);
-  const failed: QueryState = { ...base, equals: { status_code: ["failed"] } };
+  const failed: QueryState = {
+    ...base,
+    filters: [anyOf("status_code", "failed")],
+  };
 
   async function countWhere(where: string): Promise<number> {
     const { rows } = await client.query<{ rows: number }>(
@@ -276,11 +294,12 @@ describe("the narrowed-set tier", () => {
   test("a range off the sort, a second range and a contains filter the narrowed rows", async () => {
     const query: QueryState = {
       ...failed,
-      ranges: [
-        { field: "total", min: "20000", max: "90000" },
-        { field: "item_count", min: "2", max: null },
+      filters: [
+        ...failed.filters,
+        { field: "total", op: "between", min: "20000", max: "90000" },
+        { field: "item_count", op: "greater_or_equal", value: "2" },
+        { field: "note", op: "contains", value: "GIFT" },
       ],
-      texts: [{ field: "note", op: "contains", value: "GIFT" }],
     };
     const page = await listGridPage(ORDERS_GRID_DEF, execute, query, 200);
     expect(page.rows.length).toBeGreaterThan(0);
@@ -308,7 +327,7 @@ describe("the narrowed-set tier", () => {
     const query: QueryState = {
       ...base,
       combine: "or",
-      equals: { status_code: ["failed"], channel: ["phone"] },
+      filters: [anyOf("status_code", "failed"), anyOf("channel", "phone")],
     };
     const first = await listGridPage(ORDERS_GRID_DEF, execute, query, 100);
     const second = await listGridPage(
@@ -335,7 +354,7 @@ describe("the narrowed-set tier", () => {
   test("the sizes are the core's count and the sum of the terms", async () => {
     const sizes = await getNarrowedSizes(ORDERS_GRID_DEF, execute, {
       ...base,
-      equals: { status_code: ["failed"], channel: ["phone"] },
+      filters: [anyOf("status_code", "failed"), anyOf("channel", "phone")],
     });
     const failedRows = await countWhere("status_code = 'failed'");
     const phoneRows = await countWhere("channel = 'phone'");
@@ -368,13 +387,19 @@ describe("the narrowed-set tier", () => {
     const cases: QueryState[] = [
       {
         ...base,
-        texts: [{ field: "note", op: "contains", value: "fragile" }],
+        filters: [{ field: "note", op: "contains", value: "fragile" }],
       },
-      { ...base, ranges: [{ field: "total", min: "20000", max: null }] },
+      {
+        ...base,
+        filters: [{ field: "total", op: "greater_or_equal", value: "20000" }],
+      },
       {
         ...base,
         combine: "or",
-        equals: { status_code: ["completed"], region: ["gauteng"] },
+        filters: [
+          anyOf("status_code", "completed"),
+          anyOf("region", "gauteng"),
+        ],
       },
     ];
     for (const query of cases) {
@@ -396,8 +421,10 @@ describe("the narrowed-set tier", () => {
   test("a host that raises the limit runs the same query", async () => {
     const query: QueryState = {
       ...base,
-      equals: { status_code: ["completed"] },
-      texts: [{ field: "note", op: "contains", value: "fragile" }],
+      filters: [
+        anyOf("status_code", "completed"),
+        { field: "note", op: "contains", value: "fragile" },
+      ],
     };
     let refusal: unknown = null;
     try {
@@ -462,7 +489,7 @@ describe("grouping", () => {
     const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
       ...base,
       group: "status_code",
-      equals: { region: ["windhoek"] },
+      filters: [anyOf("region", "windhoek")],
     });
     expect(result.source).toBe("capped");
     const real = await groupWhere("status_code", "region = 'windhoek'");
@@ -479,13 +506,7 @@ describe("grouping", () => {
     const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
       ...base,
       group: "assignee",
-      ranges: [
-        {
-          field: "created_at",
-          min: new Date(Date.now() - 30 * 86_400_000).toISOString(),
-          max: null,
-        },
-      ],
+      filters: [since(30)],
     });
     expect(result).toMatchObject({ source: "live", truncated: false });
     const real = await groupWhere(
@@ -493,7 +514,7 @@ describe("grouping", () => {
       "created_at >= now() - interval '30 days'",
     );
     expect(result.groups).toHaveLength(real.length);
-    const empty = result.groups.find((group) => group.value === EMPTY_VALUE)!;
+    const empty = result.groups.find((group) => group.value === BLANK_GROUP)!;
     const realEmpty = real.find((row) => row.value === null)!;
     expect(Math.abs(empty.count - realEmpty.rows)).toBeLessThan(50);
     expect(empty.sums).not.toBeNull();
@@ -505,13 +526,7 @@ describe("grouping", () => {
     const result = await listGridGroups(ORDERS_GRID_DEF, execute, {
       ...base,
       group: "customer_id",
-      ranges: [
-        {
-          field: "created_at",
-          min: new Date(Date.now() - 10 * 86_400_000).toISOString(),
-          max: null,
-        },
-      ],
+      filters: [since(10)],
     });
     expect(result.source).toBe("live");
     expect(result.groups.length).toBeGreaterThan(0);
@@ -542,7 +557,7 @@ describe("grouping", () => {
     const query: QueryState = {
       ...base,
       group: "region",
-      equals: { status_code: ["failed"] },
+      filters: [anyOf("status_code", "failed")],
     };
     const headers = await listGridGroups(ORDERS_GRID_DEF, execute, query);
     const [largest] = headers.groups;
@@ -688,7 +703,7 @@ describe("totals", () => {
   test("a status grouping is a one-row read of the counter table, for every total", async () => {
     const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
-      equals: { status_code: ["failed"] },
+      filters: [anyOf("status_code", "failed")],
     });
     const real = await client.query<Counter>(
       `SELECT ${SUMS} FROM orders WHERE status_code = 'failed'`,
@@ -703,7 +718,7 @@ describe("totals", () => {
     const id = customer.rows[0].customer_id;
     const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
-      equals: { customer_id: [id] },
+      filters: [anyOf("customer_id", id)],
     });
     const real = await client.query<Counter>(
       `SELECT ${SUMS} FROM orders WHERE customer_id = $1`,
@@ -715,7 +730,7 @@ describe("totals", () => {
   test("a result over the cap has no total for any field, each with the reason", async () => {
     const totals = await listGridTotals(ORDERS_GRID_DEF, execute, {
       ...base,
-      equals: { channel: ["web"] },
+      filters: [anyOf("channel", "web")],
     });
     const refused = { code: "over_cap", params: { cap: 10000 } };
     expect(totals).toEqual([
@@ -731,7 +746,7 @@ describe("several values of one field", () => {
   test("a page under ANY holds exactly the rows of those values, in keyset order", async () => {
     const query: QueryState = {
       ...base,
-      equals: { status_code: ["failed", "refunded"] },
+      filters: [anyOf("status_code", "failed", "refunded")],
     };
     const first = await listPage(query, 100);
     const second = await listPage({ ...query, cursor: first.nextCursor }, 100);
@@ -748,7 +763,7 @@ describe("several values of one field", () => {
   test("several facet values count and total as the sum of their counters", async () => {
     const query: QueryState = {
       ...base,
-      equals: { status_code: ["failed", "refunded"] },
+      filters: [anyOf("status_code", "failed", "refunded")],
     };
     const real = await client.query<Counter>(
       `SELECT ${SUMS} FROM orders WHERE status_code IN ('failed', 'refunded')`,
@@ -768,7 +783,10 @@ describe("several values of one field", () => {
       "SELECT DISTINCT customer_id FROM (SELECT customer_id FROM orders LIMIT 500) sample LIMIT 3",
     );
     const ids = customers.rows.map((row) => row.customer_id);
-    const query: QueryState = { ...base, equals: { customer_id: ids } };
+    const query: QueryState = {
+      ...base,
+      filters: [anyOf("customer_id", ...ids)],
+    };
     const sql = buildPageSql(ORDERS_GRID_DEF, query, 50);
     expect(sql.values).toEqual([ids]);
     const page = await listPage(query, 50);
@@ -790,7 +808,10 @@ describe("several values of one field", () => {
       (_, index) =>
         `00000000-0000-7000-8000-${String(index).padStart(12, "0")}`,
     );
-    const query: QueryState = { ...base, equals: { customer_id: ids } };
+    const query: QueryState = {
+      ...base,
+      filters: [anyOf("customer_id", ...ids)],
+    };
     let refusal: unknown = null;
     try {
       buildPageSql(ORDERS_GRID_DEF, query, 50);
@@ -804,11 +825,13 @@ describe("several values of one field", () => {
   });
 });
 
-describe("empty values", () => {
-  const withAssignee = (...values: string[]): QueryState => ({
+describe("blank values", () => {
+  const withAssignee = (...filters: Filter[]): QueryState => ({
     ...defaultQuery(ORDERS_GRID_DEF),
-    equals: { assignee: values },
+    filters,
   });
+  const blank: Filter = { field: "assignee", op: "blank" };
+  const notBlank: Filter = { field: "assignee", op: "not_blank" };
 
   async function countWhere(where: string): Promise<number> {
     const { rows } = await client.query<{ rows: number }>(
@@ -817,12 +840,12 @@ describe("empty values", () => {
     return rows[0].rows;
   }
 
-  test("empty reads only the rows with no value, in keyset order", async () => {
-    const page = await listPage(withAssignee(EMPTY_VALUE), 50);
+  test("blank reads only the rows with no value, in keyset order", async () => {
+    const page = await listPage(withAssignee(blank), 50);
     expect(page.rows).toHaveLength(50);
     expect(page.rows.every((row) => row.assignee === null)).toBe(true);
     const next = await listPage(
-      { ...withAssignee(EMPTY_VALUE), cursor: page.nextCursor },
+      { ...withAssignee(blank), cursor: page.nextCursor },
       50,
     );
     expect(
@@ -830,31 +853,35 @@ describe("empty values", () => {
     ).toBe(true);
   });
 
-  test("not empty reads only the rows with a value", async () => {
-    const page = await listPage(withAssignee(NOT_EMPTY_VALUE), 50);
+  test("not blank reads only the rows with a value", async () => {
+    const page = await listPage(withAssignee(notBlank), 50);
     expect(page.rows).toHaveLength(50);
     expect(page.rows.every((row) => row.assignee !== null)).toBe(true);
   });
 
-  test("empty and not empty count every row between them", async () => {
+  test("blank and not blank count every row between them", async () => {
     const empty = await getGridCount(
       ORDERS_GRID_DEF,
       execute,
-      withAssignee(EMPTY_VALUE),
+      withAssignee(blank),
       true,
     );
     const filled = await getGridCount(
       ORDERS_GRID_DEF,
       execute,
-      withAssignee(NOT_EMPTY_VALUE),
+      withAssignee(notBlank),
       true,
     );
     expect(empty.count).toBe(await countWhere("assignee IS NULL"));
     expect(empty.count + filled.count).toBe(await countWhere("true"));
   }, 60_000);
 
-  test("empty beside a real value is the union of the two", async () => {
-    const query = withAssignee(EMPTY_VALUE, "wanjiru");
+  test("blank beside a real value is the union of the two", async () => {
+    const query = withAssignee({
+      field: "assignee",
+      op: "any_of",
+      values: [null, "wanjiru"],
+    });
     const page = await listPage(query, 200);
     expect(
       page.rows.every(
@@ -867,9 +894,174 @@ describe("empty values", () => {
     );
   }, 60_000);
 
-  test("not empty beside a value never reaches the database", () => {
-    expect(() =>
-      buildPageSql(ORDERS_GRID_DEF, withAssignee(NOT_EMPTY_VALUE, "glen"), 50),
-    ).toThrow(QueryRejected);
+  test("not blank beside a value on the same field is their intersection", async () => {
+    const query = withAssignee(notBlank, anyOf("assignee", "wanjiru"));
+    const page = await listPage(query, 50);
+    expect(page.rows).toHaveLength(50);
+    expect(page.rows.every((row) => row.assignee === "wanjiru")).toBe(true);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, true);
+    expect(count.count).toBe(await countWhere("assignee = 'wanjiru'"));
+  }, 60_000);
+});
+
+describe("narrowed operators", () => {
+  const base = defaultQuery(ORDERS_GRID_DEF);
+  const failed = anyOf("status_code", "failed");
+
+  async function countWhere(
+    where: string,
+    values: unknown[] = [],
+  ): Promise<number> {
+    const { rows } = await client.query<{ rows: number }>(
+      `SELECT count(*)::float8 AS rows FROM orders WHERE ${where}`,
+      values,
+    );
+    return rows[0].rows;
+  }
+
+  async function getRefusal(query: QueryState): Promise<unknown> {
+    try {
+      await listGridPage(ORDERS_GRID_DEF, execute, query, 50);
+    } catch (error) {
+      return error;
+    }
+    return null;
+  }
+
+  async function expectNarrowed(
+    filter: Filter,
+    where: string,
+    values: unknown[] = [],
+  ): Promise<GridRow[]> {
+    expect(await getRefusal({ ...base, filters: [filter] })).toMatchObject({
+      code: "narrow_first",
+      params: { limit: DEFAULT_LIMITS.narrowLimit },
+    });
+    const query: QueryState = { ...base, filters: [failed, filter] };
+    const page = await listGridPage(ORDERS_GRID_DEF, execute, query, 500);
+    const real = await countWhere(
+      `status_code = 'failed' AND (${where})`,
+      values,
+    );
+    expect(real).toBeGreaterThan(0);
+    expect(page.rows).toHaveLength(Math.min(real, 500));
+    expect(page.rows.every((row) => row.status_code === "failed")).toBe(true);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, true);
+    expect(count.count).toBe(real);
+    return page.rows;
+  }
+
+  test("note blank is narrowed: refused alone, answered beside a status", async () => {
+    const rows = await expectNarrowed(
+      { field: "note", op: "blank" },
+      "note IS NULL",
+    );
+    expect(rows.every((row) => row.note === null)).toBe(true);
+  }, 60_000);
+
+  test("note not blank is narrowed: refused alone, answered beside a status", async () => {
+    const rows = await expectNarrowed(
+      { field: "note", op: "not_blank" },
+      "note IS NOT NULL",
+    );
+    expect(rows.every((row) => row.note !== null)).toBe(true);
+  }, 60_000);
+
+  test("assignee blank is answered by its index, over the narrowed limit", async () => {
+    const query: QueryState = {
+      ...base,
+      filters: [{ field: "assignee", op: "blank" }],
+    };
+    const real = await countWhere("assignee IS NULL");
+    expect(real).toBeGreaterThan(DEFAULT_LIMITS.narrowLimit);
+    const page = await listGridPage(ORDERS_GRID_DEF, execute, query, 50);
+    expect(page.rows).toHaveLength(50);
+    expect(page.rows.every((row) => row.assignee === null)).toBe(true);
+    const count = await getGridCount(ORDERS_GRID_DEF, execute, query, true);
+    expect(count.count).toBe(real);
+  }, 60_000);
+
+  test("customer_id none of is narrowed: refused alone, answered beside a status", async () => {
+    const sample = await client.query<{ customer_id: string }>(
+      "SELECT customer_id FROM orders WHERE status_code = 'failed' GROUP BY customer_id ORDER BY count(*) DESC LIMIT 2",
+    );
+    const ids = sample.rows.map((row) => row.customer_id);
+    const rows = await expectNarrowed(
+      { field: "customer_id", op: "none_of", values: ids },
+      "customer_id <> ALL($1::uuid[])",
+      [ids],
+    );
+    expect(rows.every((row) => !ids.includes(String(row.customer_id)))).toBe(
+      true,
+    );
+  }, 60_000);
+
+  test("customer_name equals is narrowed: refused alone, answered beside a status", async () => {
+    const rows = await expectNarrowed(
+      { field: "customer_name", op: "equals", value: "Olivia Mokobo" },
+      "customer_name = 'Olivia Mokobo'",
+    );
+    expect(rows.every((row) => row.customer_name === "Olivia Mokobo")).toBe(
+      true,
+    );
+  }, 60_000);
+
+  test("a literal-only operation never reaches the server", async () => {
+    const seen: string[] = [];
+    const recording: SqlExecutor = async <T extends object>(sql: SqlQuery) => {
+      seen.push(sql.text);
+      return execute<T>(sql);
+    };
+    const cases: [Filter, string][] = [
+      [
+        { field: "status_code", op: "none_of", values: ["failed"] },
+        "status_code",
+      ],
+      [
+        { field: "created_at", op: "in_period", preset: "last-7-days" },
+        "created_at",
+      ],
+    ];
+    for (const [filter, field] of cases) {
+      let refusal: unknown = null;
+      try {
+        await listGridPage(
+          ORDERS_GRID_DEF,
+          recording,
+          { ...base, filters: [filter] },
+          50,
+        );
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal).toBeInstanceOf(QueryRejected);
+      expect(refusal).toMatchObject({
+        error: "invalid_value",
+        code: "literal_required",
+        params: { field, op: filter.op },
+      });
+    }
+    expect(seen).toEqual([]);
+  });
+
+  test("an operator the field does not take is refused", () => {
+    const cases: Filter[] = [
+      { field: "status_code", op: "contains", value: "fail" },
+      { field: "customer_name", op: "blank" },
+      { field: "total", op: "any_of", values: ["5"] },
+    ];
+    for (const filter of cases) {
+      let refusal: unknown = null;
+      try {
+        buildPageSql(ORDERS_GRID_DEF, { ...base, filters: [filter] }, 50);
+      } catch (error) {
+        refusal = error;
+      }
+      expect(refusal).toMatchObject({
+        error: "invalid_value",
+        code: "invalid_op",
+        params: { field: filter.field, op: filter.op },
+      });
+    }
   });
 });

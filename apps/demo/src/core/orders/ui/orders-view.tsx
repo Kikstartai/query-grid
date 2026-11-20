@@ -10,20 +10,16 @@ import {
 
 import { DemoGrid } from "@/lib/demo-grid";
 
-import {
-  ORDER_BAR_FIELDS,
-  ORDER_TEXT_FIELDS,
-  ORDERS_GRID_DEF,
-} from "../orders-grid-def";
+import { ORDER_BAR_FIELDS, ORDERS_GRID_DEF } from "../orders-grid-def";
 
 const BOARD_DETAIL_FIELDS = ["customer_name", "total", "created_at"];
 
 export function OrdersFilterBar() {
-  return <FilterBar fields={ORDER_BAR_FIELDS} texts={ORDER_TEXT_FIELDS} />;
+  return <FilterBar fields={ORDER_BAR_FIELDS} />;
 }
 
 export function OrdersFilterSidebar() {
-  return <FilterSidebar texts={ORDER_TEXT_FIELDS} />;
+  return <FilterSidebar />;
 }
 
 export function OrdersCardList() {

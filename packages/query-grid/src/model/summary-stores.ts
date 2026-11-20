@@ -12,7 +12,6 @@ import type {
   NarrowedState,
   DataSourceCapabilities,
 } from "./capabilities.ts";
-import { getReservedValue } from "./field-values.ts";
 import { labelKey } from "./format.ts";
 import type { GridLimits } from "./limits.ts";
 import {
@@ -188,12 +187,14 @@ export function createLabelStore(
     }
   };
   const requestSelected = () => {
-    for (const [key, values] of Object.entries(store.getQuery().equals)) {
-      const field = getField(store.def, key);
-      if (field && !hasFixedValues(field)) {
-        values
-          .filter((value) => getReservedValue(field, value) === null)
-          .forEach((value) => request(key, value));
+    for (const filter of store.getQuery().filters) {
+      const field = getField(store.def, filter.field);
+      if (field && !hasFixedValues(field) && "values" in filter) {
+        for (const value of filter.values) {
+          if (value !== null) {
+            request(filter.field, value);
+          }
+        }
       }
     }
   };

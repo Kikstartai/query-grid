@@ -2,29 +2,30 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { DATE_PRESETS } from "./date-presets.ts";
-import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 import {
   getField,
-  isDateType,
   type BaseFieldDef,
   type BaseGridDef,
   type SortState,
 } from "./grid-def.ts";
 import { TEST_DEF } from "./grid-def.fixture.ts";
-import { memoryCapabilities } from "./memory-source.ts";
+import { createMemorySource } from "./memory-source.ts";
 import { toLiteralQuery } from "./literal-filters.ts";
-import { defaultQuery } from "./query-actions.ts";
-import { toRange } from "./range-bounds.ts";
 import {
-  RANGE_FILTER_MAX,
+  FILTER_OPS,
+  getOperatorShape,
+  listFixedValues,
+  resolveFieldKind,
+  type FilterOp,
+} from "./operators.ts";
+import { defaultQuery } from "./query-actions.ts";
+import {
+  FILTER_MAX,
   SORT_MAX,
-  TEXT_FILTER_MAX,
   TEXT_MAX_LENGTH,
-  TEXT_OPS,
   withThenBy,
+  type Filter,
   type QueryState,
-  type RangeState,
-  type TextState,
 } from "./query-state.ts";
 import { normalizeQuery } from "./query-store.ts";
 import { decodeQuery, encodeQuery, listQueryKeys } from "./query-url.ts";
@@ -55,24 +56,14 @@ const DEF: BaseGridDef = {
     { key: "tags", label: "Tags", type: "array" },
   ],
 };
-const CAPABILITIES = memoryCapabilities(DEF);
+const CAPABILITIES = createMemorySource(DEF, []).capabilities;
 const FC_RUNS = Number(process.env.FC_RUNS) || 0;
 const PARAMS = FC_RUNS > 0 ? { numRuns: FC_RUNS } : {};
 const TIMEOUT = FC_RUNS > 0 ? 600_000 : 5_000;
 const SEPARATORS = ["..", "!", "(", ")", ",", ".", "&", "=", "+", "%", " "];
 const KEY_NAMES = ["q", "sort", "match", "group", "cursor"];
-const PREFIXES = ["f.", "o.", "r.", "c.", "nc.", "sw.", "ew.", "ne."];
-
-function listFields(keys: string[]): BaseFieldDef[] {
-  return keys.flatMap((key) => getField(DEF, key) ?? []);
-}
-
-function sometimes<T>(arbitrary: fc.Arbitrary<T>): fc.Arbitrary<T | null> {
-  return fc.oneof(
-    { weight: 3, arbitrary: fc.constant(null) },
-    { weight: 1, arbitrary },
-  );
-}
+const OLD_PREFIXES = ["f.", "o.", "r.", "c.", "nc.", "sw.", "ew.", "ne."];
+const BLANK_TOKEN = "_empty";
 
 const unit = fc.oneof(
   fc.constantFrom(...SEPARATORS),
@@ -108,96 +99,84 @@ function listBoundValues(field: BaseFieldDef): fc.Arbitrary<string> {
   }
 }
 
-function listEqualsValues(field: BaseFieldDef): fc.Arbitrary<string[]> {
-  const reserved = field.nullable
-    ? [
-        fc.constant<string[]>([NOT_EMPTY_VALUE]),
-        fc.constant<string[]>([EMPTY_VALUE]),
-      ]
-    : [];
-  if (field.options) {
-    const values = field.options.map((option) => option.value);
-    const picked = fc.subarray(values, { minLength: 1 });
-    return fc.oneof(
-      picked,
-      picked.map((items) => items.map((value) => `!${value}`)),
-      ...reserved,
-    );
-  }
-  if (field.type === "boolean") {
-    return fc.subarray(["true", "false"], { minLength: 1 });
-  }
-  if (field.type === "id") {
-    return fc.uniqueArray(fc.uuid(), { minLength: 1, maxLength: 3 });
-  }
-  const values = fc.uniqueArray(
-    text.filter((value) => value.length > 0),
-    { minLength: 1, maxLength: 4 },
-  );
-  return fc.oneof(values, ...reserved);
-}
-
-function toRecord(
-  entries: [string, string[] | null][],
-): Record<string, string[]> {
-  return Object.fromEntries(
-    entries.filter((entry): entry is [string, string[]] => entry[1] !== null),
-  );
-}
-
-function listRecord(
-  keys: string[],
-  values: (field: BaseFieldDef) => fc.Arbitrary<string[]>,
-): fc.Arbitrary<Record<string, string[]>> {
-  return fc
-    .tuple(
-      ...listFields(keys).map((field) =>
-        sometimes(values(field)).map((picked): [string, string[] | null] => [
-          field.key,
-          picked,
-        ]),
-      ),
-    )
-    .map(toRecord);
-}
-
-function listRange(field: BaseFieldDef): fc.Arbitrary<RangeState> {
-  const bound = fc.option(listBoundValues(field));
-  const bounded = fc
-    .record({
-      min: bound,
-      max: bound,
-      exclude: fc.boolean(),
-      minExclusive: fc.boolean(),
-      maxExclusive: fc.boolean(),
-    })
-    .map((input) =>
-      toRange(field.key, {
-        ...input,
-        exclude: input.exclude && (input.min !== null || input.max !== null),
-      }),
-    );
-  if (!isDateType(field.type)) {
-    return bounded;
-  }
-  return fc.oneof(
-    bounded,
-    fc
-      .constantFrom(...DATE_PRESETS)
-      .map((preset) => toRange(field.key, { min: null, max: null, preset })),
-  );
-}
-
 const textValue = text.filter((value) => {
   const length = value.trim().length;
   return length > 0 && length <= TEXT_MAX_LENGTH;
 });
 
-const arbitraryText: fc.Arbitrary<TextState> = fc.record({
-  field: fc.constantFrom(...CAPABILITIES.textFields),
-  op: fc.constantFrom(...TEXT_OPS),
-  value: textValue,
-});
+function listOperandValues(field: BaseFieldDef): fc.Arbitrary<string> {
+  return resolveFieldKind(field) === "text"
+    ? textValue
+    : listBoundValues(field);
+}
+
+function listChoiceValues(field: BaseFieldDef): fc.Arbitrary<string[]> {
+  const fixed = listFixedValues(field);
+  if (fixed) {
+    return fc.subarray(fixed, { minLength: 1 });
+  }
+  if (field.type === "id") {
+    return fc.uniqueArray(fc.uuid(), { minLength: 1, maxLength: 3 });
+  }
+  return fc.uniqueArray(
+    text.filter((value) => value.length > 0),
+    { minLength: 1, maxLength: 4 },
+  );
+}
+
+function listListValues(
+  field: BaseFieldDef,
+  op: FilterOp,
+): fc.Arbitrary<(string | null)[]> {
+  const values = listChoiceValues(field);
+  if (field.nullable !== true || op === "all_of") {
+    return values;
+  }
+  return fc
+    .tuple(values, fc.boolean())
+    .map(([picked, blank]): (string | null)[] =>
+      blank ? [...picked, null] : picked,
+    );
+}
+
+function listFilter(field: BaseFieldDef, op: FilterOp): fc.Arbitrary<Filter> {
+  const { key } = field;
+  switch (getOperatorShape(op)) {
+    case "one":
+      return listOperandValues(field).map(
+        (value) => ({ field: key, op, value }) as Filter,
+      );
+    case "pair":
+      return fc
+        .tuple(listOperandValues(field), listOperandValues(field))
+        .map(([min, max]) => ({ field: key, op, min, max }) as Filter);
+    case "list":
+      return listListValues(field, op).map(
+        (values) => ({ field: key, op, values }) as Filter,
+      );
+    case "preset":
+      return fc
+        .constantFrom(...DATE_PRESETS)
+        .map((preset) => ({ field: key, op: "in_period", preset }) as Filter);
+    case "none":
+      return fc.constant({ field: key, op } as Filter);
+  }
+}
+
+const filterArbitraries = Object.entries(CAPABILITIES.filterOps).flatMap(
+  ([key, ops]) => {
+    const field = getField(DEF, key);
+    return field ? ops.map((op) => listFilter(field, op)) : [];
+  },
+);
+
+// The URL holds one key per field and operator, so a list or a valueless filter appears once per field and operator.
+function filterIdentity(filter: Filter): string {
+  const shape = getOperatorShape(filter.op);
+  return shape === "list" || shape === "none"
+    ? `${filter.field}:${filter.op}`
+    : JSON.stringify(filter);
+}
 
 const arbitrarySorts: fc.Arbitrary<SortState[]> = fc.uniqueArray(
   fc.record({
@@ -224,23 +203,9 @@ function isUsable(query: QueryState): boolean {
 
 const arbitraryQuery: fc.Arbitrary<QueryState> = fc
   .record({
-    equals: listRecord(CAPABILITIES.equalsFields, listEqualsValues),
-    overlaps: listRecord(CAPABILITIES.overlapFields, () =>
-      fc.uniqueArray(
-        text.filter((value) => value.length > 0),
-        { minLength: 1, maxLength: 4 },
-      ),
-    ),
-    ranges: fc.uniqueArray(
-      fc.oneof(...listFields(CAPABILITIES.rangeFields).map(listRange)),
-      {
-        maxLength: RANGE_FILTER_MAX,
-        selector: (range) => JSON.stringify(range),
-      },
-    ),
-    texts: fc.uniqueArray(arbitraryText, {
-      maxLength: TEXT_FILTER_MAX,
-      selector: (item) => JSON.stringify(item),
+    filters: fc.uniqueArray(fc.oneof(...filterArbitraries), {
+      maxLength: FILTER_MAX,
+      selector: filterIdentity,
     }),
     combine: fc.constantFrom("and" as const, "or" as const),
     search: fc.option(searchValue),
@@ -253,12 +218,17 @@ const arbitraryQuery: fc.Arbitrary<QueryState> = fc
   )
   .filter(isUsable);
 
+const fieldKey = fc.oneof(
+  fc.constantFrom(...DEF.fields.map((field) => field.key)),
+  text,
+);
+
 const arbitraryName = fc.oneof(
   fc
-    .tuple(
-      fc.constantFrom(...PREFIXES),
-      fc.oneof(fc.constantFrom(...DEF.fields.map((field) => field.key)), text),
-    )
+    .tuple(fieldKey, fc.oneof(fc.constantFrom(...FILTER_OPS), text))
+    .map(([key, op]) => `f.${key}.${op}`),
+  fc
+    .tuple(fc.constantFrom(...OLD_PREFIXES), fieldKey)
     .map(([prefix, key]) => `${prefix}${key}`),
   fc.constantFrom(...KEY_NAMES),
   text,
@@ -269,8 +239,8 @@ const arbitraryValue = fc.oneof(
     "",
     "any",
     "all",
-    EMPTY_VALUE,
-    NOT_EMPTY_VALUE,
+    BLANK_TOKEN,
+    "_not_empty",
     "!open",
     "open",
     "true",
@@ -278,6 +248,7 @@ const arbitraryValue = fc.oneof(
     "!..",
     "(..)",
     "!(1..2)",
+    "1..2",
     "1..2..3",
     "2024-02-30..2024-03-01",
     "total.asc,created_at.desc",
@@ -329,6 +300,38 @@ describe("query url examples", () => {
     const query: QueryState = { ...defaultQuery(DEF), cursor: "" };
     expectValid(query);
     expect(fromUrl(toUrl(query))).toEqual(query);
+  });
+
+  test("or blank is a token in the list, and a valueless operator has an empty value", () => {
+    const query: QueryState = {
+      ...defaultQuery(DEF),
+      filters: [
+        { field: "kind", op: "any_of", values: ["a", null] },
+        { field: "note", op: "blank" },
+      ],
+    };
+    expectValid(query);
+    expect(toUrl(query)).toBe(
+      "f.kind.any_of=a&f.kind.any_of=_empty&f.note.blank=",
+    );
+    expect(fromUrl(toUrl(query))).toEqual(query);
+  });
+
+  test("the keys of the old bucket model are ignored", () => {
+    const old = [
+      "f.status=open",
+      "f.status=!open",
+      "f.note=_not_empty",
+      "r.total=5..9",
+      "r.created_at=last-7-days",
+      "c.name=acme",
+      "nc.name=acme",
+      "sw.name=ac",
+      "ew.name=me",
+      "ne.name=acme",
+      "o.tags=a",
+    ].join("&");
+    expect(fromUrl(old)).toEqual(defaultQuery(DEF));
   });
 });
 

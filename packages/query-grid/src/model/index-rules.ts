@@ -20,8 +20,8 @@ export const INDEX_RULE_CODES = [
   "index_array_equality",
   "index_then_repeats",
   "index_order_too_long",
-  "index_never_empty",
-  "index_empty_is_filtered",
+  "index_never_blank",
+  "index_blank_is_filtered",
   "index_not_text",
   "index_not_array",
 ] as const;
@@ -132,18 +132,18 @@ function checkThen(check: Check, index: IndexDef, path: string): void {
   }
 }
 
-function checkEmpty(check: Check, index: IndexDef, path: string): void {
-  for (const [at, key] of (index.empty ?? []).entries()) {
-    const params = { path: `${path}.empty.${at}`, field: key };
+function checkBlank(check: Check, index: IndexDef, path: string): void {
+  for (const [at, key] of (index.blank ?? []).entries()) {
+    const params = { path: `${path}.blank.${at}`, field: key };
     const field = getKnownField(check, key, params.path);
     if (!field) {
       continue;
     }
     if (!field.nullable) {
-      report(check, "index_never_empty", params);
+      report(check, "index_never_blank", params);
     }
     if (index.equals.includes(key) || key === index.sort) {
-      report(check, "index_empty_is_filtered", params);
+      report(check, "index_blank_is_filtered", params);
     }
   }
 }
@@ -154,7 +154,7 @@ function checkIndex(check: Check, index: IndexDef, path: string): void {
   }
   checkEquals(check, index, path);
   checkThen(check, index, path);
-  checkEmpty(check, index, path);
+  checkBlank(check, index, path);
 }
 
 function checkOwnIndexes(

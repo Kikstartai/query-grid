@@ -33,10 +33,10 @@ export function describeIndex(index: IndexDef): string {
     : "no filter";
   const range = index.range ? ` (range on ${index.sort})` : "";
   const then = index.then?.length ? `, then ${index.then.join(", ")}` : "";
-  const empty = index.empty?.length
-    ? `, where ${index.empty.map((key) => `${key} is empty`).join(" and ")}`
+  const blank = index.blank?.length
+    ? `, where ${index.blank.map((key) => `${key} is blank`).join(" and ")}`
     : "";
-  return `${filters}, sort ${index.sort}${then}${range}${empty}`;
+  return `${filters}, sort ${index.sort}${then}${range}${blank}`;
 }
 
 export function describeTextIndex(column: string): string {
@@ -71,7 +71,7 @@ const UNKNOWN_ROLES: Record<string, string> = {
   sort: "sort field",
   then: "sort field",
   equals: "equality field",
-  empty: "empty field",
+  blank: "blank field",
 };
 
 const INDEX_MESSAGES: Record<IndexRuleCode, IndexMessage> = {
@@ -92,9 +92,9 @@ const INDEX_MESSAGES: Record<IndexRuleCode, IndexMessage> = {
   index_then_repeats: ({ field }) =>
     `${field} is already an equality, the sort or the key`,
   index_order_too_long: ({ max }) => `an order has at most ${max} columns`,
-  index_never_empty: ({ field }) => `${field} is never empty`,
-  index_empty_is_filtered: ({ field }) =>
-    `${field} is empty in every row of the index, so it cannot also be an equality or the sort`,
+  index_never_blank: ({ field }) => `${field} is never blank`,
+  index_blank_is_filtered: ({ field }) =>
+    `${field} is blank in every row of the index, so it cannot also be an equality or the sort`,
   index_not_text: ({ field }) => `${field} is not a text field without options`,
   index_not_array: ({ field }) => `${field} is not an array field`,
 };
@@ -162,7 +162,7 @@ export function validateGridDef(def: PostgresGridDef): string[] {
     (index) =>
       Array.isArray(index.equals) &&
       index.equals.length === 0 &&
-      !index.empty?.length &&
+      !index.blank?.length &&
       !index.then?.length &&
       index.sort === def.defaultSort.field,
   );

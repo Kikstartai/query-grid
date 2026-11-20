@@ -36,7 +36,12 @@ function createSource(calls: Calls): DataSource {
   return createTestSource(CAPABILITIES, {
     fetchPage: async (query) => ({
       rows: ROWS.filter((row) =>
-        query.equals.status?.includes(String(row.status)),
+        query.filters.some(
+          (filter) =>
+            filter.field === "status" &&
+            "values" in filter &&
+            filter.values.includes(String(row.status)),
+        ),
       ),
       nextCursor: null,
       hasNext: false,
@@ -88,15 +93,18 @@ describe("lane queries", () => {
     expect(getLaneQueries(TEST_DEF, sorted, CAPABILITIES)?.get("open")).toEqual(
       {
         ...BASE,
-        equals: { status: ["open"] },
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
       },
     );
   });
 
   test("a selected facet value narrows the lanes", () => {
-    expect(listLanes({ ...BASE, equals: { status: ["done"] } })).toEqual([
-      "done",
-    ]);
+    expect(
+      listLanes({
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["done"] }],
+      }),
+    ).toEqual(["done"]);
   });
 
   test("a search or an unanswerable lane leaves no board", () => {
@@ -106,7 +114,10 @@ describe("lane queries", () => {
     expect(
       getLaneQueries(
         TEST_DEF,
-        { ...BASE, equals: { region: ["north"] } },
+        {
+          ...BASE,
+          filters: [{ field: "region", op: "any_of", values: ["north"] }],
+        },
         CAPABILITIES,
       ),
     ).toBeNull();

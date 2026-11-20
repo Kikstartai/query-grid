@@ -8,10 +8,11 @@ import {
   encodeQuery,
   isQueryBudgeted,
   planQuery,
+  type Combinator,
+  type Filter,
   type GridRow,
+  type OneFilter,
   type QueryState,
-  type RangeState,
-  type TextState,
 } from "@kikstart/query-grid";
 import { createMemorySource } from "@kikstart/query-grid/memory";
 import {
@@ -69,7 +70,7 @@ const DEF: PostgresGridDef = {
     { equals: [], sort: "created_at", range: true },
     { equals: [], sort: "size", range: true },
     { equals: ["starred"], sort: "created_at", range: true },
-    { equals: ["folder_id"], sort: "created_at", empty: ["deleted_at"] },
+    { equals: ["folder_id"], sort: "created_at", blank: ["deleted_at"] },
     { equals: [], sort: "size", then: ["created_at"] },
   ],
   textIndexes: ["name"],
@@ -237,12 +238,16 @@ async function expectSame(
   return fromMemory;
 }
 
-function range(field: string, bounds: Partial<RangeState>): RangeState {
-  return { field, min: null, max: null, ...bounds };
+function one(field: string, op: OneFilter["op"], value: string): OneFilter {
+  return { field, op, value };
 }
 
-function text(field: string, op: TextState["op"], value: string): TextState {
-  return { field, op, value };
+function anyOf(field: string, ...values: (string | null)[]): Filter {
+  return { field, op: "any_of", values };
+}
+
+function stampOf(at: number): string {
+  return ROWS[at].created_at as string;
 }
 
 describe("the schema of the new indexes", () => {
@@ -276,197 +281,140 @@ describe("the schema of the new indexes", () => {
 });
 
 describe("every operator answers as the memory source does", () => {
-  const cases: [string, Partial<QueryState>][] = [
+  const cases: [string, Filter[], Combinator?][] = [
     [
       "an open lower bound on the sort",
-      {
-        ranges: [
-          range("created_at", {
-            min: ROWS[700].created_at as string,
-            minExclusive: true,
-          }),
-        ],
-      },
+      [one("created_at", "greater_than", stampOf(700))],
     ],
     [
       "a closed lower bound on the sort",
-      {
-        ranges: [range("created_at", { min: ROWS[700].created_at as string })],
-      },
+      [one("created_at", "greater_or_equal", stampOf(700))],
     ],
-    [
-      "an open upper bound off the sort",
-      {
-        ranges: [range("size", { max: "250", maxExclusive: true })],
-      },
-    ],
+    ["an open upper bound off the sort", [one("size", "less_than", "250")]],
     [
       "both bounds open on a decimal",
-      {
-        ranges: [
-          range("rate", {
-            min: "10",
-            max: "20.5",
-            minExclusive: true,
-            maxExclusive: true,
-          }),
-        ],
-      },
+      [one("rate", "greater_than", "10"), one("rate", "less_than", "20.5")],
     ],
     [
       "not between, on a nullable decimal",
-      {
-        ranges: [range("rate", { min: "10", max: "20.5", exclude: true })],
-      },
+      [{ field: "rate", op: "not_between", min: "10", max: "20.5" }],
     ],
+    ["not equal to one number", [one("size", "not_equals", "250")]],
     [
-      "not equal to one number",
-      {
-        ranges: [range("size", { min: "250", max: "250", exclude: true })],
-      },
+      "at most, the complement of more than",
+      [one("size", "less_or_equal", "250")],
     ],
-    [
-      "not more than, written as an excluded open bound",
-      {
-        ranges: [
-          range("size", { min: "250", exclude: true, minExclusive: true }),
-        ],
-      },
-    ],
-    [
-      "on one day of a date field",
-      {
-        ranges: [range("due", { min: "2026-02-10", max: "2026-02-10" })],
-      },
-    ],
+    ["on one day of a date field", [one("due", "equals", "2026-02-10")]],
     [
       "not on one day of a nullable date field",
-      {
-        ranges: [
-          range("due", { min: "2026-02-10", max: "2026-02-10", exclude: true }),
-        ],
-      },
+      [one("due", "not_equals", "2026-02-10")],
+    ],
+    ["after a day of a date field", [one("due", "greater_than", "2026-03-01")]],
+    [
+      "on one day of a datetime field",
+      [one("created_at", "equals", stampOf(700).slice(0, 10))],
     ],
     [
-      "after a day of a date field",
-      {
-        ranges: [range("due", { min: "2026-03-01", minExclusive: true })],
-      },
+      "two filters on one field",
+      [
+        one("size", "greater_or_equal", "100"),
+        { field: "size", op: "not_between", min: "200", max: "300" },
+      ],
     ],
-    [
-      "two ranges on one field",
-      {
-        ranges: [
-          range("size", { min: "100" }),
-          range("size", { min: "200", max: "300", exclude: true }),
-        ],
-      },
-    ],
-    [
-      "contains on the indexed text field",
-      {
-        texts: [text("name", "contains", "voice")],
-      },
-    ],
-    ["starts with, any case", { texts: [text("name", "starts_with", "REP")] }],
-    ["ends with, any case", { texts: [text("name", "ends_with", "MEMO")] }],
-    [
-      "ends with on a field with no index",
-      {
-        texts: [text("note", "ends_with", ".PDF")],
-      },
-    ],
-    [
-      "a wildcard in the value is plain text",
-      {
-        texts: [text("note", "contains", "50%")],
-      },
-    ],
+    ["contains on the indexed text field", [one("name", "contains", "voice")]],
+    ["starts with, any case", [one("name", "starts_with", "REP")]],
+    ["ends with, any case", [one("name", "ends_with", "MEMO")]],
+    ["ends with on a field with no index", [one("note", "ends_with", ".PDF")]],
+    ["a wildcard in the value is plain text", [one("note", "contains", "50%")]],
     [
       "an underscore in the value is plain text",
-      {
-        texts: [text("note", "contains", "r_r")],
-      },
+      [one("note", "contains", "r_r")],
     ],
     [
       "does not contain, on a nullable field",
-      {
-        texts: [text("note", "not_contains", "pdf")],
-      },
+      [one("note", "not_contains", "pdf")],
+    ],
+    ["is not, matching the stored case", [one("note", "not_equals", "Final")]],
+    [
+      "equals on a text field, the stored case",
+      [one("note", "equals", "Final")],
     ],
     [
-      "is not, matching the stored case",
-      {
-        texts: [text("note", "not_equals", "Final")],
-      },
+      "equals on the indexed text field",
+      [one("name", "equals", ROWS[3].name as string)],
     ],
     [
       "two text filters on one field",
-      {
-        texts: [
-          text("name", "contains", "invoice"),
-          text("name", "not_contains", "draft"),
-        ],
-      },
+      [
+        one("name", "contains", "invoice"),
+        one("name", "not_contains", "draft"),
+      ],
+    ],
+    ["blank on a nullable text field", [{ field: "note", op: "blank" }]],
+    ["not blank on a nullable number", [{ field: "rate", op: "not_blank" }]],
+    ["blank on a nullable date", [{ field: "due", op: "blank" }]],
+    ["an overlap on the indexed array", [anyOf("tags", "red", "amber")]],
+    ["an overlap on an array with no index", [anyOf("labels", "blue")]],
+    [
+      "all of on the indexed array",
+      [{ field: "tags", op: "all_of", values: ["red", "blue"] }],
     ],
     [
-      "an overlap on the indexed array",
-      { overlaps: { tags: ["red", "amber"] } },
+      "all of on an array with no index",
+      [{ field: "labels", op: "all_of", values: ["red", "green"] }],
     ],
     [
-      "an overlap on an array with no index",
-      { overlaps: { labels: ["blue"] } },
+      "none of on an array",
+      [{ field: "tags", op: "none_of", values: ["red"] }],
     ],
-    ["a boolean", { equals: { starred: ["true"] } }],
+    ["blank on an array, null or empty", [{ field: "tags", op: "blank" }]],
+    ["a boolean", [anyOf("starred", "true")]],
     [
       "a boolean beside a range on the sort",
-      {
-        equals: { starred: ["false"] },
-        ranges: [
-          range("created_at", {
-            max: ROWS[900].created_at as string,
-            maxExclusive: true,
-          }),
-        ],
-      },
+      [anyOf("starred", "false"), one("created_at", "less_than", stampOf(900))],
+    ],
+    [
+      "a partial index: one folder or none, not deleted",
+      [
+        anyOf("folder_id", FOLDERS[0], null),
+        { field: "deleted_at", op: "blank" },
+      ],
+    ],
+    [
+      "none of on an id with no fixed values",
+      [{ field: "folder_id", op: "none_of", values: [FOLDERS[0], FOLDERS[1]] }],
     ],
     [
       "a partial index: one folder, not deleted",
-      {
-        equals: { folder_id: [FOLDERS[1]], deleted_at: ["_empty"] },
-      },
+      [anyOf("folder_id", FOLDERS[1]), { field: "deleted_at", op: "blank" }],
     ],
     [
       "match any across the new filters",
-      {
-        combine: "or",
-        texts: [text("note", "starts_with", "under")],
-        overlaps: { tags: ["blue"] },
-        ranges: [range("size", { max: "10", maxExclusive: true })],
-      },
+      [
+        one("note", "starts_with", "under"),
+        anyOf("tags", "blue"),
+        one("size", "less_than", "10"),
+      ],
+      "or",
     ],
     [
       "everything at once",
-      {
-        equals: { starred: ["false"] },
-        ranges: [
-          range("rate", { min: "5", exclude: true }),
-          range("due", { min: "2026-01-15" }),
-        ],
-        texts: [
-          text("name", "contains", "re"),
-          text("note", "not_equals", "n/a"),
-        ],
-        overlaps: { tags: ["green", "blue"] },
-      },
+      [
+        anyOf("starred", "false"),
+        one("rate", "less_than", "5"),
+        one("due", "greater_or_equal", "2026-01-15"),
+        one("name", "contains", "re"),
+        one("note", "not_equals", "n/a"),
+        anyOf("tags", "green", "blue"),
+      ],
     ],
   ];
 
-  for (const [name, filters] of cases) {
+  for (const [name, filters, combine = "and"] of cases) {
     test(
       name,
       async () => {
-        const ids = await expectSame(name, filters);
+        const ids = await expectSame(name, { filters, combine });
         expect({ name, some: ids.length > 0 }).toEqual({ name, some: true });
         expect({ name, all: ids.length < ROW_COUNT }).toEqual({
           name,
@@ -479,7 +427,7 @@ describe("every operator answers as the memory source does", () => {
 
   test("is not compares the exact case, so another case leaves every row in", async () => {
     const ids = await expectSame("is not, another case", {
-      texts: [text("note", "not_equals", "final")],
+      filters: [one("note", "not_equals", "final")],
     });
     expect(ids).toHaveLength(ROW_COUNT);
   }, 60_000);
@@ -487,15 +435,20 @@ describe("every operator answers as the memory source does", () => {
   test("an ascending sort on a number pages the same way", async () => {
     await expectSame("ascending size", {
       sort: { field: "size", direction: "asc" },
-      ranges: [range("size", { min: "100", max: "400", minExclusive: true })],
+      filters: [
+        one("size", "greater_than", "100"),
+        one("size", "less_or_equal", "400"),
+      ],
     });
   }, 60_000);
 
   test("the total of a filtered set is the memory source's", async () => {
-    const query = {
+    const query: QueryState = {
       ...BASE,
-      texts: [text("name", "starts_with", "inv")],
-      ranges: [range("size", { min: "50", max: "60", exclude: true })],
+      filters: [
+        one("name", "starts_with", "inv"),
+        { field: "size", op: "not_between", min: "50", max: "60" },
+      ],
     };
     const [fromPostgres, fromMemory] = await Promise.all([
       listGridTotals(DEF, execute, query),
@@ -511,15 +464,14 @@ describe("every operator answers as the memory source does", () => {
 
 describe("the tier each filter runs in", () => {
   test("an indexed text filter and an indexed overlap run under the budget, with no size probe", async () => {
-    for (const filters of [
-      { texts: [text("name", "contains", "voice")] },
-      { overlaps: { tags: ["red"] } },
-      {
-        equals: { starred: ["true"] },
-        texts: [text("name", "ends_with", "memo")],
-      },
-    ]) {
-      const query = { ...BASE, ...filters };
+    const cases: Filter[][] = [
+      [one("name", "contains", "voice")],
+      [anyOf("tags", "red")],
+      [{ field: "tags", op: "all_of", values: ["red", "blue"] }],
+      [anyOf("starred", "true"), one("name", "ends_with", "memo")],
+    ];
+    for (const filters of cases) {
+      const query = { ...BASE, filters };
       expect(isQueryBudgeted(DEF, query)).toBe(true);
       calls.length = 0;
       await listGridPage(DEF, execute, query, 20);
@@ -529,13 +481,18 @@ describe("the tier each filter runs in", () => {
   });
 
   test("a negation, a field with no index and a second range are sized first", async () => {
-    for (const filters of [
-      { texts: [text("name", "not_contains", "voice")] },
-      { texts: [text("note", "contains", "pdf")] },
-      { overlaps: { labels: ["red"] } },
-      { ranges: [range("size", { min: "1", max: "5", exclude: true })] },
-    ]) {
-      const query = { ...BASE, ...filters };
+    const cases: Filter[][] = [
+      [one("name", "not_contains", "voice")],
+      [one("note", "contains", "pdf")],
+      [anyOf("labels", "red")],
+      [{ field: "size", op: "not_between", min: "1", max: "5" }],
+      [{ field: "note", op: "blank" }],
+      [{ field: "labels", op: "all_of", values: ["red"] }],
+      [{ field: "folder_id", op: "none_of", values: [FOLDERS[0]] }],
+      [one("name", "equals", "Invoice 3 memo")],
+    ];
+    for (const filters of cases) {
+      const query = { ...BASE, filters };
       expect(planQuery(DEF.indexes, query, DEF)).toMatchObject({
         narrowed: true,
         budgeted: false,
@@ -545,10 +502,10 @@ describe("the tier each filter runs in", () => {
       expect(calls).toHaveLength(2);
       expect(calls[0].sql.text).toContain(") capped");
     }
-  });
+  }, 60_000);
 
   test("a narrowed filter is refused over the limit and runs under it", async () => {
-    const query = { ...BASE, texts: [text("note", "contains", "pdf")] };
+    const query = { ...BASE, filters: [one("note", "contains", "pdf")] };
     const refusal = await listGridPage(DEF, execute, query, 20, undefined, {
       ...DEFAULT_LIMITS,
       narrowLimit: 100,
@@ -569,14 +526,19 @@ describe("the tier each filter runs in", () => {
       return rows.map((row) => row["QUERY PLAN"]).join("\n");
     };
     expect(
-      await explain({ overlaps: { tags: ["nothing-has-this"] } }),
+      await explain({ filters: [anyOf("tags", "nothing-has-this")] }),
     ).toContain(`auto_${TABLE}_tags_overlap`);
     expect(
-      await explain({ texts: [text("name", "contains", "zzqqxx-no-match")] }),
+      await explain({
+        filters: [one("name", "contains", "zzqqxx-no-match")],
+      }),
     ).toContain(`auto_${TABLE}_name_trgm`);
     expect(
       await explain({
-        equals: { folder_id: [RARE_FOLDER], deleted_at: ["_empty"] },
+        filters: [
+          anyOf("folder_id", RARE_FOLDER),
+          { field: "deleted_at", op: "blank" },
+        ],
       }),
     ).toContain(`auto_${TABLE}_folder_id__created_at__empty_deleted_at`);
   });
@@ -618,7 +580,7 @@ describe("several sort columns answer as the memory source does", () => {
       [
         "starred filter, size desc, created asc",
         {
-          equals: { starred: ["true"] },
+          filters: [anyOf("starred", "true")],
           sort: by("created_at", "asc"),
           thenBy: [by("size", "desc")],
         },
@@ -717,7 +679,7 @@ describe("a composite order on the orders table", () => {
     expect(refusal).toMatchObject({ code: "narrow_first" });
     const narrowed: QueryState = {
       ...base,
-      equals: { status_code: ["failed"], channel: ["phone"] },
+      filters: [anyOf("status_code", "failed"), anyOf("channel", "phone")],
       sort: { field: "created_at", direction: "desc" },
       thenBy: [{ field: "region", direction: "asc" }],
     };
@@ -743,8 +705,8 @@ describe("an export is the memory source's file", () => {
   test("the same rows, order and cells, for a filter, a text filter and several sort columns", async () => {
     const cases: Partial<QueryState>[] = [
       {},
-      { equals: { starred: ["true"] } },
-      { texts: [text("name", "contains", "invoice")] },
+      { filters: [anyOf("starred", "true")] },
+      { filters: [one("name", "contains", "invoice")] },
       {
         sort: { field: "size", direction: "desc" },
         thenBy: [{ field: "created_at", direction: "asc" }],
@@ -772,7 +734,7 @@ describe("an export is the memory source's file", () => {
     expect(calls).toHaveLength(1);
     const small: QueryState = {
       ...base,
-      equals: { status_code: ["failed"], channel: ["phone"] },
+      filters: [anyOf("status_code", "failed"), anyOf("channel", "phone")],
     };
     const count = await getGridCount(ORDERS_GRID_DEF, execute, small, true);
     const sent = await read(
@@ -795,7 +757,7 @@ describe("the text index on the orders table", () => {
   test("a customer name contains filter is paged in order at any table size", async () => {
     const query: QueryState = {
       ...base,
-      texts: [{ field: "customer_name", op: "contains", value: "Mokoena" }],
+      filters: [one("customer_name", "contains", "Mokoena")],
     };
     expect(isQueryBudgeted(ORDERS_GRID_DEF, query)).toBe(true);
     calls.length = 0;
@@ -819,10 +781,10 @@ describe("the text index on the orders table", () => {
 
   test("a starts-with and an ends-with read the same index", async () => {
     for (const filter of [
-      text("customer_name", "starts_with", "Zan"),
-      text("customer_name", "ends_with", "ena"),
+      one("customer_name", "starts_with", "Zan"),
+      one("customer_name", "ends_with", "ena"),
     ]) {
-      const query: QueryState = { ...base, texts: [filter] };
+      const query: QueryState = { ...base, filters: [filter] };
       const page = await listGridPage(ORDERS_GRID_DEF, execute, query, 20);
       expect(page.rows.length).toBeGreaterThan(0);
       for (const row of page.rows) {
@@ -844,16 +806,14 @@ describe("the text index on the orders table", () => {
       execute,
       {
         ...base,
-        ranges: [
-          { field: "created_at", min: null, max: edge, maxExclusive: true },
-        ],
+        filters: [one("created_at", "less_than", edge)],
       },
       3,
     );
     const closed = await listGridPage(
       ORDERS_GRID_DEF,
       execute,
-      { ...base, ranges: [{ field: "created_at", min: null, max: edge }] },
+      { ...base, filters: [one("created_at", "less_or_equal", edge)] },
       3,
     );
     expect(String(closed.rows[0].created_at)).toBe(edge);

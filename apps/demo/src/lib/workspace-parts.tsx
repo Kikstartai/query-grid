@@ -17,7 +17,6 @@ import { VIEWS } from "./site";
 interface WorkspacePartsProps {
   filterFields?: string[];
   barFields?: string[];
-  textFields?: string[];
   views?: ViewOption[];
   phoneView?: string | null;
   children: ReactNode;
@@ -26,7 +25,6 @@ interface WorkspacePartsProps {
 export function WorkspaceParts({
   filterFields,
   barFields,
-  textFields,
   views = VIEWS,
   phoneView = "list",
   children,
@@ -44,9 +42,9 @@ export function WorkspaceParts({
       </div>
       <div className="workspace-body">
         <FacetPanel />
-        <FilterBar fields={barFields ?? filterFields} texts={textFields} />
+        <FilterBar fields={barFields ?? filterFields} />
         <div className="workspace-chips">
-          <FilterSidebar fields={filterFields} texts={textFields} />
+          <FilterSidebar fields={filterFields} />
           <FilterChips />
         </div>
         <div className="workspace-main">{children}</div>

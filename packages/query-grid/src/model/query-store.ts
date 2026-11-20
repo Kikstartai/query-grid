@@ -68,16 +68,9 @@ function reuseQuery(current: QueryState, next: QueryState): QueryState {
   }
   return {
     ...next,
-    equals: sameJson(current.equals, next.equals)
-      ? current.equals
-      : next.equals,
-    ranges: sameJson(current.ranges, next.ranges)
-      ? current.ranges
-      : next.ranges,
-    texts: sameJson(current.texts, next.texts) ? current.texts : next.texts,
-    overlaps: sameJson(current.overlaps, next.overlaps)
-      ? current.overlaps
-      : next.overlaps,
+    filters: sameJson(current.filters, next.filters)
+      ? current.filters
+      : next.filters,
     sort: sameJson(current.sort, next.sort) ? current.sort : next.sort,
     thenBy: sameJson(current.thenBy, next.thenBy)
       ? current.thenBy

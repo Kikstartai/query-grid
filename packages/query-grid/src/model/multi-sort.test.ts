@@ -118,11 +118,11 @@ describe("a further sort column with no index", () => {
     const extras = { textIndexes: ["name"] };
     const texted: QueryState = {
       ...query,
-      texts: [{ field: "name", op: "contains", value: "acme" }],
+      filters: [{ field: "name", op: "contains", value: "acme" }],
     };
     const plan = planQuery(INDEXES, texted, extras);
     expect(plan).toMatchObject({ narrowed: true, budgeted: false });
-    expect(plan?.core.texts).toEqual([]);
+    expect(plan?.core.filters).toEqual([]);
     const alone = planQuery(INDEXES, { ...texted, thenBy: undefined }, extras);
     expect(alone).toMatchObject({ narrowed: false, budgeted: true });
   });
@@ -131,7 +131,10 @@ describe("a further sort column with no index", () => {
     const either: QueryState = {
       ...query,
       combine: "or",
-      equals: { status: ["open"], region: ["north"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["north"] },
+      ],
     };
     const plan = planQuery(INDEXES, either);
     expect(plan?.terms).toHaveLength(2);
@@ -144,12 +147,12 @@ describe("a further sort column with no index", () => {
         ["number", "asc"],
         ["total", "asc"],
       ]),
-      ranges: [{ field: "number", min: "5", max: "9" }],
+      filters: [{ field: "number", op: "between", min: "5", max: "9" }],
     };
     const indexes = [...INDEXES, { equals: [], sort: "number", range: true }];
     const plan = planQuery(indexes, ranged);
     expect(plan?.narrowed).toBe(true);
-    expect(plan?.core.ranges).toHaveLength(1);
+    expect(plan?.core.filters).toHaveLength(1);
     expect(plan?.core.thenBy).toBeUndefined();
   });
 
@@ -194,6 +197,7 @@ describe("a further sort column with no index", () => {
     ]);
     expect(
       explainUnavailable(
+        DEF,
         BASE,
         { kind: "thenBy", field: "total" },
         context(5000),
@@ -235,7 +239,7 @@ describe("a further sort column with no index", () => {
     );
     expect(four).toBe(three);
     expect(
-      explainUnavailable(three, { kind: "thenBy", field: "region" }, small)
+      explainUnavailable(DEF, three, { kind: "thenBy", field: "region" }, small)
         .code,
     ).toBe("sort_limit");
   });

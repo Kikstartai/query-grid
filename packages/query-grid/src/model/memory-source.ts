@@ -10,38 +10,40 @@ import {
   type BaseGridDef,
   type GridRow,
 } from "./grid-def.ts";
-import type { QueryState, RangeState, TextState } from "./query-state.ts";
+import type { QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
-import { matchesEquals } from "./field-values.ts";
+import { matchesFilter } from "./filter-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {
+  hasFilterOps,
   hasValidThenBy,
   isCombineOr,
   listGroupFields,
-  listNarrowRangeFields,
-  listOverlapFields,
-  listTextFields,
 } from "./indexes.ts";
 import { sameFilters } from "./load.ts";
+import { isLiteralOp, listFieldOps, resolveFieldKind } from "./operators.ts";
 import { SourceError } from "./problems.ts";
 import { withLiteralFilters } from "./literal-filters.ts";
-import { withoutKey } from "./query-actions.ts";
 import { reorderRows } from "./reorder.ts";
-import { sortRows, toComparable } from "./sort-rows.ts";
+import { sortRows } from "./sort-rows.ts";
 
 const OPTION_LIMIT = 50;
 
 export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
   const searchFields = listSearchFields(def);
-  const rangeFields = listNarrowRangeFields(def.fields);
-  const overlapFields = listOverlapFields(def.fields);
-  const equalsFields = def.fields
-    .map((field) => field.key)
-    .filter(
-      (key) => !rangeFields.includes(key) && !overlapFields.includes(key),
-    );
-  const textFields = listTextFields(def.fields);
-  const groupFields = listGroupFields(def.fields, equalsFields);
+  const filterOps = Object.fromEntries(
+    def.fields.map((field) => [
+      field.key,
+      listFieldOps(field).filter((op) => !isLiteralOp(field, op)),
+    ]),
+  );
+  const valueFields = def.fields
+    .filter((field) => {
+      const kind = resolveFieldKind(field);
+      return kind === "choice" || kind === "text";
+    })
+    .map((field) => field.key);
+  const groupFields = listGroupFields(def.fields, valueFields);
   const sortFields = def.fields.map((field) => field.key);
   return {
     holdsAllRows: true,
@@ -51,78 +53,21 @@ export function memoryCapabilities(def: BaseGridDef): DataSourceCapabilities {
     combineOr: true,
     isNarrowed: () => false,
     narrowBasis: () => "",
-    textFields,
-    overlapFields,
+    filterOps,
     groupFields,
     canRun: (query) =>
       (query.group === null ||
         (!isCombineOr(query) && groupFields.includes(query.group))) &&
-      Object.keys(query.equals).every((key) => equalsFields.includes(key)) &&
-      query.ranges.every((range) => rangeFields.includes(range.field)) &&
-      query.texts.every((text) => textFields.includes(text.field)) &&
-      Object.keys(query.overlaps).every((key) => overlapFields.includes(key)) &&
+      hasFilterOps(filterOps, query) &&
       (query.search === null || searchFields.length > 0) &&
       sortFields.includes(query.sort.field) &&
       hasValidThenBy(query, sortFields),
-    equalsFields,
-    rangeFields,
     sortFields,
     thenByFields: sortFields,
     sortOrders: [],
     searchFields,
     isFacetCountExact: () => true,
   };
-}
-
-function matchesRange(
-  def: BaseGridDef,
-  row: GridRow,
-  range: RangeState,
-): boolean {
-  const field = getField(def, range.field);
-  if (!field) {
-    return false;
-  }
-  const value = toComparable(field, row[field.key] ?? null);
-  if (value === null) {
-    return range.exclude === true;
-  }
-  const min = range.min === null ? null : toComparable(field, range.min);
-  const max = range.max === null ? null : toComparable(field, range.max);
-  const above =
-    min === null || (range.minExclusive ? value > min : value >= min);
-  const below =
-    max === null || (range.maxExclusive ? value < max : value <= max);
-  return (above && below) !== (range.exclude === true);
-}
-
-type CellTest = (cell: string | null) => boolean;
-
-function createTextTest({ op, value }: TextState): CellTest {
-  const part = value.trim();
-  const needle = part.toLowerCase();
-  switch (op) {
-    case "contains":
-      return (cell) => cell !== null && cell.toLowerCase().includes(needle);
-    case "not_contains":
-      return (cell) => cell === null || !cell.toLowerCase().includes(needle);
-    case "starts_with":
-      return (cell) => cell !== null && cell.toLowerCase().startsWith(needle);
-    case "ends_with":
-      return (cell) => cell !== null && cell.toLowerCase().endsWith(needle);
-    case "not_equals":
-      return (cell) => cell !== part;
-  }
-}
-
-function toTextCell(row: GridRow, key: string): string | null {
-  const raw = row[key];
-  return raw === null || raw === undefined ? null : String(raw);
-}
-
-function matchesOverlap(row: GridRow, key: string, values: string[]): boolean {
-  const cell = row[key];
-  return Array.isArray(cell) && values.some((value) => cell.includes(value));
 }
 
 function matchesSearch(
@@ -140,22 +85,11 @@ function matchesSearch(
 type RowTest = (row: GridRow) => boolean;
 
 function listRowTests(def: BaseGridDef, query: QueryState): RowTest[] {
-  const tests: RowTest[] = [];
-  for (const [key, values] of Object.entries(query.equals)) {
-    const field = getField(def, key);
-    tests.push((row) => matchesEquals(field, values, row[key]));
-  }
-  for (const range of query.ranges) {
-    tests.push((row) => matchesRange(def, row, range));
-  }
-  for (const text of query.texts) {
-    const test = createTextTest(text);
-    tests.push((row) => test(toTextCell(row, text.field)));
-  }
-  for (const [key, values] of Object.entries(query.overlaps)) {
-    tests.push((row) => matchesOverlap(row, key, values));
-  }
-  return tests;
+  return query.filters.map((filter) => {
+    const field = getField(def, filter.field);
+    return (row) =>
+      field !== null && matchesFilter(field, filter, row[filter.field]);
+  });
 }
 
 export function filterRows(
@@ -298,9 +232,9 @@ export function createMemorySource(
       if (!key) {
         return [];
       }
-      const others = withoutKey(query.equals, key);
+      const others = query.filters.filter((filter) => filter.field !== key);
       const tallies = new Map<string, FacetTally>();
-      for (const row of matching({ ...query, equals: others })) {
+      for (const row of matching({ ...query, filters: others })) {
         const value = String(row[key] ?? "");
         const tally = tallies.get(value) ?? {
           value,

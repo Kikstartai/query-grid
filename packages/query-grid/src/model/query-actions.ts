@@ -1,39 +1,42 @@
 import {
   getField,
   isDefaultSort,
+  resolveMaxValues,
+  type BaseFieldDef,
   type BaseGridDef,
   type SortDirection,
 } from "./grid-def.ts";
 import {
-  listRanges,
+  listFieldFilters,
   listSorts,
   listThenBy,
   SORT_MAX,
   withThenBy,
   type Combinator,
+  type Filter,
   type QueryState,
-  type RangeInput,
-  type RangeState,
-  type TextOp,
 } from "./query-state.ts";
-import type { OfferContext } from "./capabilities.ts";
-import { canExpandEquals, toExcludeValues } from "./field-values.ts";
-import { INDEXED_TEXT_OPS, TEXT_INDEX_MIN_LENGTH } from "./indexes.ts";
-import { toRange } from "./range-bounds.ts";
+import { listCapableOps, type OfferContext } from "./capabilities.ts";
+import { canExpandNoneOf } from "./filter-values.ts";
+import { TEXT_INDEX_MIN_LENGTH } from "./indexes.ts";
+import {
+  getOperatorShape,
+  isLiteralOp,
+  listFixedValues,
+  resolveFieldKind,
+  TEXT_MATCH_OPS,
+  type FilterOp,
+} from "./operators.ts";
 
 export type QueryAction =
-  | { type: "setEquals"; field: string; values: string[] }
-  | { type: "removeEqualsValue"; field: string; value: string }
-  | { type: "clearEquals"; field: string }
-  | ({ type: "setRange"; field?: string; at?: number } & RangeInput)
-  | ({ type: "addRange"; field: string } & RangeInput)
-  | { type: "clearRange"; field?: string; at?: number }
-  | { type: "setText"; field: string; op: TextOp; value: string; at?: number }
-  | { type: "removeText"; at: number }
-  | { type: "clearTexts" }
-  | { type: "setOverlap"; field: string; values: string[] }
-  | { type: "removeOverlapValue"; field: string; value: string }
-  | { type: "clearOverlap"; field: string }
+  | { type: "setFilter"; filter: Filter; at?: number }
+  | { type: "removeFilter"; field: string; at?: number }
+  | {
+      type: "removeFilterValue";
+      field: string;
+      at: number;
+      value: string | null;
+    }
   | { type: "setCombine"; combine: Combinator }
   | { type: "setGroup"; field: string | null }
   | { type: "setSort"; field: string; direction: SortDirection }
@@ -42,33 +45,6 @@ export type QueryAction =
   | { type: "setSearch"; value: string }
   | { type: "clearSearch" }
   | { type: "reset" };
-
-export interface Offers {
-  equals: string[];
-  multi: string[];
-  exclude: string[];
-  sorts: string[];
-  thenBy: string[];
-  ranges: string[];
-  narrowRanges: string[];
-  texts: string[];
-  narrowTexts: string[];
-  overlaps: string[];
-  combineOr: boolean;
-  groups: string[];
-  search: boolean;
-}
-
-export type OfferTarget =
-  | { kind: "equals"; field: string }
-  | { kind: "range"; field: string }
-  | { kind: "text"; field: string }
-  | { kind: "overlap"; field: string }
-  | { kind: "sort"; field: string }
-  | { kind: "thenBy"; field: string }
-  | { kind: "combine" }
-  | { kind: "group"; field: string }
-  | { kind: "search" };
 
 export type ReasonCode =
   | "search_alone"
@@ -96,24 +72,45 @@ export interface UnavailableReason {
   narrowBy: string[];
 }
 
+export interface OpOffer {
+  op: FilterOp;
+  offered: boolean;
+  reason: UnavailableReason | null;
+  minLength?: number;
+}
+
+export interface Offers {
+  filters: Record<string, OpOffer[]>;
+  multi: string[];
+  sorts: string[];
+  thenBy: string[];
+  combineOr: boolean;
+  groups: string[];
+  search: boolean;
+}
+
+export type OfferTarget =
+  | { kind: "filter"; field: string; op: FilterOp }
+  | { kind: "sort"; field: string }
+  | { kind: "thenBy"; field: string }
+  | { kind: "combine" }
+  | { kind: "group"; field: string }
+  | { kind: "search" };
+
 const PROBE = ["x", "y"];
-const RANGE_PROBE = { min: "x", max: null } as const;
-// The text probe is one a text index answers, and the narrow probes ones no index does, so the two offers differ exactly where an index is the only way in.
-const TEXT_PROBE = {
-  type: "setText",
-  op: INDEXED_TEXT_OPS[0],
-  value: "x".repeat(TEXT_INDEX_MIN_LENGTH),
-  at: 0,
-} as const;
-const NARROW_TEXT_PROBE = { ...TEXT_PROBE, op: "not_equals" } as const;
-const NARROW_RANGE_PROBE = { ...RANGE_PROBE, exclude: true } as const;
+const RANGE_OPS: FilterOp[] = [
+  "greater_than",
+  "greater_or_equal",
+  "less_than",
+  "less_or_equal",
+  "between",
+  "not_between",
+  "in_period",
+];
 
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
-    equals: {},
-    ranges: [],
-    texts: [],
-    overlaps: {},
+    filters: [],
     combine: "and",
     search: null,
     sort: def.defaultSort,
@@ -122,28 +119,81 @@ export function defaultQuery(def: BaseGridDef): QueryState {
   };
 }
 
-export function withoutKey(
-  record: Record<string, string[]>,
-  key: string,
-): Record<string, string[]> {
-  return Object.fromEntries(
-    Object.entries(record).filter(([name]) => name !== key),
+// A probe stands for any value the control could send: a text one long enough for a text index, a list one the fixed values keep a remainder of.
+export function createProbeFilter(
+  field: BaseFieldDef,
+  op: FilterOp,
+  short = false,
+): Filter {
+  const { key } = field;
+  switch (getOperatorShape(op)) {
+    case "one": {
+      const text = resolveFieldKind(field) === "text" && !short;
+      return {
+        field: key,
+        op,
+        value: text ? "x".repeat(TEXT_INDEX_MIN_LENGTH) : "x",
+      } as Filter;
+    }
+    case "pair":
+      return { field: key, op, min: "x", max: "y" } as Filter;
+    case "list": {
+      const [first] = listFixedValues(field) ?? PROBE;
+      return { field: key, op, values: [first] } as Filter;
+    }
+    case "preset":
+      return { field: key, op: "in_period", preset: "today" };
+    case "none":
+      return { field: key, op } as Filter;
+  }
+}
+
+function isBoundFilter(def: BaseGridDef, filter: Filter): boolean {
+  const field = getField(def, filter.field);
+  const kind = field ? resolveFieldKind(field) : null;
+  return (
+    (kind === "number" || kind === "date") &&
+    filter.op !== "blank" &&
+    filter.op !== "not_blank"
   );
 }
 
-function proposeClear(
+function replaceFilter(
+  query: QueryState,
+  filter: Filter,
+  at: number,
+): Filter[] {
+  const target = listFieldFilters(query, filter.field)[at];
+  return target
+    ? query.filters.map((item) => (item === target ? filter : item))
+    : [...query.filters, filter];
+}
+
+function dropFilters(
+  query: QueryState,
+  field: string,
+  at: number | undefined,
+): Filter[] {
+  if (at === undefined) {
+    return query.filters.filter((filter) => filter.field !== field);
+  }
+  const target = listFieldFilters(query, field)[at];
+  return query.filters.filter((filter) => filter !== target);
+}
+
+function proposeRemove(
   def: BaseGridDef,
   query: QueryState,
   field: string,
+  at: number | undefined,
 ): QueryState[] {
-  const equals = withoutKey(query.equals, field);
+  const filters = dropFilters(query, field, at);
   return [
-    { ...query, cursor: null, equals },
+    { ...query, cursor: null, filters },
     {
       ...query,
       cursor: null,
-      equals,
-      ranges: [],
+      filters: filters.filter((filter) => !isBoundFilter(def, filter)),
       sort: def.defaultSort,
       thenBy: undefined,
     },
@@ -151,62 +201,66 @@ function proposeClear(
   ];
 }
 
-function proposeEquals(
+function normalizeFilter(filter: Filter): Filter | null {
+  if ("values" in filter) {
+    const values = [...new Set(filter.values)];
+    return values.length > 0 ? { ...filter, values } : null;
+  }
+  return filter;
+}
+
+function proposeSetFilter(
   def: BaseGridDef,
   query: QueryState,
-  field: string,
-  values: string[],
+  given: Filter,
+  at: number,
 ): QueryState[] {
-  const unique = [...new Set(values)];
-  if (unique.length === 0) {
-    return proposeClear(def, query, field);
+  const filter = normalizeFilter(given);
+  if (!filter) {
+    return proposeRemove(def, query, given.field, at);
   }
-  const target = getField(def, field);
-  if (target && !canExpandEquals(target, unique)) {
-    return [];
+  const field = getField(def, filter.field);
+  if (field && "values" in filter) {
+    const literal = isLiteralOp(field, filter.op);
+    const fits = literal
+      ? canExpandNoneOf(field, filter)
+      : filter.values.length <= resolveMaxValues(field);
+    if (!fits) {
+      return [];
+    }
+  }
+  const top = { ...query, cursor: null };
+  const replaced = { ...top, filters: replaceFilter(query, filter, at) };
+  if (!isBoundFilter(def, filter)) {
+    return [replaced];
   }
   return [
-    { ...query, cursor: null, equals: { ...query.equals, [field]: unique } },
+    replaced,
+    {
+      ...top,
+      filters: [
+        ...query.filters.filter(
+          (item) => item.field !== filter.field && !isBoundFilter(def, item),
+        ),
+        filter,
+      ],
+    },
   ];
 }
 
-function proposeOverlap(
+function proposeRemoveValue(
+  def: BaseGridDef,
   query: QueryState,
   field: string,
-  values: string[],
-): QueryState[] {
-  const unique = [...new Set(values)];
-  const overlaps =
-    unique.length === 0
-      ? withoutKey(query.overlaps, field)
-      : { ...query.overlaps, [field]: unique };
-  return [{ ...query, cursor: null, overlaps }];
-}
-
-function replaceRange(
-  query: QueryState,
-  range: RangeState,
   at: number,
-): RangeState[] {
-  const target = listRanges(query, range.field)[at];
-  return target
-    ? query.ranges.map((item) => (item === target ? range : item))
-    : [...query.ranges, range];
-}
-
-function clearRanges(
-  query: QueryState,
-  field: string | undefined,
-  at: number | undefined,
-): RangeState[] {
-  if (field === undefined) {
+  value: string | null,
+): QueryState[] {
+  const target = listFieldFilters(query, field)[at];
+  if (!target || !("values" in target)) {
     return [];
   }
-  if (at === undefined) {
-    return query.ranges.filter((range) => range.field !== field);
-  }
-  const target = listRanges(query, field)[at];
-  return query.ranges.filter((range) => range !== target);
+  const values = target.values.filter((item) => item !== value);
+  return proposeSetFilter(def, query, { ...target, values }, at);
 }
 
 function proposeAddSort(
@@ -262,66 +316,18 @@ function proposeAction(
   const top = { ...query, cursor: null };
   const searchIsOrdered = context.capabilities.searchIsOrdered;
   switch (action.type) {
-    case "setEquals":
-      return proposeEquals(def, query, action.field, action.values);
-    case "removeEqualsValue":
-      return proposeEquals(
+    case "setFilter":
+      return proposeSetFilter(def, query, action.filter, action.at ?? 0);
+    case "removeFilter":
+      return proposeRemove(def, query, action.field, action.at);
+    case "removeFilterValue":
+      return proposeRemoveValue(
         def,
         query,
         action.field,
-        (query.equals[action.field] ?? []).filter(
-          (value) => value !== action.value,
-        ),
+        action.at,
+        action.value,
       );
-    case "clearEquals":
-      return proposeClear(def, query, action.field);
-    case "setRange": {
-      const range = toRange(action.field ?? query.sort.field, action);
-      const others = query.ranges.filter((item) => item.field !== range.field);
-      if (action.at !== undefined) {
-        return [
-          { ...top, ranges: replaceRange(query, range, action.at) },
-          { ...top, ranges: [range] },
-        ];
-      }
-      return [
-        { ...top, ranges: [...others, range] },
-        { ...top, ranges: [range] },
-      ];
-    }
-    case "addRange":
-      return [
-        { ...top, ranges: [...query.ranges, toRange(action.field, action)] },
-      ];
-    case "clearRange":
-      return [{ ...top, ranges: clearRanges(query, action.field, action.at) }];
-    case "setText": {
-      const text = { field: action.field, op: action.op, value: action.value };
-      const texts = [...query.texts];
-      texts[Math.min(action.at ?? texts.length, texts.length)] = text;
-      return [{ ...top, texts }];
-    }
-    case "removeText":
-      return [
-        {
-          ...top,
-          texts: query.texts.filter((_, index) => index !== action.at),
-        },
-      ];
-    case "clearTexts":
-      return [{ ...top, texts: [] }];
-    case "setOverlap":
-      return proposeOverlap(query, action.field, action.values);
-    case "removeOverlapValue":
-      return proposeOverlap(
-        query,
-        action.field,
-        (query.overlaps[action.field] ?? []).filter(
-          (value) => value !== action.value,
-        ),
-      );
-    case "clearOverlap":
-      return proposeOverlap(query, action.field, []);
     case "setCombine":
       return [{ ...top, combine: action.combine }];
     case "setGroup":
@@ -436,30 +442,82 @@ function isOffered(
   return first !== undefined && isAnswerable(query, first, context);
 }
 
-export function listOffers(
+function isOpOffered(
+  def: BaseGridDef,
+  query: QueryState,
+  field: BaseFieldDef,
+  op: FilterOp,
+  context: OfferContext,
+  short = false,
+): boolean {
+  const filter = createProbeFilter(field, op, short);
+  return isOffered(def, query, { type: "setFilter", filter }, context);
+}
+
+interface OpListing {
+  field: BaseFieldDef;
+  op: FilterOp;
+  offered: boolean;
+}
+
+function listOpListings(
   def: BaseGridDef,
   query: QueryState,
   context: OfferContext,
-): Offers {
-  const offersEquals = (values: string[]) =>
-    context.capabilities.equalsFields.filter((field) =>
-      isOffered(def, query, { type: "setEquals", field, values }, context),
+): OpListing[] {
+  return def.fields.flatMap((field) =>
+    listCapableOps(context.capabilities, field.key).map((op) => ({
+      field,
+      op,
+      offered: isOpOffered(def, query, field, op, context),
+    })),
+  );
+}
+
+function listMulti(
+  def: BaseGridDef,
+  query: QueryState,
+  context: OfferContext,
+): string[] {
+  return Object.entries(context.capabilities.filterOps)
+    .filter(([, ops]) => ops.includes("any_of"))
+    .map(([key]) => key)
+    .filter((key) =>
+      isOffered(
+        def,
+        query,
+        {
+          type: "setFilter",
+          filter: { field: key, op: "any_of", values: PROBE },
+        },
+        context,
+      ),
     );
+}
+
+function resolveMinLength(
+  def: BaseGridDef,
+  query: QueryState,
+  listing: OpListing,
+  context: OfferContext,
+): number | undefined {
+  const { field, op, offered } = listing;
+  const matched =
+    offered &&
+    resolveFieldKind(field) === "text" &&
+    TEXT_MATCH_OPS.includes(op);
+  if (!matched || isOpOffered(def, query, field, op, context, true)) {
+    return undefined;
+  }
+  return TEXT_INDEX_MIN_LENGTH;
+}
+
+function listCoreOffers(
+  def: BaseGridDef,
+  query: QueryState,
+  context: OfferContext,
+): Omit<Offers, "filters" | "multi"> {
   return {
-    equals: offersEquals(PROBE.slice(0, 1)),
-    multi: offersEquals(PROBE),
-    exclude: context.capabilities.equalsFields.filter((field) => {
-      const [first] = getField(def, field)?.options ?? [];
-      return (
-        first !== undefined &&
-        isOffered(
-          def,
-          query,
-          { type: "setEquals", field, values: toExcludeValues([first.value]) },
-          context,
-        )
-      );
-    }),
     sorts: context.capabilities.sortFields.filter((field) =>
       proposeAction(
         def,
@@ -478,36 +536,6 @@ export function listOffers(
           context,
         ),
     ),
-    ranges: context.capabilities.rangeFields.filter((field) =>
-      isOffered(
-        def,
-        query,
-        { type: "setRange", field, ...RANGE_PROBE },
-        context,
-      ),
-    ),
-    narrowRanges: context.capabilities.rangeFields.filter((field) =>
-      isOffered(
-        def,
-        query,
-        { type: "setRange", field, ...NARROW_RANGE_PROBE },
-        context,
-      ),
-    ),
-    texts: context.capabilities.textFields.filter((field) =>
-      isOffered(def, query, { ...TEXT_PROBE, field }, context),
-    ),
-    narrowTexts: context.capabilities.textFields.filter((field) =>
-      isOffered(def, query, { ...NARROW_TEXT_PROBE, field }, context),
-    ),
-    overlaps: context.capabilities.overlapFields.filter((field) =>
-      isOffered(
-        def,
-        query,
-        { type: "setOverlap", field, values: PROBE.slice(0, 1) },
-        context,
-      ),
-    ),
     combineOr:
       context.capabilities.combineOr &&
       isOffered(def, query, { type: "setCombine", combine: "or" }, context),
@@ -518,21 +546,64 @@ export function listOffers(
   };
 }
 
+export function listOffers(
+  def: BaseGridDef,
+  query: QueryState,
+  context: OfferContext,
+): Offers {
+  const filters: Record<string, OpOffer[]> = {};
+  for (const listing of listOpListings(def, query, context)) {
+    const { field, op, offered } = listing;
+    const minLength = resolveMinLength(def, query, listing, context);
+    const offer: OpOffer = {
+      op,
+      offered,
+      reason: offered
+        ? null
+        : explainUnavailable(
+            def,
+            query,
+            { kind: "filter", field: field.key, op },
+            context,
+          ),
+      ...(minLength === undefined ? {} : { minLength }),
+    };
+    filters[field.key] = [...(filters[field.key] ?? []), offer];
+  }
+  return {
+    filters,
+    multi: listMulti(def, query, context),
+    ...listCoreOffers(def, query, context),
+  };
+}
+
+function isRangeOp(op: FilterOp): boolean {
+  return RANGE_OPS.includes(op);
+}
+
 function describeQuery(
   query: QueryState,
   code: ReasonCode,
   field: string | null,
 ): UnavailableReason {
+  const others = query.filters.filter((filter) => filter.field !== field);
   return {
     code,
     field,
     filters: [
-      ...Object.keys(query.equals),
-      ...Object.keys(query.overlaps),
-    ].filter((key) => key !== field),
-    ranges: query.ranges
-      .map((range) => range.field)
-      .filter((key) => key !== field),
+      ...new Set(
+        others
+          .filter((filter) => !isRangeOp(filter.op))
+          .map((filter) => filter.field),
+      ),
+    ],
+    ranges: [
+      ...new Set(
+        others
+          .filter((filter) => isRangeOp(filter.op))
+          .map((filter) => filter.field),
+      ),
+    ],
     sort: query.sort.field,
     rows: null,
     capped: false,
@@ -542,29 +613,20 @@ function describeQuery(
 
 const NARROW_BY_MAX = 2;
 
-function toCandidate(query: QueryState, target: OfferTarget): QueryState {
+function toCandidate(
+  def: BaseGridDef,
+  query: QueryState,
+  target: OfferTarget,
+): QueryState {
   switch (target.kind) {
-    case "range":
-      return {
-        ...query,
-        ranges: [
-          ...query.ranges.filter((range) => range.field !== target.field),
-          { field: target.field, min: "x", max: null },
-        ],
-      };
-    case "text":
-      return {
-        ...query,
-        texts: [
-          ...query.texts,
-          { field: target.field, op: TEXT_PROBE.op, value: TEXT_PROBE.value },
-        ],
-      };
-    case "overlap":
-      return {
-        ...query,
-        overlaps: { ...query.overlaps, [target.field]: PROBE.slice(0, 1) },
-      };
+    case "filter": {
+      const field = getField(def, target.field);
+      if (!field) {
+        return query;
+      }
+      const filter = createProbeFilter(field, target.op);
+      return { ...query, filters: replaceFilter(query, filter, 0) };
+    }
     case "combine":
       return { ...query, combine: "or" };
     case "group":
@@ -579,13 +641,30 @@ function toCandidate(query: QueryState, target: OfferTarget): QueryState {
   }
 }
 
+function listNarrowBy(
+  def: BaseGridDef,
+  query: QueryState,
+  context: OfferContext,
+): string[] {
+  return def.fields
+    .filter(
+      (field) =>
+        resolveFieldKind(field) === "choice" &&
+        listCapableOps(context.capabilities, field.key).includes("any_of") &&
+        listFieldFilters(query, field.key).length === 0,
+    )
+    .map((field) => field.key)
+    .slice(0, NARROW_BY_MAX);
+}
+
 function explainNarrowing(
+  def: BaseGridDef,
   query: QueryState,
   target: OfferTarget,
   context: OfferContext,
-  candidate: QueryState = toCandidate(query, target),
 ): UnavailableReason | null {
   const { capabilities, narrowed } = context;
+  const candidate = toCandidate(def, query, target);
   if (candidate === query || !capabilities.canRun(candidate)) {
     return null;
   }
@@ -603,42 +682,33 @@ function explainNarrowing(
     rows: size?.rows ?? narrowed.limit,
     capped: size?.capped ?? true,
     narrowBy:
-      target.kind === "combine"
-        ? []
-        : capabilities.equalsFields
-            .filter((key) => query.equals[key] === undefined)
-            .slice(0, NARROW_BY_MAX),
+      target.kind === "combine" ? [] : listNarrowBy(def, query, context),
   };
 }
 
-// Why a field takes only what an index answers: the reason the rest of its operators (a negation, a short text value), which run over the narrowed set, are held.
-export function explainNarrowed(
+function explainFilter(
+  def: BaseGridDef,
   query: QueryState,
-  target: Extract<OfferTarget, { kind: "text" | "range" }>,
-  context: OfferContext,
+  target: Extract<OfferTarget, { kind: "filter" }>,
 ): UnavailableReason {
-  const { field } = target;
-  const candidate: QueryState =
-    target.kind === "text"
-      ? { ...query, texts: [...query.texts, { ...NARROW_TEXT_PROBE, field }] }
-      : {
-          ...query,
-          ranges: [
-            ...query.ranges.filter((range) => range.field !== field),
-            { field, ...NARROW_RANGE_PROBE },
-          ],
-        };
-  return (
-    explainNarrowing(query, target, context, candidate) ??
-    describeQuery(
-      query,
-      target.kind === "text" ? "no_filter_with" : "no_range_with",
-      field,
-    )
+  const field = getField(def, target.field);
+  const compared =
+    isRangeOp(target.op) ||
+    (target.op === "equals" &&
+      field !== null &&
+      resolveFieldKind(field) !== "text");
+  if (!compared) {
+    return describeQuery(query, "no_filter_with", target.field);
+  }
+  return describeQuery(
+    query,
+    query.sort.field === target.field ? "no_range_with" : "range_needs_sort",
+    target.field,
   );
 }
 
 export function explainUnavailable(
+  def: BaseGridDef,
   query: QueryState,
   target: OfferTarget,
   context: OfferContext,
@@ -650,7 +720,9 @@ export function explainUnavailable(
     return describeQuery(query, "search_no_combine", null);
   }
   const narrowing =
-    query.search === null ? explainNarrowing(query, target, context) : null;
+    query.search === null
+      ? explainNarrowing(def, query, target, context)
+      : null;
   if (narrowing) {
     return narrowing;
   }
@@ -675,9 +747,6 @@ export function explainUnavailable(
   if (query.search !== null) {
     return describeQuery(query, "search_no_combine", target.field);
   }
-  if (target.kind === "range" && query.sort.field !== target.field) {
-    return describeQuery(query, "range_needs_sort", target.field);
-  }
   if (target.kind === "thenBy" && listSorts(query).length >= SORT_MAX) {
     return describeQuery(query, "sort_limit", target.field);
   }
@@ -687,28 +756,16 @@ export function explainUnavailable(
       field: target.field,
     };
   }
-  return describeQuery(
-    query,
-    target.kind === "range" ? "no_range_with" : "no_filter_with",
-    target.field,
-  );
+  return explainFilter(def, query, target);
 }
 
 function stateKey(query: QueryState): string {
   return [
-    Object.entries(query.equals)
-      .map(([key, values]) => (values.length > 1 ? `${key}*` : key))
-      .sort()
-      .join("+"),
-    query.ranges
-      .map((range) => `range:${range.field}`)
-      .sort()
-      .join("+"),
-    [...new Set(query.texts.map((text) => `text:${text.field}:${text.op}`))]
-      .sort()
-      .join("+"),
-    Object.keys(query.overlaps)
-      .map((key) => `overlap:${key}`)
+    query.filters
+      .map((filter) => {
+        const several = "values" in filter && filter.values.length > 1;
+        return `${filter.field}:${filter.op}${several ? "*" : ""}`;
+      })
       .sort()
       .join("+"),
     query.combine,
@@ -725,39 +782,35 @@ export function listControlActions(
   query: QueryState,
   context: OfferContext,
 ): QueryAction[] {
-  const offers = listOffers(def, query, context);
   const actions: QueryAction[] = [{ type: "reset" }];
-  for (const field of offers.equals) {
-    actions.push({ type: "setEquals", field, values: PROBE.slice(0, 1) });
+  const multi = listMulti(def, query, context);
+  for (const { field, op, offered } of listOpListings(def, query, context)) {
+    if (offered) {
+      actions.push({ type: "setFilter", filter: createProbeFilter(field, op) });
+    }
   }
-  for (const field of offers.multi) {
-    actions.push({ type: "setEquals", field, values: PROBE });
+  for (const field of multi) {
+    actions.push({
+      type: "setFilter",
+      filter: { field, op: "any_of", values: PROBE },
+    });
   }
-  for (const field of Object.keys(query.equals)) {
-    actions.push({ type: "clearEquals", field });
-    actions.push({ type: "removeEqualsValue", field, value: PROBE[1] });
+  for (const filter of query.filters) {
+    const at = listFieldFilters(query, filter.field).indexOf(filter);
+    actions.push({ type: "removeFilter", field: filter.field, at });
+    if ("values" in filter) {
+      actions.push({
+        type: "removeFilterValue",
+        field: filter.field,
+        at,
+        value: PROBE[1],
+      });
+    }
   }
+  const offers = listCoreOffers(def, query, context);
   for (const field of offers.sorts) {
     actions.push({ type: "setSort", field, direction: "asc" });
     actions.push({ type: "setSort", field, direction: "desc" });
-  }
-  for (const field of offers.ranges) {
-    actions.push({ type: "setRange", field, min: "x", max: null });
-  }
-  for (const range of query.ranges) {
-    actions.push({ type: "clearRange", field: range.field });
-  }
-  for (const field of offers.texts) {
-    actions.push({ ...TEXT_PROBE, field });
-  }
-  if (query.texts.length > 0) {
-    actions.push({ type: "clearTexts" });
-  }
-  for (const field of offers.overlaps) {
-    actions.push({ type: "setOverlap", field, values: PROBE.slice(0, 1) });
-  }
-  for (const field of Object.keys(query.overlaps)) {
-    actions.push({ type: "clearOverlap", field });
   }
   if (offers.combineOr) {
     actions.push({ type: "setCombine", combine: "or" });

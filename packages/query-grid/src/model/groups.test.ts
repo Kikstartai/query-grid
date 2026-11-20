@@ -2,16 +2,20 @@ import { describe, expect, test } from "bun:test";
 
 import { listFilterChips } from "./chips.ts";
 import type { GridRow } from "./grid-def.ts";
-import type { QueryState } from "./query-state.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 import type { NarrowedState, OfferContext } from "./capabilities.ts";
-import { EMPTY_VALUE, NOT_EMPTY_VALUE } from "./field-values.ts";
 import {
   createTestSource,
   settle,
   TEST_DEF,
   TEST_INDEXES,
 } from "./grid-def.fixture.ts";
-import { createGrouping, getGroupQuery, sortGroups } from "./groups.ts";
+import {
+  BLANK_GROUP,
+  createGrouping,
+  getGroupQuery,
+  sortGroups,
+} from "./groups.ts";
 import { indexCapabilities, isFacetOnlyQuery, planQuery } from "./indexes.ts";
 import type { IndexedGridDef } from "./grid-def.ts";
 import { createMemorySource } from "./memory-source.ts";
@@ -81,7 +85,7 @@ describe("what may be grouped", () => {
     const over = contextFor(BASE, true);
     expect(listOffers(DEF, BASE, over).groups).toEqual(["status"]);
     expect(
-      explainUnavailable(BASE, { kind: "group", field: "region" }, over),
+      explainUnavailable(DEF, BASE, { kind: "group", field: "region" }, over),
     ).toMatchObject({ code: "narrow_first", field: "region", rows: 1000 });
     expect(listOffers(DEF, BASE, contextFor(BASE, false)).groups).toEqual([
       "status",
@@ -100,6 +104,7 @@ describe("what may be grouped", () => {
     expect(CAPABILITIES.canRun({ ...byTotal, group: "region" })).toBe(false);
     expect(
       explainUnavailable(
+        DEF,
         byTotal,
         { kind: "group", field: "region" },
         contextFor(byTotal, false),
@@ -112,7 +117,10 @@ describe("what may be grouped", () => {
       CAPABILITIES.canRun({
         ...BASE,
         combine: "or",
-        equals: { status: ["open"], region: ["north"] },
+        filters: [
+          { field: "status", op: "any_of", values: ["open"] },
+          { field: "region", op: "any_of", values: ["north"] },
+        ],
         group: "status",
       }),
     ).toBe(false);
@@ -154,7 +162,10 @@ describe("review fixes", () => {
     const either: QueryState = {
       ...BASE,
       combine: "or",
-      equals: { status: ["open"], region: ["north"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["north"] },
+      ],
     };
     expect(memory.canRun(either)).toBe(true);
     expect(memory.canRun({ ...either, group: "status" })).toBe(false);
@@ -173,7 +184,7 @@ describe("review fixes", () => {
     expect(byName.groups.map((group) => group.value)).toEqual(["B"]);
     const byNote = await source.fetchGroups({ ...BASE, group: "note" }, signal);
     expect(byNote.groups.map((group) => group.value).sort()).toEqual([
-      EMPTY_VALUE,
+      BLANK_GROUP,
       "x",
     ]);
   });
@@ -182,26 +193,38 @@ describe("review fixes", () => {
     const plan = planQuery(TEST_INDEXES, {
       ...BASE,
       group: "region",
-      texts: [{ field: "note", op: "contains", value: "gift" }],
+      filters: [{ field: "note", op: "contains", value: "gift" }],
     });
     expect(plan?.core.group).toBeNull();
     const any = planQuery(TEST_INDEXES, {
       ...BASE,
       group: "region",
       combine: "or",
-      equals: { status: ["open"], region: ["north"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["north"] },
+      ],
     });
     expect(any?.terms?.every((term) => term.group === null)).toBe(true);
   });
 
   test("a reserved value on the counted field is not answered by the counters", () => {
     expect(
-      isFacetOnlyQuery("status", { ...BASE, equals: { status: ["open"] } }),
+      isFacetOnlyQuery("status", {
+        ...BASE,
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
+      }),
     ).toBe(true);
-    for (const value of [EMPTY_VALUE, NOT_EMPTY_VALUE]) {
-      expect(
-        isFacetOnlyQuery("status", { ...BASE, equals: { status: [value] } }),
-      ).toBe(false);
+    const blanks: Filter[] = [
+      { field: "status", op: "any_of", values: ["open", null] },
+      { field: "status", op: "blank" },
+      { field: "status", op: "not_blank" },
+      { field: "status", op: "none_of", values: ["open"] },
+    ];
+    for (const filter of blanks) {
+      expect(isFacetOnlyQuery("status", { ...BASE, filters: [filter] })).toBe(
+        false,
+      );
     }
   });
 
@@ -240,21 +263,30 @@ describe("the query of one group", () => {
     const query: QueryState = {
       ...BASE,
       group: "region",
-      equals: { status: ["open"] },
+      filters: [{ field: "status", op: "any_of", values: ["open"] }],
     };
     expect(getGroupQuery(query, "north")).toEqual({
       ...query,
       group: null,
-      equals: { status: ["open"], region: ["north"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "region", op: "any_of", values: ["north"] },
+      ],
     });
     expect(
       getGroupQuery(
-        { ...query, equals: { region: ["north", "south"] } },
+        {
+          ...query,
+          filters: [
+            { field: "region", op: "any_of", values: ["north", "south"] },
+          ],
+        },
         "south",
-      ).equals,
-    ).toEqual({ region: ["south"] });
-    expect(getGroupQuery(query, EMPTY_VALUE).equals.region).toEqual([
-      EMPTY_VALUE,
+      ).filters,
+    ).toEqual([{ field: "region", op: "any_of", values: ["south"] }]);
+    expect(getGroupQuery(query, BLANK_GROUP).filters).toEqual([
+      { field: "status", op: "any_of", values: ["open"] },
+      { field: "region", op: "blank" },
     ]);
   });
 
@@ -287,7 +319,12 @@ describe("a grouping", () => {
         pages.push(query);
         return {
           rows: ROWS.filter((row) =>
-            query.equals.status.includes(String(row.status)),
+            query.filters.some(
+              (filter) =>
+                filter.field === "status" &&
+                "values" in filter &&
+                filter.values.includes(String(row.status)),
+            ),
           ).slice(0, 3),
           nextCursor: "next",
           hasNext: true,
@@ -321,7 +358,7 @@ describe("a grouping", () => {
     expect(pages).toHaveLength(1);
     expect(pages[0]).toMatchObject({
       group: null,
-      equals: { status: ["done"] },
+      filters: [{ field: "status", op: "any_of", values: ["done"] }],
       cursor: null,
     });
     const done = grouping.getState().groups[1];
@@ -395,7 +432,11 @@ describe("the in-memory source groups", () => {
 
   test("by any equality field, with counts and sums, under the other filters", async () => {
     const result = await source.fetchGroups(
-      { ...BASE, group: "region", equals: { status: ["open"] } },
+      {
+        ...BASE,
+        group: "region",
+        filters: [{ field: "status", op: "any_of", values: ["open"] }],
+      },
       signal,
     );
     expect(result).toMatchObject({ source: "live", truncated: false });
@@ -421,10 +462,10 @@ describe("the in-memory source groups", () => {
     const result = await source.fetchGroups({ ...BASE, group: "note" }, signal);
     expect(result.groups.map((group) => [group.value, group.count])).toEqual([
       ["gift", 9],
-      [EMPTY_VALUE, 3],
+      [BLANK_GROUP, 3],
     ]);
     const page = await source.fetchPage(
-      getGroupQuery({ ...BASE, group: "note" }, EMPTY_VALUE),
+      getGroupQuery({ ...BASE, group: "note" }, BLANK_GROUP),
       20,
       signal,
     );
@@ -470,7 +511,10 @@ describe("the main feed and a group change", () => {
     await settle();
     expect(pages).toBe(1);
     expect(feed.getState().query.group).toBe("status");
-    store.dispatch({ type: "setEquals", field: "status", values: ["open"] });
+    store.dispatch({
+      type: "setFilter",
+      filter: { field: "status", op: "any_of", values: ["open"] },
+    });
     await settle();
     expect(pages).toBe(2);
   });

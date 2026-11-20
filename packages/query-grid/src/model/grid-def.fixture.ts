@@ -61,8 +61,6 @@ export const UNTIERED = {
   combineOr: false,
   isNarrowed: () => false,
   narrowBasis: () => "",
-  textFields: [],
-  overlapFields: [],
   groupFields: [],
   thenByFields: [],
   sortOrders: [],

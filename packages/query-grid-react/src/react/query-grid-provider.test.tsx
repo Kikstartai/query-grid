@@ -10,6 +10,7 @@ import {
   getLaneQueries,
   encodeQuery,
   type DataSource,
+  type Filter,
   type QueryState,
   type QueryStore,
 } from "@kikstart/query-grid";
@@ -39,6 +40,14 @@ const DEF = TEST_GRID_DEF;
 const BASE = defaultQuery(DEF);
 const source = createMemorySource(DEF, TEST_ROWS);
 const CAPABILITIES = source.capabilities;
+
+function statusAnyOf(values: string[]): Filter {
+  return { field: "status", op: "any_of", values };
+}
+
+function regionAnyOf(values: string[]): Filter {
+  return { field: "region", op: "any_of", values };
+}
 
 function Readout() {
   const query = useQueryState();
@@ -78,14 +87,11 @@ function renderAt(search: string) {
 
 describe("the URL parsers", () => {
   test("the key map is built from the def at runtime, on core's keys", () => {
+    const filterKeys = Object.entries(CAPABILITIES.filterOps).flatMap(
+      ([field, ops]) => ops.map((op) => `f.${field}.${op}`),
+    );
     expect(Object.keys(buildUrlParsers(CAPABILITIES))).toEqual([
-      ...CAPABILITIES.equalsFields.map((key) => `f.${key}`),
-      "r.number",
-      "r.created_at",
-      "r.total",
-      ...CAPABILITIES.textFields.flatMap((key) =>
-        ["c", "nc", "sw", "ew", "ne"].map((prefix) => `${prefix}.${key}`),
-      ),
+      ...filterKeys,
       "match",
       "group",
       "q",
@@ -93,15 +99,21 @@ describe("the URL parsers", () => {
       "cursor",
       "view",
     ]);
-    expect(CAPABILITIES.textFields).toEqual(["name", "note"]);
+    expect(filterKeys).toContain("f.status.any_of");
+    expect(filterKeys).toContain("f.total.between");
+    expect(filterKeys).toContain("f.note.blank");
+    expect(filterKeys).not.toContain("f.name.blank");
   });
 
   test("a state written for nuqs is the one core encodes, and reads back", () => {
     const state = {
       query: {
         ...BASE,
-        equals: { status: ["open", "done"], region: ["north"] },
-        ranges: [{ field: "total", min: "100", max: null }],
+        filters: [
+          { field: "total", op: "greater_or_equal" as const, value: "100" },
+          statusAnyOf(["open", "done"]),
+          regionAnyOf(["north"]),
+        ],
         sort: { field: "total", direction: "asc" as const },
       },
       view: "list" as const,
@@ -109,21 +121,13 @@ describe("the URL parsers", () => {
     const values = toUrlValues(DEF, CAPABILITIES, state);
     expect(values).toEqual({
       ...Object.fromEntries(
-        CAPABILITIES.equalsFields.map((key) => [`f.${key}`, []]),
-      ),
-      "f.status": ["open", "done"],
-      "f.region": ["north"],
-      "r.number": [],
-      "r.created_at": [],
-      "r.total": ["100.."],
-      ...Object.fromEntries(
-        CAPABILITIES.textFields.flatMap((key) =>
-          ["c", "nc", "sw", "ew", "ne"].map((prefix) => [
-            `${prefix}.${key}`,
-            [],
-          ]),
+        Object.entries(CAPABILITIES.filterOps).flatMap(([field, ops]) =>
+          ops.map((op) => [`f.${field}.${op}`, []]),
         ),
       ),
+      "f.status.any_of": ["open", "done"],
+      "f.region.any_of": ["north"],
+      "f.total.greater_or_equal": ["100"],
       match: null,
       group: null,
       q: null,
@@ -146,11 +150,13 @@ describe("the URL parsers", () => {
 describe("the provider under a nuqs adapter", () => {
   test("it starts from the URL, with several values, a sort and a view", () => {
     expect(
-      renderAt("?f.status=open&f.status=done&sort=total.asc&view=board"),
+      renderAt(
+        "?f.status.any_of=open&f.status.any_of=done&sort=total.asc&view=board",
+      ),
     ).toEqual({
       query: {
         ...BASE,
-        equals: { status: ["open", "done"] },
+        filters: [statusAnyOf(["open", "done"])],
         sort: { field: "total", direction: "asc" },
       },
       view: "board",
@@ -162,12 +168,17 @@ describe("the provider under a nuqs adapter", () => {
   });
 
   test("a URL nothing answers falls back to the default query", () => {
-    expect(renderAt("?f.status=nope&sort=total.asc").query).toEqual(BASE);
+    expect(renderAt("?f.status.any_of=nope&sort=total.asc").query).toEqual(
+      BASE,
+    );
     expect(renderAt("?sort=missing.asc").query).toEqual(BASE);
   });
 
   test("a parameter the def does not own is left alone", () => {
-    expect(renderAt("?utm_source=mail&f.unknown=x&q=name").query).toEqual({
+    expect(
+      renderAt("?utm_source=mail&f.unknown.any_of=x&f.status=open&q=name")
+        .query,
+    ).toEqual({
       ...BASE,
       search: "name",
     });
@@ -211,7 +222,7 @@ describe("two grids on one page", () => {
 
   test("each provider reads its own keys from one URL", () => {
     const [first, second] = readAll(
-      <NuqsTestingAdapter searchParams="?a.f.status=open&a.q=acme&b.f.status=done&b.view=list&q=stray">
+      <NuqsTestingAdapter searchParams="?a.f.status.any_of=open&a.q=acme&b.f.status.any_of=done&b.view=list&q=stray">
         <QueryGridProvider
           def={DEF}
           source={source}
@@ -231,11 +242,11 @@ describe("two grids on one page", () => {
       </NuqsTestingAdapter>,
     );
     expect(first).toEqual({
-      query: { ...BASE, equals: { status: ["open"] }, search: "acme" },
+      query: { ...BASE, filters: [statusAnyOf(["open"])], search: "acme" },
       view: "grid",
     });
     expect(second).toEqual({
-      query: { ...BASE, equals: { status: ["done"] } },
+      query: { ...BASE, filters: [statusAnyOf(["done"])] },
       view: "list",
     });
   });
@@ -249,17 +260,13 @@ describe("two grids on one page", () => {
     second.sync.follow(toQueryString(CAPABILITIES, url, "b"));
     expect(second.store.getQuery()).toEqual(BASE);
     expect(second.store.getView()).toBe("grid");
-    second.store.dispatch({
-      type: "setEquals",
-      field: "status",
-      values: ["done"],
-    });
+    second.store.dispatch({ type: "setFilter", filter: statusAnyOf(["done"]) });
     first.sync.follow(toQueryString(CAPABILITIES, url, "a"));
     expect(first.store.getQuery()).toEqual({ ...BASE, search: "acme" });
     expect(toQueryString(CAPABILITIES, url, "a")).toBe("q=acme&view=board");
-    expect(toQueryString(CAPABILITIES, url, "b")).toBe("f.status=done");
+    expect(toQueryString(CAPABILITIES, url, "b")).toBe("f.status.any_of=done");
     expect(url["a.q"]).toBe("acme");
-    expect(url["b.f.status"]).toEqual(["done"]);
+    expect(url["b.f.status.any_of"]).toEqual(["done"]);
     expect(url.q).toBeUndefined();
   });
 });
@@ -323,14 +330,14 @@ describe("the static provider", () => {
           def={DEF}
           source={source}
           urlPrefix="b"
-          queryString="f.region=north&b.f.region=south&b.view=list"
+          queryString="f.region.any_of=north&b.f.region.any_of=south&b.view=list"
           columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </StaticQueryGridProvider>,
       ),
     ).toEqual({
-      query: { ...BASE, equals: { region: ["south"] } },
+      query: { ...BASE, filters: [regionAnyOf(["south"])] },
       view: "list",
     });
   });
@@ -341,14 +348,14 @@ describe("the static provider", () => {
         <StaticQueryGridProvider
           def={DEF}
           source={source}
-          queryString="f.region=south&view=list"
+          queryString="f.region.any_of=south&view=list"
           columnPersistence={NO_PERSISTENCE}
         >
           <Readout />
         </StaticQueryGridProvider>,
       ),
     ).toEqual({
-      query: { ...BASE, equals: { region: ["south"] } },
+      query: { ...BASE, filters: [regionAnyOf(["south"])] },
       view: "list",
     });
   });

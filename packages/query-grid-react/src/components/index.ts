@@ -56,13 +56,13 @@ export {
 } from "./facet-panel.tsx";
 export {
   EqualsSelect,
+  FieldFilter,
   LookupFilter,
-  RangeFilter,
   type EqualsSelectProps,
-  type FieldRange,
+  type FieldFilterProps,
+  type FilterOpOption,
   type LoadOptions,
   type LookupFilterProps,
-  type RangeFilterProps,
 } from "./field-filter.tsx";
 export {
   FieldFrame,
@@ -92,18 +92,12 @@ export {
   type SortControlProps,
 } from "./filter-bar.tsx";
 export { FilterSidebar, type FilterSidebarProps } from "./filter-sidebar.tsx";
-export {
-  CombineToggle,
-  TextFilter,
-  type CombineToggleProps,
-  type TextFieldOption,
-  type TextFilterProps,
-  type TextFilterValue,
-} from "./narrow-filters.tsx";
+export { CombineToggle, type CombineToggleProps } from "./combine-toggle.tsx";
 export {
   DEFAULT_MESSAGES,
   formatList,
   formatLoaded,
+  formatOpLabel,
   formatProblemMessage,
   formatRows,
   QueryGridMessagesProvider,

@@ -1,3 +1,5 @@
+import type { DatePreset } from "./date-presets.ts";
+import { fromDayBound } from "./filter-values.ts";
 import {
   getField,
   isDateType,
@@ -6,48 +8,31 @@ import {
   type SortDirection,
   type SortState,
 } from "./grid-def.ts";
-import {
-  listRanges,
-  listThenBy,
-  type QueryState,
-  type RangeState,
-  type TextOp,
-} from "./query-state.ts";
-import {
-  getReservedValue,
-  isExcluding,
-  listSelectedValues,
-  type ReservedValue,
-} from "./field-values.ts";
 import { formatValue, labelKey } from "./format.ts";
 import { isCombineOr } from "./indexes.ts";
+import type { FilterOp } from "./operators.ts";
 import type { QueryAction } from "./query-actions.ts";
-import { fromDayBound, toRangeValue, type RangeOp } from "./range-bounds.ts";
+import {
+  listFieldFilters,
+  listThenBy,
+  type Filter,
+  type QueryState,
+} from "./query-state.ts";
 
 export interface ChipValue {
-  value: string;
-  text: string;
-  reserved: ReservedValue | null;
+  value: string | null;
+  text: string | null;
   clear: QueryAction;
 }
 
-export interface EqualsChip {
+export interface FieldChip {
   id: string;
-  kind: "equals";
+  kind: "filter";
   field: string;
-  excluded: boolean;
+  op: FilterOp;
+  operands: string[];
+  preset: DatePreset | null;
   values: ChipValue[];
-  clear: QueryAction;
-}
-
-export interface RangeChip {
-  id: string;
-  kind: "range";
-  field: string;
-  min: string | null;
-  max: string | null;
-  preset: string | null;
-  op: RangeOp | null;
   clear: QueryAction;
 }
 
@@ -67,23 +52,6 @@ export interface SortChip {
   clear: QueryAction | null;
 }
 
-export interface TextChip {
-  id: string;
-  kind: "text";
-  field: string;
-  op: TextOp;
-  value: string;
-  clear: QueryAction;
-}
-
-export interface OverlapChip {
-  id: string;
-  kind: "overlap";
-  field: string;
-  values: ChipValue[];
-  clear: QueryAction;
-}
-
 export interface CombineChip {
   id: string;
   kind: "combine";
@@ -99,130 +67,80 @@ export interface GroupChip {
 
 export type FilterChip =
   | GroupChip
-  | EqualsChip
-  | RangeChip
-  | TextChip
-  | OverlapChip
+  | FieldChip
   | CombineChip
   | SearchChip
   | SortChip;
 
-function formatBound(
-  def: BaseGridDef,
-  key: string,
-  bound: string | null,
-  locale: string | undefined,
-  currency: string | undefined,
-): string | null {
-  const field = getField(def, key);
-  if (!field || bound === null) {
-    return null;
-  }
-  if (isDateType(field.type)) {
-    return fromDayBound(bound);
-  }
-  return formatValue(field, bound, locale, currency);
+interface ChipFormat {
+  def: BaseGridDef;
+  labels: Record<string, string>;
+  locale: string | undefined;
+  currency: string | undefined;
 }
 
-function formatEquals(
-  def: BaseGridDef,
+function formatOperand(
+  format: ChipFormat,
   key: string,
-  value: string,
-  labels: Record<string, string>,
-  locale: string | undefined,
-  currency: string | undefined,
+  operand: string,
 ): string {
-  const field = getField(def, key);
-  const known = labels[labelKey(key, value)];
+  const field = getField(format.def, key);
+  if (!field) {
+    return operand;
+  }
+  if (isDateType(field.type)) {
+    return fromDayBound(operand);
+  }
+  return formatValue(field, operand, format.locale, format.currency);
+}
+
+function formatChoice(format: ChipFormat, key: string, value: string): string {
+  const field = getField(format.def, key);
+  const known = format.labels[labelKey(key, value)];
   if (known) {
     return known;
   }
-  return field ? formatValue(field, value, locale, currency) : value;
+  return field
+    ? formatValue(field, value, format.locale, format.currency)
+    : value;
 }
 
-function getChipReserved(
-  def: BaseGridDef,
-  key: string,
-  value: string,
-): ReservedValue | null {
-  const field = getField(def, key);
-  return field ? getReservedValue(field, value) : null;
+function listOperands(filter: Filter): string[] {
+  if ("value" in filter) {
+    return [filter.value];
+  }
+  if ("min" in filter) {
+    return [filter.min, filter.max];
+  }
+  return [];
 }
 
-function equalsChip(
-  def: BaseGridDef,
-  key: string,
-  values: string[],
-  labels: Record<string, string>,
-  locale: string | undefined,
-  currency: string | undefined,
-): EqualsChip {
-  const field = getField(def, key);
-  const excluded = field !== null && isExcluding(field, values);
-  const shown = field ? listSelectedValues(field, values) : values;
-  return {
-    id: `eq:${key}`,
-    kind: "equals",
-    field: key,
-    excluded,
-    values: shown.map((value, index) => ({
-      value,
-      text: formatEquals(def, key, value, labels, locale, currency),
-      reserved: getChipReserved(def, key, value),
-      clear: { type: "removeEqualsValue", field: key, value: values[index] },
-    })),
-    clear: { type: "clearEquals", field: key },
-  };
-}
-
-function rangeChip(
-  def: BaseGridDef,
+function fieldChip(
+  format: ChipFormat,
   query: QueryState,
-  range: RangeState,
-  locale: string | undefined,
-  currency: string | undefined,
-): RangeChip {
-  const { field } = range;
-  const at = listRanges(query, field).indexOf(range);
-  const target = getField(def, field);
-  const value = target ? toRangeValue(target, range) : null;
+  filter: Filter,
+): FieldChip {
+  const { field, op } = filter;
+  const at = listFieldFilters(query, field).indexOf(filter);
+  const id = `filter:${field}:${op}`;
   return {
-    id: at === 0 ? `range:${field}` : `range:${field}:${at}`,
-    kind: "range",
+    id: at === 0 ? id : `${id}:${at}`,
+    kind: "filter",
     field,
-    min: formatBound(def, field, value?.first ?? range.min, locale, currency),
-    max: formatBound(
-      def,
-      field,
-      value ? value.second : range.max,
-      locale,
-      currency,
+    op,
+    operands: listOperands(filter).map((operand) =>
+      formatOperand(format, field, operand),
     ),
-    preset: range.preset ?? null,
-    op: value?.op ?? null,
-    clear: { type: "clearRange", field, at },
-  };
-}
-
-function overlapChip(
-  def: BaseGridDef,
-  key: string,
-  values: string[],
-  labels: Record<string, string>,
-  locale: string | undefined,
-  currency: string | undefined,
-): OverlapChip {
-  return {
-    id: `overlap:${key}`,
-    kind: "overlap",
-    field: key,
-    values: values.map((value) => ({
-      value,
-      text: formatEquals(def, key, value, labels, locale, currency),
-      reserved: null,
-      clear: { type: "removeOverlapValue", field: key, value },
-    })),
-    clear: { type: "clearOverlap", field: key },
+    preset: "preset" in filter ? filter.preset : null,
+    values:
+      "values" in filter
+        ? filter.values.map((value) => ({
+            value,
+            text: value === null ? null : formatChoice(format, field, value),
+            clear: { type: "removeFilterValue", field, at, value },
+          }))
+        : [],
+    clear: { type: "removeFilter", field, at },
   };
 }
 
@@ -233,26 +151,10 @@ export function listFilterChips(
   locale?: string,
   currency?: string,
 ): FilterChip[] {
-  const chips: FilterChip[] = Object.entries(query.equals).map(
-    ([field, values]) =>
-      equalsChip(def, field, values, labels, locale, currency),
+  const format: ChipFormat = { def, labels, locale, currency };
+  const chips: FilterChip[] = query.filters.map((filter) =>
+    fieldChip(format, query, filter),
   );
-  for (const [field, values] of Object.entries(query.overlaps)) {
-    chips.push(overlapChip(def, field, values, labels, locale, currency));
-  }
-  for (const range of query.ranges) {
-    chips.push(rangeChip(def, query, range, locale, currency));
-  }
-  query.texts.forEach((text, at) => {
-    chips.push({
-      id: `text:${at}`,
-      kind: "text",
-      field: text.field,
-      op: text.op,
-      value: text.value,
-      clear: { type: "removeText", at },
-    });
-  });
   if (isCombineOr(query)) {
     chips.push({
       id: "combine",

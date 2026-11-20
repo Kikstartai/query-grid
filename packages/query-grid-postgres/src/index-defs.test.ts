@@ -77,7 +77,7 @@ describe("a stored def and validateGridDef agree on the index rules", () => {
     const valid: IndexedGridDef[] = [
       STORED,
       withIndex({ equals: ["region"], sort: "total", then: ["number"] }),
-      withIndex({ equals: ["status"], sort: "number", empty: ["note"] }),
+      withIndex({ equals: ["status"], sort: "number", blank: ["note"] }),
       { ...STORED, textIndexes: ["name"], arrayIndexes: ["tags"] },
     ];
     for (const def of valid) {
@@ -105,12 +105,12 @@ describe("a stored def and validateGridDef agree on the index rules", () => {
         withIndex({ equals: ["region"], sort: "total", then: ["region"] }),
       ],
       [
-        "index_never_empty",
-        withIndex({ equals: [], sort: "total", empty: ["name"] }),
+        "index_never_blank",
+        withIndex({ equals: [], sort: "total", blank: ["name"] }),
       ],
       [
-        "index_empty_is_filtered",
-        withIndex({ equals: ["note"], sort: "total", empty: ["note"] }),
+        "index_blank_is_filtered",
+        withIndex({ equals: ["note"], sort: "total", blank: ["note"] }),
       ],
       [
         "index_duplicate",

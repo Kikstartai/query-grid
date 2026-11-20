@@ -7,8 +7,7 @@ import {
   type GridRow,
   type GridValue,
 } from "./grid-def.ts";
-import type { QueryState } from "./query-state.ts";
-import { EMPTY_VALUE } from "./field-values.ts";
+import type { Filter, QueryState } from "./query-state.ts";
 import { createAbortable, isAbort, type LoadStatus } from "./load.ts";
 import { toProblem, type Problem } from "./problems.ts";
 import { createQueryStore } from "./query-store.ts";
@@ -17,6 +16,7 @@ import { createStore } from "./store.ts";
 
 export const GROUP_PAGE_SIZE = 50;
 export const GROUP_LIMIT = 200;
+export const BLANK_GROUP = "_empty";
 
 export interface GroupState {
   header: GroupHeader;
@@ -51,8 +51,17 @@ export function getGroupQuery(query: QueryState, value: string): QueryState {
     ...query,
     group: null,
     cursor: null,
-    equals: { ...query.equals, [query.group]: [value] },
+    filters: [
+      ...query.filters.filter((filter) => filter.field !== query.group),
+      toGroupFilter(query.group, value),
+    ],
   };
+}
+
+export function toGroupFilter(field: string, value: string): Filter {
+  return value === BLANK_GROUP
+    ? { field, op: "blank" }
+    : { field, op: "any_of", values: [value] };
 }
 
 export function toGroupValue(
@@ -62,7 +71,7 @@ export function toGroupValue(
   if (value !== null && value !== undefined) {
     return String(value);
   }
-  return field?.nullable ? EMPTY_VALUE : null;
+  return field?.nullable ? BLANK_GROUP : null;
 }
 
 export function sortGroups(

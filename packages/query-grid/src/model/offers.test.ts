@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import type { FilterOp } from "./operators.ts";
 import type { QueryState } from "./query-state.ts";
 import type { OfferContext } from "./capabilities.ts";
 import {
+  createTestSource,
   TEST_DEF,
   TEST_SEARCH_FIELDS,
   TEST_INDEXES,
@@ -12,6 +14,7 @@ import {
   defaultQuery,
   enumerateReachableStates,
   listOffers,
+  type Offers,
 } from "./query-actions.ts";
 import {
   isQueryIndexed,
@@ -20,6 +23,7 @@ import {
   indexId,
 } from "./indexes.ts";
 import type { IndexDef } from "./grid-def.ts";
+import { withLiteralFilters } from "./literal-filters.ts";
 
 const INDEXES = TEST_INDEXES;
 const BASE = defaultQuery(TEST_DEF);
@@ -35,6 +39,25 @@ const COMPLETE: OfferContext = {
   capabilities: CAPABILITIES,
   allSearchMatchesLoaded: true,
 };
+const RANGE_OPS: FilterOp[] = [
+  "equals",
+  "greater_than",
+  "greater_or_equal",
+  "less_than",
+  "less_or_equal",
+  "between",
+];
+
+function listOffered(offers: Offers): Record<string, FilterOp[]> {
+  return Object.fromEntries(
+    Object.entries(offers.filters)
+      .map(
+        ([key, ops]) =>
+          [key, ops.filter((op) => op.offered).map((op) => op.op)] as const,
+      )
+      .filter(([, ops]) => ops.length > 0),
+  );
+}
 
 describe("offers from declared indexes", () => {
   test("a sort narrows the filters an index answers", () => {
@@ -44,25 +67,53 @@ describe("offers from declared indexes", () => {
       { type: "setSort", field: "total", direction: "desc" },
       CAPPED,
     );
-    expect(listOffers(TEST_DEF, byTotal, CAPPED)).toEqual({
-      equals: ["status"],
+    const offers = listOffers(TEST_DEF, byTotal, CAPPED);
+    expect(listOffered(offers)).toEqual({
+      status: ["any_of"],
+      total: RANGE_OPS,
+    });
+    expect(offers).toEqual({
+      filters: expect.any(Object),
       multi: ["status"],
-      exclude: ["status"],
       sorts: ["created_at", "total"],
       thenBy: [],
-      ranges: ["total"],
-      narrowRanges: [],
-      texts: [],
-      narrowTexts: [],
-      overlaps: [],
       combineOr: false,
       groups: [],
       search: true,
     });
-    expect(listOffers(TEST_DEF, BASE, CAPPED).equals).toEqual([
-      "status",
-      "region",
+    expect(offers.filters.region).toEqual([
+      {
+        op: "any_of",
+        offered: false,
+        reason: expect.objectContaining({ code: "no_filter_with" }),
+      },
     ]);
+    expect(
+      offers.filters.created_at.find((op) => op.op === "between")?.reason?.code,
+    ).toBe("range_needs_sort");
+    expect(listOffered(listOffers(TEST_DEF, BASE, CAPPED))).toEqual({
+      created_at: RANGE_OPS,
+      status: ["any_of"],
+      region: ["any_of"],
+    });
+  });
+
+  test("an excluded value is offered wherever its expansion is", () => {
+    const capabilities = withLiteralFilters(
+      TEST_DEF,
+      createTestSource(CAPABILITIES),
+    ).capabilities;
+    const context: OfferContext = {
+      capabilities,
+      allSearchMatchesLoaded: false,
+    };
+    const byTotal: QueryState = {
+      ...BASE,
+      sort: { field: "total", direction: "desc" },
+    };
+    const offered = listOffered(listOffers(TEST_DEF, byTotal, context));
+    expect(offered.status).toEqual(["any_of", "none_of"]);
+    expect(offered.region).toBeUndefined();
   });
 
   test("an action with no index leaves the query alone", () => {
@@ -74,7 +125,10 @@ describe("offers from declared indexes", () => {
       applyAction(
         TEST_DEF,
         byTotal,
-        { type: "setEquals", field: "region", values: ["north"] },
+        {
+          type: "setFilter",
+          filter: { field: "region", op: "any_of", values: ["north"] },
+        },
         CAPPED,
       ),
     ).toBe(byTotal);
@@ -83,17 +137,21 @@ describe("offers from declared indexes", () => {
   test("clearing a filter falls back to a declared index", () => {
     const filtered: QueryState = {
       ...BASE,
-      equals: { status: ["open"] },
+      filters: [
+        { field: "status", op: "any_of", values: ["open"] },
+        { field: "total", op: "greater_or_equal", value: "100" },
+      ],
       sort: { field: "total", direction: "asc" },
-      ranges: [{ field: "total", min: "100", max: null }],
     };
     const cleared = applyAction(
       TEST_DEF,
       filtered,
-      { type: "clearEquals", field: "status" },
+      { type: "removeFilter", field: "status" },
       CAPPED,
     );
-    expect(cleared.equals).toEqual({});
+    expect(cleared.filters.some((filter) => filter.field === "status")).toBe(
+      false,
+    );
     expect(getIndex(INDEXES, cleared)).not.toBeNull();
   });
 
@@ -105,21 +163,25 @@ describe("offers from declared indexes", () => {
       CAPPED,
     );
     expect(search.search).toBe("abc");
-    expect(listOffers(TEST_DEF, search, CAPPED)).toEqual({
-      equals: ["status", "region"],
+    const offers = listOffers(TEST_DEF, search, CAPPED);
+    expect(listOffered(offers)).toEqual({
+      status: ["any_of"],
+      region: ["any_of"],
+    });
+    expect(offers).toEqual({
+      filters: expect.any(Object),
       multi: ["status", "region"],
-      exclude: ["status", "region"],
       sorts: [],
       thenBy: [],
-      ranges: [],
-      narrowRanges: [],
-      texts: [],
-      narrowTexts: [],
-      overlaps: [],
       combineOr: false,
       groups: [],
       search: true,
     });
+    expect(
+      offers.filters.total.every(
+        (op) => op.reason?.code === "search_no_combine",
+      ),
+    ).toBe(true);
     expect(listOffers(TEST_DEF, search, COMPLETE).sorts).toEqual([
       "created_at",
       "total",
@@ -127,27 +189,36 @@ describe("offers from declared indexes", () => {
     const narrowed = applyAction(
       TEST_DEF,
       search,
-      { type: "setEquals", field: "status", values: ["open", "done"] },
+      {
+        type: "setFilter",
+        filter: { field: "status", op: "any_of", values: ["open", "done"] },
+      },
       CAPPED,
     );
     expect(narrowed).toMatchObject({
       search: "abc",
-      equals: { status: ["open", "done"] },
+      filters: [{ field: "status", op: "any_of", values: ["open", "done"] }],
     });
     expect(
       applyAction(
         TEST_DEF,
         narrowed,
-        { type: "setEquals", field: "region", values: ["north"] },
+        {
+          type: "setFilter",
+          filter: { field: "region", op: "any_of", values: ["north"] },
+        },
         CAPPED,
-      ).equals,
-    ).toEqual({ status: ["open", "done"], region: ["north"] });
+      ).filters,
+    ).toEqual([
+      { field: "status", op: "any_of", values: ["open", "done"] },
+      { field: "region", op: "any_of", values: ["north"] },
+    ]);
   });
 
   test("a search is offered beside an equality filter and not beside a range", () => {
     const filtered: QueryState = {
       ...BASE,
-      equals: { status: ["open"] },
+      filters: [{ field: "status", op: "any_of", values: ["open"] }],
       sort: { field: "total", direction: "asc" },
     };
     expect(listOffers(TEST_DEF, filtered, CAPPED).search).toBe(true);
@@ -160,12 +231,14 @@ describe("offers from declared indexes", () => {
       ),
     ).toMatchObject({
       search: "abc",
-      equals: { status: ["open"] },
+      filters: [{ field: "status", op: "any_of", values: ["open"] }],
       sort: TEST_DEF.defaultSort,
     });
     const ranged: QueryState = {
       ...BASE,
-      ranges: [{ field: "created_at", min: "2026-01-01", max: null }],
+      filters: [
+        { field: "created_at", op: "greater_or_equal", value: "2026-01-01" },
+      ],
     };
     expect(listOffers(TEST_DEF, ranged, CAPPED).search).toBe(false);
     expect(
@@ -187,14 +260,23 @@ describe("offers from declared indexes", () => {
       allSearchMatchesLoaded: false,
     };
     const offers = listOffers(TEST_DEF, BASE, context);
-    expect(offers.equals).toEqual(["status", "region"]);
+    expect(listOffered(offers)).toMatchObject({
+      status: ["any_of"],
+      region: ["any_of"],
+    });
     expect(offers.multi).toEqual(["status"]);
-    const one: QueryState = { ...BASE, equals: { region: ["north"] } };
+    const one: QueryState = {
+      ...BASE,
+      filters: [{ field: "region", op: "any_of", values: ["north"] }],
+    };
     expect(
       applyAction(
         TEST_DEF,
         one,
-        { type: "setEquals", field: "region", values: ["north", "south"] },
+        {
+          type: "setFilter",
+          filter: { field: "region", op: "any_of", values: ["north", "south"] },
+        },
         context,
       ),
     ).toBe(one);
@@ -214,7 +296,14 @@ describe("reachable states", () => {
       }
       expect([...reached].sort()).toEqual(INDEXES.map(indexId).sort());
       expect(
-        states.some((state) => (state.equals.status?.length ?? 0) > 1),
+        states.some((state) =>
+          state.filters.some(
+            (filter) =>
+              filter.field === "status" &&
+              "values" in filter &&
+              filter.values.length > 1,
+          ),
+        ),
       ).toBe(true);
     }
   });

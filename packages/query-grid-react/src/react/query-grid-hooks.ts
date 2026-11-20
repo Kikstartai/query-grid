@@ -122,22 +122,22 @@ export function useGridLimits(): GridLimits | null {
 }
 
 function isOffered(offers: Offers, target: OfferTarget): boolean {
-  if (target.kind === "search") {
-    return offers.search;
+  switch (target.kind) {
+    case "search":
+      return offers.search;
+    case "combine":
+      return offers.combineOr;
+    case "filter":
+      return (offers.filters[target.field] ?? []).some(
+        (offer) => offer.op === target.op && offer.offered,
+      );
+    case "group":
+      return offers.groups.includes(target.field);
+    case "sort":
+      return offers.sorts.includes(target.field);
+    case "thenBy":
+      return offers.thenBy.includes(target.field);
   }
-  if (target.kind === "combine") {
-    return offers.combineOr;
-  }
-  const fields = {
-    equals: offers.equals,
-    range: offers.ranges,
-    text: offers.texts,
-    overlap: offers.overlaps,
-    group: offers.groups,
-    sort: offers.sorts,
-    thenBy: offers.thenBy,
-  }[target.kind];
-  return fields.includes(target.field);
 }
 
 export function useOfferState(target: OfferTarget): OfferState {
@@ -154,7 +154,7 @@ export function useOfferState(target: OfferTarget): OfferState {
       : formatReason(
           messages,
           def,
-          explainUnavailable(query, target, context),
+          explainUnavailable(def, query, target, context),
           locale,
         ),
   };
