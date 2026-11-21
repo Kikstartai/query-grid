@@ -4,7 +4,8 @@ import {
   getFacetField,
   listFieldFilters,
   listTotalFields,
-  matchesFilter,
+  listKeptValues,
+  listFixedValues,
 } from "@kikstart/query-grid";
 
 import {
@@ -85,11 +86,7 @@ export function FacetPanel() {
     values:
       own.length === 0
         ? []
-        : field.options
-            .map((option) => option.value)
-            .filter((value) =>
-              own.every((filter) => matchesFilter(field, filter, value)),
-            ),
+        : listKeptValues(field, own, listFixedValues(field) ?? []),
     multiple: true,
     onValuesChange: (values: string[]) =>
       dispatch(

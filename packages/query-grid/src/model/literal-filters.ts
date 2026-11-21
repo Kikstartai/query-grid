@@ -1,7 +1,6 @@
 import type { DataSourceCapabilities } from "./capabilities.ts";
 import { mapSourceQueries, type DataSource } from "./data-source.ts";
-import { resolveDatePreset, resolveDayPreset } from "./date-presets.ts";
-import { expandNoneOf } from "./filter-values.ts";
+import { expandNoneOf, resolvePeriod } from "./filter-values.ts";
 import { getField, type BaseGridDef } from "./grid-def.ts";
 import {
   FILTER_OPS,
@@ -38,11 +37,7 @@ function resolveFilter(
       max: filter.preset,
     };
   }
-  const period =
-    field.type === "date"
-      ? resolveDayPreset(filter.preset, mode)
-      : resolveDatePreset(filter.preset, mode);
-  return { field: filter.field, op: "between", ...period };
+  return resolvePeriod(field, filter, mode);
 }
 
 function resolveFilters(

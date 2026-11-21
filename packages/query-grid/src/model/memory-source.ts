@@ -12,7 +12,7 @@ import {
 } from "./grid-def.ts";
 import type { QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
-import { matchesFilter } from "./filter-values.ts";
+import { createFilterTest } from "./filter-values.ts";
 import { GROUP_LIMIT, sortGroups, toGroupValue } from "./groups.ts";
 import {
   hasFilterOps,
@@ -87,8 +87,11 @@ type RowTest = (row: GridRow) => boolean;
 function listRowTests(def: BaseGridDef, query: QueryState): RowTest[] {
   return query.filters.map((filter) => {
     const field = getField(def, filter.field);
-    return (row) =>
-      field !== null && matchesFilter(field, filter, row[filter.field]);
+    if (!field) {
+      return () => false;
+    }
+    const test = createFilterTest(field, filter);
+    return (row) => test(row[filter.field]);
   });
 }
 

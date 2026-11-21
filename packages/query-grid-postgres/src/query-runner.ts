@@ -1,8 +1,11 @@
 import {
   BLANK_GROUP,
   DEFAULT_LIMITS,
+  getFacetField,
   getField,
   GROUP_LIMIT,
+  listFieldFilters,
+  listKeptValues,
   matchesFilter,
   toGroupFilter,
   toGroupValue,
@@ -290,7 +293,7 @@ async function listFacetGroups(
     };
   }
   const narrow = await listNarrowSettings(def, execute, query, limits, signal);
-  const own = query.filters.filter((filter) => filter.field === key);
+  const own = listFieldFilters(query, key);
   const others = query.filters.filter((filter) => filter.field !== key);
   const values = listFacetGroupValues(getField(def, key), own);
   const cap = limits.countCap;
@@ -501,16 +504,16 @@ async function listSelectedCounters(
   signal?: AbortSignal,
 ): Promise<FacetCount[]> {
   const counts = await listFacetCounts(def, execute, signal);
-  const field = def.facet ? getField(def, def.facet.field) : null;
+  const field = getFacetField(def);
   if (!field) {
     return counts;
   }
-  return counts.filter((facet) =>
-    query.filters.every(
-      (filter) =>
-        filter.field !== field.key || matchesFilter(field, filter, facet.value),
-    ),
+  const kept = listKeptValues(
+    field,
+    listFieldFilters(query, field.key),
+    counts.map((facet) => facet.value),
   );
+  return counts.filter((facet) => kept.includes(facet.value));
 }
 
 export async function getGridCount(

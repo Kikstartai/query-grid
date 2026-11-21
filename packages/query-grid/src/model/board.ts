@@ -8,9 +8,9 @@ import {
 } from "./grid-def.ts";
 import { listFieldFilters, type QueryState } from "./query-state.ts";
 import type { DataSourceCapabilities } from "./capabilities.ts";
-import { matchesFilter } from "./filter-values.ts";
+import { listKeptValues } from "./filter-values.ts";
 import { isCombineOr } from "./indexes.ts";
-import { resolveFieldKind } from "./operators.ts";
+import { listFixedValues, resolveFieldKind } from "./operators.ts";
 import { createQueryStore } from "./query-store.ts";
 import { createFeed, type Feed } from "./row-feed.ts";
 import { createStore } from "./store.ts";
@@ -83,11 +83,7 @@ export function getLaneQueries(
   const holdsAllRows = capabilities.holdsAllRows;
   const own = listFieldFilters(query, field.key);
   const others = query.filters.filter((filter) => filter.field !== field.key);
-  const statuses = field.options
-    .map((option) => option.value)
-    .filter((value) =>
-      own.every((filter) => matchesFilter(field, filter, value)),
-    );
+  const statuses = listKeptValues(field, own, listFixedValues(field) ?? []);
   const base: QueryState = holdsAllRows
     ? { ...query, cursor: null }
     : { ...query, sort: def.defaultSort, thenBy: undefined, cursor: null };

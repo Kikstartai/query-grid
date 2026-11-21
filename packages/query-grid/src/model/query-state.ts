@@ -1,10 +1,6 @@
 import type { DatePreset } from "./date-presets.ts";
 import type { SortState } from "./grid-def.ts";
-import {
-  getOperatorShape,
-  type FilterOp,
-  type OpOfShape,
-} from "./operators.ts";
+import { getOperatorShape, type OpOfShape } from "./operators.ts";
 
 // One value compared with the field.
 export interface ValueFilter {
@@ -90,20 +86,4 @@ export function listFilteredFields(query: QueryState): string[] {
 
 export function isListFilter(filter: Filter): filter is ListFilter {
   return getOperatorShape(filter.op) === "list";
-}
-
-export function isValueFilter(filter: Filter): filter is ValueFilter {
-  return getOperatorShape(filter.op) === "one";
-}
-
-export function isBetweenFilter(filter: Filter): filter is BetweenFilter {
-  return getOperatorShape(filter.op) === "pair";
-}
-
-export function isPeriodFilter(filter: Filter): filter is PeriodFilter {
-  return getOperatorShape(filter.op) === "preset";
-}
-
-export function hasOp(filter: Filter, ops: readonly FilterOp[]): boolean {
-  return ops.includes(filter.op);
 }

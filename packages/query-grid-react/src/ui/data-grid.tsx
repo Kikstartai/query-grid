@@ -11,7 +11,7 @@ import {
   BLANK_GROUP,
   listSorts,
   listTotalFields,
-  listCapableOps,
+  listFilterFields,
   listFilteredFields,
   type BaseFieldDef,
   toProblem,
@@ -186,14 +186,10 @@ function useGridControls() {
       dispatch({ type: "addSort", field, direction }),
     onSortRemove: (field: string) => dispatch({ type: "removeSort", field }),
     filters: Object.fromEntries(
-      def.fields
-        .filter(
-          (field) => listCapableOps(source.capabilities, field.key).length > 0,
-        )
-        .map((field) => [
-          field.key,
-          <FieldFilter key={field.key} field={field} />,
-        ]),
+      listFilterFields(def, source.capabilities).map((field) => [
+        field.key,
+        <FieldFilter key={field.key} field={field} />,
+      ]),
     ),
     activeFilters: listFilteredFields(query),
   };

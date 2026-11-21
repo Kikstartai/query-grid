@@ -22,6 +22,7 @@ import { TEXT_INDEX_MIN_LENGTH } from "./indexes.ts";
 import {
   getOperatorShape,
   isLiteralOp,
+  OPERATORS,
   listFixedValues,
   resolveFieldKind,
   TEXT_MATCH_OPS,
@@ -97,15 +98,6 @@ export type OfferTarget =
   | { kind: "search" };
 
 const PROBE = ["x", "y"];
-const RANGE_OPS: FilterOp[] = [
-  "greater_than",
-  "greater_or_equal",
-  "less_than",
-  "less_or_equal",
-  "between",
-  "not_between",
-  "in_period",
-];
 
 export function defaultQuery(def: BaseGridDef): QueryState {
   return {
@@ -152,8 +144,7 @@ function isBoundFilter(def: BaseGridDef, filter: Filter): boolean {
   const kind = field ? resolveFieldKind(field) : null;
   return (
     (kind === "number" || kind === "date") &&
-    filter.op !== "blank" &&
-    filter.op !== "not_blank"
+    getOperatorShape(filter.op) !== "none"
   );
 }
 
@@ -491,10 +482,7 @@ function resolveMinLength(
   context: OfferContext,
 ): number | undefined {
   const { field, op, offered } = listing;
-  const matched =
-    offered &&
-    resolveFieldKind(field) === "text" &&
-    TEXT_MATCH_OPS.includes(op);
+  const matched = offered && TEXT_MATCH_OPS.includes(op);
   if (!matched || isOpOffered(def, query, field, op, context, true)) {
     return undefined;
   }
@@ -566,7 +554,9 @@ export function listOffers(
 }
 
 function isRangeOp(op: FilterOp): boolean {
-  return RANGE_OPS.includes(op);
+  return OPERATORS[op].kinds.every(
+    (kind) => kind === "number" || kind === "date",
+  );
 }
 
 function describeQuery(

@@ -9,7 +9,12 @@ import {
   listFixedValues,
   type FilterOp,
 } from "./operators.ts";
-import type { Filter, ListFilter } from "./query-state.ts";
+import type {
+  BetweenFilter,
+  Filter,
+  ListFilter,
+  PeriodFilter,
+} from "./query-state.ts";
 import { toComparable } from "./sort-rows.ts";
 
 const DAY_LENGTH = 10;
@@ -106,7 +111,10 @@ export function isPointBounds(value: FilterBounds): boolean {
   return value.min !== null && value.min === value.max;
 }
 
-export function expandNoneOf(field: BaseFieldDef, filter: ListFilter): Filter {
+export function expandNoneOf(
+  field: BaseFieldDef,
+  filter: ListFilter,
+): ListFilter {
   const excluded = filter.values;
   const kept: (string | null)[] = (listFixedValues(field) ?? []).filter(
     (value) => !excluded.includes(value),
@@ -123,8 +131,7 @@ export function canExpandNoneOf(
   field: BaseFieldDef,
   filter: ListFilter,
 ): boolean {
-  const expanded = expandNoneOf(field, filter);
-  const size = "values" in expanded ? expanded.values.length : 0;
+  const size = expandNoneOf(field, filter).values.length;
   return size > 0 && size <= resolveMaxValues(field);
 }
 
@@ -160,54 +167,54 @@ function holdsAll(
   );
 }
 
-function matchesText(
+function createTextTest(
   op: FilterOp,
-  cell: string | null,
   value: string,
-): boolean {
-  const needle = value.trim().toLowerCase();
-  const text = cell?.toLowerCase() ?? null;
+): (cell: string | null) => boolean {
+  const trimmed = value.trim();
+  const needle = trimmed.toLowerCase();
   switch (op) {
     case "equals":
-      return cell === value.trim();
+      return (cell) => cell === trimmed;
     case "not_equals":
-      return cell !== value.trim();
+      return (cell) => cell !== trimmed;
     case "contains":
-      return text !== null && text.includes(needle);
+      return (cell) => cell !== null && cell.toLowerCase().includes(needle);
     case "not_contains":
-      return text === null || !text.includes(needle);
+      return (cell) => cell === null || !cell.toLowerCase().includes(needle);
     case "starts_with":
-      return text !== null && text.startsWith(needle);
+      return (cell) => cell !== null && cell.toLowerCase().startsWith(needle);
     case "ends_with":
-      return text !== null && text.endsWith(needle);
+      return (cell) => cell !== null && cell.toLowerCase().endsWith(needle);
     default:
-      return false;
+      return () => false;
   }
 }
 
-function matchesBounds(
+function createBoundsTest(
   field: BaseFieldDef,
   value: FilterBounds,
-  cell: GridValue | undefined,
-): boolean {
-  const compared = toComparable(field, cell ?? null);
-  if (compared === null) {
-    return value.outside;
-  }
+): (cell: GridValue | undefined) => boolean {
   const min = value.min === null ? null : toComparable(field, value.min);
   const max = value.max === null ? null : toComparable(field, value.max);
-  const above =
-    min === null || (value.minOpen ? compared > min : compared >= min);
-  const below =
-    max === null || (value.maxOpen ? compared < max : compared <= max);
-  return (above && below) !== value.outside;
+  return (cell) => {
+    const compared = toComparable(field, cell ?? null);
+    if (compared === null) {
+      return value.outside;
+    }
+    const above =
+      min === null || (value.minOpen ? compared > min : compared >= min);
+    const below =
+      max === null || (value.maxOpen ? compared < max : compared <= max);
+    return (above && below) !== value.outside;
+  };
 }
 
-function resolvePeriod(field: BaseFieldDef, filter: Filter): Filter {
-  if (filter.op !== "in_period") {
-    return filter;
-  }
-  const now = new Date();
+export function resolvePeriod(
+  field: BaseFieldDef,
+  filter: PeriodFilter,
+  now: Date,
+): BetweenFilter {
   const period =
     field.type === "date"
       ? resolveDayPreset(filter.preset, now)
@@ -219,37 +226,64 @@ function toTextCell(cell: GridValue | undefined): string | null {
   return cell === null || cell === undefined ? null : String(cell);
 }
 
-export function matchesFilter(
+export function createFilterTest(
   field: BaseFieldDef,
   filter: Filter,
-  cell: GridValue | undefined,
-): boolean {
-  const resolved = resolvePeriod(field, filter);
+): (cell: GridValue | undefined) => boolean {
+  const resolved =
+    filter.op === "in_period"
+      ? resolvePeriod(field, filter, new Date())
+      : filter;
   const range = field.type === "text" ? null : toFilterBounds(field, resolved);
   if (range) {
-    return matchesBounds(field, range, cell);
+    return createBoundsTest(field, range);
   }
   switch (resolved.op) {
     case "blank":
-      return isBlankCell(cell);
+      return isBlankCell;
     case "not_blank":
-      return !isBlankCell(cell);
-    case "any_of":
-      return holdsAny(cell, resolved.values);
-    case "none_of":
-      return !holdsAny(cell, resolved.values);
-    case "all_of":
-      return holdsAll(cell, resolved.values);
+      return (cell) => !isBlankCell(cell);
+    case "any_of": {
+      const { values } = resolved;
+      return (cell) => holdsAny(cell, values);
+    }
+    case "none_of": {
+      const { values } = resolved;
+      return (cell) => !holdsAny(cell, values);
+    }
+    case "all_of": {
+      const { values } = resolved;
+      return (cell) => holdsAll(cell, values);
+    }
     case "equals":
     case "not_equals":
     case "contains":
     case "not_contains":
     case "starts_with":
-    case "ends_with":
-      return matchesText(resolved.op, toTextCell(cell), resolved.value);
+    case "ends_with": {
+      const test = createTextTest(resolved.op, resolved.value);
+      return (cell) => test(toTextCell(cell));
+    }
     default:
-      return false;
+      return () => false;
   }
+}
+
+export function matchesFilter(
+  field: BaseFieldDef,
+  filter: Filter,
+  cell: GridValue | undefined,
+): boolean {
+  return createFilterTest(field, filter)(cell);
+}
+
+export function listKeptValues(
+  field: BaseFieldDef,
+  filters: Filter[],
+  values: string[],
+): string[] {
+  const tests = filters.map((filter) => createFilterTest(field, filter));
+  return values.filter((value) => tests.every((test) => test(value)));
 }
 
 function firstValue(filter: Filter): string | null {

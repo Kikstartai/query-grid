@@ -70,12 +70,6 @@ export type OpOfShape<S extends OperatorShape> = {
 
 export const FILTER_OPS = Object.keys(OPERATORS) as FilterOp[];
 
-export const TEXT_MATCH_OPS: FilterOp[] = [
-  "contains",
-  "starts_with",
-  "ends_with",
-];
-
 export function isFilterOp(value: string): value is FilterOp {
   return Object.hasOwn(OPERATORS, value);
 }
@@ -87,6 +81,10 @@ export function getOperatorShape(op: FilterOp): OperatorShape {
 export function listIndexKinds(op: FilterOp): readonly IndexKind[] {
   return OPERATORS[op].index ?? [];
 }
+
+export const TEXT_MATCH_OPS = FILTER_OPS.filter((op) =>
+  listIndexKinds(op).includes("text"),
+);
 
 export function resolveFieldKind(field: BaseFieldDef): FieldKind {
   if (field.type === "array") {
