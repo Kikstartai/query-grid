@@ -77,14 +77,18 @@ const INDEX_MESSAGES: Record<IndexRuleCode, IndexMessage> = {
   index_unknown_field: ({ field }, role) =>
     `unknown ${UNKNOWN_ROLES[role] ?? "field"} ${field}`,
   index_duplicate: ({ value }, role) =>
-    role === "sort" ? `${value} is sorted on twice` : `${value} is declared twice`,
+    role === "sort"
+      ? `${value} is sorted on twice`
+      : `${value} is declared twice`,
   index_nullable_sort: () => "a nullable field cannot be a keyset sort",
   index_no_sort: () => "an index needs at least one sort column",
-  index_sort_is_filter: ({ field }) => `${field} is both a filter and a sort column`,
+  index_sort_is_filter: ({ field }) =>
+    `${field} is both a filter and a sort column`,
   index_array_sort: ({ field }) => `${field} is an array, which has no order`,
   index_array_filter: ({ field }) =>
     `${field} is an array; its index is { array: "${field}" }`,
-  index_sort_repeats: ({ field }) => `${field} is the key, which ends every order`,
+  index_sort_repeats: ({ field }) =>
+    `${field} is the key, which ends every order`,
   index_order_too_long: ({ max }) => `an order has at most ${max} columns`,
   index_not_text: ({ field }) => `${field} is not a text field without options`,
   index_not_array: ({ field }) => `${field} is not an array field`,

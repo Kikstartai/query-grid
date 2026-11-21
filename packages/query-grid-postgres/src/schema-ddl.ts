@@ -102,9 +102,7 @@ function indexDdl(
   const columns = [...order, KEY_FIELD]
     .map(identifier)
     .filter((column, position, all) => all.indexOf(column) === position);
-  const name = shortenIdentifier(
-    `${AUTO_PREFIX}${table}_${order.join("__")}`,
-  );
+  const name = shortenIdentifier(`${AUTO_PREFIX}${table}_${order.join("__")}`);
   return {
     note: describeIndex(index),
     name,

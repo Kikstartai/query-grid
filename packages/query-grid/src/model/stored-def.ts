@@ -589,7 +589,11 @@ function readFacet(value: unknown, path: string, run: Run): FacetDef | null {
   return field === null ? null : { field };
 }
 
-function readSortIndex(source: Source, path: string, run: Run): IndexDef | null {
+function readSortIndex(
+  source: Source,
+  path: string,
+  run: Run,
+): IndexDef | null {
   readObject(source, path, SORT_INDEX_KEYS, run);
   const filter = readFieldRefs(
     pick(source, "filter"),
@@ -612,7 +616,12 @@ function readOwnIndex(
   key: "text" | "array",
   run: Run,
 ): IndexDef | null {
-  readObject(source, path, key === "text" ? TEXT_INDEX_KEYS : ARRAY_INDEX_KEYS, run);
+  readObject(
+    source,
+    path,
+    key === "text" ? TEXT_INDEX_KEYS : ARRAY_INDEX_KEYS,
+    run,
+  );
   const column = readFieldRef(pick(source, key), joinPath(path, key), run);
   if (column === null) {
     return null;
