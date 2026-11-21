@@ -82,7 +82,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 
 ## Demo
 
-- Verify runtime changes with `/verify`, following `.claude/skills/verify`.
+- Verify runtime changes with `/verify`, following `.agents/skills/verify/SKILL.md`.
 - Never force a subtree dynamic to satisfy the framework (`connection()`, `noStore`, `force-dynamic`, an `AtRequest`-style wrapper). A page renders static unless it reads real request data, and if a build complains, fix the cause, not the symptom.
 
 ## House style
