@@ -37,6 +37,18 @@ The browser suite is Playwright in `apps/demo/e2e`. It needs `bun run build` fir
 bun run --filter demo e2e
 ```
 
+## Checks
+
+| Suite         | Command                                | Needed when                                                                                                  | Rough time |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------- |
+| unit          | `bun run test`                         | every change                                                                                                 | 1 min      |
+| typecheck     | `bun run typecheck`                    | every change                                                                                                 | 1 min      |
+| lint          | `bun run lint`                         | every change                                                                                                 | 1 min      |
+| database      | `bun run --filter demo test:db`        | any change reaching SQL, the planner, defs or `apps/demo/db`; needs `apps/demo/.env.local`                   | 2 min      |
+| performance   | `bun run --filter demo db:bench:quick` | SQL, index, planner or schema changes                                                                        | 1 min      |
+| build         | `bun run build`                        | before e2e and before a commit                                                                               | 2 min      |
+| browser (e2e) | `bun run --filter demo e2e`            | any change the demo renders; needs a build; board moves write to the database; `E2E_PORT` when 3040 is taken | 5 min      |
+
 ## UI SDK
 
 Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/ui-sdk`), and read `node_modules/@ui-sdk/react/docs/llms.txt`. To build a new component, also search `node_modules/@ui-sdk/react/docs/core.md` by heading and read `rendering.md` next to it.
@@ -70,7 +82,7 @@ Before using ui-sdk, follow the ui-sdk skill if it's installed (`.agents/skills/
 
 ## Demo
 
-- Verify demo changes at runtime with the `nextjs:next-dev-loop` skill (from the `nextjs@nextjs` plugin) against `bun run dev`, and with the Playwright `e2e` suite for board moves.
+- Verify runtime changes with `/verify`, following `.claude/skills/verify`.
 - Never force a subtree dynamic to satisfy the framework (`connection()`, `noStore`, `force-dynamic`, an `AtRequest`-style wrapper). A page renders static unless it reads real request data, and if a build complains, fix the cause, not the symptom.
 
 ## House style
